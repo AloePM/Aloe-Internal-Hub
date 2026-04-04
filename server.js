@@ -286,7 +286,11 @@ async function rvFetch(path, params = {}) {
   const r = await fetch(url.toString(), {
     headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json' },
   });
-  if (!r.ok) return { error: `Rentvine ${r.status}: ${r.statusText}`, url: url.toString() };
+ if (!r.ok) {
+    const txt = await r.text();
+    console.error(`Rentvine error ${r.status}:`, txt.slice(0, 200));
+    return { error: `Rentvine ${r.status}: ${txt.slice(0, 100)}` };
+  } ${r.statusText}`, url: url.toString() };
   return r.json();
 }
 
