@@ -548,12 +548,34 @@ async function executeTool(name, input) {
 }
 
 // ── Claude API proxy ──────────────────────────────────────────────────────────
+function getRelevantTools(msg) {
+  msg = msg.toLowerCase();
+  const rv_leases   = ['rv_get_leases','rv_get_ledger','rv_get_transactions'];
+  const rv_props    = ['rv_get_properties','rv_get_units'];
+  const rv_ops      = ['rv_get_work_orders','rv_get_work_order_detail','rv_get_inspections','rv_get_inspection_detail'];
+  const rv_contacts = ['rv_get_owners','rv_get_tenants','rv_get_vendors'];
+  const aptly_t     = ['aptly_get_board_cards','aptly_list_boards','aptly_search_cards'];
+  const notion_t    = ['notion_search','notion_get_page'];
+  const slack_t     = ['slack_search','slack_get_channel_messages','slack_list_channels'];
+  let tools = new Set();
+  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid/)) rv_leases.forEach(t=>tools.add(t));
+  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address/)) rv_props.forEach(t=>tools.add(t));
+  if (msg.match(/work.?order|maintenance|repair|inspect/)) rv_ops.forEach(t=>tools.add(t));
+  if (msg.match(/vendor|contractor/)) tools.add('rv_get_vendors');
+  if (msg.match(/owner|landlord|portfolio|performing/)) rv_contacts.filter(t=>t.includes('owner')).forEach(t=>tools.add(t));
+  if (msg.match(/lead|aptly|pipeline|move.?in|move.?out|hoa|renewal|board/)) aptly_t.forEach(t=>tools.add(t));
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|steps?/)) notion_t.forEach(t=>tools.add(t));
+  if (msg.match(/slack|team|announcement|update|channel/)) slack_t.forEach(t=>tools.add(t));
+  if (tools.size===0) { rv_leases.forEach(t=>tools.add(t)); notion_t.forEach(t=>tools.add(t)); }
+  return ALL_TOOLS.filter(t=>[...tools].slice(0,8).includes(t.name));
+}
 app.post('/api/chat', async (req, res) => {
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
   try {
-    const { messages } = req.body;
-
+  const { messages } = req.body;
+    const lastMsg = [...messages].reverse().find(m=>m.role==='user')?.content||'';
+    const tools = getRelevantTools(lastMsg);
     let currentMessages = [...messages];
     let loopCount = 0;
 
@@ -568,10 +590,10 @@ app.post('/api/chat', async (req, res) => {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1500,
+          max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: currentMessages,
-          tools: ALL_TOOLS,
+          tools: tools,
         }),
       });
 
