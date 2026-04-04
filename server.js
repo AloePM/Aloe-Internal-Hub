@@ -365,11 +365,24 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_units': {
-        const params = { pageSize: 100 };
-        if (input.propertyId) params.propertyID = input.propertyId;
-        const data = await rvFetch('/units/export', params);
-        return JSON.stringify(data);
-      }
+  // Get all units from export
+  const units = await rvFetch('/units/export', { pageSize: 100 });
+  // Get active leases to determine which units are occupied
+  const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+  const occupiedUnitIds = new Set(
+    Array.isArray(leases) ? leases.map(l => l.lease?.unitID).filter(Boolean) : []
+  );
+  // Mark each unit as available or occupied
+  if (Array.isArray(units)) {
+    return JSON.stringify(units.map(u => ({
+      ...u,
+      isAvailable: !occupiedUnitIds.has(u.unitID),
+    })));
+  }
+  // Fallback: just return leases with unit data
+  const fallback = await rvFetch('/leases/export', { pageSize: 100 });
+  return JSON.stringify(fallback);
+}
 
       case 'rv_get_owners': {
         const data = await rvFetch('/contacts/owners', { pageSize: 100 });
