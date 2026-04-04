@@ -361,7 +361,7 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'rv_get_leases': {
-        const params = { pageSize: 25, page: input.page || 1 };
+        const params = { pageSize: 200, page: input.page || 1 };
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
         else if (input.status !== 'all') params['primaryLeaseStatusIDs[]'] = 1;
         const data = await rvFetch('/leases/export', params);
@@ -390,15 +390,23 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_properties': {
-        const data = await rvFetch('/properties/export', { pageSize: 200 });
-        if (input.search && Array.isArray(data)) {
-          return JSON.stringify(data.filter(function(item) {
+        let allData = [];
+        let pg = 1;
+        while (true) {
+          const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
+          if (!Array.isArray(batch) || batch.length === 0) break;
+          allData = allData.concat(batch);
+          if (batch.length < 200) break;
+          pg++;
+        }
+        if (input.search) {
+          return JSON.stringify(allData.filter(function(item) {
             const p = item.property || {};
             const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
             return fuzzyMatch(input.search, full);
           }));
         }
-        return JSON.stringify(data);
+        return JSON.stringify(allData);
       }
 
       case 'rv_get_units': {
