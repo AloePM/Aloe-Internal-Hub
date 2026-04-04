@@ -377,23 +377,46 @@ async function executeTool(name, input) {
 }
 
       case 'rv_get_units': {
-  // Get all units from export
-  const units = await rvFetch('/units/export', { pageSize: 100 });
-  // Get active leases to determine which units are occupied
-  const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+  const normalize = (str) => (str || '').toLowerCase()
+    .replace(/\bnorth\b/g, 'n').replace(/\bn\b/g, 'north')
+    .replace(/\bsouth\b/g, 's').replace(/\bsouth\b/g, 's')
+    .replace(/\beast\b/g, 'e').replace(/\bwest\b/g, 'w')
+    .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr')
+    .replace(/\blane\b/g, 'ln').replace(/\bcourt\b/g, 'ct')
+    .replace(/\bblvd\b/g, 'boulevard').replace(/\bave\b/g, 'avenue')
+    .replace(/[.,#]/g, '').replace(/\s+/g, ' ').trim();
+
+  // Get units and active leases to determine availability
+  const [units, leases] = await Promise.all([
+    rvFetch('/units/export', { pageSize: 200 }),
+    rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 }),
+  ]);
+
   const occupiedUnitIds = new Set(
     Array.isArray(leases) ? leases.map(l => l.lease?.unitID).filter(Boolean) : []
   );
-  // Mark each unit as available or occupied
-  if (Array.isArray(units)) {
-    return JSON.stringify(units.map(u => ({
-      ...u,
-      isAvailable: !occupiedUnitIds.has(u.unitID),
-    })));
+
+  const tagged = Array.isArray(units)
+    ? units.map(u => ({ ...u, isAvailable: !occupiedUnitIds.has(u.unitID) }))
+    : units;
+
+  if (input.search && Array.isArray(tagged)) {
+    const q = input.search.toLowerCase();
+    const qn = normalize(q);
+    const streetNum = q.match(/\d{3,6}/)?.[0];
+    const words = qn.split(' ').filter(w => w.length > 2 && !/^\d+$/.test(w));
+
+    return JSON.stringify(tagged.filter(u => {
+      const addr = normalize(u.address || '') + ' ' + normalize(u.city || '') + ' ' + normalize(u.name || '');
+      if (addr.includes(qn)) return true;
+      if (streetNum && addr.includes(streetNum)) {
+        return words.filter(w => addr.includes(w)).length >= 1;
+      }
+      return words.length > 0 && words.filter(w => addr.includes(w)).length / words.length >= 0.6;
+    }));
   }
-  // Fallback: just return leases with unit data
-  const fallback = await rvFetch('/leases/export', { pageSize: 100 });
-  return JSON.stringify(fallback);
+
+  return JSON.stringify(tagged);
 }
 
       case 'rv_get_owners': {
