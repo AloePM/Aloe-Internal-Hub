@@ -41,20 +41,13 @@ app.post('/api/chat', async (req, res) => {
       max_tokens: 1000,
       system: SYSTEM_PROMPT,
       messages,
-      mcp_servers: mcp_servers || [
-        { type: 'url', url: 'https://mcp.notion.com/mcp',   name: 'notion' },
-        { type: 'url', url: 'https://mcp.getaptly.com/mcp', name: 'aptly'  },
-        { type: 'url', url: 'https://mcp.slack.com/mcp',     name: 'slack'  },
-      ],
     };
-
     if (tools && tools.length > 0) body.tools = tools;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'anthropic-beta': 'mcp-client-2025-04-04',
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
       },
