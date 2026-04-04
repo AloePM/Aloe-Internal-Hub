@@ -607,13 +607,14 @@ function getRelevantTools(msg) {
   const slack_t     = ['slack_search','slack_get_channel_messages','slack_list_channels'];
   let tools = new Set();
   if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid/)) rv_leases.forEach(t=>tools.add(t));
-  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address/)) rv_props.forEach(t=>tools.add(t));
+  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}\s/)) {)) ['rv_get_properties','rv_get_units']rv_props.forEach(t=>tools.add(t));
   if (msg.match(/work.?order|maintenance|repair|inspect/)) rv_ops.forEach(t=>tools.add(t));
   if (msg.match(/vendor|contractor/)) tools.add('rv_get_vendors');
   if (msg.match(/owner|landlord|portfolio|performing/)) rv_contacts.filter(t=>t.includes('owner')).forEach(t=>tools.add(t));
   if (msg.match(/lead|aptly|pipeline|move.?in|move.?out|hoa|renewal|board/)) aptly_t.forEach(t=>tools.add(t));
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|steps?/)) notion_t.forEach(t=>tools.add(t));
   if (msg.match(/slack|team|announcement|update|channel/)) slack_t.forEach(t=>tools.add(t));
+}
   if (tools.size===0) { rv_leases.forEach(t=>tools.add(t)); notion_t.forEach(t=>tools.add(t)); }
   return ALL_TOOLS.filter(t=>[...tools].slice(0,8).includes(t.name));
 }
