@@ -6,7 +6,6 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// ── Environment variables ─────────────────────────────────────────────────────
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
 const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
@@ -14,13 +13,10 @@ const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
 const NOTION_TOKEN        = process.env.NOTION_TOKEN;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
-// ZINSPECTOR_API_KEY is stored but zInspector has no public API
-// Inspection data flows through Rentvine's inspection endpoints instead
 
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
-// ── System prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
 
 You have access to these live data sources via tools:
@@ -55,13 +51,11 @@ Rules:
 - Use numbered steps for procedures
 - Always cite your source (Rentvine, Aptly, Notion, or Slack)
 - Never speculate on legal or fair housing matters
-- If you can't find a property or tenant in the data: say ONLY "I couldn't find [X] in what Rentvine returned — the address may be formatted differently, or check with Randi directly." NEVER invent reasons or possibilities. NEVER guess about lockboxes, tours, or setup issues.
-- NEVER make up explanations for why something isn't found. Only report what the data actually shows.
+- If you cannot find a property or tenant: say ONLY "I couldn't find [X] in what Rentvine returned — the address may be formatted differently, or check with Randi directly." NEVER invent reasons or possibilities. NEVER guess about lockboxes, tours, or setup issues.
+- NEVER make up explanations for why something is not found. Only report what the data actually shows.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
-// ── Tools definition ──────────────────────────────────────────────────────────
 const ALL_TOOLS = [
-  // RENTVINE — Leases & Tenants
   {
     name: 'rv_get_leases',
     description: 'Search leases from Rentvine with tenant info, balances, unpaid charges, and property details. Best tool for tenant lookups and balance checks.',
@@ -76,7 +70,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_ledger',
-    description: 'Get the full accounting ledger for a lease — all charges, payments, credits with dates and descriptions. Use after rv_get_leases to get the leaseId.',
+    description: 'Get the full accounting ledger for a lease — all charges, payments, credits with dates. Use after rv_get_leases to get the leaseId.',
     input_schema: {
       type: 'object',
       properties: {
@@ -96,28 +90,27 @@ const ALL_TOOLS = [
       required: ['leaseId'],
     },
   },
-  // RENTVINE — Properties & Units
   {
     name: 'rv_get_properties',
-    description: 'Get all properties in the Aloe PM portfolio with address, owner, and status',
+    description: 'Get properties in the portfolio. Search by address, name, or city. Use to look up a specific property address.',
     input_schema: {
       type: 'object',
       properties: {
-        isActive: { type: 'boolean', description: 'Active properties only (default: true)' },
+        search: { type: 'string', description: 'Address, property name, or city to search for (optional)' },
       },
     },
   },
   {
     name: 'rv_get_units',
-    description: 'Get units with rent, deposit, beds, baths, availability. Can search by address.', Use to find vacant/available rentals.',
+    description: 'Get units with rent, deposit, beds, baths, availability. Search by address. Use to find vacant or available rentals.',
     input_schema: {
       type: 'object',
-      properties: { search:{type:'string',description:'Address or unit name to search for (optional)'},
+      properties: {
+        search: { type: 'string', description: 'Address or unit name to search for (optional)' },
         propertyId: { type: 'number', description: 'Filter by property ID (optional)' },
       },
     },
   },
-  // RENTVINE — Owners
   {
     name: 'rv_get_owners',
     description: 'Get owner/landlord contact info, portfolio, and associated properties',
@@ -128,7 +121,6 @@ const ALL_TOOLS = [
       },
     },
   },
-  // RENTVINE — Work Orders
   {
     name: 'rv_get_work_orders',
     description: 'Get maintenance work orders. Filter by open/closed/all and optionally by property.',
@@ -152,7 +144,6 @@ const ALL_TOOLS = [
       required: ['workOrderId'],
     },
   },
-  // RENTVINE — Inspections
   {
     name: 'rv_get_inspections',
     description: 'Get property inspections from Rentvine — move-in, move-out, and periodic inspections with dates and status',
@@ -175,7 +166,6 @@ const ALL_TOOLS = [
       required: ['inspectionId'],
     },
   },
-  // RENTVINE — Tenants & Vendors
   {
     name: 'rv_get_tenants',
     description: 'Search for tenant contacts in Rentvine by name or email',
@@ -196,7 +186,6 @@ const ALL_TOOLS = [
       },
     },
   },
-  // APTLY — Leads & Boards
   {
     name: 'aptly_get_board_cards',
     description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz. Use aptly_list_boards to find other board IDs.',
@@ -226,7 +215,6 @@ const ALL_TOOLS = [
       required: ['boardId', 'query'],
     },
   },
-  // NOTION — Policies
   {
     name: 'notion_search',
     description: 'Search Notion for company policies, SOPs, procedures, fee schedules, and guidelines',
@@ -249,7 +237,6 @@ const ALL_TOOLS = [
       required: ['pageId'],
     },
   },
-  // SLACK — Team communications
   {
     name: 'slack_search',
     description: 'Search Slack for team messages, announcements, and decisions across all channels',
@@ -280,6 +267,33 @@ const ALL_TOOLS = [
   },
 ];
 
+// ── Fuzzy address normalizer ──────────────────────────────────────────────────
+function normalizeAddr(str) {
+  return (str || '').toLowerCase()
+    .replace(/\bnorth\b/g, 'n').replace(/\bn\.\b/g, 'n')
+    .replace(/\bsouth\b/g, 's').replace(/\bs\.\b/g, 's')
+    .replace(/\beast\b/g, 'e').replace(/\be\.\b/g, 'e')
+    .replace(/\bwest\b/g, 'w').replace(/\bw\.\b/g, 'w')
+    .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr')
+    .replace(/\blane\b/g, 'ln').replace(/\bcourt\b/g, 'ct')
+    .replace(/\bboulevard\b/g, 'blvd').replace(/\bavenue\b/g, 'ave')
+    .replace(/\broad\b/g, 'rd').replace(/\bplace\b/g, 'pl')
+    .replace(/[.,#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function fuzzyMatch(query, target) {
+  const q = normalizeAddr(query);
+  const t = normalizeAddr(target);
+  if (t.includes(q)) return true;
+  const streetNum = query.match(/\d{3,6}/)?.[0];
+  const words = q.split(' ').filter(w => w.length > 2 && !/^\d+$/.test(w));
+  if (streetNum && t.includes(streetNum) && words.some(w => t.includes(w))) return true;
+  if (words.length > 0 && words.filter(w => t.includes(w)).length / words.length >= 0.6) return true;
+  return false;
+}
+
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function rvFetch(path, params = {}) {
   const url = new URL(`${RENTVINE_BASE}${path}`);
@@ -298,44 +312,45 @@ async function rvFetch(path, params = {}) {
 }
 
 async function aptlyFetch(path, params = {}) {
-  const url = new URL(`https://app.getaptly.com/api${path}`);
+  const url = new URL('https://app.getaptly.com/api' + path);
   url.searchParams.set('x-token', APTLY_TOKEN);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
   const r = await fetch(url.toString());
-  if (!r.ok) return { error: `Aptly ${r.status}: ${r.statusText}` };
+  if (!r.ok) return { error: 'Aptly ' + r.status };
   return r.json();
 }
 
-async function notionFetch(path, method = 'GET', body = null) {
+async function notionFetch(path, method, body) {
+  method = method || 'GET';
   const opts = {
     method,
     headers: {
-      Authorization: `Bearer ${NOTION_TOKEN}`,
+      Authorization: 'Bearer ' + NOTION_TOKEN,
       'Notion-Version': '2022-06-28',
       'Content-Type': 'application/json',
     },
   };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch(`https://api.notion.com/v1${path}`, opts);
+  const r = await fetch('https://api.notion.com/v1' + path, opts);
   return r.json();
 }
 
-async function slackFetch(path, params = {}) {
-  const url = new URL(`https://slack.com/api${path}`);
+async function slackFetch(path, params) {
+  params = params || {};
+  const url = new URL('https://slack.com/api' + path);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
   const r = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${SLACK_TOKEN}` },
+    headers: { Authorization: 'Bearer ' + SLACK_TOKEN },
   });
   return r.json();
 }
 
 // ── Tool executor ─────────────────────────────────────────────────────────────
 async function executeTool(name, input) {
-  console.log(`Executing tool: ${name}`, JSON.stringify(input).slice(0, 100));
+  console.log('Tool: ' + name, JSON.stringify(input).slice(0, 80));
   try {
     switch (name) {
 
-      // ── RENTVINE ──────────────────────────────────────────────────────────
       case 'rv_get_leases': {
         const params = { pageSize: 25, page: input.page || 1 };
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
@@ -343,89 +358,65 @@ async function executeTool(name, input) {
         const data = await rvFetch('/leases/export', params);
         if (input.search && Array.isArray(data)) {
           const q = input.search.toLowerCase();
-          return JSON.stringify(data.filter(item =>
-            item.lease?.tenants?.some(t =>
-              t.name?.toLowerCase().includes(q) || t.email?.toLowerCase().includes(q)
-            ) || item.property?.address?.toLowerCase().includes(q) ||
-            item.unit?.address?.toLowerCase().includes(q)
-          ));
+          return JSON.stringify(data.filter(function(item) {
+            const tenantMatch = item.lease && item.lease.tenants && item.lease.tenants.some(function(t) {
+              return (t.name || '').toLowerCase().includes(q) || (t.email || '').toLowerCase().includes(q);
+            });
+            if (tenantMatch) return true;
+            const propAddr = (item.property && item.property.address) || '';
+            const unitAddr = (item.unit && item.unit.address) || '';
+            return fuzzyMatch(q, propAddr + ' ' + (item.property && item.property.city || '')) ||
+                   fuzzyMatch(q, unitAddr);
+          }));
         }
         return JSON.stringify(data);
       }
 
       case 'rv_get_ledger': {
-        const data = await rvFetch('/accounting/ledgers', { leaseID: input.leaseId, pageSize: 50 });
-        return JSON.stringify(data);
+        return JSON.stringify(await rvFetch('/accounting/ledgers', { leaseID: input.leaseId, pageSize: 50 }));
       }
 
       case 'rv_get_transactions': {
-        const data = await rvFetch('/accounting/transactions', { leaseID: input.leaseId, pageSize: 50 });
+        return JSON.stringify(await rvFetch('/accounting/transactions', { leaseID: input.leaseId, pageSize: 50 }));
+      }
+
+      case 'rv_get_properties': {
+        const data = await rvFetch('/properties/export', { pageSize: 200 });
+        if (input.search && Array.isArray(data)) {
+          return JSON.stringify(data.filter(function(item) {
+            const p = item.property || {};
+            const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
+            return fuzzyMatch(input.search, full);
+          }));
+        }
         return JSON.stringify(data);
       }
 
-     case 'rv_get_properties': {
-  const data = await rvFetch('/properties/export', { pageSize: 200 });
-  if (input.search && Array.isArray(data)) {
-    const q = input.search.toLowerCase();
-    return JSON.stringify(data.filter(item =>
-      item.property?.address?.toLowerCase().includes(q) ||
-      item.property?.name?.toLowerCase().includes(q) ||
-      item.property?.city?.toLowerCase().includes(q)
-    ));
-  }
-  return JSON.stringify(data);
-}
-
       case 'rv_get_units': {
-  const normalize = (str) => (str || '').toLowerCase()
-    .replace(/\bnorth\b/g, 'n').replace(/\bn\b/g, 'north')
-    .replace(/\bsouth\b/g, 's').replace(/\bsouth\b/g, 's')
-    .replace(/\beast\b/g, 'e').replace(/\bwest\b/g, 'w')
-    .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr')
-    .replace(/\blane\b/g, 'ln').replace(/\bcourt\b/g, 'ct')
-    .replace(/\bblvd\b/g, 'boulevard').replace(/\bave\b/g, 'avenue')
-    .replace(/[.,#]/g, '').replace(/\s+/g, ' ').trim();
-
-  // Get units and active leases to determine availability
-  const [units, leases] = await Promise.all([
-    rvFetch('/units/export', { pageSize: 200 }),
-    rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 }),
-  ]);
-
-  const occupiedUnitIds = new Set(
-    Array.isArray(leases) ? leases.map(l => l.lease?.unitID).filter(Boolean) : []
-  );
-
-  const tagged = Array.isArray(units)
-    ? units.map(u => ({ ...u, isAvailable: !occupiedUnitIds.has(u.unitID) }))
-    : units;
-
-  if (input.search && Array.isArray(tagged)) {
-    const q = input.search.toLowerCase();
-    const qn = normalize(q);
-    const streetNum = q.match(/\d{3,6}/)?.[0];
-    const words = qn.split(' ').filter(w => w.length > 2 && !/^\d+$/.test(w));
-
-    return JSON.stringify(tagged.filter(u => {
-      const addr = normalize(u.address || '') + ' ' + normalize(u.city || '') + ' ' + normalize(u.name || '');
-      if (addr.includes(qn)) return true;
-      if (streetNum && addr.includes(streetNum)) {
-        return words.filter(w => addr.includes(w)).length >= 1;
+        const unitData = await rvFetch('/units/export', { pageSize: 200 });
+        const leaseData = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+        const occupiedIds = new Set(
+          Array.isArray(leaseData) ? leaseData.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
+        );
+        const tagged = Array.isArray(unitData)
+          ? unitData.map(function(u) { return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) }); })
+          : unitData;
+        if (input.search && Array.isArray(tagged)) {
+          return JSON.stringify(tagged.filter(function(u) {
+            const full = (u.address || '') + ' ' + (u.city || '') + ' ' + (u.name || '');
+            return fuzzyMatch(input.search, full);
+          }));
+        }
+        return JSON.stringify(tagged);
       }
-      return words.length > 0 && words.filter(w => addr.includes(w)).length / words.length >= 0.6;
-    }));
-  }
-
-  return JSON.stringify(tagged);
-}
 
       case 'rv_get_owners': {
         const data = await rvFetch('/contacts/owners', { pageSize: 100 });
         if (input.search && Array.isArray(data)) {
           const q = input.search.toLowerCase();
-          return JSON.stringify(data.filter(o =>
-            o.name?.toLowerCase().includes(q) || o.email?.toLowerCase().includes(q)
-          ));
+          return JSON.stringify(data.filter(function(o) {
+            return (o.name || '').toLowerCase().includes(q) || (o.email || '').toLowerCase().includes(q);
+          }));
         }
         return JSON.stringify(data);
       }
@@ -435,37 +426,34 @@ async function executeTool(name, input) {
         if (input.propertyId) params.propertyID = input.propertyId;
         const data = await rvFetch('/maintenance/work-orders', params);
         if (input.status && input.status !== 'all' && Array.isArray(data)) {
-          return JSON.stringify(data.filter(wo =>
-            input.status === 'open' ? !wo.closedDate : !!wo.closedDate
-          ));
+          return JSON.stringify(data.filter(function(wo) {
+            return input.status === 'open' ? !wo.closedDate : !!wo.closedDate;
+          }));
         }
         return JSON.stringify(data);
       }
 
       case 'rv_get_work_order_detail': {
-        const data = await rvFetch(`/maintenance/work-orders/${input.workOrderId}`);
-        return JSON.stringify(data);
+        return JSON.stringify(await rvFetch('/maintenance/work-orders/' + input.workOrderId));
       }
 
       case 'rv_get_inspections': {
         const params = { pageSize: 50, page: input.page || 1 };
         if (input.propertyId) params.propertyID = input.propertyId;
-        const data = await rvFetch('/maintenance/inspections', params);
-        return JSON.stringify(data);
+        return JSON.stringify(await rvFetch('/maintenance/inspections', params));
       }
 
       case 'rv_get_inspection_detail': {
-        const data = await rvFetch(`/maintenance/inspections/${input.inspectionId}`);
-        return JSON.stringify(data);
+        return JSON.stringify(await rvFetch('/maintenance/inspections/' + input.inspectionId));
       }
 
       case 'rv_get_tenants': {
         const data = await rvFetch('/contacts/tenants', { pageSize: 100 });
         if (input.search && Array.isArray(data)) {
           const q = input.search.toLowerCase();
-          return JSON.stringify(data.filter(t =>
-            t.name?.toLowerCase().includes(q) || t.email?.toLowerCase().includes(q)
-          ));
+          return JSON.stringify(data.filter(function(t) {
+            return (t.name || '').toLowerCase().includes(q) || (t.email || '').toLowerCase().includes(q);
+          }));
         }
         return JSON.stringify(data);
       }
@@ -474,163 +462,168 @@ async function executeTool(name, input) {
         const data = await rvFetch('/contacts/vendors', { pageSize: 100 });
         if (input.search && Array.isArray(data)) {
           const q = input.search.toLowerCase();
-          return JSON.stringify(data.filter(v => v.name?.toLowerCase().includes(q)));
+          return JSON.stringify(data.filter(function(v) {
+            return (v.name || '').toLowerCase().includes(q);
+          }));
         }
         return JSON.stringify(data);
       }
 
-      // ── APTLY ─────────────────────────────────────────────────────────────
       case 'aptly_get_board_cards': {
-        const data = await aptlyFetch(`/aptlet/${input.boardId}`, { page: input.page || 0 });
-        return JSON.stringify(data);
+        return JSON.stringify(await aptlyFetch('/aptlet/' + input.boardId, { page: input.page || 0 }));
       }
 
       case 'aptly_list_boards': {
-        const data = await aptlyFetch('/aptlets');
-        return JSON.stringify(data);
+        return JSON.stringify(await aptlyFetch('/aptlets'));
       }
 
       case 'aptly_search_cards': {
-        const data = await aptlyFetch(`/aptlet/${input.boardId}`, { page: 0 });
-        if (Array.isArray(data?.cards)) {
+        const data = await aptlyFetch('/aptlet/' + input.boardId, { page: 0 });
+        if (Array.isArray(data && data.cards)) {
           const q = input.query.toLowerCase();
-          return JSON.stringify({
-            ...data,
-            cards: data.cards.filter(c => JSON.stringify(c).toLowerCase().includes(q)),
-          });
+          return JSON.stringify(Object.assign({}, data, {
+            cards: data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }),
+          }));
         }
         return JSON.stringify(data);
       }
 
-      // ── NOTION ────────────────────────────────────────────────────────────
       case 'notion_search': {
         const data = await notionFetch('/search', 'POST', {
           query: input.query,
           filter: { value: 'page', property: 'object' },
           page_size: 5,
         });
-        if (data.results?.length > 0) {
-          const pages = await Promise.all(
-            data.results.slice(0, 3).map(async page => {
-              const blocks = await notionFetch(`/blocks/${page.id}/children`);
-              const text = (blocks.results || [])
-                .map(b => {
-                  const t = b.type;
-                  return b[t]?.rich_text?.map(rt => rt.plain_text).join('') || '';
-                })
-                .filter(t => t.length > 0)
-                .slice(0, 30)
-                .join('\n');
-              return {
-                title: page.properties?.title?.title?.[0]?.plain_text ||
-                       page.properties?.Name?.title?.[0]?.plain_text || 'Untitled',
-                id: page.id,
-                url: page.url,
-                content: text || 'No text content',
-              };
-            })
-          );
+        if (data.results && data.results.length > 0) {
+          const pages = await Promise.all(data.results.slice(0, 3).map(async function(page) {
+            const blocks = await notionFetch('/blocks/' + page.id + '/children');
+            const text = (blocks.results || [])
+              .map(function(b) {
+                const t = b.type;
+                return b[t] && b[t].rich_text ? b[t].rich_text.map(function(rt) { return rt.plain_text; }).join('') : '';
+              })
+              .filter(function(t) { return t.length > 0; })
+              .slice(0, 30)
+              .join('\n');
+            const title = (page.properties && page.properties.title && page.properties.title.title && page.properties.title.title[0] && page.properties.title.title[0].plain_text) ||
+                          (page.properties && page.properties.Name && page.properties.Name.title && page.properties.Name.title[0] && page.properties.Name.title[0].plain_text) ||
+                          'Untitled';
+            return { title: title, id: page.id, url: page.url, content: text || 'No content' };
+          }));
           return JSON.stringify(pages);
         }
         return JSON.stringify({ message: 'No Notion pages found', query: input.query });
       }
 
       case 'notion_get_page': {
-        const blocks = await notionFetch(`/blocks/${input.pageId}/children?page_size=100`);
+        const blocks = await notionFetch('/blocks/' + input.pageId + '/children?page_size=100');
         const text = (blocks.results || [])
-          .map(b => {
+          .map(function(b) {
             const t = b.type;
-            if (!b[t]?.rich_text) return null;
-            return b[t].rich_text.map(rt => rt.plain_text).join('');
+            if (!b[t] || !b[t].rich_text) return null;
+            return b[t].rich_text.map(function(rt) { return rt.plain_text; }).join('');
           })
           .filter(Boolean)
           .join('\n');
-        return JSON.stringify({ pageId: input.pageId, content: text || 'No content found' });
+        return JSON.stringify({ content: text || 'No content found' });
       }
 
-      // ── SLACK ─────────────────────────────────────────────────────────────
       case 'slack_search': {
         const data = await slackFetch('/search.messages', { query: input.query, count: 10 });
-        if (data.messages?.matches) {
-          return JSON.stringify(data.messages.matches.map(m => ({
-            channel: m.channel?.name,
-            user: m.username,
-            text: m.text,
-            timestamp: new Date(parseFloat(m.ts) * 1000).toLocaleString(),
-            permalink: m.permalink,
-          })));
+        if (data.messages && data.messages.matches) {
+          return JSON.stringify(data.messages.matches.map(function(m) {
+            return {
+              channel: m.channel && m.channel.name,
+              user: m.username,
+              text: m.text,
+              time: new Date(parseFloat(m.ts) * 1000).toLocaleString(),
+            };
+          }));
         }
-        return JSON.stringify({ message: 'No Slack results found', query: input.query });
+        return JSON.stringify({ message: 'No results', query: input.query });
       }
 
       case 'slack_get_channel_messages': {
-        const data = await slackFetch('/conversations.history', {
-          channel: input.channelId,
-          limit: input.limit || 20,
-        });
+        const data = await slackFetch('/conversations.history', { channel: input.channelId, limit: input.limit || 20 });
         if (data.messages) {
-          return JSON.stringify(data.messages.map(m => ({
-            text: m.text,
-            timestamp: new Date(parseFloat(m.ts) * 1000).toLocaleString(),
-            user: m.user,
-          })));
+          return JSON.stringify(data.messages.map(function(m) {
+            return { text: m.text, time: new Date(parseFloat(m.ts) * 1000).toLocaleString() };
+          }));
         }
-        return JSON.stringify({ error: data.error || 'Could not fetch messages' });
+        return JSON.stringify({ error: data.error || 'Could not fetch' });
       }
 
       case 'slack_list_channels': {
         const data = await slackFetch('/conversations.list', { limit: 100, exclude_archived: true });
         if (data.channels) {
-          return JSON.stringify(data.channels.map(c => ({ id: c.id, name: c.name, purpose: c.purpose?.value })));
+          return JSON.stringify(data.channels.map(function(c) { return { id: c.id, name: c.name }; }));
         }
-        return JSON.stringify({ error: data.error || 'Could not list channels' });
+        return JSON.stringify({ error: data.error });
       }
 
       default:
-        return JSON.stringify({ error: `Unknown tool: ${name}` });
+        return JSON.stringify({ error: 'Unknown tool: ' + name });
     }
   } catch (err) {
-    console.error(`Tool ${name} error:`, err.message);
-    return JSON.stringify({ error: err.message, tool: name });
+    console.error('Tool ' + name + ' error:', err.message);
+    return JSON.stringify({ error: err.message });
   }
 }
 
-// ── Claude API proxy ──────────────────────────────────────────────────────────
+// ── Smart tool router ─────────────────────────────────────────────────────────
 function getRelevantTools(msg) {
-  msg = msg.toLowerCase();
-  const rv_leases   = ['rv_get_leases','rv_get_ledger','rv_get_transactions'];
-  const rv_props    = ['rv_get_properties','rv_get_units'];
-  const rv_ops      = ['rv_get_work_orders','rv_get_work_order_detail','rv_get_inspections','rv_get_inspection_detail'];
-  const rv_contacts = ['rv_get_owners','rv_get_tenants','rv_get_vendors'];
-  const aptly_t     = ['aptly_get_board_cards','aptly_list_boards','aptly_search_cards'];
-  const notion_t    = ['notion_search','notion_get_page'];
-  const slack_t     = ['slack_search','slack_get_channel_messages','slack_list_channels'];
-  let tools = new Set();
-  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid/)) rv_leases.forEach(t=>tools.add(t));
-  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}\s/)) {)) ['rv_get_properties','rv_get_units']rv_props.forEach(t=>tools.add(t));
-  if (msg.match(/work.?order|maintenance|repair|inspect/)) rv_ops.forEach(t=>tools.add(t));
-  if (msg.match(/vendor|contractor/)) tools.add('rv_get_vendors');
-  if (msg.match(/owner|landlord|portfolio|performing/)) rv_contacts.filter(t=>t.includes('owner')).forEach(t=>tools.add(t));
-  if (msg.match(/lead|aptly|pipeline|move.?in|move.?out|hoa|renewal|board/)) aptly_t.forEach(t=>tools.add(t));
-  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|steps?/)) notion_t.forEach(t=>tools.add(t));
-  if (msg.match(/slack|team|announcement|update|channel/)) slack_t.forEach(t=>tools.add(t));
+  msg = (msg || '').toLowerCase();
+  const tools = new Set();
+
+  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
+    ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}/)) {
+    ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
+    ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/inspect/)) {
+    ['rv_get_inspections', 'rv_get_inspection_detail'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/vendor|contractor/)) {
+    tools.add('rv_get_vendors');
+  }
+  if (msg.match(/owner|landlord|portfolio|performing|statement/)) {
+    ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly/)) {
+    ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
+    ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/slack|team|announce|update|channel|said|message/)) {
+    ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
+  }
+
+  if (tools.size === 0) {
+    ['rv_get_leases', 'notion_search'].forEach(function(t) { tools.add(t); });
+  }
+
+  const selected = Array.from(tools).slice(0, 8);
+  return ALL_TOOLS.filter(function(t) { return selected.indexOf(t.name) !== -1; });
 }
-  if (tools.size===0) { rv_leases.forEach(t=>tools.add(t)); notion_t.forEach(t=>tools.add(t)); }
-  return ALL_TOOLS.filter(t=>[...tools].slice(0,8).includes(t.name));
-}
-app.post('/api/chat', async (req, res) => {
+
+// ── Claude API proxy ──────────────────────────────────────────────────────────
+app.post('/api/chat', async function(req, res) {
   if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
-
   try {
-  const { messages } = req.body;
-    const lastMsg = [...messages].reverse().find(m=>m.role==='user')?.content||'';
-    const tools = getRelevantTools(lastMsg);
-    let currentMessages = [...messages];
-    let loopCount = 0;
+    const messages = req.body.messages;
+    const lastMsg = messages.slice().reverse().find(function(m) { return m.role === 'user'; });
+    const tools = getRelevantTools(lastMsg ? lastMsg.content : '');
+    console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
-    while (loopCount < 6) {
-      loopCount++;
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+    let current = messages.slice();
+
+    for (let i = 0; i < 5; i++) {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -641,56 +634,51 @@ app.post('/api/chat', async (req, res) => {
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
           system: SYSTEM_PROMPT,
-          messages: currentMessages,
+          messages: current,
           tools: tools,
         }),
       });
 
-      const data = await response.json();
+      const data = await r.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      console.log('Loop ' + (i + 1) + ': stop_reason=' + data.stop_reason);
 
-      console.log(`Loop ${loopCount}: stop_reason=${data.stop_reason}`);
+      if (data.stop_reason !== 'tool_use') return res.json(data);
 
-      if (data.stop_reason !== 'tool_use') {
-        return res.json(data);
-      }
-
-      // Execute all tool calls
-      const toolUseBlocks = data.content.filter(b => b.type === 'tool_use');
-      const toolResults = await Promise.all(
-        toolUseBlocks.map(async tb => ({
+      const tbs = data.content.filter(function(b) { return b.type === 'tool_use'; });
+      const results = await Promise.all(tbs.map(async function(tb) {
+        return {
           type: 'tool_result',
           tool_use_id: tb.id,
           content: await executeTool(tb.name, tb.input),
-        }))
-      );
+        };
+      }));
 
-      currentMessages = [
-        ...currentMessages,
+      current = current.concat([
         { role: 'assistant', content: data.content },
-        { role: 'user', content: toolResults },
-      ];
+        { role: 'user', content: results },
+      ]);
     }
 
-    res.status(500).json({ error: 'Too many tool calls — please try a more specific question' });
+    res.status(500).json({ error: 'Too many steps — try a more specific question' });
   } catch (err) {
     console.error('Chat error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/health', (req, res) => res.json({
-  status: 'ok',
-  anthropic:  !!ANTHROPIC_API_KEY,
-  rentvine:   !!(RENTVINE_API_KEY && RENTVINE_API_SECRET),
-  aptly:      !!APTLY_TOKEN,
-  notion:     !!NOTION_TOKEN,
-  slack:      !!SLACK_TOKEN,
-  note:       'zInspector has no public API — inspection data comes via Rentvine',
-}));
+app.get('/health', function(req, res) {
+  res.json({
+    status: 'ok',
+    anthropic: !!ANTHROPIC_API_KEY,
+    rentvine: !!(RENTVINE_API_KEY && RENTVINE_API_SECRET),
+    aptly: !!APTLY_TOKEN,
+    notion: !!NOTION_TOKEN,
+    slack: !!SLACK_TOKEN,
+  });
+});
 
-// ── Serve the React app ───────────────────────────────────────────────────────
-app.get('*', (req, res) => {
+app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -730,10 +718,10 @@ const SUGGESTIONS = [
 ];
 
 const SOURCES = [
-  {label:"Rentvine", bg:"#e6f0fb", border:"#85B7EB"},
-  {label:"Aptly",    bg:"#EAF3DE", border:"#97C459"},
-  {label:"Notion",   bg:"#f5f5f5", border:"#d0d0d0"},
-  {label:"Slack",    bg:"#f0e6f6", border:"#c17edb"},
+  {label:"Rentvine",bg:"#e6f0fb",border:"#85B7EB"},
+  {label:"Aptly",   bg:"#EAF3DE",border:"#97C459"},
+  {label:"Notion",  bg:"#f5f5f5",border:"#d0d0d0"},
+  {label:"Slack",   bg:"#f0e6f6",border:"#c17edb"},
 ];
 
 function renderMd(text) {
@@ -758,10 +746,7 @@ function renderMd(text) {
 
 function Dots() {
   return React.createElement('div',{style:{display:"flex",gap:4,padding:"2px 0"}},
-    [0,1,2].map(i => React.createElement('div',{key:i,style:{
-      width:6,height:6,borderRadius:"50%",background:"#3B6D11",
-      animation:\`ab 1.2s ease-in-out \${i*0.18}s infinite\`
-    }}))
+    [0,1,2].map(i => React.createElement('div',{key:i,style:{width:6,height:6,borderRadius:"50%",background:"#3B6D11",animation:\`ab 1.2s ease-in-out \${i*0.18}s infinite\`}}))
   );
 }
 
@@ -785,12 +770,7 @@ function PasscodeGate({onUnlock}) {
         </div>
         <div style={{width:"100%",background:"white",border:"1px solid #e5e5e5",borderRadius:12,padding:"24px 20px",animation:shake?"shake 0.4s ease":"none"}}>
           <p style={{fontSize:13,color:"#666",marginBottom:12,textAlign:"center"}}>Enter your team passcode</p>
-          <input ref={ref} type="password" value={val}
-            onChange={e=>{setVal(e.target.value);setError(false);}}
-            onKeyDown={e=>e.key==="Enter"&&attempt()}
-            placeholder="Passcode"
-            style={{width:"100%",fontSize:15,padding:"10px 14px",textAlign:"center",letterSpacing:"0.15em",border:\`1px solid \${error?"#e53e3e":"#e5e5e5"}\`,borderRadius:8,background:"#f9f9f9",color:"#1a1a1a",fontFamily:"inherit",marginBottom:error?8:12}}
-          />
+          <input ref={ref} type="password" value={val} onChange={e=>{setVal(e.target.value);setError(false);}} onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="Passcode" style={{width:"100%",fontSize:15,padding:"10px 14px",textAlign:"center",letterSpacing:"0.15em",border:\`1px solid \${error?"#e53e3e":"#e5e5e5"}\`,borderRadius:8,background:"#f9f9f9",color:"#1a1a1a",fontFamily:"inherit",marginBottom:error?8:12}}/>
           {error && <p style={{fontSize:12,color:"#e53e3e",textAlign:"center",marginBottom:10}}>Incorrect passcode — try again</p>}
           <button onClick={attempt} style={{width:"100%",padding:"10px",background:"#3B6D11",border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:600,cursor:"pointer"}}>Sign in</button>
         </div>
@@ -817,31 +797,18 @@ function Assistant() {
     const next = [...messages,{role:"user",content:msg}];
     setMessages(next); setLoading(true);
     try {
-      const res = await fetch('/api/chat',{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({messages:next.map(m=>({role:m.role,content:m.content}))}),
-      });
+      const res = await fetch('/api/chat',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:next.map(m=>({role:m.role,content:m.content}))})});
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const txt = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\\n")||"Sorry, try again.";
       setMessages([...next,{role:"assistant",content:txt}]);
-    } catch(e) {
-      setLastError(e.message);
-      setMessages([...next,{role:"assistant",content:"Something went wrong — see error above."}]);
-    }
+    } catch(e) { setLastError(e.message); setMessages([...next,{role:"assistant",content:"Something went wrong — see error above."}]); }
     setLoading(false);
   };
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
-      {lastError && (
-        <div style={{padding:"8px 16px",background:"#fff5f5",borderBottom:"1px solid #fed7d7",display:"flex",justifyContent:"space-between",flexShrink:0}}>
-          <span style={{fontSize:12,color:"#c53030"}}>⚠ {lastError}</span>
-          <button onClick={()=>setLastError("")} style={{background:"none",border:"none",cursor:"pointer",color:"#c53030",fontSize:16}}>×</button>
-        </div>
-      )}
-
+      {lastError && <div style={{padding:"8px 16px",background:"#fff5f5",borderBottom:"1px solid #fed7d7",display:"flex",justifyContent:"space-between",flexShrink:0}}><span style={{fontSize:12,color:"#c53030"}}>⚠ {lastError}</span><button onClick={()=>setLastError("")} style={{background:"none",border:"none",cursor:"pointer",color:"#c53030",fontSize:16}}>×</button></div>}
       <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"white",borderBottom:"1px solid #f0f0f0",flexShrink:0,gap:10}}>
         <div style={{width:36,height:36,borderRadius:8,background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌿</div>
         <div>
@@ -849,24 +816,20 @@ function Assistant() {
           <div style={{fontSize:11,color:"#888"}}>Rentvine · Aptly · Notion · Slack · All live</div>
         </div>
       </div>
-
       <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
         {messages.length===0 ? (
           <div style={{minHeight:400,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24}}>
             <div style={{textAlign:"center"}}>
               <div style={{fontSize:36,marginBottom:10}}>🌿</div>
               <div style={{fontSize:20,fontWeight:600,color:"#1a1a1a",marginBottom:6}}>Hi, I'm Aloe</div>
-              <div style={{fontSize:14,color:"#666",maxWidth:420,lineHeight:1.6}}>
-                Ask me anything — tenant balances, available homes, leads, policies, work orders, inspections, or team updates.
-              </div>
+              <div style={{fontSize:14,color:"#666",maxWidth:420,lineHeight:1.6}}>Ask me anything — tenant balances, available homes, leads, policies, work orders, inspections, or team updates.</div>
             </div>
             <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-              {SOURCES.map(s => React.createElement('div',{key:s.label,style:{padding:"3px 10px",borderRadius:20,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:12,color:"#333"}},s.label))}
+              {SOURCES.map(s=>React.createElement('div',{key:s.label,style:{padding:"3px 10px",borderRadius:20,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:12,color:"#333"}},s.label))}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:8,width:"100%",maxWidth:540}}>
-              {SUGGESTIONS.map((s,i) => (
-                <button key={i} className="chip" onClick={()=>send(s.text)}
-                  style={{background:"white",border:"1px solid #f0f0f0",borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",fontSize:13,color:"#666",lineHeight:1.4,display:"flex",alignItems:"flex-start",gap:6,transition:"background 0.1s"}}>
+              {SUGGESTIONS.map((s,i)=>(
+                <button key={i} className="chip" onClick={()=>send(s.text)} style={{background:"white",border:"1px solid #f0f0f0",borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",fontSize:13,color:"#666",lineHeight:1.4,display:"flex",alignItems:"flex-start",gap:6,transition:"background 0.1s"}}>
                   <span style={{fontSize:14,flexShrink:0}}>{s.icon}</span>{s.text}
                 </button>
               ))}
@@ -874,51 +837,25 @@ function Assistant() {
           </div>
         ) : (
           <div style={{maxWidth:680,width:"100%",margin:"0 auto"}}>
-            {messages.map((m,i) => (
+            {messages.map((m,i)=>(
               <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:12}}>
-                {m.role==="assistant" && (
-                  <div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}>🌿</div>
-                )}
-                <div style={{maxWidth:"78%",padding:"10px 14px",
-                  borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",
-                  background:m.role==="user"?"#EAF3DE":"white",
-                  border:\`1px solid \${m.role==="user"?"#97C459":"#f0f0f0"}\`,
-                  color:m.role==="user"?"#173404":"#1a1a1a",
-                  fontSize:14,lineHeight:1.6}}>
-                  {m.role==="assistant" ? renderMd(m.content) : m.content}
+                {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}>🌿</div>}
+                <div style={{maxWidth:"78%",padding:"10px 14px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?"#EAF3DE":"white",border:\`1px solid \${m.role==="user"?"#97C459":"#f0f0f0"}\`,color:m.role==="user"?"#173404":"#1a1a1a",fontSize:14,lineHeight:1.6}}>
+                  {m.role==="assistant"?renderMd(m.content):m.content}
                 </div>
               </div>
             ))}
-            {loading && (
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>🌿</div>
-                <div style={{padding:"10px 14px",background:"white",border:"1px solid #f0f0f0",borderRadius:"12px 12px 12px 4px"}}><Dots/></div>
-              </div>
-            )}
+            {loading&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>🌿</div><div style={{padding:"10px 14px",background:"white",border:"1px solid #f0f0f0",borderRadius:"12px 12px 12px 4px"}}><Dots/></div></div>}
             <div ref={endRef}/>
           </div>
         )}
       </div>
-
       <div style={{padding:"12px 16px",background:"white",borderTop:"1px solid #f0f0f0",flexShrink:0}}>
         <div style={{maxWidth:680,margin:"0 auto",display:"flex",gap:8,alignItems:"flex-end"}}>
-          <textarea ref={taRef} value={input}
-            onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}}
-            onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
-            placeholder="Ask about tenants, balances, leads, properties, policies, work orders, inspections..."
-            rows={1}
-            style={{flex:1,padding:"9px 12px",background:"#f9f9f7",border:"1px solid #e5e5e5",borderRadius:8,color:"#1a1a1a",fontSize:14,fontFamily:"inherit",resize:"none",lineHeight:1.5,minHeight:38,maxHeight:120}}
-          />
-          <button onClick={()=>send()} disabled={!input.trim()||loading}
-            style={{width:38,height:38,borderRadius:8,
-              background:input.trim()&&!loading?"#3B6D11":"#f0f0f0",
-              border:"none",cursor:input.trim()&&!loading?"pointer":"default",
-              color:input.trim()&&!loading?"white":"#aaa",
-              fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
+          <textarea ref={taRef} value={input} onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder="Ask about tenants, balances, leads, properties, policies, work orders, inspections..." rows={1} style={{flex:1,padding:"9px 12px",background:"#f9f9f7",border:"1px solid #e5e5e5",borderRadius:8,color:"#1a1a1a",fontSize:14,fontFamily:"inherit",resize:"none",lineHeight:1.5,minHeight:38,maxHeight:120}}/>
+          <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:38,height:38,borderRadius:8,background:input.trim()&&!loading?"#3B6D11":"#f0f0f0",border:"none",cursor:input.trim()&&!loading?"pointer":"default",color:input.trim()&&!loading?"white":"#aaa",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
         </div>
-        <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>
-          Rentvine · Aptly · Notion · Slack · All data is live
-        </div>
+        <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>Rentvine · Aptly · Notion · Slack · All data is live</div>
       </div>
     </div>
   );
@@ -936,4 +873,4 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Aloe Assistant running on port ${PORT}`));
+app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
