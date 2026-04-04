@@ -57,10 +57,11 @@ Rules:
   - HOA violations or HOA questions → "Reach out to Juan directly."
   - Move-out or lease renewal questions → "Reach out to Persia directly."
   - Any property in Maricopa if no one else can help → "Reach out to Teri directly."
-  - Owner/landlord related issues → "Reach out to Alexes directly."
+  - Owner or landlord related issues → "Reach out to Alexes directly."
   - Accounting questions → "Reach out to Randi directly."
-- NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person based on the topic above.
-- NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.- NEVER make up explanations for why something is not found. Only report what the data actually shows.
+- NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
+- If an address is not found, say "I couldn't find [X] in Rentvine — the address may be formatted differently. For leasing questions reach out to Dhyana, or try searching with the full street name spelled out."
+- NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
 const ALL_TOOLS = [
@@ -684,6 +685,16 @@ app.get('/health', function(req, res) {
     notion: !!NOTION_TOKEN,
     slack: !!SLACK_TOKEN,
   });
+});
+
+app.get('/debug/properties', async function(req, res) {
+  const data = await rvFetch('/properties/export', { pageSize: 200 });
+  res.json(data);
+});
+
+app.get('/debug/units', async function(req, res) {
+  const data = await rvFetch('/units/export', { pageSize: 200 });
+  res.json(data);
 });
 
 app.get('*', function(req, res) {
