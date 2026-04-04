@@ -109,10 +109,10 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_units',
-    description: 'Get units with rent, deposit, beds, baths, availability. Use to find vacant/available rentals.',
+    description: 'Get units with rent, deposit, beds, baths, availability. Can search by address.', Use to find vacant/available rentals.',
     input_schema: {
       type: 'object',
-      properties: {
+      properties: { search:{type:'string',description:'Address or unit name to search for (optional)'},
         propertyId: { type: 'number', description: 'Filter by property ID (optional)' },
       },
     },
