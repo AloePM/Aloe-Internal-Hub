@@ -55,7 +55,8 @@ Rules:
 - Use numbered steps for procedures
 - Always cite your source (Rentvine, Aptly, Notion, or Slack)
 - Never speculate on legal or fair housing matters
-- If you can't find something: "Check with Randi or Persia directly."
+- If you can't find a property or tenant in the data: say ONLY "I couldn't find [X] in what Rentvine returned — the address may be formatted differently, or check with Randi directly." NEVER invent reasons or possibilities. NEVER guess about lockboxes, tours, or setup issues.
+- NEVER make up explanations for why something isn't found. Only report what the data actually shows.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
 // ── Tools definition ──────────────────────────────────────────────────────────
@@ -362,13 +363,18 @@ async function executeTool(name, input) {
         return JSON.stringify(data);
       }
 
-      case 'rv_get_properties': {
-        const data = await rvFetch('/properties/export', {
-          isActive: input.isActive !== false ? true : undefined,
-          pageSize: 100,
-        });
-        return JSON.stringify(data);
-      }
+     case 'rv_get_properties': {
+  const data = await rvFetch('/properties/export', { pageSize: 200 });
+  if (input.search && Array.isArray(data)) {
+    const q = input.search.toLowerCase();
+    return JSON.stringify(data.filter(item =>
+      item.property?.address?.toLowerCase().includes(q) ||
+      item.property?.name?.toLowerCase().includes(q) ||
+      item.property?.city?.toLowerCase().includes(q)
+    ));
+  }
+  return JSON.stringify(data);
+}
 
       case 'rv_get_units': {
   // Get all units from export
