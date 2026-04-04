@@ -17,7 +17,7 @@ const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
-const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), Roberto (Maintenance coordinator), Alexes (Property Manager), Teri (Property Manager), Juan (Resident Coorindator) and other staff.
+const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
 
 You have access to these live data sources via tools:
 
@@ -25,7 +25,6 @@ RENTVINE — Source of truth for all property management data:
 - Tenant info, balances, ledger, payment history, unpaid charges with full breakdown
 - Lease details, move-in/out dates, lease terms, rent amounts, deposit
 - Property and unit details, availability, beds/baths, addresses
-- Note: showing schedules and tour availability are managed in Aptly, not Rentvine
 - Owner info, portfolio details, contact information
 - Work orders and maintenance requests
 - Property inspections (move-in, move-out, periodic)
@@ -33,7 +32,6 @@ RENTVINE — Source of truth for all property management data:
 
 APTLY — CRM and workflow boards:
 - Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
-- Showing schedules, tour requests, and appointment tracking
 - Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
 - Contact and lead details
 
@@ -64,6 +62,9 @@ Rules:
 - NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
 - If an address is not found, say "I couldn't find [X] in Rentvine — the address may be formatted differently. For leasing questions reach out to Dhyana, or try searching with the full street name spelled out."
 - NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
+- For ANY question about tours, showings, scheduling, or appointments for a specific address: check Rentvine to see if the home is currently occupied (active lease), then search Aptly boards for that address to find its status in the leasing pipeline and any scheduled showing dates.
+- When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions, do NOT tell the user what to do. Just report what the data shows.
+- NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
 const ALL_TOOLS = [
@@ -411,32 +412,23 @@ async function executeTool(name, input) {
         return JSON.stringify(allData);
       }
 
-     case 'rv_get_units': {
-  if (input.propertyId) {
-    // Use the correct per-property units endpoint
-    const units = await rvFetch('/properties/' + input.propertyId + '/units');
-    // Cross-reference with leases to determine availability
-    const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
-    const occupiedIds = new Set(
-      Array.isArray(leases) ? leases.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
-    );
-    if (Array.isArray(units)) {
-      return JSON.stringify(units.map(function(u) {
-        return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) });
-      }));
-    }
-    return JSON.stringify(units);
-  }
-  // No propertyId — derive units from lease export instead
-  const leases = await rvFetch('/leases/export', { pageSize: 200 });
-  if (input.search && Array.isArray(leases)) {
-    return JSON.stringify(leases.filter(function(item) {
-      const full = (item.unit && item.unit.address || '') + ' ' + (item.property && item.property.city || '');
-      return fuzzyMatch(input.search, full);
-    }));
-  }
-  return JSON.stringify(leases);
-}
+      case 'rv_get_units': {
+        const unitData = await rvFetch('/units/export', { pageSize: 200 });
+        const leaseData = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+        const occupiedIds = new Set(
+          Array.isArray(leaseData) ? leaseData.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
+        );
+        const tagged = Array.isArray(unitData)
+          ? unitData.map(function(u) { return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) }); })
+          : unitData;
+        if (input.search && Array.isArray(tagged)) {
+          return JSON.stringify(tagged.filter(function(u) {
+            const full = (u.address || '') + ' ' + (u.city || '') + ' ' + (u.name || '');
+            return fuzzyMatch(input.search, full);
+          }));
+        }
+        return JSON.stringify(tagged);
+      }
 
       case 'rv_get_owners': {
         const data = await rvFetch('/contacts/owners', { pageSize: 100 });
@@ -607,9 +599,6 @@ function getRelevantTools(msg) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}/)) {
-    if (msg.match(/tour|showing|schedule|appointment|visit/)) {
-  ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
-}
     ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
@@ -624,7 +613,7 @@ function getRelevantTools(msg) {
   if (msg.match(/owner|landlord|portfolio|performing|statement/)) {
     ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly/)) {
+  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
