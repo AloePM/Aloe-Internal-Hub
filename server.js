@@ -409,23 +409,32 @@ async function executeTool(name, input) {
         return JSON.stringify(allData);
       }
 
-      case 'rv_get_units': {
-        const unitData = await rvFetch('/units/export', { pageSize: 200 });
-        const leaseData = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
-        const occupiedIds = new Set(
-          Array.isArray(leaseData) ? leaseData.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
-        );
-        const tagged = Array.isArray(unitData)
-          ? unitData.map(function(u) { return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) }); })
-          : unitData;
-        if (input.search && Array.isArray(tagged)) {
-          return JSON.stringify(tagged.filter(function(u) {
-            const full = (u.address || '') + ' ' + (u.city || '') + ' ' + (u.name || '');
-            return fuzzyMatch(input.search, full);
-          }));
-        }
-        return JSON.stringify(tagged);
-      }
+     case 'rv_get_units': {
+  if (input.propertyId) {
+    // Use the correct per-property units endpoint
+    const units = await rvFetch('/properties/' + input.propertyId + '/units');
+    // Cross-reference with leases to determine availability
+    const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+    const occupiedIds = new Set(
+      Array.isArray(leases) ? leases.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
+    );
+    if (Array.isArray(units)) {
+      return JSON.stringify(units.map(function(u) {
+        return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) });
+      }));
+    }
+    return JSON.stringify(units);
+  }
+  // No propertyId — derive units from lease export instead
+  const leases = await rvFetch('/leases/export', { pageSize: 200 });
+  if (input.search && Array.isArray(leases)) {
+    return JSON.stringify(leases.filter(function(item) {
+      const full = (item.unit && item.unit.address || '') + ' ' + (item.property && item.property.city || '');
+      return fuzzyMatch(input.search, full);
+    }));
+  }
+  return JSON.stringify(leases);
+}
 
       case 'rv_get_owners': {
         const data = await rvFetch('/contacts/owners', { pageSize: 100 });
