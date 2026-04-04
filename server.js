@@ -282,15 +282,17 @@ const ALL_TOOLS = [
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function rvFetch(path, params = {}) {
   const url = new URL(`${RENTVINE_BASE}${path}`);
-  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.set(k, v); });
-  const r = await fetch(url.toString(), {
-    headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json' },
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) url.searchParams.set(k, v);
   });
- if (!r.ok) {
+  const r = await fetch(url.toString(), {
+    headers: { Authorization: `Basic ${RENTVINE_AUTH}` },
+  });
+  if (!r.ok) {
     const txt = await r.text();
-    console.error(`Rentvine error ${r.status}:`, txt.slice(0, 200));
-    return { error: `Rentvine ${r.status}: ${txt.slice(0, 100)}` };
-  } ${r.statusText}`, url: url.toString() };
+    console.error('Rentvine error', r.status, txt.slice(0, 200));
+    return { error: 'Rentvine ' + r.status + ': ' + txt.slice(0, 100) };
+  }
   return r.json();
 }
 
