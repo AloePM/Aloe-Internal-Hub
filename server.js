@@ -62,7 +62,9 @@ app.post('/api/chat', async (req, res) => {
     });
 
     const data = await response.json();
-    res.json(data);
+console.log('Anthropic response status:', response.status);
+console.log('Anthropic response:', JSON.stringify(data).slice(0, 500));
+res.json(data);
   } catch (err) {
     console.error('Claude API error:', err.message);
     res.status(500).json({ error: err.message });
