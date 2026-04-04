@@ -17,7 +17,7 @@ const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
-const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
+const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), Roberto (Maintenance coordinator), Alexes (Property Manager), Teri (Property Manager), Juan (Resident Coorindator) and other staff.
 
 You have access to these live data sources via tools:
 
@@ -25,6 +25,7 @@ RENTVINE — Source of truth for all property management data:
 - Tenant info, balances, ledger, payment history, unpaid charges with full breakdown
 - Lease details, move-in/out dates, lease terms, rent amounts, deposit
 - Property and unit details, availability, beds/baths, addresses
+- Note: showing schedules and tour availability are managed in Aptly, not Rentvine
 - Owner info, portfolio details, contact information
 - Work orders and maintenance requests
 - Property inspections (move-in, move-out, periodic)
@@ -32,6 +33,7 @@ RENTVINE — Source of truth for all property management data:
 
 APTLY — CRM and workflow boards:
 - Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
+- Showing schedules, tour requests, and appointment tracking
 - Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
 - Contact and lead details
 
@@ -605,6 +607,9 @@ function getRelevantTools(msg) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}/)) {
+    if (msg.match(/tour|showing|schedule|appointment|visit/)) {
+  ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+}
     ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
