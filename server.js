@@ -17,6 +17,29 @@ const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
+// ── In-memory cache ────────────────────────────────────────────────────────────
+const _cache = new Map();
+function cacheGet(key) {
+  const e = _cache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.exp) { _cache.delete(key); return null; }
+  return e.data;
+}
+function cacheSet(key, data, ttlMs) {
+  _cache.set(key, { data, exp: Date.now() + ttlMs });
+}
+async function cachedFetch(key, ttlMs, fn) {
+  const hit = cacheGet(key);
+  if (hit !== null) { console.log('Cache HIT:', key.slice(0, 60)); return hit; }
+  const data = await fn();
+  cacheSet(key, data, ttlMs);
+  return data;
+}
+const APTLY_TTL  = 10 * 60 * 1000;  // 10 min — board data
+const PROP_TTL   = 15 * 60 * 1000;  // 15 min — property list
+const LEASE_TTL  =  3 * 60 * 1000;  //  3 min — lease data
+
+
 const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), and staff.
 
 APTLY BOARDS: List Property=qfBzBxfooJtfTQncd, Move-Outs=YA3QWmPebvMwLwbB3, Renewals=86YrLPbwdkxtdyZoj, Move-Ins=K9mMGGjKgQPqDykaa, Renter Leads=4EMDSYKirhQaNdQKz
@@ -401,19 +424,23 @@ async function executeTool(name, input) {
         // (Rentvine's propertyIDs[] API param is unreliable)
         if (input.propertyId) {
           const pid = Number(input.propertyId);
-          let page = 1;
-          while (true) {
-            const data = await rvFetch('/leases/export', Object.assign({}, params, { page, pageSize: 200 }));
-            if (!Array.isArray(data) || data.length === 0) break;
-            const matches = data.filter(function(item) {
-              const propId = item.property && (item.property.propertyID || item.property.id);
-              return Number(propId) === pid;
-            });
-            if (matches.length > 0) return JSON.stringify(matches.map(slimLease));
-            if (data.length < 200) break;
-            page++;
-          }
-          return JSON.stringify([]);
+          const statusKey = input.status || 'active';
+          const leaseMatches = await cachedFetch('rv:leases:prop:' + pid + ':' + statusKey, LEASE_TTL, async () => {
+            let page = 1;
+            while (true) {
+              const data = await rvFetch('/leases/export', Object.assign({}, params, { page, pageSize: 200 }));
+              if (!Array.isArray(data) || data.length === 0) break;
+              const matches = data.filter(function(item) {
+                const propId = item.property && (item.property.propertyID || item.property.id);
+                return Number(propId) === pid;
+              });
+              if (matches.length > 0) return matches.map(slimLease);
+              if (data.length < 200) break;
+              page++;
+            }
+            return [];
+          });
+          return JSON.stringify(leaseMatches);
         }
 
         // Search by tenant name or address string
@@ -453,15 +480,17 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_properties': {
-        let allData = [];
-        let pg = 1;
-        while (true) {
-          const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
-          if (!Array.isArray(batch) || batch.length === 0) break;
-          allData = allData.concat(batch);
-          if (batch.length < 200) break;
-          pg++;
-        }
+        let allData = await cachedFetch('rv:properties:all', PROP_TTL, async () => {
+          let all = [], pg = 1;
+          while (true) {
+            const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
+            if (!Array.isArray(batch) || batch.length === 0) break;
+            all = all.concat(batch);
+            if (batch.length < 200) break;
+            pg++;
+          }
+          return all;
+        });
         if (input.search) {
           return JSON.stringify(allData.filter(function(item) {
             const p = item.property || {};
@@ -569,7 +598,7 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board_cards': {
-        const raw = await aptlyFetch('/board/' + input.boardId, { page: input.page || 0 });
+        const raw = await cachedFetch('aptly:board:' + input.boardId + ':' + (input.page||0), APTLY_TTL, () => aptlyFetch('/board/' + input.boardId, { page: input.page || 0 }));
         // Slim cards to key fields only — full cards are too large
         const KEY_FIELDS2 = [
           'Move In Date', 'Move Out Date', 'Expected Move Out Date', 'Lease End Date',
@@ -609,7 +638,7 @@ async function executeTool(name, input) {
 
       case 'aptly_search_cards': {
         // Use Aptly's native query param to filter server-side — avoids fetching all cards
-        const data = await aptlyFetch('/board/' + input.boardId, { page: 0, query: input.query });
+        const data = await cachedFetch('aptly:search:' + input.boardId + ':' + input.query, APTLY_TTL, () => aptlyFetch('/board/' + input.boardId, { page: 0, query: input.query }));
         const KEY_FIELDS = [
           'Move In Date', 'Move Out Date', 'Expected Move Out Date', 'Lease End Date',
           'Requested Showing Information', 'Showing Date', 'Showing Time',
@@ -830,6 +859,19 @@ app.post('/api/chat', async function(req, res) {
     console.error('Chat error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+app.get('/cache/status', function(req, res) {
+  const entries = [];
+  _cache.forEach(function(v, k) {
+    entries.push({ key: k.slice(0, 80), expiresIn: Math.round((v.exp - Date.now()) / 1000) + 's' });
+  });
+  res.json({ size: _cache.size, entries });
+});
+
+app.get('/cache/clear', function(req, res) {
+  _cache.clear();
+  res.json({ cleared: true });
 });
 
 app.get('/health', function(req, res) {
