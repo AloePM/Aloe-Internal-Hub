@@ -736,18 +736,46 @@ app.get('/debug/lease/:id', async function(req, res) {
 });
 
 app.get('/debug/aptly/ticket/:id', async function(req, res) {
-  const data = await aptlyFetch('/aptlet-instance/' + req.params.id);
-  res.json(data);
+  const id = req.params.id;
+  const results = {};
+  const paths = [
+    '/aptlet-instance/' + id,
+    '/ticket/' + id,
+    '/instance/' + id,
+    '/card/' + id,
+    '/aptlet/' + id,
+  ];
+  for (const path of paths) {
+    try {
+      const r = await fetch('https://app.getaptly.com/api' + path + '?x-token=' + APTLY_TOKEN);
+      if (r.ok) {
+        results[path] = { status: r.status, data: await r.json() };
+      } else {
+        results[path] = { status: r.status, body: await r.text() };
+      }
+    } catch(e) {
+      results[path] = { error: e.message };
+    }
+  }
+  res.json(results);
 });
 
 app.get('/debug/aptly/units', async function(req, res) {
-  // Try different possible Aptly endpoints for units/locations
   const results = {};
-  const endpoints = ['/location/unit', '/locations', '/units', '/location/units', '/properties'];
+  const endpoints = [
+    '/location/unit', '/location/units', '/locations', '/units', '/properties',
+    '/listing', '/listings', '/v1/units', '/v2/units', '/v1/locations',
+    '/aptlet', '/aptlets', '/unit', '/property',
+    '/location', '/v1/location', '/v1/listing', '/v2/listing',
+  ];
   for (const ep of endpoints) {
     try {
       const r = await fetch('https://app.getaptly.com/api' + ep + '?x-token=' + APTLY_TOKEN);
-      results[ep] = { status: r.status, data: r.ok ? await r.json() : await r.text() };
+      if (r.ok) {
+        results[ep] = { status: r.status, data: await r.json() };
+      } else {
+        results[ep] = { status: r.status };
+      }
     } catch(e) {
       results[ep] = { error: e.message };
     }
