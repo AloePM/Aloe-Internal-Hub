@@ -369,12 +369,23 @@ async function executeTool(name, input) {
           };
         }
 
-        // Search by propertyId — most reliable
+        // Search by propertyId — paginate and filter client-side
+        // (Rentvine's propertyIDs[] API param is unreliable)
         if (input.propertyId) {
-          params['propertyIDs[]'] = input.propertyId;
-          params.pageSize = 10;
-          const data = await rvFetch('/leases/export', Object.assign({}, params, { page: 1 }));
-          return JSON.stringify(Array.isArray(data) ? data.map(slimLease) : []);
+          const pid = Number(input.propertyId);
+          let page = 1;
+          while (true) {
+            const data = await rvFetch('/leases/export', Object.assign({}, params, { page, pageSize: 200 }));
+            if (!Array.isArray(data) || data.length === 0) break;
+            const matches = data.filter(function(item) {
+              const propId = item.property && (item.property.propertyID || item.property.id);
+              return Number(propId) === pid;
+            });
+            if (matches.length > 0) return JSON.stringify(matches.map(slimLease));
+            if (data.length < 200) break;
+            page++;
+          }
+          return JSON.stringify([]);
         }
 
         // Search by tenant name or address string
