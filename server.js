@@ -756,7 +756,7 @@ app.get('/debug/aptly/search/:boardId/:query', async function(req, res) {
   }
 });
 
-
+app.get('/debug/properties', async function(req, res) {
   const data = await rvFetch('/properties/export', { pageSize: 200 });
   res.json(data);
 });
