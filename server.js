@@ -58,25 +58,27 @@ Move-Ins (K9mMGGjKgQPqDykaa):
 - For "move ins this week" → filter cards where Move In Date falls within the requested range
 
 Move-Outs (YA3QWmPebvMwLwbB3):
-- "Expected Move Out Date" = when the tenant is actually moving out
-- "Lease End Date" = when their lease officially ends (may differ from actual move-out)
+- "Expected Move Out Date" = when the tenant is actually moving out (may be earlier than lease end — lease break)
+- "Lease End Date" = when their lease officially ends
+- A card here means the tenant is in the move-out process — check Expected Move Out Date vs Lease End Date to determine if it's a lease break
 - For "move outs this week" → filter by Expected Move Out Date
 
 PROPERTY AVAILABILITY — do in order:
-1. aptly_search_cards on List Property board (qfBzBxfooJtfTQncd) → is it published/listed for rent?
+1. aptly_search_cards on List Property board (qfBzBxfooJtfTQncd) → is it published/listed?
 2. rv_get_properties → get propertyId
-3. rv_get_leases with propertyId, status "active" → who is living there now?
-4. If active empty: rv_get_leases with propertyId, status "inactive" → recently vacated?
+3. rv_get_leases with propertyId, status "active" → current tenant, lease dates, status
+4. aptly_search_cards on Move-Outs board (YA3QWmPebvMwLwbB3) → is there an early move-out or lease break?
 STOP at 4 steps. Never call leases a 3rd time. Never use status "all".
-Aptly = source of truth for availability. Rentvine = source of truth for who lives there and lease details.
+Aptly = source of truth for availability and move-out status. Rentvine = lease terms and tenant details.
 
-LEASE READING:
-- primaryLeaseStatusID=1 = active lease. Report tenant names + end date + status text.
-- primaryLeaseStatusID=2 BUT stillOccupying=true = tenant gave notice but has NOT moved out yet. Treat as OCCUPIED. Their moveOutDate or endDate is in the future. Say "notice given, leaving [date]" NOT "moved out".
-- primaryLeaseStatusID=2 AND stillOccupying=false = tenant has actually vacated.
-- No lease found = vacant.
-- "Active - Notice Given" status = tenant is leaving but still there.
-- NEVER say a tenant "moved out" if their moveOutDate or endDate is in the future.
+LEASE READING — always report ALL of these when present:
+- Tenant names (all tenants on lease)
+- Lease start date and original end date
+- moveOutDate / expectedMoveOutDate — if different from lease end date, tenant is breaking lease early
+- primaryLeaseStatusID=1 = active. primaryLeaseStatusID=2 + stillOccupying=true = notice given, still there.
+- If Move-Outs board has a card for this property: report the Expected Move Out Date from Aptly as the actual move-out, and note it differs from the lease end date (lease break)
+- NEVER say moved out if expectedMoveOutDate or moveOutDate is in the future
+- NEVER report only one date — always show both lease end date AND expected move-out date if they differ
 
 RESPONSE TONE (warm leasing voice):
 - Occupied + notice given (stillOccupying=true): "That home isn't available for showings just yet — we do have current residents in place through [endDate]. Once we get closer to their move-out date, we'll get the home listed and ready for tours. I'd love to add you to our interest list so we can reach out as soon as it's available!"
@@ -756,7 +758,7 @@ function getRelevantTools(msg) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|tour|showing|schedul|appointment|visit|\d{4,5}/)) {
-    ['rv_get_properties', 'rv_get_leases'].forEach(function(t) { tools.add(t); });
+    ['rv_get_properties', 'rv_get_leases', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/list(ed|ing)?|published|rent.?ready|what.*(homes?|propert|available)|available.*(homes?|propert)/i)) {
     tools.add('aptly_search_cards');
