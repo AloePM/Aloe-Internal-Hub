@@ -42,7 +42,19 @@ const LEASE_TTL  =  3 * 60 * 1000;  //  3 min — lease data
 
 const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), and staff.
 
-APTLY BOARDS: List Property=qfBzBxfooJtfTQncd, Move-Outs=YA3QWmPebvMwLwbB3, Renewals=86YrLPbwdkxtdyZoj, Move-Ins=K9mMGGjKgQPqDykaa, Renter Leads=4EMDSYKirhQaNdQKz
+APTLY BOARDS:
+- List Property=qfBzBxfooJtfTQncd (availability: rent ready, showings enabled, published)
+- Renter Leads=4EMDSYKirhQaNdQKz (showing schedules — "Requested Showing Information" field)
+- Move-Ins=K9mMGGjKgQPqDykaa ("Move In Date" field)
+- Move-Outs=YA3QWmPebvMwLwbB3 ("Expected Move Out Date" and "Lease End Date" fields)
+- Tenant Renewals=86YrLPbwdkxtdyZoj
+- Applicants=MJxaStgENouWrNEKd
+- Evictions=TEXBDbbQmjktAqyad
+- Owner Pipeline=QySZ8yRWJ5KeYFcZt
+- Work Orders=workOrder (UUID field keys — schema auto-fetched)
+- Units=unit (rent ready, showings, published — UUID field keys)
+- Leases=lease (UUID field keys)
+- Portfolios=portfolio (UUID field keys)
 
 APTLY BOARD FIELD GUIDE — use aptly_get_board_cards to pull cards, then read these fields:
 
@@ -86,6 +98,8 @@ RESPONSE TONE (warm leasing voice):
 - Listed in Aptly: "That home is available at $[rent]/mo, [bed]bd/[bath]ba — showings are [enabled/not yet enabled]."
 - Vacant, not listed: "The home is vacant but not yet listed — still getting it rent-ready. I can add you to our interest list."
 
+UNPAID BALANCES: To find who has unpaid rent across the whole portfolio, call rv_get_leases with unpaid=true and status="active". This returns all active leases with a balance > 0. Include tenant name, property address, and balance amount in your response. For a single tenant/property balance, use rv_get_ledger after finding their leaseId.
+
 FALLBACK (only with zero data): Leasing→Dhyana, Maintenance→Roberto, HOA→Juan, Renewals→Persia, Maricopa zero data→Teri, Owner→Alexes, Accounting→Randi. Never route if you have lease data.
 
 NEVER SAY: "couldn't access", "inaccessible", "limited data", "cannot be toured", "tours not possible", "you should", "I recommend"`;
@@ -101,6 +115,7 @@ const ALL_TOOLS = [
         propertyId: { type: 'number', description: 'Property ID from rv_get_properties — most reliable way to find leases for an address' },
         search: { type: 'string', description: 'Tenant name, email, or property address (use only if propertyId unknown)' },
         status: { type: 'string', description: 'active, inactive, or all (default: active)' },
+        unpaid: { type: 'boolean', description: 'Set true to get ALL active leases with unpaid balances across the entire portfolio' },
         page: { type: 'number', description: 'Page number (default: 1)' },
       },
     },
@@ -416,6 +431,8 @@ async function executeTool(name, input) {
             expectedMoveOutDate: l.expectedMoveOutDate,
             rent: l.rent,
             deposit: l.deposit,
+            balance: l.balance,
+            unpaidBalance: l.unpaidBalance || l.balance,
             tenants: (l.tenants || []).map(function(t) { return { name: t.name, email: t.email, phone: t.phone }; }),
             property: { address: p.address, city: p.city, state: p.state, zip: p.zip, propertyID: p.propertyID },
             unit: { address: u.address, beds: u.beds, baths: u.baths, sqft: u.sqft },
@@ -467,6 +484,28 @@ async function executeTool(name, input) {
             page++;
           }
           return JSON.stringify([]);
+        }
+
+        // Unpaid balances — fetch all active leases and filter for balance > 0
+        if (input.unpaid) {
+          const cacheKey = 'rv:leases:unpaid:' + (input.status || 'active');
+          const results = await cachedFetch(cacheKey, LEASE_TTL, async () => {
+            let all = [], pg = 1;
+            while (true) {
+              const batch = await rvFetch('/leases/export', Object.assign({}, params, { page: pg, pageSize: 200 }));
+              if (!Array.isArray(batch) || batch.length === 0) break;
+              all = all.concat(batch);
+              if (batch.length < 200) break;
+              pg++;
+            }
+            return all
+              .filter(function(item) {
+                const bal = parseFloat(item.lease && (item.lease.balance || item.lease.unpaidBalance) || 0);
+                return bal > 0;
+              })
+              .map(slimLease);
+          });
+          return JSON.stringify(results);
         }
 
         const data = await rvFetch('/leases/export', Object.assign({}, params, { page: input.page || 1 }));
@@ -606,27 +645,40 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board_cards': {
+        // Fetch schema to map UUID field keys to human-readable labels
+        const schema = await cachedFetch('aptly:schema:' + input.boardId, APTLY_TTL, async () => {
+          try {
+            const s = await aptlyFetch('/schema/' + input.boardId);
+            if (Array.isArray(s)) {
+              const map = {};
+              s.forEach(function(f) { if (f.key && f.label) map[f.key] = f.label; });
+              return map;
+            }
+          } catch(e) {}
+          return {};
+        });
         const raw = await cachedFetch('aptly:board:' + input.boardId + ':' + (input.page||0), APTLY_TTL, () => aptlyFetch('/board/' + input.boardId, { page: input.page || 0 }));
         // Slim cards to key fields only — full cards are too large
-        const KEY_FIELDS2 = [
-          'Move In Date', 'Move Out Date', 'Expected Move Out Date', 'Lease End Date',
-          'Requested Showing Information', 'Showing Date', 'Showing Time',
-          'Rent Ready', 'Showings Enabled', 'Published', 'Status',
-          'Property Address', 'Address', 'Unit', 'Tenant', 'Name',
-        ];
         function slimCard(card) {
           const fields = {};
+          // Handle both named fields and UUID-keyed fields (using schema map)
           if (Array.isArray(card.fields)) {
             card.fields.forEach(function(f) {
-              if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
-                const val = String(f.value);
-                if (KEY_FIELDS2.some(function(k) { return f.label.toLowerCase().includes(k.toLowerCase()); })) {
-                  fields[f.label] = val.slice(0, 100);
-                }
+              const label = (f.label) || (schema && schema[f.key]) || f.key || '';
+              const val = f.value !== undefined && f.value !== null ? String(f.value) : '';
+              if (label && val && val !== 'null') fields[label.slice(0, 60)] = val.slice(0, 150);
+            });
+          } else if (card.fields && typeof card.fields === 'object') {
+            // UUID-keyed object format
+            Object.keys(card.fields).forEach(function(k) {
+              const label = (schema && schema[k]) || k;
+              const val = card.fields[k];
+              if (val !== undefined && val !== null && val !== '') {
+                fields[label.slice(0, 60)] = String(val).slice(0, 150);
               }
             });
           }
-          return { id: card.id, title: (card.title || card.name || '').slice(0, 80), status: card.status || card.stage, fields: fields };
+          return { id: card.id || card.cardId, title: (card.title || card.name || '').slice(0, 80), status: card.status || card.stage, fields: fields };
         }
         if (raw && Array.isArray(raw.cards)) {
           return JSON.stringify({ total: raw.cards.length, cards: raw.cards.slice(0, 50).map(slimCard) });
@@ -636,11 +688,18 @@ async function executeTool(name, input) {
 
       case 'aptly_list_boards': {
         return JSON.stringify([
-          { name: 'List Property (Listings)', id: 'qfBzBxfooJtfTQncd', note: 'Properties listed for rent — rent ready, showings enabled, published status' },
-          { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing activity and lead stats only — NOT listing availability' },
-          { name: 'Move-Ins', id: 'K9mMGGjKgQPqDykaa', note: 'New tenant move-in pipeline' },
-          { name: 'Move-Outs', id: 'YA3QWmPebvMwLwbB3', note: 'Tenant move-out pipeline' },
+          { name: 'List Property', id: 'qfBzBxfooJtfTQncd', note: 'Properties listed for rent — availability, rent ready, showings enabled' },
+          { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing schedules and lead stats — Requested Showing Information field has date/time' },
+          { name: 'Move-Ins', id: 'K9mMGGjKgQPqDykaa', note: 'New tenant move-in pipeline — Move In Date field' },
+          { name: 'Move-Outs', id: 'YA3QWmPebvMwLwbB3', note: 'Move-out pipeline — Expected Move Out Date and Lease End Date fields' },
           { name: 'Tenant Renewals', id: '86YrLPbwdkxtdyZoj', note: 'Lease renewal pipeline' },
+          { name: 'Applicants', id: 'MJxaStgENouWrNEKd', note: 'Rental applicants pipeline' },
+          { name: 'Evictions', id: 'TEXBDbbQmjktAqyad', note: 'Eviction cases' },
+          { name: 'Owner Pipeline', id: 'QySZ8yRWJ5KeYFcZt', note: 'Owner onboarding and management pipeline' },
+          { name: 'Work Orders', id: 'workOrder', note: 'Maintenance work orders — fields use UUID keys, fetch schema first' },
+          { name: 'Leases', id: 'lease', note: 'All leases — fields use UUID keys, fetch schema first' },
+          { name: 'Units', id: 'unit', note: 'All units/properties — rent ready, showings, published status — fields use UUID keys, fetch schema first' },
+          { name: 'Portfolios', id: 'portfolio', note: 'Portfolio/owner data — fields use UUID keys, fetch schema first' },
         ]);
       }
 
