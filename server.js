@@ -1,4 +1,4 @@
-import express from 'express';
+=import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 
@@ -569,7 +569,29 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board_cards': {
-        return JSON.stringify(await aptlyFetch('/board/' + input.boardId, { page: input.page || 0 }));
+        const raw = await aptlyFetch('/board/' + input.boardId, { page: input.page || 0 });
+        // Slim cards to key fields only — full cards are too large
+        function slimCard(card) {
+          const fields = {};
+          // Extract all field values into a flat object
+          if (Array.isArray(card.fields)) {
+            card.fields.forEach(function(f) {
+              if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
+                fields[f.label] = f.value;
+              }
+            });
+          }
+          return {
+            id: card.id,
+            title: card.title || card.name,
+            status: card.status || card.stage,
+            fields: fields,
+          };
+        }
+        if (raw && Array.isArray(raw.cards)) {
+          return JSON.stringify({ total: raw.cards.length, cards: raw.cards.map(slimCard) });
+        }
+        return JSON.stringify(raw);
       }
 
       case 'aptly_list_boards': {
@@ -584,11 +606,21 @@ async function executeTool(name, input) {
 
       case 'aptly_search_cards': {
         const data = await aptlyFetch('/board/' + input.boardId, { page: 0 });
-        if (Array.isArray(data && data.cards)) {
+        if (data && Array.isArray(data.cards)) {
           const q = input.query.toLowerCase();
-          return JSON.stringify(Object.assign({}, data, {
-            cards: data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }),
-          }));
+          const matches = data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); });
+          function slimCard(card) {
+            const fields = {};
+            if (Array.isArray(card.fields)) {
+              card.fields.forEach(function(f) {
+                if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
+                  fields[f.label] = f.value;
+                }
+              });
+            }
+            return { id: card.id, title: card.title || card.name, status: card.status || card.stage, fields: fields };
+          }
+          return JSON.stringify({ total: matches.length, cards: matches.map(slimCard) });
         }
         return JSON.stringify(data);
       }
