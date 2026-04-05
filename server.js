@@ -40,9 +40,10 @@ const PROP_TTL   = 15 * 60 * 1000;  // 15 min — property list
 const LEASE_TTL  =  3 * 60 * 1000;  //  3 min — lease data
 
 
+const _today = new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
 const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), Roberto (maintenance), Juan (HOA), Teri (Maricopa), Alexes (owners), and staff.
 
-Today's date: ${new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}.
+Today's date: ${_today}.
 
 NATURAL LANGUAGE GUIDE — recognize these question types and know exactly what to pull:
 
@@ -130,7 +131,7 @@ CLARIFICATION: If a question is ambiguous (e.g. "who has a balance" could mean p
 
 FALLBACK (only zero data from all sources): Leasing→Dhyana, Maintenance→Roberto, HOA→Juan, Renewals→Persia, Maricopa no data→Teri, Owner→Alexes, Accounting→Randi.
 
-NEVER SAY: "couldn't access", "inaccessible", "limited data", "cannot be toured", "tours not possible", "you should", "I recommend", "reach out to X" when data exists\`;
+NEVER SAY: "couldn't access", "inaccessible", "limited data", "cannot be toured", "tours not possible", "you should", "I recommend", "reach out to X" when data exists`;
 
 
 const ALL_TOOLS = [
