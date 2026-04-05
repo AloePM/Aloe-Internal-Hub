@@ -29,10 +29,9 @@ RENTVINE — Source of truth for all property management data:
 - Work orders, maintenance, inspections, vendors
 
 APTLY — CRM and workflow boards:
-- Listings/Properties board — shows homes that are rent-ready, published, showings enabled (get board ID from aptly_list_boards)
-- Renter Leads board (4EMDSYKirhQaNdQKz) — showing STATS and activity only, NOT availability
-- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
-- DO NOT use Renter Leads to determine if a home is available — it only shows showing volume and lead stats
+- List Property board (ID: qfBzBxfooJtfTQncd) — properties listed for rent, shows rent ready, showings enabled, published status. USE THIS to check if a home is listed/available.
+- Renter Leads board (ID: 4EMDSYKirhQaNdQKz) — showing STATS and activity only, NOT availability. DO NOT use this for availability checks.
+- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards (IDs TBD)
 
 NOTION — Company policies and SOPs
 SLACK — Team communications
@@ -41,7 +40,7 @@ STRICT RULES:
 
 1. DETERMINING PROPERTY AVAILABILITY — always do ALL of these:
    a) Call rv_get_leases with status "all" for the address — get full lease data including tenant names, lease status text, endDate, moveOutDate, expectedMoveOutDate
-   b) Check Aptly listings/properties board (use aptly_list_boards to find it, look for board named "Listings", "Properties", "Available Units", "Rent Ready" or similar) — search it for the address to see if it's published and showings-enabled
+   b) Search Aptly List Property board (ID: qfBzBxfooJtfTQncd) using aptly_search_cards — this shows homes actively listed for rent with rent ready, showings enabled, and published status
    c) DO NOT check Renter Leads for availability — it does not contain that data
 
 2. READING LEASE DATA:
@@ -518,13 +517,13 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_list_boards': {
-        // /aptlets endpoint does not exist in Aptly API — return known board IDs for Aloe PM
         return JSON.stringify([
-          { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing activity and lead stats — NOT listing availability' },
-          { name: 'Move-Ins', id: 'UNKNOWN — get from Aptly URL', note: 'New tenant move-in pipeline' },
-          { name: 'Move-Outs', id: 'UNKNOWN — get from Aptly URL', note: 'Tenant move-out pipeline' },
-          { name: 'Tenant Renewals', id: 'UNKNOWN — get from Aptly URL', note: 'Lease renewal pipeline' },
-          { name: 'HOA Violations', id: 'UNKNOWN — get from Aptly URL', note: 'HOA violation tracking' },
+          { name: 'List Property (Listings)', id: 'qfBzBxfooJtfTQncd', note: 'Properties listed for rent — rent ready, showings enabled, published status' },
+          { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing activity and lead stats only — NOT listing availability' },
+          { name: 'Move-Ins', id: 'UNKNOWN', note: 'New tenant move-in pipeline' },
+          { name: 'Move-Outs', id: 'UNKNOWN', note: 'Tenant move-out pipeline' },
+          { name: 'Tenant Renewals', id: 'UNKNOWN', note: 'Lease renewal pipeline' },
+          { name: 'HOA Violations', id: 'UNKNOWN', note: 'HOA violation tracking' },
         ]);
       }
 
@@ -781,6 +780,11 @@ app.get('/debug/aptly/units', async function(req, res) {
     }
   }
   res.json(results);
+});
+
+app.get('/debug/aptly/listings', async function(req, res) {
+  const data = await aptlyFetch('/aptlet/qfBzBxfooJtfTQncd', { page: 0 });
+  res.json(data);
 });
 
 app.get('/debug/aptly/boards', async function(req, res) {
