@@ -770,6 +770,39 @@ app.get('/debug/lease/:id', async function(req, res) {
   res.json(data);
 });
 
+app.get('/debug/property-leases/:propertyId', async function(req, res) {
+  const pid = req.params.propertyId;
+  const [active, inactive] = await Promise.all([
+    rvFetch('/leases/export', { pageSize: 200, page: 1, 'primaryLeaseStatusIDs[]': 1 }),
+    rvFetch('/leases/export', { pageSize: 200, page: 1, 'primaryLeaseStatusIDs[]': 2 }),
+  ]);
+  // Return all leases and show property ID fields so we can see the structure
+  const all = [
+    ...(Array.isArray(active) ? active : []),
+    ...(Array.isArray(inactive) ? inactive : []),
+  ];
+  const matches = all.filter(function(item) {
+    return JSON.stringify(item).includes(pid);
+  });
+  // Show the raw structure of matched items
+  res.json({
+    matchCount: matches.length,
+    propertyIdFieldsFound: matches.map(function(item) {
+      return {
+        'lease.propertyID': item.lease && item.lease.propertyID,
+        'property.propertyID': item.property && item.property.propertyID,
+        'property.id': item.property && item.property.id,
+        'unit.propertyID': item.unit && item.unit.propertyID,
+        primaryLeaseStatusID: item.lease && item.lease.primaryLeaseStatusID,
+        leaseStatusText: item.lease && item.lease.leaseStatusText,
+        tenants: item.lease && item.lease.tenants && item.lease.tenants.map(function(t) { return t.name; }),
+        endDate: item.lease && item.lease.endDate,
+        moveOutDate: item.lease && item.lease.moveOutDate,
+      };
+    }),
+  });
+});
+
 app.get('/debug/aptly/ticket/:id', async function(req, res) {
   const id = req.params.id;
   const results = {};
