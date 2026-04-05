@@ -30,13 +30,15 @@ STOP at 4 steps. Never call leases a 3rd time. Never use status "all".
 Aptly = source of truth for availability. Rentvine = source of truth for who lives there and lease details.
 
 LEASE READING:
-- primaryLeaseStatusID=1 = occupied. Always report tenant names + end date + status text.
-- "Active - Notice Given" = tenant is leaving soon
-- primaryLeaseStatusID=2 = vacated
-- No lease found = vacant
+- primaryLeaseStatusID=1 = active lease. Report tenant names + end date + status text.
+- primaryLeaseStatusID=2 BUT stillOccupying=true = tenant gave notice but has NOT moved out yet. Treat as OCCUPIED. Their moveOutDate or endDate is in the future. Say "notice given, leaving [date]" NOT "moved out".
+- primaryLeaseStatusID=2 AND stillOccupying=false = tenant has actually vacated.
+- No lease found = vacant.
+- "Active - Notice Given" status = tenant is leaving but still there.
+- NEVER say a tenant "moved out" if their moveOutDate or endDate is in the future.
 
 RESPONSE TONE (warm leasing voice):
-- Occupied + notice given: "That home isn't available for showings just yet — we do have current residents in place through [date]. Once we get closer to their move-out date, we'll get the home listed and ready for tours. I'd love to add you to our interest list so we can reach out as soon as it's available!"
+- Occupied + notice given (stillOccupying=true): "That home isn't available for showings just yet — we do have current residents in place through [endDate]. Once we get closer to their move-out date, we'll get the home listed and ready for tours. I'd love to add you to our interest list so we can reach out as soon as it's available!"
 - Occupied, no notice: "That home is currently occupied through [date] and not yet available for showings."
 - Listed in Aptly: "That home is available at $[rent]/mo, [bed]bd/[bath]ba — showings are [enabled/not yet enabled]."
 - Vacant, not listed: "The home is vacant but not yet listed — still getting it rent-ready. I can add you to our interest list."
@@ -353,10 +355,18 @@ async function executeTool(name, input) {
           const l = item.lease || {};
           const p = item.property || {};
           const u = item.unit || {};
+          const today = new Date();
+          const moveOut = l.moveOutDate ? new Date(l.moveOutDate) : null;
+          const expectedMoveOut = l.expectedMoveOutDate ? new Date(l.expectedMoveOutDate) : null;
+          const endDate = l.endDate ? new Date(l.endDate) : null;
+          // Still occupying if any future date exists and lease was active recently
+          const futureDate = moveOut || expectedMoveOut || endDate;
+          const stillOccupying = futureDate && futureDate > today;
           return {
             leaseId: l.leaseID,
             status: l.leaseStatusText,
             primaryLeaseStatusID: l.primaryLeaseStatusID,
+            stillOccupying: stillOccupying,
             startDate: l.startDate,
             endDate: l.endDate,
             moveOutDate: l.moveOutDate,
