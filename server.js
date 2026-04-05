@@ -882,6 +882,27 @@ app.get('/debug/aptly/units', async function(req, res) {
   res.json(results);
 });
 
+app.get('/debug/aptly/all-boards', async function(req, res) {
+  const boards = [
+    { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz' },
+    { name: 'Move-Ins', id: 'K9mMGGjKgQPqDykaa' },
+    { name: 'Move-Outs', id: 'YA3QWmPebvMwLwbB3' },
+    { name: 'Renewals', id: '86YrLPbwdkxtdyZoj' },
+    { name: 'List Property', id: 'qfBzBxfooJtfTQncd' },
+  ];
+  const results = {};
+  for (const board of boards) {
+    try {
+      const r = await fetch('https://app.getaptly.com/api/aptlet/' + board.id + '?page=0&x-token=' + APTLY_TOKEN);
+      const body = r.ok ? await r.json() : await r.text();
+      results[board.name] = { status: r.status, cardCount: body && body.cards ? body.cards.length : body };
+    } catch(e) {
+      results[board.name] = { error: e.message };
+    }
+  }
+  res.json(results);
+});
+
 app.get('/debug/aptly/listings', async function(req, res) {
   const id = 'qfBzBxfooJtfTQncd';
   const results = {};
