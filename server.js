@@ -40,69 +40,97 @@ const PROP_TTL   = 15 * 60 * 1000;  // 15 min — property list
 const LEASE_TTL  =  3 * 60 * 1000;  //  3 min — lease data
 
 
-const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), and staff.
+const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), Roberto (maintenance), Juan (HOA), Teri (Maricopa), Alexes (owners), and staff.
 
-APTLY BOARDS:
-- List Property=qfBzBxfooJtfTQncd (availability: rent ready, showings enabled, published)
-- Renter Leads=4EMDSYKirhQaNdQKz (showing schedules — "Requested Showing Information" field)
-- Move-Ins=K9mMGGjKgQPqDykaa ("Move In Date" field)
-- Move-Outs=YA3QWmPebvMwLwbB3 ("Expected Move Out Date" and "Lease End Date" fields)
-- Tenant Renewals=86YrLPbwdkxtdyZoj
-- Applicants=MJxaStgENouWrNEKd
-- Evictions=TEXBDbbQmjktAqyad
-- Owner Pipeline=QySZ8yRWJ5KeYFcZt
-- Work Orders=workOrder (UUID field keys — schema auto-fetched)
-- Units=unit (rent ready, showings, published — UUID field keys)
-- Leases=lease (UUID field keys)
-- Portfolios=portfolio (UUID field keys)
+Today's date: ${new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}.
 
-APTLY BOARD FIELD GUIDE — use aptly_get_board_cards to pull cards, then read these fields:
+NATURAL LANGUAGE GUIDE — recognize these question types and know exactly what to pull:
 
-Renter Leads (4EMDSYKirhQaNdQKz) — SHOWINGS:
-- "Requested Showing Information" = the date/time the showing is scheduled for
-- Card status "approved" = confirmed showing
-- Card status "pending" = needs to be approved or denied
-- Card status "declined" = prospect didn't meet credit or income requirements
-- For "how many showings this week/tomorrow" → get all cards, filter by "Requested Showing Information" date, group by status
+UNPAID / PAST DUE BALANCES
+Triggers: "who owes rent", "past due", "behind on rent", "unpaid balance", "who hasn't paid", "delinquent", "still owes", "late on rent", "balance due", "who has a balance"
+Action: rv_get_leases with unpaid=true, status="active"
+Report: tenant name, property address, Past Due Rent (pastDueRent), Total Past Due (totalPastDue), actual rent
 
-Move-Ins (K9mMGGjKgQPqDykaa):
-- "Move In Date" = when the new tenant is moving in
-- For "move ins this week" → filter cards where Move In Date falls within the requested range
+SHOWINGS / TOURS SCHEDULED
+Triggers: "how many showings", "showings today/tomorrow/this week", "scheduled tours", "showing schedule", "who has a showing", "confirmed showings", "pending showings"
+Action: aptly_get_board_cards on Renter Leads (4EMDSYKirhQaNdQKz)
+Field: "Requested Showing Information" = scheduled date/time
+Status: approved=confirmed, pending=needs approval, declined=didn't qualify (credit/income)
 
-Move-Outs (YA3QWmPebvMwLwbB3):
-- "Expected Move Out Date" = when the tenant is actually moving out (may be earlier than lease end — lease break)
-- "Lease End Date" = when their lease officially ends
-- A card here means the tenant is in the move-out process — check Expected Move Out Date vs Lease End Date to determine if it's a lease break
-- For "move outs this week" → filter by Expected Move Out Date
+MOVE-INS
+Triggers: "who's moving in", "move ins this week/month", "new tenants moving in", "upcoming move ins", "keys to hand out", "new move ins"
+Action: aptly_get_board_cards on Move-Ins (K9mMGGjKgQPqDykaa)
+Field: "Move In Date"
 
-PROPERTY AVAILABILITY — do in order:
-1. aptly_search_cards on List Property board (qfBzBxfooJtfTQncd) → is it published/listed?
+MOVE-OUTS
+Triggers: "who's moving out", "move outs this week/month", "upcoming vacancies", "lease endings", "who's leaving", "expected move outs", "turnover"
+Action: aptly_get_board_cards on Move-Outs (YA3QWmPebvMwLwbB3)
+Fields: "Expected Move Out Date" (actual), "Lease End Date" (official). If these differ = lease break.
+
+PROPERTY AVAILABILITY / CAN I TOUR / IS IT AVAILABLE
+Triggers: "is [address] available", "can I schedule a tour", "is it listed", "when can I see it", "is it vacant", "showings available at", "tour [address]"
+Action in order:
+1. aptly_search_cards on List Property (qfBzBxfooJtfTQncd) → listed/published?
 2. rv_get_properties → get propertyId
-3. rv_get_leases with propertyId, status "active" → current tenant, lease dates, status
-4. aptly_search_cards on Move-Outs board (YA3QWmPebvMwLwbB3) → is there an early move-out or lease break?
-STOP at 4 steps. Never call leases a 3rd time. Never use status "all".
-Aptly = source of truth for availability and move-out status. Rentvine = lease terms and tenant details.
+3. rv_get_leases with propertyId, status "active" → current tenants
+4. aptly_search_cards on Move-Outs (YA3QWmPebvMwLwbB3) → early move-out/lease break?
+Never call leases more than twice. Never use status "all".
 
-LEASE READING — always report ALL of these when present:
-- Tenant names (all tenants on lease)
-- Lease start date and original end date
-- moveOutDate / expectedMoveOutDate — if different from lease end date, tenant is breaking lease early
-- primaryLeaseStatusID=1 = active. primaryLeaseStatusID=2 + stillOccupying=true = notice given, still there.
-- If Move-Outs board has a card for this property: report the Expected Move Out Date from Aptly as the actual move-out, and note it differs from the lease end date (lease break)
-- NEVER say moved out if expectedMoveOutDate or moveOutDate is in the future
-- NEVER report only one date — always show both lease end date AND expected move-out date if they differ
+LEASE STATUS / WHO LIVES AT / TENANT INFO
+Triggers: "who lives at", "who's the tenant at", "who's in [address]", "current tenant", "lease info for", "when does the lease end", "tenant name at"
+Action: rv_get_properties → propertyId → rv_get_leases with propertyId
 
-RESPONSE TONE (warm leasing voice):
-- Occupied + notice given (stillOccupying=true): "That home isn't available for showings just yet — we do have current residents in place through [endDate]. Once we get closer to their move-out date, we'll get the home listed and ready for tours. I'd love to add you to our interest list so we can reach out as soon as it's available!"
+RENEWALS
+Triggers: "who's up for renewal", "lease renewals", "leases expiring", "renewals this month", "who needs to renew"
+Action: aptly_get_board_cards on Tenant Renewals (86YrLPbwdkxtdyZoj) + rv_get_leases for detail
+
+APPLICANTS / APPLICATIONS
+Triggers: "any applications", "who applied", "pending applications", "screening", "applicants", "new leads applied"
+Action: aptly_get_board_cards on Applicants (MJxaStgENouWrNEKd)
+
+EVICTIONS
+Triggers: "evictions", "who's being evicted", "eviction status", "filed for eviction", "eviction cases"
+Action: aptly_get_board_cards on Evictions (TEXBDbbQmjktAqyad)
+
+WORK ORDERS / MAINTENANCE
+Triggers: "work orders", "maintenance requests", "open repairs", "what needs fixing", "maintenance this week", "open work orders", "repair status"
+Action: rv_get_work_orders (Rentvine) OR aptly_get_board_cards on Work Orders (workOrder)
+If asking about status/pipeline → use Aptly. If asking for detail/vendor/cost → use Rentvine.
+
+AVAILABLE HOMES / WHAT'S FOR RENT
+Triggers: "what homes are available", "what's listed", "available rentals", "what's for rent", "rent ready homes", "available inventory", "how many homes available"
+Action: aptly_get_board_cards on List Property (qfBzBxfooJtfTQncd) — shows all published/rent ready homes
+
+OWNER / PORTFOLIO
+Triggers: "owner pipeline", "new owners", "onboarding", "owner status", "portfolio owners"
+Action: aptly_get_board_cards on Owner Pipeline (QySZ8yRWJ5KeYFcZt)
+
+POLICIES / PROCEDURES / SOPs
+Triggers: "what's our policy on", "how do we handle", "what's the process for", "SOP for", "procedure for", "pet policy", "lease break fee", "screening criteria", "late fee"
+Action: notion_search
+
+TEAM MESSAGES / SLACK
+Triggers: "what did the team say about", "any messages about", "Slack", "team update on", "did anyone mention"
+Action: slack_search or slack_get_channel_messages
+
+LEASE READING:
+- primaryLeaseStatusID=1 = active/occupied
+- primaryLeaseStatusID=2 + stillOccupying=true = gave notice, still in home (lease break or notice given)
+- primaryLeaseStatusID=2 + stillOccupying=false = vacated
+- "Active - Notice Given" = leaving but still there — report BOTH lease end date AND expected move-out
+- NEVER say moved out if any future date is present
+
+RESPONSE TONE (leasing voice for availability questions):
+- Occupied + notice given: "That home isn't available for showings just yet — we do have current residents in place through [date]. Once we get closer to their move-out date, we'll get the home listed and ready for tours. I'd love to add you to our interest list!"
 - Occupied, no notice: "That home is currently occupied through [date] and not yet available for showings."
-- Listed in Aptly: "That home is available at $[rent]/mo, [bed]bd/[bath]ba — showings are [enabled/not yet enabled]."
-- Vacant, not listed: "The home is vacant but not yet listed — still getting it rent-ready. I can add you to our interest list."
+- Listed/available: "That home is available at $[rent]/mo, [bed]bd/[bath]ba — showings are [enabled/pending]."
+- Vacant, not listed: "The home is vacant but not yet listed — still getting it rent-ready. I can add you to the interest list."
 
-UNPAID BALANCES: To find who has unpaid rent across the whole portfolio, call rv_get_leases with unpaid=true and status="active". This returns all active leases with a balance > 0. Include tenant name, property address, and balance amount in your response. For a single tenant/property balance, use rv_get_ledger after finding their leaseId.
+CLARIFICATION: If a question is ambiguous (e.g. "who has a balance" could mean past due OR security deposit), answer with the most likely interpretation AND ask if they meant something else.
 
-FALLBACK (only with zero data): Leasing→Dhyana, Maintenance→Roberto, HOA→Juan, Renewals→Persia, Maricopa zero data→Teri, Owner→Alexes, Accounting→Randi. Never route if you have lease data.
+FALLBACK (only zero data from all sources): Leasing→Dhyana, Maintenance→Roberto, HOA→Juan, Renewals→Persia, Maricopa no data→Teri, Owner→Alexes, Accounting→Randi.
 
-NEVER SAY: "couldn't access", "inaccessible", "limited data", "cannot be toured", "tours not possible", "you should", "I recommend"`;
+NEVER SAY: "couldn't access", "inaccessible", "limited data", "cannot be toured", "tours not possible", "you should", "I recommend", "reach out to X" when data exists\`;
 
 
 const ALL_TOOLS = [
@@ -431,8 +459,9 @@ async function executeTool(name, input) {
             expectedMoveOutDate: l.expectedMoveOutDate,
             rent: l.rent,
             deposit: l.deposit,
-            balance: l.balance,
-            unpaidBalance: l.unpaidBalance || l.balance,
+            pastDueRent: l.pastDueRent || l.pastDue || 0,
+            totalPastDue: l.totalPastDue || l.totalDue || 0,
+            balance: l.balance || l.arBalance || l.currentBalance || l.pastDueRent || 0,
             tenants: (l.tenants || []).map(function(t) { return { name: t.name, email: t.email, phone: t.phone }; }),
             property: { address: p.address, city: p.city, state: p.state, zip: p.zip, propertyID: p.propertyID },
             unit: { address: u.address, beds: u.beds, baths: u.baths, sqft: u.sqft },
@@ -500,8 +529,17 @@ async function executeTool(name, input) {
             }
             return all
               .filter(function(item) {
-                const bal = parseFloat(item.lease && (item.lease.balance || item.lease.unpaidBalance) || 0);
-                return bal > 0;
+                const l = item.lease || {};
+                // Rentvine fields confirmed from Lease Balances report:
+                // pastDueRent = "Past Due Rent" column
+                // totalPastDue = "Total Past Due" column
+                const bal = parseFloat(
+                  l.pastDueRent || l.pastDue || l.totalPastDue ||
+                  l.balance || l.unpaidBalance || l.arBalance ||
+                  l.pastDueBalance || l.currentBalance ||
+                  l.outstandingBalance || l.amountDue || 0
+                );
+                return bal > 0.01;
               })
               .map(slimLease);
           });
@@ -657,7 +695,21 @@ async function executeTool(name, input) {
           } catch(e) {}
           return {};
         });
-        const raw = await cachedFetch('aptly:board:' + input.boardId + ':' + (input.page||0), APTLY_TTL, () => aptlyFetch('/board/' + input.boardId, { page: input.page || 0 }));
+        const raw = await cachedFetch('aptly:board:' + input.boardId + ':all', APTLY_TTL, async () => {
+          // Paginate through all pages to get complete board data
+          let allCards = [];
+          let pg = 0;
+          while (true) {
+            const batch = await aptlyFetch('/board/' + input.boardId, { page: pg });
+            const cards = batch && batch.cards;
+            if (!Array.isArray(cards) || cards.length === 0) break;
+            allCards = allCards.concat(cards);
+            if (cards.length < 20) break; // Aptly default page size is 20
+            pg++;
+            if (pg > 20) break; // safety limit
+          }
+          return { cards: allCards };
+        });
         // Slim cards to key fields only — full cards are too large
         function slimCard(card) {
           const fields = {};
@@ -819,38 +871,65 @@ function getRelevantTools(msg) {
   msg = (msg || '').toLowerCase();
   const tools = new Set();
 
-  if (msg.match(/tenant|owe|balance|ledger|payment|charge|deposit|past.?due|unpaid|how much/)) {
+  // UNPAID / PAST DUE
+  if (msg.match(/owe|past.?due|unpaid|behind.?on.?rent|hasn.?t.?paid|delinquent|late.?on.?rent|balance.?due|who.?has.?a.?balance|still.?owes|balance|ledger|payment|charge|how.?much/)) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|tour|showing|schedul|appointment|visit|\d{4,5}/)) {
+  // PROPERTY / AVAILABILITY / LEASE INFO
+  if (msg.match(/availab|vacant|tour|can.?i.?see|is.?it.?listed|when.?can.?i|homes?|house|propert|address|who.?lives|who.?is.?in|who.?is.?the.?tenant|current.?tenant|lease.?info|lives.?at|\d{3,5}/)) {
     ['rv_get_properties', 'rv_get_leases', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/list(ed|ing)?|published|rent.?ready|what.*(homes?|propert|available)|available.*(homes?|propert)/i)) {
-    tools.add('aptly_search_cards');
+  // AVAILABLE INVENTORY / LISTED HOMES
+  if (msg.match(/list(ed|ing)?s?|published|rent.?ready|what.*(homes?|propert|avail)|avail.*(homes?|propert|units?)|how.?many.*(homes?|units?|propert)|inventory|for.?rent/i)) {
+    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  // SHOWINGS
+  if (msg.match(/show(ing)?s?|schedul(ed)?|tour(s|ed)?|appointment|confirmed|pending.?show|how.?many.?show|tomorrow|today|this.?week|calendar/)) {
+    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  // MOVE-INS
+  if (msg.match(/move.?in|moving.?in|new.?tenant|new.?resident|keys|check.?in|incoming/)) {
+    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  // MOVE-OUTS / VACANCIES
+  if (msg.match(/move.?out|moving.?out|vacanc|who.?s.?leaving|turnover|leaving|vacating|notice/)) {
+    ['aptly_get_board_cards', 'aptly_search_cards', 'rv_get_leases'].forEach(function(t) { tools.add(t); });
+  }
+  // RENEWALS
+  if (msg.match(/renew(al)?s?|expir|lease.?end|up.?for.?renew|needs.?to.?renew/)) {
+    ['aptly_get_board_cards'].forEach(function(t) { tools.add(t); });
+    tools.add('rv_get_leases');
+  }
+  // APPLICANTS
+  if (msg.match(/applicant|application|applied|screening|who.?applied|new.?leads?.?applied/)) {
     tools.add('aptly_get_board_cards');
   }
-  if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
-    ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
+  // EVICTIONS
+  if (msg.match(/evict(ion)?s?|filing|unlawful.?detainer|eviction.?status/)) {
+    tools.add('aptly_get_board_cards');
   }
+  // WORK ORDERS / MAINTENANCE
+  if (msg.match(/work.?order|maintenance|repair|fix|broken|open.?request|maintenance.?this|what.?needs.?fix/)) {
+    ['rv_get_work_orders', 'rv_get_work_order_detail', 'aptly_get_board_cards'].forEach(function(t) { tools.add(t); });
+  }
+  // INSPECTIONS
   if (msg.match(/inspect/)) {
     ['rv_get_inspections', 'rv_get_inspection_detail'].forEach(function(t) { tools.add(t); });
   }
+  // VENDORS
   if (msg.match(/vendor|contractor/)) {
     tools.add('rv_get_vendors');
   }
-  if (msg.match(/owner|landlord|portfolio|performing|statement/)) {
-    ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
+  // OWNERS / PORTFOLIO
+  if (msg.match(/owner|landlord|portfolio|owner.?pipeline|onboard|new.?owner/)) {
+    ['rv_get_owners', 'rv_get_properties', 'aptly_get_board_cards'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly/)) {
-    ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
-  }
-  if (msg.match(/show(ing)?s?|schedul|calendar|appointment|tomorrow|today|this week|how many/)) {
-    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
-  }
-  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
+  // POLICIES / SOPs
+  if (msg.match(/policy|procedure|sop|how.?do.?we|what.?is.?our|lease.?break|pet|screening.?criteria|late.?fee|application.?fee|process.?for|rule/)) {
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/slack|team|announce|update|channel|said|message/)) {
+  // SLACK / TEAM
+  if (msg.match(/slack|team.?said|any.?messages?|team.?update|channel|what.?did.*say/)) {
     ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
   }
 
@@ -955,6 +1034,23 @@ app.get('/health', function(req, res) {
 app.get('/debug/lease/:id', async function(req, res) {
   const data = await rvFetch('/leases/export', { 'leaseIDs[]': req.params.id });
   res.json(data);
+});
+
+app.get('/debug/lease-balance-fields', async function(req, res) {
+  // Fetch first page of active leases and show ALL fields that contain numbers > 0
+  const data = await rvFetch('/leases/export', { pageSize: 5, page: 1, 'primaryLeaseStatusIDs[]': 1 });
+  if (!Array.isArray(data) || data.length === 0) return res.json({ error: 'No data' });
+  const sample = data[0];
+  const lease = sample.lease || {};
+  // Show every field in the lease object that might be a balance
+  const allFields = {};
+  Object.keys(lease).forEach(function(k) {
+    const v = lease[k];
+    if (typeof v === 'number' || (typeof v === 'string' && !isNaN(parseFloat(v)))) {
+      allFields[k] = v;
+    }
+  });
+  res.json({ leaseId: lease.leaseID, allNumericFields: allFields, fullLease: lease });
 });
 
 app.get('/debug/property-leases/:propertyId', async function(req, res) {
