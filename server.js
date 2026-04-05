@@ -589,7 +589,7 @@ async function executeTool(name, input) {
           };
         }
         if (raw && Array.isArray(raw.cards)) {
-          return JSON.stringify({ total: raw.cards.length, cards: raw.cards.map(slimCard) });
+          return JSON.stringify({ total: raw.cards.length, cards: raw.cards.slice(0, 50).map(slimCard) });
         }
         return JSON.stringify(raw);
       }
@@ -605,22 +605,21 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_search_cards': {
-        const data = await aptlyFetch('/board/' + input.boardId, { page: 0 });
-        if (data && Array.isArray(data.cards)) {
-          const q = input.query.toLowerCase();
-          const matches = data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); });
-          function slimCard(card) {
-            const fields = {};
-            if (Array.isArray(card.fields)) {
-              card.fields.forEach(function(f) {
-                if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
-                  fields[f.label] = f.value;
-                }
-              });
-            }
-            return { id: card.id, title: card.title || card.name, status: card.status || card.stage, fields: fields };
+        // Use Aptly's native query param to filter server-side — avoids fetching all cards
+        const data = await aptlyFetch('/board/' + input.boardId, { page: 0, query: input.query });
+        function slimCard(card) {
+          const fields = {};
+          if (Array.isArray(card.fields)) {
+            card.fields.forEach(function(f) {
+              if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
+                fields[f.label] = f.value;
+              }
+            });
           }
-          return JSON.stringify({ total: matches.length, cards: matches.map(slimCard) });
+          return { id: card.id, title: card.title || card.name, status: card.status || card.stage, fields: fields };
+        }
+        if (data && Array.isArray(data.cards)) {
+          return JSON.stringify({ total: data.cards.length, cards: data.cards.slice(0, 20).map(slimCard) });
         }
         return JSON.stringify(data);
       }
@@ -763,7 +762,7 @@ app.post('/api/chat', async function(req, res) {
     // Trim history: keep only last 6 messages to prevent token bloat
     // Also strip large tool_result payloads from older turns
     function trimMessages(msgs) {
-      const trimmed = msgs.slice(-6);
+      const trimmed = msgs.slice(-2);
       // Ensure it starts with a user message
       while (trimmed.length > 0 && trimmed[0].role !== 'user') trimmed.shift();
       return trimmed;
