@@ -69,8 +69,7 @@ STRICT RULES:
    - Accounting → Randi
    DO NOT route if you found lease data — that IS sufficient to answer.
 
-5. NEVER SAY: "I couldn't access", "inaccessible", "limited data", "cannot be toured", "tours are not possible", "next steps would be", "you should", "I recommend"`;
-5. NEVER say: "I couldn't access", "I have limited data", "inaccessible", "reach out to X" when you have data, "next steps would be", "you should", "I recommend", "cannot be toured", "tours are not possible"`;
+5. NEVER SAY: "I couldn't access", "inaccessible", "limited data", "cannot be toured", "tours are not possible", "next steps would be", "you should", "I recommend", "reach out to X" when you have data`;
 
 
 const ALL_TOOLS = [
@@ -627,11 +626,11 @@ function getRelevantTools(msg) {
   msg = (msg || '').toLowerCase();
   const tools = new Set();
 
-  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
+  if (msg.match(/tenant|owe|balance|ledger|payment|charge|deposit|past.?due|unpaid|how much/)) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}/)) {
-    ['rv_get_properties', 'rv_get_units', 'rv_get_leases'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|tour|showing|schedul|appointment|visit|\d{4,5}/)) {
+    ['rv_get_leases', 'rv_get_properties', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
@@ -645,7 +644,7 @@ function getRelevantTools(msg) {
   if (msg.match(/owner|landlord|portfolio|performing|statement/)) {
     ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
+  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly/)) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
