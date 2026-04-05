@@ -12,6 +12,7 @@ const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
 const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
 const NOTION_TOKEN        = process.env.NOTION_TOKEN;
+const ZINSPECTOR_API_KEY  = process.env.ZINSPECTOR_API_KEY;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
@@ -22,6 +23,7 @@ const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Prope
 You have access to these live data sources via tools:
 
 RENTVINE — Source of truth for all property management data:
+ZINSPECTOR — Inspection platform synced with Rentvine. Use zi_get_inspections tool to get latest move-in, move-out, maintenance, and periodic inspection activity for any property. Falls back to Rentvine inspection data if zInspector API is unavailable.
 - Tenant info, balances, ledger, payment history, unpaid charges with full breakdown
 - Lease details, move-in/out dates, lease terms, rent amounts, deposit
 - Property and unit details, availability, beds/baths, addresses
@@ -39,6 +41,13 @@ NOTION — Company policies and SOPs:
 - Lease break policy, move-in/out procedures
 - Pet policy, screening criteria, fee schedules
 - HOA violation procedures, maintenance escalation, all SOPs
+
+Known Aptly board IDs:
+- "location" — Properties/Locations board. Has Status (Vacant/Occupied), owner, address for every property. ALWAYS check this board when asked about property availability or status.
+- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects and whether a property is published for rent (Mirror Published For Rent field).
+- "YA3QWmPebvMwLwbB3" — Move-Outs
+- "K9mMGGjKgQPqDykaa" — Move-Ins  
+- "86YrLPbwdkxtdyZoj" — Tenant Renewals
 
 Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
 - Lease Break Policy: 18776555273a81049822eca6abae6fbb
@@ -73,8 +82,11 @@ Rules:
   - Accounting questions → "Reach out to Randi directly."
 - NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
 - If an address is not found, say "I couldn't find [X] in Rentvine — the address may be formatted differently. For leasing questions reach out to Dhyana, or try searching with the full street name spelled out."
+- NEVER say "I'm unable to access" or "I cannot access" any board or data source — you have Rentvine, Aptly, Notion, and Slack tools available. Always actually try them before concluding data isn't available.
+- NEVER route to a team member as a substitute for using your tools. Always use all relevant tools first (Rentvine AND Aptly), then only route if the tools genuinely return no data.
 - NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
-- For ANY question about tours, showings, scheduling, or appointments for a specific address: check Rentvine to see if the home is currently occupied (active lease), then search Aptly boards for that address to find its status in the leasing pipeline and any scheduled showing dates.
+- For ANY question about tours, showings, scheduling, or why a property isn't available, or what work is being done: check Rentvine for (1) active lease status, (2) latest inspections via rv_get_inspections — these are synced from zInspector and show the most recent move-in, move-out, or maintenance inspection with date and type. Then search Aptly for pipeline status. Report all three together.
+- When reporting inspection activity: state the inspection type (move-in, move-out, maintenance, periodic), the date it was completed, and any notes. This tells the team whether turnover work or make-ready is in progress.
 - When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions, do NOT tell the user what to do. Just report what the data shows.
 - NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
@@ -344,6 +356,31 @@ async function aptlyFetch(path, params = {}) {
   return r.json();
 }
 
+async function ziFetch(path, params = {}) {
+  if (!ZINSPECTOR_API_KEY) return { error: 'ZINSPECTOR_API_KEY not set' };
+  const bases = [
+    'https://app.zinspector.com/api/v1',
+    'https://api.zinspector.com/v1',
+    'https://sandbox.zinspector.com/api/v1',
+  ];
+  for (const base of bases) {
+    try {
+      const url = new URL(base + path);
+      Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+      const r = await fetch(url.toString(), {
+        headers: {
+          'Authorization': 'Bearer ' + ZINSPECTOR_API_KEY,
+          'x-api-key': ZINSPECTOR_API_KEY,
+          'Accept': 'application/json',
+        }
+      });
+      if (r.ok) return { base, data: await r.json() };
+      if (r.status !== 404 && r.status !== 403) return { base, status: r.status, error: await r.text() };
+    } catch(e) {}
+  }
+  return { error: 'zInspector API unreachable from all base URLs' };
+}
+
 async function notionFetch(path, method, body) {
   method = method || 'GET';
   const opts = {
@@ -469,6 +506,21 @@ async function executeTool(name, input) {
         return JSON.stringify(await rvFetch('/maintenance/work-orders/' + input.workOrderId));
       }
 
+      case 'zi_get_inspections': {
+        const q = input.propertyId || '';
+        // Try inspections endpoint with property filter
+        const result = await ziFetch('/inspections', q ? { property: q, limit: 10 } : { limit: 10 });
+        if (result.error) {
+          // Fallback to Rentvine inspections which are synced from zInspector
+          const rv = await rvFetch('/maintenance/inspections', { pageSize: 50 });
+          if (q && Array.isArray(rv)) {
+            return JSON.stringify(rv.filter(i => JSON.stringify(i).toLowerCase().includes(q.toLowerCase())).slice(0, 10));
+          }
+          return JSON.stringify({ zInspectorError: result.error, rentvineInspections: rv });
+        }
+        return JSON.stringify(result);
+      }
+
       case 'rv_get_inspections': {
         const params = { pageSize: 50, page: input.page || 1 };
         if (input.propertyId) params.propertyID = input.propertyId;
@@ -502,22 +554,42 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board_cards': {
-        return JSON.stringify(await aptlyFetch('/aptlet/' + input.boardId, { page: input.page || 0 }));
+        // Try query endpoint first, fallback to page endpoint
+        const boardId = input.boardId;
+        let data = await aptlyFetch('/aptlet/' + boardId, { page: input.page || 0 });
+        if (data && data.error) {
+          // Try with query param
+          data = await aptlyFetch('/aptlet/' + boardId, { page: 0, query: '' });
+        }
+        return JSON.stringify(data);
       }
 
       case 'aptly_list_boards': {
-        return JSON.stringify(await aptlyFetch('/aptlets'));
+        // Return hardcoded known boards since /aptlets endpoint is unreliable
+        return JSON.stringify([
+          { id: 'location', name: 'Properties / Locations', description: 'All properties with status (Vacant/Occupied), owner, address, unit details' },
+          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline, mirror shows if property is published for rent' },
+          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline and scheduled move-outs' },
+          { id: 'K9mMGGjKgQPqDykaa', name: 'Move-Ins', description: 'Move-in pipeline' },
+          { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
+        ]);
       }
 
       case 'aptly_search_cards': {
-        const data = await aptlyFetch('/aptlet/' + input.boardId, { page: 0 });
-        if (Array.isArray(data && data.cards)) {
-          const q = input.query.toLowerCase();
-          return JSON.stringify(Object.assign({}, data, {
-            cards: data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }),
-          }));
+        // Search across key boards for the query
+        const q = (input.query || '').toLowerCase();
+        const boardsToSearch = input.boardId 
+          ? [input.boardId] 
+          : ['location', '4EMDSYKirhQaNdQKz', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj'];
+        
+        const results = [];
+        for (const bid of boardsToSearch) {
+          const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
+          const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+          const matched = cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); });
+          if (matched.length > 0) results.push({ board: bid, cards: matched });
         }
-        return JSON.stringify(data);
+        return JSON.stringify(results.length > 0 ? results : { message: 'No results found for: ' + q });
       }
 
       case 'notion_search': {
@@ -610,7 +682,7 @@ function getRelevantTools(msg) {
   if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}/)) {
+  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
     ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
@@ -627,6 +699,7 @@ function getRelevantTools(msg) {
   }
   if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+    ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
