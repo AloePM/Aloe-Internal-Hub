@@ -19,9 +19,25 @@ const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).
 
 const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), and staff.
 
-APTLY BOARDS: List Property=qfBzBxfooJtfTQncd, Move-Outs=YA3QWmPebvMwLwbB3, Renewals=86YrLPbwdkxtdyZoj, Move-Ins=K9mMGGjKgQPqDykaa, Renter Leads=4EMDSYKirhQaNdQKz(showing schedules, calendar, lead stats — NOT listing availability)
+APTLY BOARDS: List Property=qfBzBxfooJtfTQncd, Move-Outs=YA3QWmPebvMwLwbB3, Renewals=86YrLPbwdkxtdyZoj, Move-Ins=K9mMGGjKgQPqDykaa, Renter Leads=4EMDSYKirhQaNdQKz
 
-SHOWING SCHEDULES: Showing appointments and calendar info are on the Renter Leads board (4EMDSYKirhQaNdQKz). Use aptly_get_board_cards to get all cards, then look for scheduled showing dates. For "how many showings tomorrow" — get all cards and count those with a showing date matching tomorrow's date.
+APTLY BOARD FIELD GUIDE — use aptly_get_board_cards to pull cards, then read these fields:
+
+Renter Leads (4EMDSYKirhQaNdQKz) — SHOWINGS:
+- "Requested Showing Information" = the date/time the showing is scheduled for
+- Card status "approved" = confirmed showing
+- Card status "pending" = needs to be approved or denied
+- Card status "declined" = prospect didn't meet credit or income requirements
+- For "how many showings this week/tomorrow" → get all cards, filter by "Requested Showing Information" date, group by status
+
+Move-Ins (K9mMGGjKgQPqDykaa):
+- "Move In Date" = when the new tenant is moving in
+- For "move ins this week" → filter cards where Move In Date falls within the requested range
+
+Move-Outs (YA3QWmPebvMwLwbB3):
+- "Expected Move Out Date" = when the tenant is actually moving out
+- "Lease End Date" = when their lease officially ends (may differ from actual move-out)
+- For "move outs this week" → filter by Expected Move Out Date
 
 PROPERTY AVAILABILITY — do in order:
 1. aptly_search_cards on List Property board (qfBzBxfooJtfTQncd) → is it published/listed for rent?
@@ -184,7 +200,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_get_board_cards',
-    description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz. Use aptly_list_boards to find other board IDs.',
+    description: 'Get all cards from an Aptly board. For showings: use Renter Leads (4EMDSYKirhQaNdQKz), read "Requested Showing Information" for date, status=approved/pending/declined. For move-ins: use Move-Ins (K9mMGGjKgQPqDykaa), read "Move In Date". For move-outs: use Move-Outs (YA3QWmPebvMwLwbB3), read "Expected Move Out Date" and "Lease End Date".',
     input_schema: {
       type: 'object',
       properties: {
