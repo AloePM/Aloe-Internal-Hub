@@ -324,7 +324,7 @@ async function rvFetch(path, params = {}) {
 }
 
 async function aptlyFetch(path, params = {}) {
-  const url = new URL('https://app.getaptly.com/api' + path);
+  const url = new URL('https://core-api.getaptly.com/api' + path);
   url.searchParams.set('x-token', APTLY_TOKEN);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
   const r = await fetch(url.toString());
@@ -569,7 +569,7 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board_cards': {
-        return JSON.stringify(await aptlyFetch('/aptlet/' + input.boardId, { page: input.page || 0 }));
+        return JSON.stringify(await aptlyFetch('/board/' + input.boardId, { page: input.page || 0 }));
       }
 
       case 'aptly_list_boards': {
@@ -583,7 +583,7 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_search_cards': {
-        const data = await aptlyFetch('/aptlet/' + input.boardId, { page: 0 });
+        const data = await aptlyFetch('/board/' + input.boardId, { page: 0 });
         if (Array.isArray(data && data.cards)) {
           const q = input.query.toLowerCase();
           return JSON.stringify(Object.assign({}, data, {
@@ -842,11 +842,11 @@ app.get('/debug/aptly/ticket/:id', async function(req, res) {
     '/ticket/' + id,
     '/instance/' + id,
     '/card/' + id,
-    '/aptlet/' + id,
+    '/board/' + id,
   ];
   for (const path of paths) {
     try {
-      const r = await fetch('https://app.getaptly.com/api' + path + '?x-token=' + APTLY_TOKEN);
+      const r = await fetch('https://core-api.getaptly.com/api' + path + '?x-token=' + APTLY_TOKEN);
       if (r.ok) {
         results[path] = { status: r.status, data: await r.json() };
       } else {
@@ -869,7 +869,7 @@ app.get('/debug/aptly/units', async function(req, res) {
   ];
   for (const ep of endpoints) {
     try {
-      const r = await fetch('https://app.getaptly.com/api' + ep + '?x-token=' + APTLY_TOKEN);
+      const r = await fetch('https://core-api.getaptly.com/api' + ep + '?x-token=' + APTLY_TOKEN);
       if (r.ok) {
         results[ep] = { status: r.status, data: await r.json() };
       } else {
@@ -884,7 +884,7 @@ app.get('/debug/aptly/units', async function(req, res) {
 
 app.get('/debug/aptly/raw-cards/:boardId', async function(req, res) {
   try {
-    const r = await fetch('https://app.getaptly.com/api/aptlet/' + req.params.boardId + '?page=0&x-token=' + APTLY_TOKEN);
+    const r = await fetch('https://core-api.getaptly.com/api/board/' + req.params.boardId + '?page=0&x-token=' + APTLY_TOKEN);
     const body = await r.json();
     // Return first 2 cards in full so we can see field names
     const cards = body && body.cards ? body.cards.slice(0, 2) : body;
@@ -905,7 +905,7 @@ app.get('/debug/aptly/all-boards', async function(req, res) {
   const results = {};
   for (const board of boards) {
     try {
-      const r = await fetch('https://app.getaptly.com/api/aptlet/' + board.id + '?page=0&x-token=' + APTLY_TOKEN);
+      const r = await fetch('https://core-api.getaptly.com/api/board/' + board.id + '?page=0&x-token=' + APTLY_TOKEN);
       const body = r.ok ? await r.json() : await r.text();
       results[board.name] = { status: r.status, cardCount: body && body.cards ? body.cards.length : body };
     } catch(e) {
@@ -919,11 +919,11 @@ app.get('/debug/aptly/listings', async function(req, res) {
   const id = 'qfBzBxfooJtfTQncd';
   const results = {};
   const attempts = [
-    'https://app.getaptly.com/api/aptlet/' + id + '?page=0&x-token=' + APTLY_TOKEN,
-    'https://preview.getaptly.com/api/aptlet/' + id + '?page=0&x-token=' + APTLY_TOKEN,
+    'https://core-api.getaptly.com/api/board/' + id + '?page=0&x-token=' + APTLY_TOKEN,
+    'https://core-api.getaptly.com/api/board/' + id + '?page=0&x-token=' + APTLY_TOKEN,
     'https://app.getaptly.com/api/ticket/' + id + '?page=0&x-token=' + APTLY_TOKEN,
     'https://preview.getaptly.com/api/ticket/' + id + '?page=0&x-token=' + APTLY_TOKEN,
-    'https://preview.getaptly.com/api/aptlet/' + id + '?x-token=' + APTLY_TOKEN,
+    'https://core-api.getaptly.com/api/board/' + id + '?x-token=' + APTLY_TOKEN,
   ];
   for (const url of attempts) {
     try {
@@ -943,7 +943,7 @@ app.get('/debug/aptly/boards', async function(req, res) {
 });
 
 app.get('/debug/aptly/search/:boardId/:query', async function(req, res) {
-  const data = await aptlyFetch('/aptlet/' + req.params.boardId, { page: 0 });
+  const data = await aptlyFetch('/board/' + req.params.boardId, { page: 0 });
   const q = req.params.query.toLowerCase();
   if (Array.isArray(data && data.cards)) {
     res.json(data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }));
