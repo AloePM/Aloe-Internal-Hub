@@ -689,14 +689,6 @@ app.post('/api/chat', async function(req, res) {
           system: SYSTEM_PROMPT,
           messages: current,
           tools: tools,
-          mcp_servers: [
-            {
-              type: 'url',
-              url: 'https://mcp.getaptly.com/mcp',
-              name: 'aptly',
-              authorization_token: APTLY_TOKEN,
-            }
-          ],
         }),
       });
 
