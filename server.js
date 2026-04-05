@@ -494,13 +494,19 @@ async function executeTool(name, input) {
           return all;
         });
         if (input.search) {
-          return JSON.stringify(allData.filter(function(item) {
+          const matches = allData.filter(function(item) {
             const p = item.property || {};
             const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
             return fuzzyMatch(input.search, full);
+          });
+          // Slim properties — only return what's needed
+          return JSON.stringify(matches.map(function(item) {
+            const p = item.property || {};
+            return { propertyID: p.propertyID, address: p.address, city: p.city, state: p.state, zip: p.zip, name: p.name };
           }));
         }
-        return JSON.stringify(allData);
+        // No search — never return all properties, just the count
+        return JSON.stringify({ total: allData.length, message: 'Provide a search term to find specific properties' });
       }
 
       case 'rv_get_units': {
