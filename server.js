@@ -17,141 +17,75 @@ const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
-// ── In-memory cache ────────────────────────────────────────────────────────────
-const _cache = new Map();
-function cacheGet(key) {
-  const e = _cache.get(key);
-  if (!e) return null;
-  if (Date.now() > e.exp) { _cache.delete(key); return null; }
-  return e.data;
-}
-function cacheSet(key, data, ttlMs) {
-  _cache.set(key, { data, exp: Date.now() + ttlMs });
-}
-async function cachedFetch(key, ttlMs, fn) {
-  const hit = cacheGet(key);
-  if (hit !== null) { console.log('Cache HIT:', key.slice(0, 60)); return hit; }
-  const data = await fn();
-  cacheSet(key, data, ttlMs);
-  return data;
-}
-const APTLY_TTL  = 10 * 60 * 1000;  // 10 min — board data
-const PROP_TTL   = 15 * 60 * 1000;  // 15 min — property list
-const LEASE_TTL  =  3 * 60 * 1000;  //  3 min — lease data
+const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
 
+You have access to these live data sources via tools:
 
-const _today = new Date().toLocaleDateString('en-US', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
-const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), Roberto (maintenance), Juan (HOA), Teri (Maricopa), Alexes (owners), and staff.
+RENTVINE — Source of truth for all property management data:
+- Tenant info, balances, ledger, payment history, unpaid charges with full breakdown
+- Lease details, move-in/out dates, lease terms, rent amounts, deposit
+- Property and unit details, availability, beds/baths, addresses
+- Owner info, portfolio details, contact information
+- Work orders and maintenance requests
+- Property inspections (move-in, move-out, periodic)
+- Vendors and contractors
 
-Today's date: ${_today}.
+APTLY — CRM and workflow boards:
+- Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
+- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
+- Contact and lead details
 
-NATURAL LANGUAGE GUIDE — recognize these question types and know exactly what to pull:
+NOTION — Company policies and SOPs:
+- Lease break policy, move-in/out procedures
+- Pet policy, screening criteria, fee schedules
+- HOA violation procedures, maintenance escalation, all SOPs
 
-UNPAID / PAST DUE BALANCES
-Triggers: "who owes rent", "past due", "behind on rent", "unpaid balance", "who hasn't paid", "delinquent", "still owes", "late on rent", "balance due", "who has a balance"
-Action: rv_get_leases with unpaid=true, status="active"
-Report: tenant name, property address, Past Due Rent (pastDueRent), Total Past Due (totalPastDue), actual rent
+SLACK — Team communications:
+- Recent team messages, announcements, decisions
+- Search across all channels for specific topics
 
-SHOWINGS / TOURS SCHEDULED
-Triggers: "how many showings", "showings today/tomorrow/this week", "scheduled tours", "showing schedule", "who has a showing", "confirmed showings", "pending showings"
-Action: aptly_get_board_cards on Renter Leads (4EMDSYKirhQaNdQKz)
-Field: "Requested Showing Information" = scheduled date/time
-Status: approved=confirmed, pending=needs approval, declined=didn't qualify (credit/income)
-
-MOVE-INS
-Triggers: "who's moving in", "move ins this week/month", "new tenants moving in", "upcoming move ins", "keys to hand out", "new move ins"
-Action: aptly_get_board_cards on Move-Ins (K9mMGGjKgQPqDykaa)
-Field: "Move In Date"
-
-MOVE-OUTS
-Triggers: "who's moving out", "move outs this week/month", "upcoming vacancies", "lease endings", "who's leaving", "expected move outs", "turnover"
-Action: aptly_get_board_cards on Move-Outs (YA3QWmPebvMwLwbB3)
-Fields: "Expected Move Out Date" (actual), "Lease End Date" (official). If these differ = lease break.
-
-PROPERTY AVAILABILITY / CAN I TOUR / IS IT AVAILABLE
-Triggers: "is [address] available", "can I schedule a tour", "is it listed", "when can I see it", "is it vacant", "showings available at", "tour [address]"
-Action in order:
-1. aptly_search_cards on List Property (qfBzBxfooJtfTQncd) → listed/published?
-2. rv_get_properties → get propertyId
-3. rv_get_leases with propertyId, status "active" → current tenants
-4. aptly_search_cards on Move-Outs (YA3QWmPebvMwLwbB3) → early move-out/lease break?
-Never call leases more than twice. Never use status "all".
-
-LEASE STATUS / WHO LIVES AT / TENANT INFO
-Triggers: "who lives at", "who's the tenant at", "who's in [address]", "current tenant", "lease info for", "when does the lease end", "tenant name at"
-Action: rv_get_properties → propertyId → rv_get_leases with propertyId
-
-RENEWALS
-Triggers: "who's up for renewal", "lease renewals", "leases expiring", "renewals this month", "who needs to renew"
-Action: aptly_get_board_cards on Tenant Renewals (86YrLPbwdkxtdyZoj) + rv_get_leases for detail
-
-APPLICANTS / APPLICATIONS
-Triggers: "any applications", "who applied", "pending applications", "screening", "applicants", "new leads applied"
-Action: aptly_get_board_cards on Applicants (MJxaStgENouWrNEKd)
-
-EVICTIONS
-Triggers: "evictions", "who's being evicted", "eviction status", "filed for eviction", "eviction cases"
-Action: aptly_get_board_cards on Evictions (TEXBDbbQmjktAqyad)
-
-WORK ORDERS / MAINTENANCE
-Triggers: "work orders", "maintenance requests", "open repairs", "what needs fixing", "maintenance this week", "open work orders", "repair status"
-Action: rv_get_work_orders (Rentvine) OR aptly_get_board_cards on Work Orders (workOrder)
-If asking about status/pipeline → use Aptly. If asking for detail/vendor/cost → use Rentvine.
-
-AVAILABLE HOMES / WHAT'S FOR RENT
-Triggers: "what homes are available", "what's listed", "available rentals", "what's for rent", "rent ready homes", "available inventory", "how many homes available"
-Action: use aptly_get_available_units — this paginates ALL 520+ units and filters for publishedForRent=true. Returns all homes currently published for rent with address, beds, baths, rent, stage, availableDate.
-
-OWNER / PORTFOLIO
-Triggers: "owner pipeline", "new owners", "onboarding", "owner status", "portfolio owners"
-Action: aptly_get_board_cards on Owner Pipeline (QySZ8yRWJ5KeYFcZt)
-
-POLICIES / PROCEDURES / SOPs
-Triggers: "what's our policy on", "how do we handle", "what's the process for", "SOP for", "procedure for", "pet policy", "lease break fee", "screening criteria", "late fee"
-Action: notion_search
-
-TEAM MESSAGES / SLACK
-Triggers: "what did the team say about", "any messages about", "Slack", "team update on", "did anyone mention"
-Action: slack_search or slack_get_channel_messages
-
-LEASE READING:
-- primaryLeaseStatusID=1 = active/occupied
-- primaryLeaseStatusID=2 + stillOccupying=true = gave notice, still in home (lease break or notice given)
-- primaryLeaseStatusID=2 + stillOccupying=false = vacated
-- "Active - Notice Given" = leaving but still there — report BOTH lease end date AND expected move-out
-- NEVER say moved out if any future date is present
-
-RESPONSE TONE (leasing voice for availability questions):
-- Occupied + notice given: "That home isn't available for showings just yet — we do have current residents in place through [date]. Once we get closer to their move-out date, we'll get the home listed and ready for tours. I'd love to add you to our interest list!"
-- Occupied, no notice: "That home is currently occupied through [date] and not yet available for showings."
-- Listed/available: "That home is available at $[rent]/mo, [bed]bd/[bath]ba — showings are [enabled/pending]."
-- Vacant, not listed: "The home is vacant but not yet listed — still getting it rent-ready. I can add you to the interest list."
-
-CLARIFICATION: If a question is ambiguous (e.g. "who has a balance" could mean past due OR security deposit), answer with the most likely interpretation AND ask if they meant something else.
-
-FALLBACK (only zero data from all sources): Leasing→Dhyana, Maintenance→Roberto, HOA→Juan, Renewals→Persia, Maricopa no data→Teri, Owner→Alexes, Accounting→Randi.
-
-NEVER SAY: "couldn't access", "inaccessible", "limited data", "cannot be toured", "tours not possible", "you should", "I recommend", "reach out to X" when data exists`;
-
+Rules:
+- Always use tools to get live data — never guess or make up numbers
+- For tenant balances always show the full breakdown (what charges, amounts, dates)
+- Be concise. Lead with the answer, then details
+- Use numbered steps for procedures
+- Always cite your source (Rentvine, Aptly, Notion, or Slack)
+- Never speculate on legal or fair housing matters
+- NEVER ask the user clarifying questions. Search the data with multiple keyword variations and report what you find. If someone asks about "lease break policy" try searching Notion for "lease break", "lease break fee", "early termination", and "lease termination" before concluding nothing exists.
+- For any policy or procedure question: always search Notion at least 2-3 times with different keywords before saying it's not found. Policy pages may use different titles than the question uses.
+- NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
+- If you cannot find something in the data after multiple searches, say so clearly and direct to the right person based on the topic:
+  - Leasing questions (applications, showings, availability, move-ins) → "Reach out to Dhyana directly."
+  - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
+  - HOA violations or HOA questions → "Reach out to Juan directly."
+  - Move-out or lease renewal questions → "Reach out to Persia directly."
+  - Any property in Maricopa if no one else can help → "Reach out to Teri directly."
+  - Owner or landlord related issues → "Reach out to Alexes directly."
+  - Accounting questions → "Reach out to Randi directly."
+- NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
+- If an address is not found, say "I couldn't find [X] in Rentvine — the address may be formatted differently. For leasing questions reach out to Dhyana, or try searching with the full street name spelled out."
+- NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
+- For ANY question about tours, showings, scheduling, or appointments for a specific address: check Rentvine to see if the home is currently occupied (active lease), then search Aptly boards for that address to find its status in the leasing pipeline and any scheduled showing dates.
+- When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions, do NOT tell the user what to do. Just report what the data shows.
+- NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
+- Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
 const ALL_TOOLS = [
   {
     name: 'rv_get_leases',
-    description: 'Search Rentvine leases. Use propertyId for best results.',
+    description: 'Search leases from Rentvine with tenant info, balances, unpaid charges, and property details. Best tool for tenant lookups and balance checks.',
     input_schema: {
       type: 'object',
       properties: {
-        propertyId: { type: 'number', description: 'Property ID from rv_get_properties — most reliable way to find leases for an address' },
-        search: { type: 'string', description: 'Tenant name, email, or property address (use only if propertyId unknown)' },
+        search: { type: 'string', description: 'Tenant name, email, or property address to search' },
         status: { type: 'string', description: 'active, inactive, or all (default: active)' },
-        unpaid: { type: 'boolean', description: 'Set true to get ALL active leases with unpaid balances across the entire portfolio' },
         page: { type: 'number', description: 'Page number (default: 1)' },
       },
     },
   },
   {
     name: 'rv_get_ledger',
-    description: 'Full ledger for a lease — charges, payments, credits.',
+    description: 'Get the full accounting ledger for a lease — all charges, payments, credits with dates. Use after rv_get_leases to get the leaseId.',
     input_schema: {
       type: 'object',
       properties: {
@@ -269,7 +203,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_get_board_cards',
-    description: 'Get all cards from an Aptly board. For showings: use Renter Leads (4EMDSYKirhQaNdQKz), read "Requested Showing Information" for date, status=approved/pending/declined. For move-ins: use Move-Ins (K9mMGGjKgQPqDykaa), read "Move In Date". For move-outs: use Move-Outs (YA3QWmPebvMwLwbB3), read "Expected Move Out Date" and "Lease End Date".',
+    description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz. Use aptly_list_boards to find other board IDs.',
     input_schema: {
       type: 'object',
       properties: {
@@ -280,15 +214,8 @@ const ALL_TOOLS = [
     },
   },
   {
-    name: 'aptly_get_available_units',
-    description: 'Get all units published for rent from Aptly — filters by publishedForRent=true. Use for "what homes do we have available", "available inventory", "what is for rent", "rent ready homes". Returns address, beds, baths, rent, stage, availableDate for each published unit.',
-    input_schema: { type: 'object', properties: {
-      rentReadyOnly: { type: 'boolean', description: 'If true, only return units where rentReady is also true' },
-    }},
-  },
-  {
     name: 'aptly_list_boards',
-    description: 'Returns the known Aptly board IDs for Aloe PM. Use these IDs with aptly_search_cards and aptly_get_board_cards.',
+    description: 'List all available Aptly boards to find board IDs for Move-Ins, Move-Outs, HOA Violations, Renewals etc.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -400,7 +327,7 @@ async function rvFetch(path, params = {}) {
 }
 
 async function aptlyFetch(path, params = {}) {
-  const url = new URL('https://core-api.getaptly.com/api' + path);
+  const url = new URL('https://app.getaptly.com/api' + path);
   url.searchParams.set('x-token', APTLY_TOKEN);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
   const r = await fetch(url.toString());
@@ -440,122 +367,24 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'rv_get_leases': {
-        const params = { pageSize: 200 };
+        const params = { pageSize: 200, page: input.page || 1 };
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
         else if (input.status !== 'all') params['primaryLeaseStatusIDs[]'] = 1;
-
-        // Slim down lease records to only fields needed — prevents rate limit errors
-        function slimLease(item) {
-          const l = item.lease || {};
-          const p = item.property || {};
-          const u = item.unit || {};
-          const today = new Date();
-          const moveOut = l.moveOutDate ? new Date(l.moveOutDate) : null;
-          const expectedMoveOut = l.expectedMoveOutDate ? new Date(l.expectedMoveOutDate) : null;
-          const endDate = l.endDate ? new Date(l.endDate) : null;
-          // Still occupying if any future date exists and lease was active recently
-          const futureDate = moveOut || expectedMoveOut || endDate;
-          const stillOccupying = futureDate && futureDate > today;
-          return {
-            leaseId: l.leaseID,
-            status: l.leaseStatusText,
-            primaryLeaseStatusID: l.primaryLeaseStatusID,
-            stillOccupying: stillOccupying,
-            startDate: l.startDate,
-            endDate: l.endDate,
-            moveOutDate: l.moveOutDate,
-            expectedMoveOutDate: l.expectedMoveOutDate,
-            rent: l.rent,
-            deposit: l.deposit,
-            pastDueRent: l.pastDueRent || l.pastDue || 0,
-            totalPastDue: l.totalPastDue || l.totalDue || 0,
-            balance: l.balance || l.arBalance || l.currentBalance || l.pastDueRent || 0,
-            tenants: (l.tenants || []).map(function(t) { return { name: t.name, email: t.email, phone: t.phone }; }),
-            property: { address: p.address, city: p.city, state: p.state, zip: p.zip, propertyID: p.propertyID },
-            unit: { address: u.address, beds: u.beds, baths: u.baths, sqft: u.sqft },
-          };
-        }
-
-        // Search by propertyId — paginate and filter client-side
-        // (Rentvine's propertyIDs[] API param is unreliable)
-        if (input.propertyId) {
-          const pid = Number(input.propertyId);
-          const statusKey = input.status || 'active';
-          const leaseMatches = await cachedFetch('rv:leases:prop:' + pid + ':' + statusKey, LEASE_TTL, async () => {
-            let page = 1;
-            while (true) {
-              const data = await rvFetch('/leases/export', Object.assign({}, params, { page, pageSize: 200 }));
-              if (!Array.isArray(data) || data.length === 0) break;
-              const matches = data.filter(function(item) {
-                const propId = item.property && (item.property.propertyID || item.property.id);
-                return Number(propId) === pid;
-              });
-              if (matches.length > 0) return matches.map(slimLease);
-              if (data.length < 200) break;
-              page++;
-            }
-            return [];
-          });
-          return JSON.stringify(leaseMatches);
-        }
-
-        // Search by tenant name or address string
-        if (input.search) {
+        const data = await rvFetch('/leases/export', params);
+        if (input.search && Array.isArray(data)) {
           const q = input.search.toLowerCase();
-          let page = 1;
-          while (true) {
-            const data = await rvFetch('/leases/export', Object.assign({}, params, { page }));
-            if (!Array.isArray(data) || data.length === 0) break;
-            const matches = data.filter(function(item) {
-              const tenantMatch = item.lease && item.lease.tenants && item.lease.tenants.some(function(t) {
-                return (t.name || '').toLowerCase().includes(q) || (t.email || '').toLowerCase().includes(q);
-              });
-              if (tenantMatch) return true;
-              const propAddr = (item.property && item.property.address) || '';
-              const unitAddr = (item.unit && item.unit.address) || '';
-              return fuzzyMatch(q, propAddr + ' ' + (item.property && item.property.city || '')) ||
-                     fuzzyMatch(q, unitAddr);
+          return JSON.stringify(data.filter(function(item) {
+            const tenantMatch = item.lease && item.lease.tenants && item.lease.tenants.some(function(t) {
+              return (t.name || '').toLowerCase().includes(q) || (t.email || '').toLowerCase().includes(q);
             });
-            if (matches.length > 0) return JSON.stringify(matches.map(slimLease));
-            if (data.length < 200) break;
-            page++;
-          }
-          return JSON.stringify([]);
+            if (tenantMatch) return true;
+            const propAddr = (item.property && item.property.address) || '';
+            const unitAddr = (item.unit && item.unit.address) || '';
+            return fuzzyMatch(q, propAddr + ' ' + (item.property && item.property.city || '')) ||
+                   fuzzyMatch(q, unitAddr);
+          }));
         }
-
-        // Unpaid balances — fetch all active leases and filter for balance > 0
-        if (input.unpaid) {
-          const cacheKey = 'rv:leases:unpaid:' + (input.status || 'active');
-          const results = await cachedFetch(cacheKey, LEASE_TTL, async () => {
-            let all = [], pg = 1;
-            while (true) {
-              const batch = await rvFetch('/leases/export', Object.assign({}, params, { page: pg, pageSize: 200 }));
-              if (!Array.isArray(batch) || batch.length === 0) break;
-              all = all.concat(batch);
-              if (batch.length < 200) break;
-              pg++;
-            }
-            return all
-              .filter(function(item) {
-                const l = item.lease || {};
-                // Rentvine fields confirmed from Lease Balances report:
-                // pastDueRent = "Past Due Rent" column
-                // totalPastDue = "Total Past Due" column
-                const bal = parseFloat(
-                  l.pastDueRent || l.pastDue || l.totalPastDue ||
-                  l.balance || l.unpaidBalance || l.arBalance ||
-                  l.pastDueBalance || l.currentBalance ||
-                  l.outstandingBalance || l.amountDue || 0
-                );
-                return bal > 0.01;
-              })
-              .map(slimLease);
-          });
-          return JSON.stringify(results);
-        }
-
-        const data = await rvFetch('/leases/export', Object.assign({}, params, { page: input.page || 1 }));
-        return JSON.stringify(Array.isArray(data) ? data.map(slimLease) : data);
+        return JSON.stringify(data);
       }
 
       case 'rv_get_ledger': {
@@ -567,68 +396,41 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_properties': {
-        let allData = await cachedFetch('rv:properties:all', PROP_TTL, async () => {
-          let all = [], pg = 1;
-          while (true) {
-            const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
-            if (!Array.isArray(batch) || batch.length === 0) break;
-            all = all.concat(batch);
-            if (batch.length < 200) break;
-            pg++;
-          }
-          return all;
-        });
+        let allData = [];
+        let pg = 1;
+        while (true) {
+          const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
+          if (!Array.isArray(batch) || batch.length === 0) break;
+          allData = allData.concat(batch);
+          if (batch.length < 200) break;
+          pg++;
+        }
         if (input.search) {
-          const matches = allData.filter(function(item) {
+          return JSON.stringify(allData.filter(function(item) {
             const p = item.property || {};
             const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
             return fuzzyMatch(input.search, full);
-          });
-          // Slim properties — only return what's needed
-          return JSON.stringify(matches.map(function(item) {
-            const p = item.property || {};
-            return { propertyID: p.propertyID, address: p.address, city: p.city, state: p.state, zip: p.zip, name: p.name };
           }));
         }
-        // No search — never return all properties, just the count
-        return JSON.stringify({ total: allData.length, message: 'Provide a search term to find specific properties' });
+        return JSON.stringify(allData);
       }
 
       case 'rv_get_units': {
-        // If we have a propertyId, use the per-property units endpoint
-        if (input.propertyId) {
-          const units = await rvFetch('/properties/' + input.propertyId + '/units');
-          if (!units.error) {
-            // Cross-reference with active leases to tag availability
-            const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
-            const occupiedIds = new Set(
-              Array.isArray(leases) ? leases.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
-            );
-            if (Array.isArray(units)) {
-              return JSON.stringify(units.map(function(u) {
-                return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) });
-              }));
-            }
-            return JSON.stringify(units);
-          }
-        }
-        // Fallback: derive unit info from the full lease export
-        // This works because leases include full unit and property data
-        const allLeases = await rvFetch('/leases/export', { pageSize: 200 });
-        if (input.search && Array.isArray(allLeases)) {
-          return JSON.stringify(allLeases.filter(function(item) {
-            const full = (item.unit && item.unit.address || '') + ' ' +
-                         (item.property && item.property.address || '') + ' ' +
-                         (item.property && item.property.city || '');
+        const unitData = await rvFetch('/units/export', { pageSize: 200 });
+        const leaseData = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+        const occupiedIds = new Set(
+          Array.isArray(leaseData) ? leaseData.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
+        );
+        const tagged = Array.isArray(unitData)
+          ? unitData.map(function(u) { return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) }); })
+          : unitData;
+        if (input.search && Array.isArray(tagged)) {
+          return JSON.stringify(tagged.filter(function(u) {
+            const full = (u.address || '') + ' ' + (u.city || '') + ' ' + (u.name || '');
             return fuzzyMatch(input.search, full);
           }));
         }
-        if (input.propertyId && Array.isArray(allLeases)) {
-          return JSON.stringify(allLeases.filter(function(item) {
-            return item.lease && item.lease.propertyID == input.propertyId;
-          }));
-        }
-        return JSON.stringify(allLeases);
+        return JSON.stringify(tagged);
       }
 
       case 'rv_get_owners': {
@@ -691,142 +493,20 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board_cards': {
-        // Fetch schema to map UUID field keys to human-readable labels
-        const schema = await cachedFetch('aptly:schema:' + input.boardId, APTLY_TTL, async () => {
-          try {
-            const s = await aptlyFetch('/schema/' + input.boardId);
-            if (Array.isArray(s)) {
-              const map = {};
-              s.forEach(function(f) { if (f.key && f.label) map[f.key] = f.label; });
-              return map;
-            }
-          } catch(e) {}
-          return {};
-        });
-        const raw = await cachedFetch('aptly:board:' + input.boardId + ':all', APTLY_TTL, async () => {
-          // Paginate through all pages to get complete board data
-          let allCards = [];
-          let pg = 0;
-          while (true) {
-            const batch = await aptlyFetch('/board/' + input.boardId, { page: pg });
-            const cards = batch && batch.cards;
-            if (!Array.isArray(cards) || cards.length === 0) break;
-            allCards = allCards.concat(cards);
-            if (cards.length < 20) break; // Aptly default page size is 20
-            pg++;
-            if (pg > 20) break; // safety limit
-          }
-          return { cards: allCards };
-        });
-        // Slim cards to key fields only — full cards are too large
-        function slimCard(card) {
-          const fields = {};
-          // Handle both named fields and UUID-keyed fields (using schema map)
-          if (Array.isArray(card.fields)) {
-            card.fields.forEach(function(f) {
-              const label = (f.label) || (schema && schema[f.key]) || f.key || '';
-              const val = f.value !== undefined && f.value !== null ? String(f.value) : '';
-              if (label && val && val !== 'null') fields[label.slice(0, 60)] = val.slice(0, 150);
-            });
-          } else if (card.fields && typeof card.fields === 'object') {
-            // UUID-keyed object format
-            Object.keys(card.fields).forEach(function(k) {
-              const label = (schema && schema[k]) || k;
-              const val = card.fields[k];
-              if (val !== undefined && val !== null && val !== '') {
-                fields[label.slice(0, 60)] = String(val).slice(0, 150);
-              }
-            });
-          }
-          return { id: card.id || card.cardId, title: (card.title || card.name || '').slice(0, 80), status: card.status || card.stage, fields: fields };
-        }
-        if (raw && Array.isArray(raw.cards)) {
-          return JSON.stringify({ total: raw.cards.length, cards: raw.cards.slice(0, 50).map(slimCard) });
-        }
-        return JSON.stringify(raw);
-      }
-
-      case 'aptly_get_available_units': {
-        // Paginate through ALL pages of the unit board and filter publishedForRent=true
-        const cacheKey = 'aptly:available_units:' + (input.rentReadyOnly ? 'rr' : 'all');
-        const available = await cachedFetch(cacheKey, APTLY_TTL, async () => {
-          let results = [];
-          let pg = 0;
-          while (true) {
-            const batch = await aptlyFetch('/board/unit', { page: pg });
-            if (!batch || !Array.isArray(batch.cards) || batch.cards.length === 0) break;
-            for (const card of batch.cards) {
-              if (card.publishedForRent === true) {
-                if (input.rentReadyOnly && card.rentReady !== true) continue;
-                const addr = card.address || {};
-                results.push({
-                  address: addr.standardAddress || card.street + ', ' + card.city + ', ' + card.state + ' ' + card.postalCode,
-                  stage: card.stage,
-                  beds: card.beds,
-                  baths: card.baths,
-                  halfBaths: card.halfBaths,
-                  sqft: card.totalArea,
-                  rent: card.marketRent && card.marketRent.amount,
-                  deposit: card.deposit && card.deposit.amount,
-                  rentReady: card.rentReady,
-                  availableDate: card.availableDate,
-                  petsAllowed: card.petRestrictions,
-                  showingEnabled: card['aptlyListings.showingEnabled'],
-                  cardId: card.cardId,
-                });
-              }
-            }
-            if (batch.cards.length < (batch.pageSize || 20)) break;
-            pg++;
-            if (pg > 30) break; // safety limit
-          }
-          return results;
-        });
-        return JSON.stringify({ total: available.length, units: available });
+        return JSON.stringify(await aptlyFetch('/aptlet/' + input.boardId, { page: input.page || 0 }));
       }
 
       case 'aptly_list_boards': {
-        return JSON.stringify([
-          { name: 'List Property', id: 'qfBzBxfooJtfTQncd', note: 'Properties listed for rent — availability, rent ready, showings enabled' },
-          { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing schedules and lead stats — Requested Showing Information field has date/time' },
-          { name: 'Move-Ins', id: 'K9mMGGjKgQPqDykaa', note: 'New tenant move-in pipeline — Move In Date field' },
-          { name: 'Move-Outs', id: 'YA3QWmPebvMwLwbB3', note: 'Move-out pipeline — Expected Move Out Date and Lease End Date fields' },
-          { name: 'Tenant Renewals', id: '86YrLPbwdkxtdyZoj', note: 'Lease renewal pipeline' },
-          { name: 'Applicants', id: 'MJxaStgENouWrNEKd', note: 'Rental applicants pipeline' },
-          { name: 'Evictions', id: 'TEXBDbbQmjktAqyad', note: 'Eviction cases' },
-          { name: 'Owner Pipeline', id: 'QySZ8yRWJ5KeYFcZt', note: 'Owner onboarding and management pipeline' },
-          { name: 'Work Orders', id: 'workOrder', note: 'Maintenance work orders — fields use UUID keys, fetch schema first' },
-          { name: 'Leases', id: 'lease', note: 'All leases — fields use UUID keys, fetch schema first' },
-          { name: 'Units', id: 'unit', note: 'All units/properties — rent ready, showings, published status — fields use UUID keys, fetch schema first' },
-          { name: 'Portfolios', id: 'portfolio', note: 'Portfolio/owner data — fields use UUID keys, fetch schema first' },
-        ]);
+        return JSON.stringify(await aptlyFetch('/aptlets'));
       }
 
       case 'aptly_search_cards': {
-        // Use Aptly's native query param to filter server-side — avoids fetching all cards
-        const data = await cachedFetch('aptly:search:' + input.boardId + ':' + input.query, APTLY_TTL, () => aptlyFetch('/board/' + input.boardId, { page: 0, query: input.query }));
-        const KEY_FIELDS = [
-          'Move In Date', 'Move Out Date', 'Expected Move Out Date', 'Lease End Date',
-          'Requested Showing Information', 'Showing Date', 'Showing Time',
-          'Rent Ready', 'Showings Enabled', 'Published', 'Status',
-          'Property Address', 'Address', 'Unit', 'Tenant', 'Name',
-        ];
-        function slimCard(card) {
-          const fields = {};
-          if (Array.isArray(card.fields)) {
-            card.fields.forEach(function(f) {
-              if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
-                const val = String(f.value);
-                if (KEY_FIELDS.some(function(k) { return f.label.toLowerCase().includes(k.toLowerCase()); })) {
-                  fields[f.label] = val.slice(0, 100);
-                }
-              }
-            });
-          }
-          return { id: card.id, title: (card.title || card.name || '').slice(0, 80), status: card.status || card.stage, fields: fields };
-        }
-        if (data && Array.isArray(data.cards)) {
-          return JSON.stringify({ total: data.cards.length, cards: data.cards.slice(0, 20).map(slimCard) });
+        const data = await aptlyFetch('/aptlet/' + input.boardId, { page: 0 });
+        if (Array.isArray(data && data.cards)) {
+          const q = input.query.toLowerCase();
+          return JSON.stringify(Object.assign({}, data, {
+            cards: data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }),
+          }));
         }
         return JSON.stringify(data);
       }
@@ -918,65 +598,31 @@ function getRelevantTools(msg) {
   msg = (msg || '').toLowerCase();
   const tools = new Set();
 
-  // UNPAID / PAST DUE
-  if (msg.match(/owe|past.?due|unpaid|behind.?on.?rent|hasn.?t.?paid|delinquent|late.?on.?rent|balance.?due|who.?has.?a.?balance|still.?owes|balance|ledger|payment|charge|how.?much/)) {
+  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
-  // PROPERTY / AVAILABILITY / LEASE INFO
-  if (msg.match(/availab|vacant|tour|can.?i.?see|is.?it.?listed|when.?can.?i|homes?|house|propert|address|who.?lives|who.?is.?in|who.?is.?the.?tenant|current.?tenant|lease.?info|lives.?at|\d{3,5}/)) {
-    ['rv_get_properties', 'rv_get_leases', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}/)) {
+    ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
   }
-  // AVAILABLE INVENTORY / LISTED HOMES
-  if (msg.match(/list(ed|ing)?s?|published|rent.?ready|what.*(homes?|propert|avail)|avail.*(homes?|propert|units?)|how.?many.*(homes?|units?|propert)|inventory|for.?rent/i)) {
-    tools.add("aptly_get_available_units");
+  if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
+    ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
   }
-  // SHOWINGS
-  if (msg.match(/show(ing)?s?|schedul(ed)?|tour(s|ed)?|appointment|confirmed|pending.?show|how.?many.?show|tomorrow|today|this.?week|calendar/)) {
-    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
-  }
-  // MOVE-INS
-  if (msg.match(/move.?in|moving.?in|new.?tenant|new.?resident|keys|check.?in|incoming/)) {
-    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
-  }
-  // MOVE-OUTS / VACANCIES
-  if (msg.match(/move.?out|moving.?out|vacanc|who.?s.?leaving|turnover|leaving|vacating|notice/)) {
-    ['aptly_get_board_cards', 'aptly_search_cards', 'rv_get_leases'].forEach(function(t) { tools.add(t); });
-  }
-  // RENEWALS
-  if (msg.match(/renew(al)?s?|expir|lease.?end|up.?for.?renew|needs.?to.?renew/)) {
-    ['aptly_get_board_cards'].forEach(function(t) { tools.add(t); });
-    tools.add('rv_get_leases');
-  }
-  // APPLICANTS
-  if (msg.match(/applicant|application|applied|screening|who.?applied|new.?leads?.?applied/)) {
-    tools.add('aptly_get_board_cards');
-  }
-  // EVICTIONS
-  if (msg.match(/evict(ion)?s?|filing|unlawful.?detainer|eviction.?status/)) {
-    tools.add('aptly_get_board_cards');
-  }
-  // WORK ORDERS / MAINTENANCE
-  if (msg.match(/work.?order|maintenance|repair|fix|broken|open.?request|maintenance.?this|what.?needs.?fix/)) {
-    ['rv_get_work_orders', 'rv_get_work_order_detail', 'aptly_get_board_cards'].forEach(function(t) { tools.add(t); });
-  }
-  // INSPECTIONS
   if (msg.match(/inspect/)) {
     ['rv_get_inspections', 'rv_get_inspection_detail'].forEach(function(t) { tools.add(t); });
   }
-  // VENDORS
   if (msg.match(/vendor|contractor/)) {
     tools.add('rv_get_vendors');
   }
-  // OWNERS / PORTFOLIO
-  if (msg.match(/owner|landlord|portfolio|owner.?pipeline|onboard|new.?owner/)) {
-    ['rv_get_owners', 'rv_get_properties', 'aptly_get_board_cards'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/owner|landlord|portfolio|performing|statement/)) {
+    ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
   }
-  // POLICIES / SOPs
-  if (msg.match(/policy|procedure|sop|how.?do.?we|what.?is.?our|lease.?break|pet|screening.?criteria|late.?fee|application.?fee|process.?for|rule/)) {
+  if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
+    ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
   }
-  // SLACK / TEAM
-  if (msg.match(/slack|team.?said|any.?messages?|team.?update|channel|what.?did.*say/)) {
+  if (msg.match(/slack|team|announce|update|channel|said|message/)) {
     ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
   }
 
@@ -997,28 +643,18 @@ app.post('/api/chat', async function(req, res) {
     const tools = getRelevantTools(lastMsg ? lastMsg.content : '');
     console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
-    // Trim history: keep only last 6 messages to prevent token bloat
-    // Also strip large tool_result payloads from older turns
-    function trimMessages(msgs) {
-      const trimmed = msgs.slice(-2);
-      // Ensure it starts with a user message
-      while (trimmed.length > 0 && trimmed[0].role !== 'user') trimmed.shift();
-      return trimmed;
-    }
+    let current = messages.slice();
 
-    let current = trimMessages(messages.slice());
-
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 5; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': ANTHROPIC_API_KEY,
           'anthropic-version': '2023-06-01',
-          
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: current,
@@ -1054,19 +690,6 @@ app.post('/api/chat', async function(req, res) {
   }
 });
 
-app.get('/cache/status', function(req, res) {
-  const entries = [];
-  _cache.forEach(function(v, k) {
-    entries.push({ key: k.slice(0, 80), expiresIn: Math.round((v.exp - Date.now()) / 1000) + 's' });
-  });
-  res.json({ size: _cache.size, entries });
-});
-
-app.get('/cache/clear', function(req, res) {
-  _cache.clear();
-  res.json({ cleared: true });
-});
-
 app.get('/health', function(req, res) {
   res.json({
     status: 'ok',
@@ -1076,209 +699,6 @@ app.get('/health', function(req, res) {
     notion: !!NOTION_TOKEN,
     slack: !!SLACK_TOKEN,
   });
-});
-
-app.get('/debug/lease/:id', async function(req, res) {
-  const data = await rvFetch('/leases/export', { 'leaseIDs[]': req.params.id });
-  res.json(data);
-});
-
-app.get('/debug/lease-balance-fields', async function(req, res) {
-  // Fetch first page of active leases and show ALL fields that contain numbers > 0
-  const data = await rvFetch('/leases/export', { pageSize: 5, page: 1, 'primaryLeaseStatusIDs[]': 1 });
-  if (!Array.isArray(data) || data.length === 0) return res.json({ error: 'No data' });
-  const sample = data[0];
-  const lease = sample.lease || {};
-  // Show every field in the lease object that might be a balance
-  const allFields = {};
-  Object.keys(lease).forEach(function(k) {
-    const v = lease[k];
-    if (typeof v === 'number' || (typeof v === 'string' && !isNaN(parseFloat(v)))) {
-      allFields[k] = v;
-    }
-  });
-  res.json({ leaseId: lease.leaseID, allNumericFields: allFields, fullLease: lease });
-});
-
-app.get('/debug/property-leases/:propertyId', async function(req, res) {
-  const pid = req.params.propertyId;
-  const [active, inactive] = await Promise.all([
-    rvFetch('/leases/export', { pageSize: 200, page: 1, 'primaryLeaseStatusIDs[]': 1 }),
-    rvFetch('/leases/export', { pageSize: 200, page: 1, 'primaryLeaseStatusIDs[]': 2 }),
-  ]);
-  // Return all leases and show property ID fields so we can see the structure
-  const all = [
-    ...(Array.isArray(active) ? active : []),
-    ...(Array.isArray(inactive) ? inactive : []),
-  ];
-  const matches = all.filter(function(item) {
-    return JSON.stringify(item).includes(pid);
-  });
-  // Show the raw structure of matched items
-  res.json({
-    matchCount: matches.length,
-    propertyIdFieldsFound: matches.map(function(item) {
-      return {
-        'lease.propertyID': item.lease && item.lease.propertyID,
-        'property.propertyID': item.property && item.property.propertyID,
-        'property.id': item.property && item.property.id,
-        'unit.propertyID': item.unit && item.unit.propertyID,
-        primaryLeaseStatusID: item.lease && item.lease.primaryLeaseStatusID,
-        leaseStatusText: item.lease && item.lease.leaseStatusText,
-        tenants: item.lease && item.lease.tenants && item.lease.tenants.map(function(t) { return t.name; }),
-        endDate: item.lease && item.lease.endDate,
-        moveOutDate: item.lease && item.lease.moveOutDate,
-      };
-    }),
-  });
-});
-
-app.get('/debug/aptly/ticket/:id', async function(req, res) {
-  const id = req.params.id;
-  const results = {};
-  const paths = [
-    '/aptlet-instance/' + id,
-    '/ticket/' + id,
-    '/instance/' + id,
-    '/card/' + id,
-    '/board/' + id,
-  ];
-  for (const path of paths) {
-    try {
-      const r = await fetch('https://core-api.getaptly.com/api' + path + '?x-token=' + APTLY_TOKEN);
-      if (r.ok) {
-        results[path] = { status: r.status, data: await r.json() };
-      } else {
-        results[path] = { status: r.status, body: await r.text() };
-      }
-    } catch(e) {
-      results[path] = { error: e.message };
-    }
-  }
-  res.json(results);
-});
-
-app.get('/debug/aptly/units', async function(req, res) {
-  const results = {};
-  const endpoints = [
-    '/location/unit', '/location/units', '/locations', '/units', '/properties',
-    '/listing', '/listings', '/v1/units', '/v2/units', '/v1/locations',
-    '/aptlet', '/aptlets', '/unit', '/property',
-    '/location', '/v1/location', '/v1/listing', '/v2/listing',
-  ];
-  for (const ep of endpoints) {
-    try {
-      const r = await fetch('https://core-api.getaptly.com/api' + ep + '?x-token=' + APTLY_TOKEN);
-      if (r.ok) {
-        results[ep] = { status: r.status, data: await r.json() };
-      } else {
-        results[ep] = { status: r.status };
-      }
-    } catch(e) {
-      results[ep] = { error: e.message };
-    }
-  }
-  res.json(results);
-});
-
-app.get('/debug/aptly/schema/:boardId', async function(req, res) {
-  try {
-    const schema = await aptlyFetch('/schema/' + req.params.boardId);
-    res.json(schema);
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
-
-app.get('/debug/aptly/unit-sample', async function(req, res) {
-  try {
-    const schema = await aptlyFetch('/schema/unit');
-    const schemaMap = {};
-    if (Array.isArray(schema)) schema.forEach(function(f) { if (f.key && f.label) schemaMap[f.key] = f.label; });
-    const cards = await aptlyFetch('/board/unit', { page: 0 });
-    const sample = cards && cards.cards ? cards.cards.slice(0, 3).map(function(card) {
-      const readable = {};
-      if (card.fields && typeof card.fields === 'object') {
-        Object.keys(card.fields).forEach(function(k) {
-          readable[schemaMap[k] || k] = card.fields[k];
-        });
-      }
-      return { id: card.id || card.cardId, title: card.title || card.name, status: card.status, readableFields: readable };
-    }) : cards;
-    res.json({ schemaMap, sample });
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
-
-app.get('/debug/aptly/raw-cards/:boardId', async function(req, res) {
-  try {
-    const r = await fetch('https://core-api.getaptly.com/api/board/' + req.params.boardId + '?page=0&x-token=' + APTLY_TOKEN);
-    const body = await r.json();
-    // Return first 2 cards in full so we can see field names
-    const cards = body && body.cards ? body.cards.slice(0, 2) : body;
-    res.json({ status: r.status, totalCards: body && body.cards ? body.cards.length : 0, sampleCards: cards });
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
-
-app.get('/debug/aptly/all-boards', async function(req, res) {
-  const boards = [
-    { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz' },
-    { name: 'Move-Ins', id: 'K9mMGGjKgQPqDykaa' },
-    { name: 'Move-Outs', id: 'YA3QWmPebvMwLwbB3' },
-    { name: 'Renewals', id: '86YrLPbwdkxtdyZoj' },
-    { name: 'List Property', id: 'qfBzBxfooJtfTQncd' },
-  ];
-  const results = {};
-  for (const board of boards) {
-    try {
-      const r = await fetch('https://core-api.getaptly.com/api/board/' + board.id + '?page=0&x-token=' + APTLY_TOKEN);
-      const body = r.ok ? await r.json() : await r.text();
-      results[board.name] = { status: r.status, cardCount: body && body.cards ? body.cards.length : body };
-    } catch(e) {
-      results[board.name] = { error: e.message };
-    }
-  }
-  res.json(results);
-});
-
-app.get('/debug/aptly/listings', async function(req, res) {
-  const id = 'qfBzBxfooJtfTQncd';
-  const results = {};
-  const attempts = [
-    'https://core-api.getaptly.com/api/board/' + id + '?page=0&x-token=' + APTLY_TOKEN,
-    'https://core-api.getaptly.com/api/board/' + id + '?page=0&x-token=' + APTLY_TOKEN,
-    'https://app.getaptly.com/api/ticket/' + id + '?page=0&x-token=' + APTLY_TOKEN,
-    'https://preview.getaptly.com/api/ticket/' + id + '?page=0&x-token=' + APTLY_TOKEN,
-    'https://core-api.getaptly.com/api/board/' + id + '?x-token=' + APTLY_TOKEN,
-  ];
-  for (const url of attempts) {
-    try {
-      const r = await fetch(url);
-      const key = url.replace(APTLY_TOKEN, 'TOKEN');
-      results[key] = { status: r.status, data: r.ok ? await r.json() : await r.text() };
-    } catch(e) {
-      results[url.replace(APTLY_TOKEN, 'TOKEN')] = { error: e.message };
-    }
-  }
-  res.json(results);
-});
-
-app.get('/debug/aptly/boards', async function(req, res) {
-  const data = await aptlyFetch('/aptlets');
-  res.json(data);
-});
-
-app.get('/debug/aptly/search/:boardId/:query', async function(req, res) {
-  const data = await aptlyFetch('/board/' + req.params.boardId, { page: 0 });
-  const q = req.params.query.toLowerCase();
-  if (Array.isArray(data && data.cards)) {
-    res.json(data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }));
-  } else {
-    res.json(data);
-  }
 });
 
 app.get('/debug/properties', async function(req, res) {
