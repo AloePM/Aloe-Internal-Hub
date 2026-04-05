@@ -30,59 +30,48 @@ RENTVINE — Source of truth for all property management data:
 - Property inspections (move-in, move-out, periodic)
 - Vendors and contractors
 
-APTLY — CRM and workflow boards:
-- Renter leads pipeline showing activity and stats (board ID: 4EMDSYKirhQaNdQKz) — tracks showings and lead activity, NOT listing availability
-- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
+APTLY — CRM and workflow boards (full MCP access — use Aptly MCP tools to browse all boards):
+- You have access to ALL Aptly boards via the Aptly MCP integration
+- Use Aptly MCP tools to list boards, search cards, and get card details
+- Renter Leads board (ID: 4EMDSYKirhQaNdQKz) — tracks showing activity and lead stats only, NOT listing availability
+- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals and any other boards you can discover
 - Contact and lead details
 
-NOTION — Company policies and SOPs:
-- Lease break policy, move-in/out procedures
-- Pet policy, screening criteria, fee schedules
-- HOA violation procedures, maintenance escalation, all SOPs
+NOTION — Company policies and SOPs
+SLACK — Team communications
 
-SLACK — Team communications:
-- Recent team messages, announcements, decisions
-- Search across all channels for specific topics
+STRICT DATA RULES — follow these exactly, no exceptions:
 
-Rules:
-- Always use tools to get live data — never guess or make up numbers
-- For tenant balances always show the full breakdown (what charges, amounts, dates)
-- Be concise. Lead with the answer, then details
-- Use numbered steps for procedures
-- Always cite your source (Rentvine, Aptly, Notion, or Slack)
-- Never speculate on legal or fair housing matters
-- If you cannot find something in the data, say so clearly and direct to the right person based on the topic:
-  - Leasing questions (applications, showings, availability, move-ins) → "Reach out to Dhyana directly."
-  - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
-  - HOA violations or HOA questions → "Reach out to Juan directly."
-  - Move-out or lease renewal questions → "Reach out to Persia directly."
-  - Any property in Maricopa if you have ZERO data from both Rentvine AND Aptly → "Reach out to Teri directly." Do NOT say this if you found lease data in Rentvine — that is sufficient data to give an answer.
-  - Owner or landlord related issues → "Reach out to Alexes directly."
-  - Accounting questions → "Reach out to Randi directly."
-- NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
-- If an address is not found, say "I couldn't find [X] in Rentvine — the address may be formatted differently. For leasing questions reach out to Dhyana, or try searching with the full street name spelled out."
-- NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
-- For ANY question about a property's availability, tours, showings, or status, do a FULL property status check using ALL of these steps:
+1. LEASE DATA INTERPRETATION:
+   - A lease record with any data = that property exists in the system. Report what you found.
+   - primaryLeaseStatusID=1 = OCCUPIED. Always say "currently occupied." Never say "limited data" or "unclear" if you have this.
+   - primaryLeaseStatusID=2 = recently vacated.
+   - A lease ID existing is NOT "limited data" — it is definitive data. Use it.
+   - NEVER use the word "available" for a property with primaryLeaseStatusID=1.
+   - The unit.isAvailable field is a system flag, NOT an indicator of vacancy. Ignore it for occupancy determination.
 
-  STEP 1 — RENTVINE LEASE CHECK (rv_get_leases, status: "all"):
-  - If a lease record exists with primaryLeaseStatusID=1: Property IS occupied — say "currently occupied"
-  - If a lease record exists with primaryLeaseStatusID=2: Tenant has moved out — say "recently vacated"
-  - No lease found: Property is vacant or new to portfolio
-  - NEVER say "available" if a lease record exists with status 1. The unit.isAvailable field in Rentvine does NOT mean vacant — it is a system flag, not occupancy status. Only use primaryLeaseStatusID to determine occupancy.
-  - Report: tenant names, leaseEndDate, moveOutDate, expectedMoveOutDate, rent amount
+2. APTLY DATA INTERPRETATION:
+   - If an Aptly tool runs and returns an empty array or no matching cards: say "not found in [board name]"
+   - NEVER say "couldn't access Aptly" or "Aptly appears unavailable" if the tool ran without throwing an error
+   - Empty results ≠ access failure. Distinguish these clearly.
 
-  STEP 2 — APTLY SEARCH:
-  - NOTE: The Renter Leads board (4EMDSYKirhQaNdQKz) tracks showing activity and lead stats only — it does NOT indicate whether a home is available or listed.
-  - Use aptly_list_boards to see known board IDs, then search each board that has a real ID using aptly_search_cards.
-  - Currently confirmed board: Renter Leads (4EMDSYKirhQaNdQKz). Search it for the property address to see showing activity.
-  - If other boards say "UNKNOWN": skip them and note "other Aptly boards not yet configured."
-  - If search returns empty: say "not found in [board name]" — NEVER say "cannot access Aptly."
-  - If a board returns results: report all relevant fields — rent ready, showings enabled, published, move-out date, renewal status, move-in date.
+3. FALLBACK ROUTING — only use these when you genuinely have zero data:
+   - Leasing / showings / availability → Dhyana
+   - Maintenance / repairs → Roberto
+   - HOA violations → Juan
+   - Move-out / renewals → Persia
+   - Maricopa properties with truly zero data from Rentvine AND Aptly → Teri
+   - Landlord / owner issues → Alexes
+   - Accounting → Randi
+   - DO NOT say "reach out to Teri" if you found a lease record in Rentvine. That IS your answer.
+   - DO NOT give two routing suggestions in the same response.
 
-  CRITICAL: "Aptly returned no results" is NOT the same as "cannot access Aptly." Report what you found or didn't find — never what you "couldn't do."
+4. RESPONSE FORMAT for property status questions:
+   Lead with the facts from Rentvine, then Aptly. Example:
+   "17373 North Costa Brava — currently occupied. Lease ID 1126, $1,575/month, 3bd/2.5ba. Lease ends [date]. Not found in Aptly Renter Leads showing activity. Other Aptly boards not yet configured."
 
-- NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
-- Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
+5. NEVER say: "I couldn't access", "I have limited data", "reach out to X" when you have data, "next steps would be", "you should", "I recommend"`;
+
 
 const ALL_TOOLS = [
   {
@@ -692,6 +681,7 @@ app.post('/api/chat', async function(req, res) {
           'Content-Type': 'application/json',
           'x-api-key': ANTHROPIC_API_KEY,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'mcp-client-1.0',
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
@@ -699,6 +689,14 @@ app.post('/api/chat', async function(req, res) {
           system: SYSTEM_PROMPT,
           messages: current,
           tools: tools,
+          mcp_servers: [
+            {
+              type: 'url',
+              url: 'https://mcp.getaptly.com/mcp',
+              name: 'aptly',
+              authorization_token: APTLY_TOKEN,
+            }
+          ],
         }),
       });
 
