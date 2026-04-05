@@ -41,7 +41,7 @@ SLACK — Team communications
 STRICT RULES:
 
 1. DETERMINING PROPERTY AVAILABILITY — always do ALL of these:
-   a) Call rv_get_properties to find the property and get its propertyId. Then call rv_get_leases with that propertyId (not an address search) to get the current active lease. This is the only reliable way — address fuzzy matching on leases misses records. If no active lease found by propertyId, call rv_get_leases again with propertyId and status "inactive" to check if recently vacated.
+   a) Call rv_get_properties to find the property and get its propertyId. Then call rv_get_leases with that propertyId and status "active". If the result is empty, call rv_get_leases once more with propertyId and status "inactive". STOP after these two calls — do NOT call with status "all" or search by address. Two lease calls maximum.
    b) Search Aptly List Property board (ID: qfBzBxfooJtfTQncd) using aptly_search_cards — this shows homes actively listed for rent with rent ready, showings enabled, and published status
    c) DO NOT check Renter Leads for availability — it does not contain that data
 
@@ -375,11 +375,32 @@ async function executeTool(name, input) {
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
         else if (input.status !== 'all') params['primaryLeaseStatusIDs[]'] = 1;
 
-        // Search by propertyId — most reliable, avoids address fuzzy match failures
+        // Slim down lease records to only fields needed — prevents rate limit errors
+        function slimLease(item) {
+          const l = item.lease || {};
+          const p = item.property || {};
+          const u = item.unit || {};
+          return {
+            leaseId: l.leaseID,
+            status: l.leaseStatusText,
+            primaryLeaseStatusID: l.primaryLeaseStatusID,
+            startDate: l.startDate,
+            endDate: l.endDate,
+            moveOutDate: l.moveOutDate,
+            expectedMoveOutDate: l.expectedMoveOutDate,
+            rent: l.rent,
+            deposit: l.deposit,
+            tenants: (l.tenants || []).map(function(t) { return { name: t.name, email: t.email, phone: t.phone }; }),
+            property: { address: p.address, city: p.city, state: p.state, zip: p.zip, propertyID: p.propertyID },
+            unit: { address: u.address, beds: u.beds, baths: u.baths, sqft: u.sqft },
+          };
+        }
+
+        // Search by propertyId — most reliable
         if (input.propertyId) {
           params['propertyIDs[]'] = input.propertyId;
           const data = await rvFetch('/leases/export', Object.assign({}, params, { page: 1 }));
-          return JSON.stringify(Array.isArray(data) ? data : []);
+          return JSON.stringify(Array.isArray(data) ? data.map(slimLease) : []);
         }
 
         // Search by tenant name or address string
@@ -399,7 +420,7 @@ async function executeTool(name, input) {
               return fuzzyMatch(q, propAddr + ' ' + (item.property && item.property.city || '')) ||
                      fuzzyMatch(q, unitAddr);
             });
-            if (matches.length > 0) return JSON.stringify(matches);
+            if (matches.length > 0) return JSON.stringify(matches.map(slimLease));
             if (data.length < 200) break;
             page++;
           }
@@ -407,7 +428,7 @@ async function executeTool(name, input) {
         }
 
         const data = await rvFetch('/leases/export', Object.assign({}, params, { page: input.page || 1 }));
-        return JSON.stringify(data);
+        return JSON.stringify(Array.isArray(data) ? data.map(slimLease) : data);
       }
 
       case 'rv_get_ledger': {
