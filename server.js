@@ -19,7 +19,9 @@ const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).
 
 const SYSTEM_PROMPT = `You are Aloe Assistant, internal AI for Aloe Property Management (Phoenix metro). You serve Randi (owner), Persia (APM), Dhyana (leasing), and staff.
 
-APTLY BOARDS: List Property=qfBzBxfooJtfTQncd, Move-Outs=YA3QWmPebvMwLwbB3, Renewals=86YrLPbwdkxtdyZoj, Move-Ins=K9mMGGjKgQPqDykaa, Renter Leads=4EMDSYKirhQaNdQKz(stats only—not availability)
+APTLY BOARDS: List Property=qfBzBxfooJtfTQncd, Move-Outs=YA3QWmPebvMwLwbB3, Renewals=86YrLPbwdkxtdyZoj, Move-Ins=K9mMGGjKgQPqDykaa, Renter Leads=4EMDSYKirhQaNdQKz(showing schedules, calendar, lead stats — NOT listing availability)
+
+SHOWING SCHEDULES: Showing appointments and calendar info are on the Renter Leads board (4EMDSYKirhQaNdQKz). Use aptly_get_board_cards to get all cards, then look for scheduled showing dates. For "how many showings tomorrow" — get all cards and count those with a showing date matching tomorrow's date.
 
 PROPERTY AVAILABILITY — do in order:
 1. aptly_search_cards on List Property board (qfBzBxfooJtfTQncd) → is it published/listed for rent?
@@ -682,6 +684,9 @@ function getRelevantTools(msg) {
   }
   if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly/)) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/show(ing)?s?|schedul|calendar|appointment|tomorrow|today|this week|how many/)) {
+    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
