@@ -29,9 +29,11 @@ RENTVINE — Source of truth for all property management data:
 - Work orders, maintenance, inspections, vendors
 
 APTLY — CRM and workflow boards:
-- List Property board (ID: qfBzBxfooJtfTQncd) — properties listed for rent, shows rent ready, showings enabled, published status. USE THIS to check if a home is listed/available.
-- Renter Leads board (ID: 4EMDSYKirhQaNdQKz) — showing STATS and activity only, NOT availability. DO NOT use this for availability checks.
-- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards (IDs TBD)
+- List Property board (ID: qfBzBxfooJtfTQncd) — properties listed for rent with rent ready, showings enabled, published status. USE THIS to check if a home is listed/available.
+- Move-Outs board (ID: YA3QWmPebvMwLwbB3) — tenant move-out pipeline, check this for move-out status and dates
+- Tenant Renewals board (ID: 86YrLPbwdkxtdyZoj) — lease renewal pipeline, check if tenant is renewing
+- Move-Ins board (ID: K9mMGGjKgQPqDykaa) — new tenant move-in pipeline, check if new tenant already lined up
+- Renter Leads board (ID: 4EMDSYKirhQaNdQKz) — showing STATS and activity only, NOT availability. DO NOT use for availability checks.
 
 NOTION — Company policies and SOPs
 SLACK — Team communications
@@ -39,7 +41,7 @@ SLACK — Team communications
 STRICT RULES:
 
 1. DETERMINING PROPERTY AVAILABILITY — always do ALL of these:
-   a) Call rv_get_leases with status "all" for the address — get full lease data including tenant names, lease status text, endDate, moveOutDate, expectedMoveOutDate
+   a) Call rv_get_leases with status "active" for the address to find current tenants. If no active lease found, then call with status "inactive" to see if recently vacated. NEVER use status "all" for occupancy checks — it returns old expired leases and creates confusion about who is actually living there now.
    b) Search Aptly List Property board (ID: qfBzBxfooJtfTQncd) using aptly_search_cards — this shows homes actively listed for rent with rent ready, showings enabled, and published status
    c) DO NOT check Renter Leads for availability — it does not contain that data
 
@@ -520,10 +522,9 @@ async function executeTool(name, input) {
         return JSON.stringify([
           { name: 'List Property (Listings)', id: 'qfBzBxfooJtfTQncd', note: 'Properties listed for rent — rent ready, showings enabled, published status' },
           { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing activity and lead stats only — NOT listing availability' },
-          { name: 'Move-Ins', id: 'UNKNOWN', note: 'New tenant move-in pipeline' },
-          { name: 'Move-Outs', id: 'UNKNOWN', note: 'Tenant move-out pipeline' },
-          { name: 'Tenant Renewals', id: 'UNKNOWN', note: 'Lease renewal pipeline' },
-          { name: 'HOA Violations', id: 'UNKNOWN', note: 'HOA violation tracking' },
+          { name: 'Move-Ins', id: 'K9mMGGjKgQPqDykaa', note: 'New tenant move-in pipeline' },
+          { name: 'Move-Outs', id: 'YA3QWmPebvMwLwbB3', note: 'Tenant move-out pipeline' },
+          { name: 'Tenant Renewals', id: '86YrLPbwdkxtdyZoj', note: 'Lease renewal pipeline' },
         ]);
       }
 
@@ -783,8 +784,25 @@ app.get('/debug/aptly/units', async function(req, res) {
 });
 
 app.get('/debug/aptly/listings', async function(req, res) {
-  const data = await aptlyFetch('/aptlet/qfBzBxfooJtfTQncd', { page: 0 });
-  res.json(data);
+  const id = 'qfBzBxfooJtfTQncd';
+  const results = {};
+  const attempts = [
+    'https://app.getaptly.com/api/aptlet/' + id + '?page=0&x-token=' + APTLY_TOKEN,
+    'https://preview.getaptly.com/api/aptlet/' + id + '?page=0&x-token=' + APTLY_TOKEN,
+    'https://app.getaptly.com/api/ticket/' + id + '?page=0&x-token=' + APTLY_TOKEN,
+    'https://preview.getaptly.com/api/ticket/' + id + '?page=0&x-token=' + APTLY_TOKEN,
+    'https://preview.getaptly.com/api/aptlet/' + id + '?x-token=' + APTLY_TOKEN,
+  ];
+  for (const url of attempts) {
+    try {
+      const r = await fetch(url);
+      const key = url.replace(APTLY_TOKEN, 'TOKEN');
+      results[key] = { status: r.status, data: r.ok ? await r.json() : await r.text() };
+    } catch(e) {
+      results[url.replace(APTLY_TOKEN, 'TOKEN')] = { error: e.message };
+    }
+  }
+  res.json(results);
 });
 
 app.get('/debug/aptly/boards', async function(req, res) {
