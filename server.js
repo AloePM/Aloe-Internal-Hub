@@ -100,7 +100,7 @@ If asking about status/pipeline → use Aptly. If asking for detail/vendor/cost 
 
 AVAILABLE HOMES / WHAT'S FOR RENT
 Triggers: "what homes are available", "what's listed", "available rentals", "what's for rent", "rent ready homes", "available inventory", "how many homes available"
-Action: aptly_get_board_cards on List Property (qfBzBxfooJtfTQncd) — shows all published/rent ready homes
+Action: ALWAYS use aptly_get_board_cards with boardId="qfBzBxfooJtfTQncd" (List Property board) — do NOT use the 'unit' board. This shows all published/rent-ready homes with address, beds, baths, rent.
 
 OWNER / PORTFOLIO
 Triggers: "owner pipeline", "new owners", "onboarding", "owner status", "portfolio owners"
@@ -882,7 +882,7 @@ function getRelevantTools(msg) {
   }
   // AVAILABLE INVENTORY / LISTED HOMES
   if (msg.match(/list(ed|ing)?s?|published|rent.?ready|what.*(homes?|propert|avail)|avail.*(homes?|propert|units?)|how.?many.*(homes?|units?|propert)|inventory|for.?rent/i)) {
-    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+    tools.add("aptly_get_board_cards");
   }
   // SHOWINGS
   if (msg.match(/show(ing)?s?|schedul(ed)?|tour(s|ed)?|appointment|confirmed|pending.?show|how.?many.?show|tomorrow|today|this.?week|calendar/)) {
@@ -1133,6 +1133,36 @@ app.get('/debug/aptly/units', async function(req, res) {
     }
   }
   res.json(results);
+});
+
+app.get('/debug/aptly/schema/:boardId', async function(req, res) {
+  try {
+    const schema = await aptlyFetch('/schema/' + req.params.boardId);
+    res.json(schema);
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
+app.get('/debug/aptly/unit-sample', async function(req, res) {
+  try {
+    const schema = await aptlyFetch('/schema/unit');
+    const schemaMap = {};
+    if (Array.isArray(schema)) schema.forEach(function(f) { if (f.key && f.label) schemaMap[f.key] = f.label; });
+    const cards = await aptlyFetch('/board/unit', { page: 0 });
+    const sample = cards && cards.cards ? cards.cards.slice(0, 3).map(function(card) {
+      const readable = {};
+      if (card.fields && typeof card.fields === 'object') {
+        Object.keys(card.fields).forEach(function(k) {
+          readable[schemaMap[k] || k] = card.fields[k];
+        });
+      }
+      return { id: card.id || card.cardId, title: card.title || card.name, status: card.status, readableFields: readable };
+    }) : cards;
+    res.json({ schemaMap, sample });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
 });
 
 app.get('/debug/aptly/raw-cards/:boardId', async function(req, res) {
