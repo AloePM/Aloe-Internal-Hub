@@ -685,7 +685,16 @@ app.post('/api/chat', async function(req, res) {
     const tools = getRelevantTools(lastMsg ? lastMsg.content : '');
     console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
-    let current = messages.slice();
+    // Trim history: keep only last 6 messages to prevent token bloat
+    // Also strip large tool_result payloads from older turns
+    function trimMessages(msgs) {
+      const trimmed = msgs.slice(-6);
+      // Ensure it starts with a user message
+      while (trimmed.length > 0 && trimmed[0].role !== 'user') trimmed.shift();
+      return trimmed;
+    }
+
+    let current = trimMessages(messages.slice());
 
     for (let i = 0; i < 8; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
