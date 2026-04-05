@@ -413,21 +413,40 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_units': {
-        const unitData = await rvFetch('/units/export', { pageSize: 200 });
-        const leaseData = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
-        const occupiedIds = new Set(
-          Array.isArray(leaseData) ? leaseData.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
-        );
-        const tagged = Array.isArray(unitData)
-          ? unitData.map(function(u) { return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) }); })
-          : unitData;
-        if (input.search && Array.isArray(tagged)) {
-          return JSON.stringify(tagged.filter(function(u) {
-            const full = (u.address || '') + ' ' + (u.city || '') + ' ' + (u.name || '');
+        // If we have a propertyId, use the per-property units endpoint
+        if (input.propertyId) {
+          const units = await rvFetch('/properties/' + input.propertyId + '/units');
+          if (!units.error) {
+            // Cross-reference with active leases to tag availability
+            const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+            const occupiedIds = new Set(
+              Array.isArray(leases) ? leases.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
+            );
+            if (Array.isArray(units)) {
+              return JSON.stringify(units.map(function(u) {
+                return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) });
+              }));
+            }
+            return JSON.stringify(units);
+          }
+        }
+        // Fallback: derive unit info from the full lease export
+        // This works because leases include full unit and property data
+        const allLeases = await rvFetch('/leases/export', { pageSize: 200 });
+        if (input.search && Array.isArray(allLeases)) {
+          return JSON.stringify(allLeases.filter(function(item) {
+            const full = (item.unit && item.unit.address || '') + ' ' +
+                         (item.property && item.property.address || '') + ' ' +
+                         (item.property && item.property.city || '');
             return fuzzyMatch(input.search, full);
           }));
         }
-        return JSON.stringify(tagged);
+        if (input.propertyId && Array.isArray(allLeases)) {
+          return JSON.stringify(allLeases.filter(function(item) {
+            return item.lease && item.lease.propertyID == input.propertyId;
+          }));
+        }
+        return JSON.stringify(allLeases);
       }
 
       case 'rv_get_owners': {
@@ -642,7 +661,7 @@ app.post('/api/chat', async function(req, res) {
 
     let current = messages.slice();
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
