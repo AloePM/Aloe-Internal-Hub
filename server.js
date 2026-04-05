@@ -31,7 +31,7 @@ RENTVINE — Source of truth for all property management data:
 - Vendors and contractors
 
 APTLY — CRM and workflow boards:
-- Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
+- Renter leads pipeline showing activity and stats (board ID: 4EMDSYKirhQaNdQKz) — tracks showings and lead activity, NOT listing availability
 - Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
 - Contact and lead details
 
@@ -65,26 +65,24 @@ Rules:
 - For ANY question about a property's availability, tours, showings, or status, do a FULL property status check using ALL of these steps:
 
   STEP 1 — RENTVINE LEASE CHECK (rv_get_leases, status: "all"):
-  - primaryLeaseStatusID=1: Property IS occupied — has active tenants
-  - primaryLeaseStatusID=2: Lease is closed/inactive — tenants have moved out
-  - No lease found: Property has never been leased or is brand new to portfolio
-  - Key fields to report: tenant names, leaseEndDate, moveOutDate, expectedMoveOutDate, current balance
+  - If a lease record exists with primaryLeaseStatusID=1: Property IS occupied — say "currently occupied"
+  - If a lease record exists with primaryLeaseStatusID=2: Tenant has moved out — say "recently vacated"
+  - No lease found: Property is vacant or new to portfolio
+  - NEVER say "available" if a lease record exists with status 1. The unit.isAvailable field in Rentvine does NOT mean vacant — it is a system flag, not occupancy status. Only use primaryLeaseStatusID to determine occupancy.
+  - Report: tenant names, leaseEndDate, moveOutDate, expectedMoveOutDate, rent amount
 
-  STEP 2 — APTLY RENTER LEADS (board ID: 4EMDSYKirhQaNdQKz):
-  - Search for the address — if found here, it IS actively listed/published for rent
-  - Report the card status, any showing dates, agent notes
+  STEP 2 — APTLY ALL BOARDS SEARCH:
+  - IMPORTANT: Renter Leads board (4EMDSYKirhQaNdQKz) tracks showing activity and lead stats only — it does NOT show whether a home is available or listed for rent.
+  - Use aptly_list_boards to get ALL board IDs, then use aptly_search_cards to search each board for the property address.
+  - Look for boards named: Listings, Available Units, Rent Ready, Published, Units, Properties, Move-Ins, Move-Outs, Renewals, or similar.
+  - For each board where the property is found, report ALL relevant fields you see: rent ready (yes/no), showings enabled (yes/no), published (yes/no), listing date, move-out date, renewal status, move-in date, any notes.
+  - If the property appears in Move-Outs: report the scheduled move-out date.
+  - If the property appears in Renewals: report whether the tenant is renewing and the timeline.
+  - If the property appears in Move-Ins: report the new tenant scheduled move-in date.
+  - If not found in any board: say "not found in any Aptly board" — never say "cannot access Aptly."
 
-  STEP 3 — APTLY OTHER BOARDS (use aptly_list_boards to find IDs):
-  - Search Move-Outs board: is a move-out in progress or scheduled?
-  - Search Tenant Renewals board: is the current tenant renewing?
-  - Search Move-Ins board: is a new tenant already lined up?
+  CRITICAL: "Aptly returned no results" is NOT the same as "cannot access Aptly." If the tool ran without an error, Aptly was accessed — there was just nothing there for that address. Always report what you found (or didn't find), never what you "couldn't do."
 
-  Then synthesize everything into one clear answer:
-  - "17373 North Costa Brava is currently occupied. Tenant: [name], lease ends [date], expected move-out [date]. It is [not yet / already] listed in Aptly. [Renewal / Move-out / New tenant move-in] is [status]."
-
-- NEVER say "available" if there is an active lease (primaryLeaseStatusID=1)
-- NEVER suggest steps or tell the user what to do — only report what the data shows
-- Do NOT say "reach out to Teri/Dhyana" unless you genuinely have zero data from any source
 - NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
@@ -738,7 +736,27 @@ app.get('/health', function(req, res) {
   });
 });
 
-app.get('/debug/properties', async function(req, res) {
+app.get('/debug/lease/:id', async function(req, res) {
+  const data = await rvFetch('/leases/export', { 'leaseIDs[]': req.params.id });
+  res.json(data);
+});
+
+app.get('/debug/aptly/boards', async function(req, res) {
+  const data = await aptlyFetch('/aptlets');
+  res.json(data);
+});
+
+app.get('/debug/aptly/search/:boardId/:query', async function(req, res) {
+  const data = await aptlyFetch('/aptlet/' + req.params.boardId, { page: 0 });
+  const q = req.params.query.toLowerCase();
+  if (Array.isArray(data && data.cards)) {
+    res.json(data.cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); }));
+  } else {
+    res.json(data);
+  }
+});
+
+
   const data = await rvFetch('/properties/export', { pageSize: 200 });
   res.json(data);
 });
