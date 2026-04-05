@@ -56,7 +56,7 @@ Rules:
   - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
   - HOA violations or HOA questions → "Reach out to Juan directly."
   - Move-out or lease renewal questions → "Reach out to Persia directly."
-  - Any property in Maricopa if no one else can help → "Reach out to Teri directly."
+  - Any property in Maricopa if you have ZERO data from both Rentvine AND Aptly → "Reach out to Teri directly." Do NOT say this if you found lease data in Rentvine — that is sufficient data to give an answer.
   - Owner or landlord related issues → "Reach out to Alexes directly."
   - Accounting questions → "Reach out to Randi directly."
 - NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
@@ -71,17 +71,15 @@ Rules:
   - NEVER say "available" if a lease record exists with status 1. The unit.isAvailable field in Rentvine does NOT mean vacant — it is a system flag, not occupancy status. Only use primaryLeaseStatusID to determine occupancy.
   - Report: tenant names, leaseEndDate, moveOutDate, expectedMoveOutDate, rent amount
 
-  STEP 2 — APTLY ALL BOARDS SEARCH:
-  - IMPORTANT: Renter Leads board (4EMDSYKirhQaNdQKz) tracks showing activity and lead stats only — it does NOT show whether a home is available or listed for rent.
-  - Use aptly_list_boards to get ALL board IDs, then use aptly_search_cards to search each board for the property address.
-  - Look for boards named: Listings, Available Units, Rent Ready, Published, Units, Properties, Move-Ins, Move-Outs, Renewals, or similar.
-  - For each board where the property is found, report ALL relevant fields you see: rent ready (yes/no), showings enabled (yes/no), published (yes/no), listing date, move-out date, renewal status, move-in date, any notes.
-  - If the property appears in Move-Outs: report the scheduled move-out date.
-  - If the property appears in Renewals: report whether the tenant is renewing and the timeline.
-  - If the property appears in Move-Ins: report the new tenant scheduled move-in date.
-  - If not found in any board: say "not found in any Aptly board" — never say "cannot access Aptly."
+  STEP 2 — APTLY SEARCH:
+  - NOTE: The Renter Leads board (4EMDSYKirhQaNdQKz) tracks showing activity and lead stats only — it does NOT indicate whether a home is available or listed.
+  - Use aptly_list_boards to see known board IDs, then search each board that has a real ID using aptly_search_cards.
+  - Currently confirmed board: Renter Leads (4EMDSYKirhQaNdQKz). Search it for the property address to see showing activity.
+  - If other boards say "UNKNOWN": skip them and note "other Aptly boards not yet configured."
+  - If search returns empty: say "not found in [board name]" — NEVER say "cannot access Aptly."
+  - If a board returns results: report all relevant fields — rent ready, showings enabled, published, move-out date, renewal status, move-in date.
 
-  CRITICAL: "Aptly returned no results" is NOT the same as "cannot access Aptly." If the tool ran without an error, Aptly was accessed — there was just nothing there for that address. Always report what you found (or didn't find), never what you "couldn't do."
+  CRITICAL: "Aptly returned no results" is NOT the same as "cannot access Aptly." Report what you found or didn't find — never what you "couldn't do."
 
 - NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
@@ -231,7 +229,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_list_boards',
-    description: 'List all available Aptly boards to find board IDs for Move-Ins, Move-Outs, HOA Violations, Renewals etc.',
+    description: 'Returns the known Aptly board IDs for Aloe PM. Use these IDs with aptly_search_cards and aptly_get_board_cards.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -532,7 +530,14 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_list_boards': {
-        return JSON.stringify(await aptlyFetch('/aptlets'));
+        // /aptlets endpoint does not exist in Aptly API — return known board IDs for Aloe PM
+        return JSON.stringify([
+          { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz', note: 'Showing activity and lead stats — NOT listing availability' },
+          { name: 'Move-Ins', id: 'UNKNOWN — get from Aptly URL', note: 'New tenant move-in pipeline' },
+          { name: 'Move-Outs', id: 'UNKNOWN — get from Aptly URL', note: 'Tenant move-out pipeline' },
+          { name: 'Tenant Renewals', id: 'UNKNOWN — get from Aptly URL', note: 'Lease renewal pipeline' },
+          { name: 'HOA Violations', id: 'UNKNOWN — get from Aptly URL', note: 'HOA violation tracking' },
+        ]);
       }
 
       case 'aptly_search_cards': {
