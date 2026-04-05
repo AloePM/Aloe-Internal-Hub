@@ -41,7 +41,7 @@ SLACK — Team communications
 STRICT RULES:
 
 1. DETERMINING PROPERTY AVAILABILITY — always do ALL of these:
-   a) Call rv_get_leases with status "active" for the address to find current tenants. If no active lease found, then call with status "inactive" to see if recently vacated. NEVER use status "all" for occupancy checks — it returns old expired leases and creates confusion about who is actually living there now.
+   a) Call rv_get_properties to find the property and get its propertyId. Then call rv_get_leases with that propertyId (not an address search) to get the current active lease. This is the only reliable way — address fuzzy matching on leases misses records. If no active lease found by propertyId, call rv_get_leases again with propertyId and status "inactive" to check if recently vacated.
    b) Search Aptly List Property board (ID: qfBzBxfooJtfTQncd) using aptly_search_cards — this shows homes actively listed for rent with rent ready, showings enabled, and published status
    c) DO NOT check Renter Leads for availability — it does not contain that data
 
@@ -76,11 +76,12 @@ STRICT RULES:
 const ALL_TOOLS = [
   {
     name: 'rv_get_leases',
-    description: 'Search leases from Rentvine with tenant info, balances, unpaid charges, and property details. Best tool for tenant lookups and balance checks.',
+    description: 'Search leases from Rentvine. PREFERRED: use propertyId (from rv_get_properties result) for accurate results. Falls back to address/tenant name search.',
     input_schema: {
       type: 'object',
       properties: {
-        search: { type: 'string', description: 'Tenant name, email, or property address to search' },
+        propertyId: { type: 'number', description: 'Property ID from rv_get_properties — most reliable way to find leases for an address' },
+        search: { type: 'string', description: 'Tenant name, email, or property address (use only if propertyId unknown)' },
         status: { type: 'string', description: 'active, inactive, or all (default: active)' },
         page: { type: 'number', description: 'Page number (default: 1)' },
       },
@@ -374,6 +375,14 @@ async function executeTool(name, input) {
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
         else if (input.status !== 'all') params['primaryLeaseStatusIDs[]'] = 1;
 
+        // Search by propertyId — most reliable, avoids address fuzzy match failures
+        if (input.propertyId) {
+          params['propertyIDs[]'] = input.propertyId;
+          const data = await rvFetch('/leases/export', Object.assign({}, params, { page: 1 }));
+          return JSON.stringify(Array.isArray(data) ? data : []);
+        }
+
+        // Search by tenant name or address string
         if (input.search) {
           const q = input.search.toLowerCase();
           let page = 1;
