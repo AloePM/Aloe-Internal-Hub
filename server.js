@@ -571,22 +571,25 @@ async function executeTool(name, input) {
       case 'aptly_get_board_cards': {
         const raw = await aptlyFetch('/board/' + input.boardId, { page: input.page || 0 });
         // Slim cards to key fields only — full cards are too large
+        const KEY_FIELDS2 = [
+          'Move In Date', 'Move Out Date', 'Expected Move Out Date', 'Lease End Date',
+          'Requested Showing Information', 'Showing Date', 'Showing Time',
+          'Rent Ready', 'Showings Enabled', 'Published', 'Status',
+          'Property Address', 'Address', 'Unit', 'Tenant', 'Name',
+        ];
         function slimCard(card) {
           const fields = {};
-          // Extract all field values into a flat object
           if (Array.isArray(card.fields)) {
             card.fields.forEach(function(f) {
               if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
-                fields[f.label] = f.value;
+                const val = String(f.value);
+                if (KEY_FIELDS2.some(function(k) { return f.label.toLowerCase().includes(k.toLowerCase()); })) {
+                  fields[f.label] = val.slice(0, 100);
+                }
               }
             });
           }
-          return {
-            id: card.id,
-            title: card.title || card.name,
-            status: card.status || card.stage,
-            fields: fields,
-          };
+          return { id: card.id, title: (card.title || card.name || '').slice(0, 80), status: card.status || card.stage, fields: fields };
         }
         if (raw && Array.isArray(raw.cards)) {
           return JSON.stringify({ total: raw.cards.length, cards: raw.cards.slice(0, 50).map(slimCard) });
@@ -607,16 +610,25 @@ async function executeTool(name, input) {
       case 'aptly_search_cards': {
         // Use Aptly's native query param to filter server-side — avoids fetching all cards
         const data = await aptlyFetch('/board/' + input.boardId, { page: 0, query: input.query });
+        const KEY_FIELDS = [
+          'Move In Date', 'Move Out Date', 'Expected Move Out Date', 'Lease End Date',
+          'Requested Showing Information', 'Showing Date', 'Showing Time',
+          'Rent Ready', 'Showings Enabled', 'Published', 'Status',
+          'Property Address', 'Address', 'Unit', 'Tenant', 'Name',
+        ];
         function slimCard(card) {
           const fields = {};
           if (Array.isArray(card.fields)) {
             card.fields.forEach(function(f) {
               if (f.label && f.value !== undefined && f.value !== null && f.value !== '') {
-                fields[f.label] = f.value;
+                const val = String(f.value);
+                if (KEY_FIELDS.some(function(k) { return f.label.toLowerCase().includes(k.toLowerCase()); })) {
+                  fields[f.label] = val.slice(0, 100);
+                }
               }
             });
           }
-          return { id: card.id, title: card.title || card.name, status: card.status || card.stage, fields: fields };
+          return { id: card.id, title: (card.title || card.name || '').slice(0, 80), status: card.status || card.stage, fields: fields };
         }
         if (data && Array.isArray(data.cards)) {
           return JSON.stringify({ total: data.cards.length, cards: data.cards.slice(0, 20).map(slimCard) });
@@ -715,7 +727,11 @@ function getRelevantTools(msg) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|tour|showing|schedul|appointment|visit|\d{4,5}/)) {
-    ['rv_get_properties', 'rv_get_leases', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+    ['rv_get_properties', 'rv_get_leases'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/list(ed|ing)?|published|rent.?ready|what.*(homes?|propert|available)|available.*(homes?|propert)/i)) {
+    tools.add('aptly_search_cards');
+    tools.add('aptly_get_board_cards');
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
