@@ -370,23 +370,34 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'rv_get_leases': {
-        const params = { pageSize: 200, page: input.page || 1 };
+        const params = { pageSize: 200 };
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
         else if (input.status !== 'all') params['primaryLeaseStatusIDs[]'] = 1;
-        const data = await rvFetch('/leases/export', params);
-        if (input.search && Array.isArray(data)) {
+
+        if (input.search) {
           const q = input.search.toLowerCase();
-          return JSON.stringify(data.filter(function(item) {
-            const tenantMatch = item.lease && item.lease.tenants && item.lease.tenants.some(function(t) {
-              return (t.name || '').toLowerCase().includes(q) || (t.email || '').toLowerCase().includes(q);
+          let page = 1;
+          while (true) {
+            const data = await rvFetch('/leases/export', Object.assign({}, params, { page }));
+            if (!Array.isArray(data) || data.length === 0) break;
+            const matches = data.filter(function(item) {
+              const tenantMatch = item.lease && item.lease.tenants && item.lease.tenants.some(function(t) {
+                return (t.name || '').toLowerCase().includes(q) || (t.email || '').toLowerCase().includes(q);
+              });
+              if (tenantMatch) return true;
+              const propAddr = (item.property && item.property.address) || '';
+              const unitAddr = (item.unit && item.unit.address) || '';
+              return fuzzyMatch(q, propAddr + ' ' + (item.property && item.property.city || '')) ||
+                     fuzzyMatch(q, unitAddr);
             });
-            if (tenantMatch) return true;
-            const propAddr = (item.property && item.property.address) || '';
-            const unitAddr = (item.unit && item.unit.address) || '';
-            return fuzzyMatch(q, propAddr + ' ' + (item.property && item.property.city || '')) ||
-                   fuzzyMatch(q, unitAddr);
-          }));
+            if (matches.length > 0) return JSON.stringify(matches);
+            if (data.length < 200) break;
+            page++;
+          }
+          return JSON.stringify([]);
         }
+
+        const data = await rvFetch('/leases/export', Object.assign({}, params, { page: input.page || 1 }));
         return JSON.stringify(data);
       }
 
