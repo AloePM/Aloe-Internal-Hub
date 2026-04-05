@@ -52,6 +52,15 @@ Known Aptly board IDs:
 Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
 - Lease Break Policy: 18776555273a81049822eca6abae6fbb
   → Use this for ANY question about lease break fees, early termination, tenant breaking lease, lease termination
+- Checking Property Availability — Tenant Inquiry SOP: 33976555273a81e093d9d062009a206c
+  → Use this when asked how to check if a property is available, or when a tenant calls about availability
+
+Property availability workflow (follow this order):
+1. Check Aptly Applications board for approved applications on the property
+2. If approved: check whether the earnest deposit has been paid — deposit paid = property is OFF the market
+3. Check Rentvine → Future Leases for the property — confirm move-in is scheduled and deposit receipt exists
+4. Check lease status: if Pending = future lease = off market
+5. Only if none of the above apply = property is available
 
 SLACK — Team communications:
 - Recent team messages, announcements, decisions
@@ -452,31 +461,50 @@ async function executeTool(name, input) {
           pg++;
         }
         if (input.search) {
-          return JSON.stringify(allData.filter(function(item) {
+          const matches = allData.filter(function(item) {
             const p = item.property || {};
             const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
             return fuzzyMatch(input.search, full);
-          }));
+          });
+          return JSON.stringify(matches);
         }
-        return JSON.stringify(allData);
+        // No search — return summary only to avoid context overflow
+        return JSON.stringify({
+          total: allData.length,
+          message: 'Pass a search term to find specific properties. Showing summary only to conserve context.',
+          sample: allData.slice(0, 5).map(function(item) {
+            const p = item.property || {};
+            return { id: p.propertyID, address: p.address, city: p.city };
+          })
+        });
       }
 
       case 'rv_get_units': {
-        const unitData = await rvFetch('/units/export', { pageSize: 200 });
-        const leaseData = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
-        const occupiedIds = new Set(
-          Array.isArray(leaseData) ? leaseData.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
-        );
-        const tagged = Array.isArray(unitData)
-          ? unitData.map(function(u) { return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) }); })
-          : unitData;
-        if (input.search && Array.isArray(tagged)) {
-          return JSON.stringify(tagged.filter(function(u) {
-            const full = (u.address || '') + ' ' + (u.city || '') + ' ' + (u.name || '');
+        if (!input.propertyId && !input.search) {
+          return JSON.stringify({ error: 'propertyId or search required — use rv_get_properties first to find the propertyId, then call rv_get_units with that propertyId' });
+        }
+        if (input.propertyId) {
+          const units = await rvFetch('/properties/' + input.propertyId + '/units');
+          const leases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200 });
+          const occupiedIds = new Set(
+            Array.isArray(leases) ? leases.map(function(l) { return l.lease && l.lease.unitID; }).filter(Boolean) : []
+          );
+          if (Array.isArray(units)) {
+            return JSON.stringify(units.map(function(u) {
+              return Object.assign({}, u, { isAvailable: !occupiedIds.has(u.unitID) });
+            }));
+          }
+          return JSON.stringify(units);
+        }
+        // search-only fallback via lease export
+        const leases = await rvFetch('/leases/export', { pageSize: 200 });
+        if (Array.isArray(leases)) {
+          return JSON.stringify(leases.filter(function(item) {
+            const full = (item.unit && item.unit.address || '') + ' ' + (item.property && item.property.city || '');
             return fuzzyMatch(input.search, full);
           }));
         }
-        return JSON.stringify(tagged);
+        return JSON.stringify(leases);
       }
 
       case 'rv_get_owners': {
