@@ -882,6 +882,18 @@ app.get('/debug/aptly/units', async function(req, res) {
   res.json(results);
 });
 
+app.get('/debug/aptly/raw-cards/:boardId', async function(req, res) {
+  try {
+    const r = await fetch('https://app.getaptly.com/api/aptlet/' + req.params.boardId + '?page=0&x-token=' + APTLY_TOKEN);
+    const body = await r.json();
+    // Return first 2 cards in full so we can see field names
+    const cards = body && body.cards ? body.cards.slice(0, 2) : body;
+    res.json({ status: r.status, totalCards: body && body.cards ? body.cards.length : 0, sampleCards: cards });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.get('/debug/aptly/all-boards', async function(req, res) {
   const boards = [
     { name: 'Renter Leads', id: '4EMDSYKirhQaNdQKz' },
