@@ -100,7 +100,7 @@ If asking about status/pipeline → use Aptly. If asking for detail/vendor/cost 
 
 AVAILABLE HOMES / WHAT'S FOR RENT
 Triggers: "what homes are available", "what's listed", "available rentals", "what's for rent", "rent ready homes", "available inventory", "how many homes available"
-Action: ALWAYS use aptly_get_board_cards with boardId="qfBzBxfooJtfTQncd" (List Property board) — do NOT use the 'unit' board. This shows all published/rent-ready homes with address, beds, baths, rent.
+Action: use aptly_get_available_units — this paginates ALL 520+ units and filters for publishedForRent=true. Returns all homes currently published for rent with address, beds, baths, rent, stage, availableDate.
 
 OWNER / PORTFOLIO
 Triggers: "owner pipeline", "new owners", "onboarding", "owner status", "portfolio owners"
@@ -278,6 +278,13 @@ const ALL_TOOLS = [
       },
       required: ['boardId'],
     },
+  },
+  {
+    name: 'aptly_get_available_units',
+    description: 'Get all units published for rent from Aptly — filters by publishedForRent=true. Use for "what homes do we have available", "available inventory", "what is for rent", "rent ready homes". Returns address, beds, baths, rent, stage, availableDate for each published unit.',
+    input_schema: { type: 'object', properties: {
+      rentReadyOnly: { type: 'boolean', description: 'If true, only return units where rentReady is also true' },
+    }},
   },
   {
     name: 'aptly_list_boards',
@@ -739,6 +746,45 @@ async function executeTool(name, input) {
         return JSON.stringify(raw);
       }
 
+      case 'aptly_get_available_units': {
+        // Paginate through ALL pages of the unit board and filter publishedForRent=true
+        const cacheKey = 'aptly:available_units:' + (input.rentReadyOnly ? 'rr' : 'all');
+        const available = await cachedFetch(cacheKey, APTLY_TTL, async () => {
+          let results = [];
+          let pg = 0;
+          while (true) {
+            const batch = await aptlyFetch('/board/unit', { page: pg });
+            if (!batch || !Array.isArray(batch.cards) || batch.cards.length === 0) break;
+            for (const card of batch.cards) {
+              if (card.publishedForRent === true) {
+                if (input.rentReadyOnly && card.rentReady !== true) continue;
+                const addr = card.address || {};
+                results.push({
+                  address: addr.standardAddress || card.street + ', ' + card.city + ', ' + card.state + ' ' + card.postalCode,
+                  stage: card.stage,
+                  beds: card.beds,
+                  baths: card.baths,
+                  halfBaths: card.halfBaths,
+                  sqft: card.totalArea,
+                  rent: card.marketRent && card.marketRent.amount,
+                  deposit: card.deposit && card.deposit.amount,
+                  rentReady: card.rentReady,
+                  availableDate: card.availableDate,
+                  petsAllowed: card.petRestrictions,
+                  showingEnabled: card['aptlyListings.showingEnabled'],
+                  cardId: card.cardId,
+                });
+              }
+            }
+            if (batch.cards.length < (batch.pageSize || 20)) break;
+            pg++;
+            if (pg > 30) break; // safety limit
+          }
+          return results;
+        });
+        return JSON.stringify({ total: available.length, units: available });
+      }
+
       case 'aptly_list_boards': {
         return JSON.stringify([
           { name: 'List Property', id: 'qfBzBxfooJtfTQncd', note: 'Properties listed for rent — availability, rent ready, showings enabled' },
@@ -882,7 +928,7 @@ function getRelevantTools(msg) {
   }
   // AVAILABLE INVENTORY / LISTED HOMES
   if (msg.match(/list(ed|ing)?s?|published|rent.?ready|what.*(homes?|propert|avail)|avail.*(homes?|propert|units?)|how.?many.*(homes?|units?|propert)|inventory|for.?rent/i)) {
-    tools.add("aptly_get_board_cards");
+    tools.add("aptly_get_available_units");
   }
   // SHOWINGS
   if (msg.match(/show(ing)?s?|schedul(ed)?|tour(s|ed)?|appointment|confirmed|pending.?show|how.?many.?show|tomorrow|today|this.?week|calendar/)) {
