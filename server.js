@@ -529,62 +529,37 @@ async function executeTool(name, input) {
         }
         if (!allLeases.length) return JSON.stringify({ error: 'No leases returned from Rentvine' });
 
-        // Check all possible balance field paths
-        function extractBalance(obj) {
-          if (!obj || typeof obj !== 'object') return 0;
-          const allFields = Object.keys(obj);
-          for (const k of allFields) {
-            if (k.toLowerCase().includes('past') || k.toLowerCase().includes('due') ||
-                k.toLowerCase().includes('balance') || k.toLowerCase().includes('overdue') ||
-                k.toLowerCase().includes('delinquent')) {
-              const v = parseFloat(String(obj[k]).replace(/[^0-9.-]/g, ''));
-              if (v > 0) return v;
-            }
-          }
-          return 0;
-        }
-
-        const firstLease = allLeases[0] || {};
-        const allBalanceFields = Object.fromEntries(
-          Object.entries(firstLease).filter(([k]) =>
-            k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') ||
-            k.toLowerCase().includes('past') || k.toLowerCase().includes('amount') ||
-            k.toLowerCase().includes('charge')
-          )
-        );
-        const nestedBalanceFields = Object.fromEntries(
-          Object.entries(firstLease.lease || {}).filter(([k]) =>
-            k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') || k.toLowerCase().includes('past')
-          )
-        );
-
+        // Balance data is nested at l.balances — confirmed from Rentvine API
+        // Fields: balances.pastDueTotalAmount, balances.pastDueRentAmount, balances.unpaidTotalAmount
         const delinquent = allLeases.filter(function(l) {
-          return extractBalance(l) > 0 || extractBalance(l.lease) > 0;
+          const bal = l.balances || {};
+          const pastDue = parseFloat(bal.pastDueTotalAmount || 0);
+          const pastRent = parseFloat(bal.pastDueRentAmount || 0);
+          return pastDue > 0 || pastRent > 0;
         }).map(function(l) {
-          const b = l.lease || {};
-          const t = Array.isArray(l.tenants) ? l.tenants : [];
+          const bal = l.balances || {};
+          const lease = l.lease || {};
           const p = l.property || {};
+          const u = l.unit || {};
+          const tenants = Array.isArray(lease.tenants) ? lease.tenants : [];
           return {
-            address: p.address || b.address || l.address,
-            city: p.city || l.city,
-            tenants: t.map(function(x) { return (x.firstName || '') + ' ' + (x.lastName || ''); }).join(', ') || b.tenantName || l.tenantName,
-            pastDueRent: l.pastDueRentAmount || b.pastDueRentAmount || l.pastDue || 0,
-            totalPastDue: l.pastDueTotalAmount || b.pastDueTotalAmount || l.totalPastDue || 0,
-            balance: extractBalance(l) || extractBalance(b),
-            leaseStatus: b.leaseStatusText || l.leaseStatusText || b.leaseStatus || l.leaseStatus,
-            leaseEnd: b.leaseEndDate || l.leaseEndDate,
+            address: p.address || u.address,
+            city: p.city,
+            tenants: tenants.map(function(t) { return (t.firstName || '') + ' ' + (t.lastName || ''); }).join(', '),
+            pastDueRent: parseFloat(bal.pastDueRentAmount || 0),
+            totalPastDue: parseFloat(bal.pastDueTotalAmount || 0),
+            unpaidTotal: parseFloat(bal.unpaidTotalAmount || 0),
+            leaseEnd: lease.endDate,
+            leaseStatus: lease.primaryLeaseStatusID === 1 ? 'Active' : 'Other',
           };
-        });
+        }).sort(function(a, b) { return b.totalPastDue - a.totalPastDue; });
 
         return JSON.stringify({
-          source: 'Rentvine lease export',
+          source: 'Rentvine',
           total_active_leases: allLeases.length,
-          pages_fetched: page - 1,
           delinquent_count: delinquent.length,
+          total_past_due: delinquent.reduce(function(s, d) { return s + d.totalPastDue; }, 0).toFixed(2),
           delinquent,
-          debug_balance_fields_in_first_lease: allBalanceFields,
-          debug_nested_lease_balance_fields: nestedBalanceFields,
-          debug_first_lease_all_keys: Object.keys(firstLease).join(', '),
         });
       }
 
