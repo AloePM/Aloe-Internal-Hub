@@ -769,27 +769,35 @@ app.post('/api/chat', async function(req, res) {
         const listBoard = await aptlyFetch('/aptlet/qfBzBxfooJtfTQncd', { page: 0, query: '' });
         const cards = (listBoard && listBoard.cards) || (Array.isArray(listBoard) ? listBoard : []);
         if (cards.length > 0) {
-          // Separate On Market (available now/soon) from List Property (coming soon, not yet listed)
-          const onMarket = cards.filter(function(c) { return c.Stage === 'On Market'; });
-          const comingSoon = cards.filter(function(c) { return c.Stage === 'List Property'; });
-          
           const fmt = function(c) {
             const addr = c.Title || c['Mirror Address'] || '?';
             const rent = c['Mirror Market Rent'] || '';
             const beds = c['Mirror Beds'] ? c['Mirror Beds'] + 'bd/' + (c['Mirror Baths'] || '?') + 'ba' : '';
             const avail = c['Mirror Available Date'] || '';
-            const status = c['Mirror Status'] || '';
-            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + (status === 'Occupied' ? ' (occupied)' : '');
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '');
           };
-          
-          let text = 'Currently listed properties (' + onMarket.length + ' on market, ' + comingSoon.length + ' coming soon):\n';
-          if (onMarket.length > 0) {
-            text += '\n**ON MARKET NOW:**\n' + onMarket.map(fmt).join('\n');
+
+          // All published listings regardless of occupancy status
+          const published = cards.filter(function(c) {
+            return c['Mirror Published For Rent'] === 'checked';
+          });
+
+          const fmt2 = function(c) {
+            const addr = c.Title || c['Mirror Address'] || '?';
+            const rent = c['Mirror Market Rent'] || '';
+            const beds = c['Mirror Beds'] ? c['Mirror Beds'] + 'bd/' + (c['Mirror Baths'] || '?') + 'ba' : '';
+            const avail = c['Mirror Available Date'] || '';
+            const occupied = c['Mirror Status'] === 'Occupied' ? ' ⚠️ occupied' : '';
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied;
+          };
+
+          let text = 'Homes published for rent (' + published.length + '):\n';
+          if (published.length > 0) {
+            text += '\n' + published.map(fmt2).join('\n');
+          } else {
+            text += '\nNo homes currently published for rent.';
           }
-          if (comingSoon.length > 0) {
-            text += '\n\n**COMING SOON (not yet listed):**\n' + comingSoon.map(fmt).join('\n');
-          }
-          text += '\n\nAsk me about any specific address for more details.';
+          text += '\n\nAsk me about any address for more details.';
           return res.json({ content: [{ type: 'text', text }] });
         }
       } catch(e) { /* fall through to normal flow */ }
