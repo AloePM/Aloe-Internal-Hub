@@ -43,11 +43,13 @@ NOTION — Company policies and SOPs:
 - HOA violation procedures, maintenance escalation, all SOPs
 
 Known Aptly board IDs:
-- "location" — Properties/Locations board. Has Status (Vacant/Occupied), owner, address for every property. ALWAYS check this board when asked about property availability or status.
-- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects and whether a property is published for rent (Mirror Published For Rent field).
-- "YA3QWmPebvMwLwbB3" — Move-Outs
-- "K9mMGGjKgQPqDykaa" — Move-Ins  
-- "86YrLPbwdkxtdyZoj" — Tenant Renewals
+- "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, application link, lockbox description, published status. USE THIS for "what units are available" or any broad availability question — search with query="" to get all units, filter Stage=Vacant.
+- "qfBzBxfooJtfTQncd" — List Property / On Market board. Shows properties actively listed, showing start date, notes on occupancy, market status.
+- "location" — Properties/Locations board. Has owner, address, property details for every property.
+- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects per property, whether published for rent.
+- "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
+- "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
+- "86YrLPbwdkxtdyZoj" — Tenant Renewals.
 
 Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
 - Lease Break Policy: 18776555273a81049822eca6abae6fbb
@@ -424,6 +426,9 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'rv_get_leases': {
+        if (!input.tenantName && !input.address && !input.leaseId && !input.unit && input.status !== 'all') {
+          return JSON.stringify({ error: 'A search term (address, tenantName, or leaseId) is required for rv_get_leases to prevent context overflow. For broad availability, use aptly_search_cards with boardId="location" instead.' });
+        }
         const params = { pageSize: 200, page: input.page || 1 };
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
         else if (input.status !== 'all') params['primaryLeaseStatusIDs[]'] = 1;
@@ -593,9 +598,11 @@ async function executeTool(name, input) {
       case 'aptly_list_boards': {
         // Return hardcoded known boards since /aptlets endpoint is unreliable
         return JSON.stringify([
-          { id: 'location', name: 'Properties / Locations', description: 'All properties with status (Vacant/Occupied), owner, address, unit details' },
-          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline, mirror shows if property is published for rent' },
-          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline and scheduled move-outs' },
+          { id: 'unit', name: 'Units / Listings', description: 'All units with Stage (Vacant/Occupied), beds, baths, rent, available date, lockbox, application link. Use this for availability questions.' },
+          { id: 'qfBzBxfooJtfTQncd', name: 'List Property / On Market', description: 'Properties actively listed for rent, showing start date, market status, occupancy notes.' },
+          { id: 'location', name: 'Properties / Locations', description: 'All properties with owner, address, property details' },
+          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline, published for rent status' },
+          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline, repair status, inspection notes' },
           { id: 'K9mMGGjKgQPqDykaa', name: 'Move-Ins', description: 'Move-in pipeline' },
           { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
         ]);
@@ -605,7 +612,7 @@ async function executeTool(name, input) {
         const q = input.query || '';
         const boardsToSearch = input.boardId 
           ? [input.boardId] 
-          : ['location', '4EMDSYKirhQaNdQKz', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj'];
+          : ['unit', 'qfBzBxfooJtfTQncd', 'location', '4EMDSYKirhQaNdQKz', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj'];
         
         const results = [];
         for (const bid of boardsToSearch) {
