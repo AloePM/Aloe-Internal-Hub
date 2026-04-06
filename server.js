@@ -519,15 +519,42 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
+        if (!input.propertyId && !input.search && !input.status) {
+          return JSON.stringify({ error: 'Too broad — provide propertyId, search term, or status (open/closed) to filter work orders. Without a filter this returns thousands of records.' });
+        }
         const params = { pageSize: 50, page: input.page || 1 };
         if (input.propertyId) params.propertyID = input.propertyId;
-        const data = await rvFetch('/maintenance/work-orders', params);
-        if (input.status && input.status !== 'all' && Array.isArray(data)) {
-          return JSON.stringify(data.filter(function(wo) {
+        let data = await rvFetch('/maintenance/work-orders', params);
+        if (!Array.isArray(data)) return JSON.stringify(data);
+        // Filter by status
+        if (input.status && input.status !== 'all') {
+          data = data.filter(function(wo) {
             return input.status === 'open' ? !wo.closedDate : !!wo.closedDate;
-          }));
+          });
         }
-        return JSON.stringify(data);
+        // Filter by search term
+        if (input.search) {
+          const q = input.search.toLowerCase();
+          data = data.filter(function(wo) {
+            return JSON.stringify(wo).toLowerCase().includes(q);
+          });
+        }
+        // Cap at 20 results to prevent context overflow, trim large fields
+        const trimmed = data.slice(0, 20).map(function(wo) {
+          return {
+            workOrderID: wo.workOrderID,
+            propertyID: wo.propertyID,
+            address: wo.property && wo.property.address,
+            description: (wo.description || '').slice(0, 200),
+            status: wo.closedDate ? 'closed' : 'open',
+            priority: wo.priority,
+            category: wo.category,
+            vendor: wo.vendor && wo.vendor.name,
+            createdDate: wo.createdDate,
+            closedDate: wo.closedDate,
+          };
+        });
+        return JSON.stringify({ total: data.length, shown: trimmed.length, workOrders: trimmed });
       }
 
       case 'rv_get_work_order_detail': {
