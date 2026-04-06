@@ -11,43 +11,6 @@ const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
 const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
-
-const APTLY_BOARDS = [
-  { id: 'unit',                 name: 'Units',                       who: 'Dhyana',  description: 'PRIMARY source for unit availability. Stage = Occupied or Vacant. Has market rent, beds/baths, sq ft, residents, lease end date (Mirror Date Contract Ends), pet restrictions, marketing description, application link, virtual tour, lockbox info, and property photos. Use this FIRST for any availability question.' },
-  { id: 'location',            name: 'Properties / Locations',     who: 'Juan',    description: 'All properties — status (Vacant/Occupied), owner, address, unit details. Source of truth for property availability.' },
-  { id: '4EMDSYKirhQaNdQKz',  name: 'Renter Leads',               who: 'Dhyana',  description: 'Prospective tenants — tour dates/times, showing feedback, interest level, lead source (Zillow etc.), all prospect info.' },
-  { id: 'MJxaStgENouWrNEKd',  name: 'Applicants',                 who: 'Teri',    description: 'Rental applications — all adults 18+, $65 fee, 2 bank statements, 2 pay stubs, criteria verification, move date.' },
-  { id: 'K9mMGGjKgQPqDykaa',  name: 'Move-Ins',                   who: 'Dhyana',  description: 'Approved applicants — $1,500 earnest deposit to take property off market, utility verification, renters insurance, lease sent/signed.' },
-  { id: 'YA3QWmPebvMwLwbB3',  name: 'Move-Outs',                  who: 'Persia',  description: 'Tenant notice — expected move-out date, lease end date, owner decision (relist/sell/cancel mgmt), comp request, inspection type ($150 comprehensive or standard), deposit return within 14 business days, unit turn.' },
-  { id: '86YrLPbwdkxtdyZoj',  name: 'Tenant Renewals',            who: 'Persia',  description: '90-day renewal pipeline — inspection scheduling (John\'s Google Drive spreadsheet), owner rent decision (increase/same), terms accepted, lease sent/signed, walk-through scheduled.' },
-  { id: 'wk228jktWTWibWNhT',  name: 'Accounts Receivable',        who: 'Rita',    description: 'Tenants with a balance — late rent, missed air filter fee, admin fee, violation fee. 5-day notice sent on 5th, eviction filed on 10th. Tracks how many times late and balance amount.' },
-  { id: 'TEXBDbbQmjktAqyad',  name: 'Evictions',                  who: 'Rita',    description: 'Eviction tracking — filed to attorney, hearing date, judgement or tenant pays, tracked through full removal.' },
-  { id: '8bazEHshdZNuMKCFE',  name: 'HOA Violations',             who: 'Juan',    description: 'HOA warnings and fines — $5 charge per violation either way, tenant or owner violations, tracked through resolution.' },
-  { id: 'kt29ZGZC5PAe3QFGg',  name: 'HOA Registration',           who: 'Juan',    description: 'HOA registration — which HOA manages the home, tenant registration form, updated every move-in and renewal.' },
-  { id: 'qfBzBxfooJtfTQncd',  name: 'List Property',              who: 'Dhyana',  description: 'Relisting pipeline — hold until ready/price confirmed/closer to move-out, list on market, notify owner, take off when rented.' },
-  { id: 'aSsiB5v3dMretri3m',  name: 'Lease Violations',           who: 'Juan',    description: 'Tenants not following lease terms — tracked through resolution.' },
-  { id: 'fB9YrpvHdJyEXBJX4',  name: 'Former Tenant Collections',  who: 'Randi',   description: 'Collections on moved-out tenants with outstanding balances.' },
-  { id: 'QySZ8yRWJ5KeYFcZt',  name: 'Owner Pipeline',             who: 'Alexes',  description: 'Prospective owners — source, referral, portfolio size, comps sent, info sent, conversation notes, PMA sent/signed, close rate vs lost leads.' },
-  { id: 'LDhqFFos8fsQLavv8',  name: 'Owner Onboarding',           who: 'Alexes',  description: 'New owners post-PMA — home info collection, payment/ACH setup, portal registration, onboarding fee, completion tracking.' },
-  { id: 'ioQSgk9CMDAoT8Ddy',  name: 'Current Owners',             who: 'Alexes',  description: 'Active owner contacts and their property portfolio.' },
-  { id: 'BaMiriNFDZBtWd5rR',  name: 'Offboard Owner',             who: 'Alexes',  description: 'Owners ending management — reason tracked.' },
-  { id: 'kfyX2CWx67FwYkKkB',  name: 'PM Agreement Update',        who: 'Alexes',  description: 'Expiring PMAs — send updated property management agreements to owners for renewal.' },
-  { id: '5Tu3fnHAgRitofMWv',  name: 'Pet Request',                who: 'Juan',    description: 'Pet registration requests — approval, pet fee added. Tracks unauthorized pets found at inspections.' },
-  { id: 'ZJQtoaxSsvLSXu9vE',  name: 'Renters Insurance',          who: 'Persia',  description: 'Renters insurance tracking — verify policy meets Aloe requirements or enroll in Aloe\'s plan, renewed at lease renewal.' },
-  { id: 'Z6Rgnp7M4d8CqHqb5',  name: 'Leases Keys',               who: 'Alexes',  description: 'Keyless deadbolt opt-in — front door only, all doors, or opt out.' },
-  { id: 'PEQCns2CTq9xH3QWz',  name: 'Agent Referrals',            who: 'Alexes',  description: 'Real estate agents referring new owner clients — $200 paid per referral.' },
-  { id: 'rWD7LF6RWWE9awiZ8',  name: 'Owner Referrals',            who: 'Alexes',  description: 'Owner-to-owner referrals for new property management clients.' },
-  { id: 'YP8cNFwrkRiAZuBDs',  name: 'Early Pay Out Owners',       who: 'Randi',   description: 'Owner requests for early disbursement outside the standard 15th of month payout.' },
-  { id: 'jcXPF6Ev8QyaQoELL',  name: 'Owner Requested Walk Throughs', who: 'Teri',    description: 'Owner-requested property walk-throughs and inspections.' },
-  { id: 'Dyo25kcQkQsZxNdfw',  name: 'Pay Bills',                  who: 'Randi',   description: 'Bill payment workflow.' },
-  { id: 'bPiaHdFSBbFccS45z',  name: 'Pay Owners',                 who: 'Randi',   description: 'Owner disbursement processing.' },
-  { id: '6nzBd7wfdjvnFLdQK',  name: 'Pay HOA Dues',               who: 'Randi',   description: 'HOA dues payment tracking.' },
-  { id: 'nCz8qCLhcWLSYdewD',  name: 'Help Desk',                  who: 'Persia',  description: 'Internal help desk and support tickets.' },
-  { id: 'workOrder',            name: 'Work Orders',                 who: 'Roberto', description: 'All maintenance work orders — repairs, vendors, status tracking, property issues. Roberto manages all work orders in both Aptly and Rentvine.' },
-  { id: 'BpL6Pd2CHJM9sb9Af',  name: 'Salt Water System',          who: 'Roberto', description: 'Salt water pool system maintenance and service tracking.' },
-  { id: 'N3BAqaoXJ2ZgbQk47',  name: 'New Hire',                   who: 'Randi',   description: 'New employee onboarding workflow.' },
-  { id: 'yK8kg7KD6qsA7uCfa',  name: 'Time Off Board',             who: 'Randi',   description: 'Team time off requests and tracking.' },
-];
 const NOTION_TOKEN        = process.env.NOTION_TOKEN;
 const ZINSPECTOR_API_KEY  = process.env.ZINSPECTOR_API_KEY;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
@@ -79,39 +42,25 @@ NOTION — Company policies and SOPs:
 - Pet policy, screening criteria, fee schedules
 - HOA violation procedures, maintenance escalation, all SOPs
 
-Aptly has 32 boards covering all operations. Use aptly_list_boards to see all. Key boards for common questions:
-- "workOrder" → Work Orders board (Roberto). All maintenance requests, repairs, vendor assignments, status. Check this for any maintenance or repair question.
-- "unit" → PRIMARY availability source. Stage=Occupied/Vacant, market rent, beds/baths, residents, lease end date, pet policy, marketing copy, application link, virtual tour. Use this FIRST for availability questions.
-- "location" → property/owner details, Rentvine ID cross-reference
-- "4EMDSYKirhQaNdQKz" → Renter Leads: tours, showing dates/feedback, interest, lead source
-- "MJxaStgENouWrNEKd" → Applicants: applications, $65 fee, criteria, move date
-- "K9mMGGjKgQPqDykaa" → Move-Ins: earnest deposit ($1,500 min), utilities, insurance, lease
-- "YA3QWmPebvMwLwbB3" → Move-Outs: notice, owner decision, inspection, deposit return
-- "86YrLPbwdkxtdyZoj" → Tenant Renewals: 90-day pipeline, inspections, owner rent decision
-- For "who is late on rent" or delinquencies: use rv_get_delinquencies (Rentvine) AND aptly_get_board with boardId="wk228jktWTWibWNhT" stage="Delinquent" (Aptly AR board). Both sources together give the complete picture. Never use rv_get_leases or aptly_search with keyword "late rent" for this question.
-- "TEXBDbbQmjktAqyad" → Evictions: attorney filed, hearing date, judgement
-- "8bazEHshdZNuMKCFE" → HOA Violations: warnings/fines, $5 charge
-- "qfBzBxfooJtfTQncd" → List Property: relisting pipeline
-- "QySZ8yRWJ5KeYFcZt" → Owner Pipeline: prospects, PMA sent/signed, close rate
-- "LDhqFFos8fsQLavv8" → Owner Onboarding: post-PMA setup, portal, fees
-For ANY Aptly search: use aptly_search with the address or name — it searches all key boards automatically.
+Known Aptly board IDs:
+- "location" — Properties/Locations board. Has Status (Vacant/Occupied), owner, address for every property. ALWAYS check this board when asked about property availability or status.
+- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects and whether a property is published for rent (Mirror Published For Rent field).
+- "YA3QWmPebvMwLwbB3" — Move-Outs
+- "K9mMGGjKgQPqDykaa" — Move-Ins  
+- "86YrLPbwdkxtdyZoj" — Tenant Renewals
 
-For ANY policy, SOP, fee, or procedure question: ALWAYS start by fetching the Aloe AI Knowledge Index page using notion_get_page with pageId "33a76555273a81c6b785c4218f855be8". This index maps every topic to the exact Notion page ID. Then fetch that specific page directly. Do NOT use notion_search — use the index instead.
-
-Quick lookup for the most common questions (skip the index for these, go direct):
-- Lease break / early termination → 18776555273a81049822eca6abae6fbb
-- Management fee amount / required fees / what we charge / onboarding fee / leasing fee → 26576555273a80c1bea4fa858c5b6c03
-  (Management fee is $89/mo flat, no charge when vacant. Leasing fee $750. Onboarding $99 vacant / $150 occupied. Annual renewal $99.)
-- Pricing plan comparison / plan options / DIY / executive plan → 26376555273a80a9ba89d61d5159e8c2
-- Management fee what's included → 18776555273a81508b17fe8e936dc9c0
-- Property availability / earnest deposit → 33976555273a81e093d9d062009a206c
+Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
+- Lease Break Policy: 18776555273a81049822eca6abae6fbb
+  → Use this for ANY question about lease break fees, early termination, tenant breaking lease, lease termination
+- Checking Property Availability — Tenant Inquiry SOP: 33976555273a81e093d9d062009a206c
+  → Use this when asked how to check if a property is available, or when a tenant calls about availability
 
 Property availability workflow (follow this order):
-1. Search Aptly "unit" board (ID: unit) for the address — Stage field tells you Occupied or Vacant instantly
-2. If Vacant: report market rent, beds/baths, available date, pet restrictions, and application link from the unit card
-3. If Occupied: report residents, lease end date (Mirror Date Contract Ends), and check Renter Leads for active showing interest
-4. Check Aptly Applications/Move-Ins boards for approved applications with earnest deposit paid — deposit paid = off market even if showing as vacant
-5. Check Rentvine for active lease confirmation if needed
+1. Check Aptly Applications board for approved applications on the property
+2. If approved: check whether the earnest deposit has been paid — deposit paid = property is OFF the market
+3. Check Rentvine → Future Leases for the property — confirm move-in is scheduled and deposit receipt exists
+4. Check lease status: if Pending = future lease = off market
+5. Only if none of the above apply = property is available
 
 SLACK — Team communications:
 - Recent team messages, announcements, decisions
@@ -125,6 +74,8 @@ Rules:
 - Always cite your source (Rentvine, Aptly, Notion, or Slack)
 - Never speculate on legal or fair housing matters
 - NEVER ask the user clarifying questions. Just search and answer.
+- NEVER explain how a tool works or describe what it does. Always run the tool and report the actual results. If someone asks "where do I look for move-out inspections?" — run rv_get_inspections and report what's in there, don't describe the tool.
+- NEVER say "you can use X tool" or "the results will show" — just use the tool and show the results directly.
 - For known policy topics (lease break, early termination): use notion_get_page with the hardcoded page ID above — do NOT waste loops searching.
 - For unknown policy topics: search Notion 2-3 times with different keywords before giving up.
 - NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
@@ -134,10 +85,10 @@ Rules:
 - Use the context of the question to determine audience. "A tenant wants to know..." or "what should I tell a tenant" = tenant audience only.
 - If you cannot find something in the data after multiple searches, say so clearly and direct to the right person based on the topic:
   - Leasing questions (applications, showings, availability, move-ins) → "Reach out to Dhyana directly."
-  - Maintenance issues (repairs, vendors, work orders) → Roberto. Work orders are in BOTH Aptly (board ID: workOrder) AND Rentvine (rv_get_work_orders). Always check Aptly workOrder board first, then Rentvine for additional detail.
+  - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
   - HOA violations or HOA questions → "Reach out to Juan directly."
   - Move-out or lease renewal questions → "Reach out to Persia directly."
-  - Any property in Maricopa where BOTH Rentvine AND Aptly return zero data → "Reach out to Teri directly." Do NOT route to Teri if you found the property in Rentvine — search Aptly before giving up.
+  - Any property in Maricopa if no one else can help → "Reach out to Teri directly."
   - Owner or landlord related issues → "Reach out to Alexes directly."
   - Accounting questions → "Reach out to Randi directly."
 - NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
@@ -145,18 +96,13 @@ Rules:
 - NEVER say "I'm unable to access" or "I cannot access" any board or data source — you have Rentvine, Aptly, Notion, and Slack tools available. Always actually try them before concluding data isn't available.
 - NEVER route to a team member as a substitute for using your tools. Always use all relevant tools first (Rentvine AND Aptly), then only route if the tools genuinely return no data.
 - NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
-- For ANY question about tours, showings, scheduling, or why a property isn't available, or what work is being done: check Rentvine for (1) active lease status, (2) latest inspections via rv_get_inspections. Then use aptly_search to find the property in Aptly — do NOT call aptly_get_board without a query, and do NOT call aptly_list_boards (you already know all board IDs). Use aptly_search with the address as the query — it searches all boards automatically.
+- For ANY question about tours, showings, scheduling, or why a property isn't available, or what work is being done: check Rentvine for (1) active lease status, (2) latest inspections via rv_get_inspections — these are synced from zInspector and show the most recent move-in, move-out, or maintenance inspection with date and type. Then search Aptly for pipeline status. Report all three together.
 - When reporting inspection activity: state the inspection type (move-in, move-out, maintenance, periodic), the date it was completed, and any notes. This tells the team whether turnover work or make-ready is in progress.
 - When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions, do NOT tell the user what to do. Just report what the data shows.
 - NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
 const ALL_TOOLS = [
-  {
-    name: 'rv_get_delinquencies',
-    description: 'Get all tenants with past due balances from Rentvine. Use this for "who is late on rent" or delinquency questions. Returns only tenants who owe money.',
-    input_schema: { type: 'object', properties: {} }
-  },
   {
     name: 'rv_get_leases',
     description: 'Search leases from Rentvine with tenant info, balances, unpaid charges, and property details. Best tool for tenant lookups and balance checks.',
@@ -288,7 +234,7 @@ const ALL_TOOLS = [
     },
   },
   {
-    name: 'aptly_get_board',
+    name: 'aptly_get_board_cards',
     description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz. Use aptly_list_boards to find other board IDs.',
     input_schema: {
       type: 'object',
@@ -301,11 +247,11 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_list_boards',
-    description: 'Returns the list of all known Aptly board IDs and their purposes. Call this if unsure which board to search.',
+    description: 'List all available Aptly boards to find board IDs for Move-Ins, Move-Outs, HOA Violations, Renewals etc.',
     input_schema: { type: 'object', properties: {} },
   },
   {
-    name: 'aptly_search',
+    name: 'aptly_search_cards',
     description: 'Search for specific leads or cards in an Aptly board by name, address, or keyword',
     input_schema: {
       type: 'object',
@@ -412,52 +358,13 @@ async function rvFetch(path, params = {}) {
   return r.json();
 }
 
-async function aptlyFetch(boardId, params = {}) {
-  // Try core-api first, fall back to app.getaptly.com
-  return aptlySearch(boardId, params.query || null, params.pageSize || 20);
-}
-
-async function aptlySchema(boardId) {
-  const r = await fetch('https://core-api.getaptly.com/api/schema/' + boardId, {
-    headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' }
-  });
-  if (!r.ok) return null;
+async function aptlyFetch(path, params = {}) {
+  const url = new URL('https://app.getaptly.com/api' + path);
+  url.searchParams.set('x-token', APTLY_TOKEN);
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
+  const r = await fetch(url.toString());
+  if (!r.ok) return { error: 'Aptly ' + r.status };
   return r.json();
-}
-
-async function aptlySearch(boardId, query, pageSize = 50) {
-  // Try both base URLs — core-api supports includeArchived, app.getaptly.com does not
-  const bases = [
-    { base: 'https://core-api.getaptly.com/api/board/', pageParam: 'page' },
-    { base: 'https://app.getaptly.com/api/aptlet/',    pageParam: 'page' },
-  ];
-  for (const { base, pageParam } of bases) {
-    try {
-      const url = new URL(base + boardId);
-      url.searchParams.set(pageParam, '0');
-      url.searchParams.set('pageSize', String(pageSize));
-      // includeArchived required for AR board delinquent cards (they are archived in Aptly)
-      url.searchParams.set('includeArchived', 'true');
-      if (query) url.searchParams.set('query', query);
-      const r = await fetch(url.toString(), {
-        headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!r.ok) continue;
-      const data = await r.json();
-      if (data && data.error) continue;
-      // Client-side filter for accuracy
-      const q = query ? query.toLowerCase() : '';
-      if (q && Array.isArray(data)) {
-        return data.filter(c => JSON.stringify(c).toLowerCase().includes(q));
-      }
-      if (q && data && Array.isArray(data.cards)) {
-        return { ...data, cards: data.cards.filter(c => JSON.stringify(c).toLowerCase().includes(q)) };
-      }
-      return data;
-    } catch(e) { continue; }
-  }
-  return { error: 'Aptly unreachable', boardId };
 }
 
 async function ziFetch(path, params = {}) {
@@ -515,53 +422,6 @@ async function executeTool(name, input) {
   console.log('Tool: ' + name, JSON.stringify(input).slice(0, 80));
   try {
     switch (name) {
-
-      case 'rv_get_delinquencies': {
-        // Fetch all active leases from Rentvine with full pagination
-        let allLeases = [];
-        let page = 1;
-        while (page <= 10) {
-          const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page: page });
-          if (!Array.isArray(batch) || batch.length === 0) break;
-          allLeases = allLeases.concat(batch);
-          if (batch.length < 200) break;
-          page++;
-        }
-        if (!allLeases.length) return JSON.stringify({ error: 'No leases returned from Rentvine' });
-
-        // Balance data is nested at l.balances — confirmed from Rentvine API
-        // Fields: balances.pastDueTotalAmount, balances.pastDueRentAmount, balances.unpaidTotalAmount
-        const delinquent = allLeases.filter(function(l) {
-          const bal = l.balances || {};
-          const pastDue = parseFloat(bal.pastDueTotalAmount || 0);
-          const pastRent = parseFloat(bal.pastDueRentAmount || 0);
-          return pastDue > 0 || pastRent > 0;
-        }).map(function(l) {
-          const bal = l.balances || {};
-          const lease = l.lease || {};
-          const p = l.property || {};
-          const u = l.unit || {};
-          const tenants = Array.isArray(lease.tenants) ? lease.tenants : [];
-          return {
-            address: p.address || u.address,
-            city: p.city,
-            tenants: tenants.map(function(t) { return (t.firstName || '') + ' ' + (t.lastName || ''); }).join(', '),
-            pastDueRent: parseFloat(bal.pastDueRentAmount || 0),
-            totalPastDue: parseFloat(bal.pastDueTotalAmount || 0),
-            unpaidTotal: parseFloat(bal.unpaidTotalAmount || 0),
-            leaseEnd: lease.endDate,
-            leaseStatus: lease.primaryLeaseStatusID === 1 ? 'Active' : 'Other',
-          };
-        }).sort(function(a, b) { return b.totalPastDue - a.totalPastDue; });
-
-        return JSON.stringify({
-          source: 'Rentvine',
-          total_active_leases: allLeases.length,
-          delinquent_count: delinquent.length,
-          total_past_due: delinquent.reduce(function(s, d) { return s + d.totalPastDue; }, 0).toFixed(2),
-          delinquent,
-        });
-      }
 
       case 'rv_get_leases': {
         const params = { pageSize: 200, page: input.page || 1 };
@@ -661,42 +521,15 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        if (!input.propertyId && !input.search && !input.status) {
-          return JSON.stringify({ error: 'Too broad — provide propertyId, search term, or status (open/closed) to filter work orders. Without a filter this returns thousands of records.' });
-        }
         const params = { pageSize: 50, page: input.page || 1 };
         if (input.propertyId) params.propertyID = input.propertyId;
-        let data = await rvFetch('/maintenance/work-orders', params);
-        if (!Array.isArray(data)) return JSON.stringify(data);
-        // Filter by status
-        if (input.status && input.status !== 'all') {
-          data = data.filter(function(wo) {
+        const data = await rvFetch('/maintenance/work-orders', params);
+        if (input.status && input.status !== 'all' && Array.isArray(data)) {
+          return JSON.stringify(data.filter(function(wo) {
             return input.status === 'open' ? !wo.closedDate : !!wo.closedDate;
-          });
+          }));
         }
-        // Filter by search term
-        if (input.search) {
-          const q = input.search.toLowerCase();
-          data = data.filter(function(wo) {
-            return JSON.stringify(wo).toLowerCase().includes(q);
-          });
-        }
-        // Cap at 20 results to prevent context overflow, trim large fields
-        const trimmed = data.slice(0, 20).map(function(wo) {
-          return {
-            workOrderID: wo.workOrderID,
-            propertyID: wo.propertyID,
-            address: wo.property && wo.property.address,
-            description: (wo.description || '').slice(0, 200),
-            status: wo.closedDate ? 'closed' : 'open',
-            priority: wo.priority,
-            category: wo.category,
-            vendor: wo.vendor && wo.vendor.name,
-            createdDate: wo.createdDate,
-            closedDate: wo.closedDate,
-          };
-        });
-        return JSON.stringify({ total: data.length, shown: trimmed.length, workOrders: trimmed });
+        return JSON.stringify(data);
       }
 
       case 'rv_get_work_order_detail': {
@@ -750,56 +583,42 @@ async function executeTool(name, input) {
         return JSON.stringify(data);
       }
 
-      case 'aptly_get_board': {
-        if (!input.boardId) return JSON.stringify({ error: 'boardId is required' });
-        const q = input.query || input.search || null;
-        const data = await aptlySearch(input.boardId, q, input.pageSize || 50);
-        let cards = Array.isArray(data) ? data : (data && data.cards ? data.cards : []);
-        // Filter by stage if provided (e.g. stage="Delinquent" for AR board)
-        if (input.stage) {
-          cards = cards.filter(c => (c.Stage || '').toLowerCase() === input.stage.toLowerCase());
-        }
-        // Trim each card to key fields to avoid context overflow
-        const trimmed = cards.slice(0, 25).map(function(c) {
-          return {
-            id: c._id,
-            title: c.Title,
-            stage: c.Stage,
-            tenants: c.Tenants || c.Residents,
-            address: c['Mirror Address'] || c.Address,
-            balance: c['Mirror Current Balance'],
-            overdueRent: c['Mirror Overdue Rent Balance'],
-            overdueCharges: c['Mirror Overdue Charge Balance'],
-            rent: c.Rent,
-            leaseStatus: c['Lease Status'],
-            leaseEnd: c['Lease End Date'],
-            lastActivity: c['Last Activity Date'],
-            owners: c.Owners,
-            // Include all other fields for non-AR boards
-            ...(input.boardId !== 'wk228jktWTWibWNhT' ? c : {}),
-          };
-        });
-        return JSON.stringify({ board: input.boardId, total: cards.length, shown: trimmed.length, cards: trimmed });
+      case 'aptly_get_board_cards': {
+        const boardId = input.boardId;
+        // query param is required — empty string returns all cards
+        const data = await aptlyFetch('/aptlet/' + boardId, { page: input.page || 0, query: input.query || '' });
+        return JSON.stringify(data);
       }
 
       case 'aptly_list_boards': {
-        return JSON.stringify(APTLY_BOARDS);
+        // Return hardcoded known boards since /aptlets endpoint is unreliable
+        return JSON.stringify([
+          { id: 'location', name: 'Properties / Locations', description: 'All properties with status (Vacant/Occupied), owner, address, unit details' },
+          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline, mirror shows if property is published for rent' },
+          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline and scheduled move-outs' },
+          { id: 'K9mMGGjKgQPqDykaa', name: 'Move-Ins', description: 'Move-in pipeline' },
+          { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
+        ]);
       }
 
-      case 'aptly_search': {
-        const q = (input.query || '').toLowerCase();
-        if (!q) return JSON.stringify({ error: 'query is required' });
-        // Search specific board or all key operational boards
-        const boardsToSearch = input.boardId
-          ? [input.boardId]
-          : ['unit', 'location', '4EMDSYKirhQaNdQKz', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj', 'MJxaStgENouWrNEKd', 'wk228jktWTWibWNhT', 'qfBzBxfooJtfTQncd', 'workOrder'];
+      case 'aptly_search_cards': {
+        const q = input.query || '';
+        const boardsToSearch = input.boardId 
+          ? [input.boardId] 
+          : ['location', '4EMDSYKirhQaNdQKz', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj'];
+        
         const results = [];
         for (const bid of boardsToSearch) {
-          const data = await aptlySearch(bid, q);
-          const cards = Array.isArray(data) ? data : (data && data.cards ? data.cards : []);
-          if (cards.length > 0) results.push({ board: bid, boardName: (APTLY_BOARDS.find(b => b.id === bid) || {}).name, cards: cards.slice(0, 5) });
+          // Always pass query param — required for API to return results
+          const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
+          const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+          // Client-side filter if query provided
+          const matched = q 
+            ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q.toLowerCase()); })
+            : cards;
+          if (matched.length > 0) results.push({ board: bid, cards: matched });
         }
-        return JSON.stringify(results.length > 0 ? results : { message: 'No results found for: ' + q });
+        return JSON.stringify(results.length > 0 ? results : { message: 'No results found for: ' + (q || '(all)') });
       }
 
       case 'notion_search': {
@@ -889,13 +708,13 @@ function getRelevantTools(msg) {
   msg = (msg || '').toLowerCase();
   const tools = new Set();
 
-  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much|late|delinquent|who hasn.?t paid|behind on rent/)) {
-    ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions', 'rv_get_delinquencies'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
+    ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
     ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/work.?order|maintenance|repair|fix|broken|vendor|contractor|hvac|plumb|electric|leak|damage/)) {
+  if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/inspect/)) {
@@ -908,11 +727,11 @@ function getRelevantTools(msg) {
     ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
-    ['aptly_search'].forEach(function(t) { tools.add(t); });
+    ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule|price|pricing|plan|cost|charge|management.?fee|how much|what.?we.?charge|our.?fee|evict|hoa|lockout|deposit|maintenance|work.?order|move.?in|move.?out|late.?fee|payment|screening/)) {
-    ['notion_get_page', 'notion_search'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
+    ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/slack|team|announce|update|channel|said|message/)) {
     ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
@@ -937,7 +756,7 @@ app.post('/api/chat', async function(req, res) {
 
     let current = messages.slice();
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -947,7 +766,7 @@ app.post('/api/chat', async function(req, res) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 4096,
+          max_tokens: 1024,
           system: SYSTEM_PROMPT,
           messages: current,
           tools: tools,
@@ -991,58 +810,6 @@ app.get('/health', function(req, res) {
     notion: !!NOTION_TOKEN,
     slack: !!SLACK_TOKEN,
   });
-});
-
-app.get('/debug/rentvine-balance-endpoints', async function(req, res) {
-  const endpoints = [
-    '/reports/leaseBalances',
-    '/reports/lease-balances',
-    '/accounting/leaseBalances',
-    '/leases/balances',
-    '/reports/delinquency',
-    '/accounting/delinquencies',
-    '/leases/export?includeBalance=true',
-  ];
-  const results = {};
-  for (const ep of endpoints) {
-    try {
-      const r = await rvFetch(ep, { pageSize: 5 });
-      results[ep] = { status: 'ok', type: typeof r, isArray: Array.isArray(r), sample: Array.isArray(r) ? r[0] : r };
-    } catch(e) {
-      results[ep] = { status: 'error', message: e.message };
-    }
-  }
-  res.json(results);
-});
-
-app.get('/debug/lease-fields', async function(req, res) {
-  try {
-    const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 3, page: 1 });
-    if (!Array.isArray(batch) || !batch.length) return res.json({ error: 'No leases returned', batch });
-    const sample = batch[0];
-    res.json({
-      total_returned: batch.length,
-      all_top_level_keys: Object.keys(sample),
-      balance_related: Object.fromEntries(
-        Object.entries(sample).filter(([k]) =>
-          k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') ||
-          k.toLowerCase().includes('past') || k.toLowerCase().includes('amount') ||
-          k.toLowerCase().includes('charge') || k.toLowerCase().includes('unpaid')
-        )
-      ),
-      nested_keys: {
-        lease: Object.keys(sample.lease || {}),
-        tenant: Object.keys(sample.tenant || {}),
-        property: Object.keys(sample.property || {}),
-      },
-      lease_balance_fields: Object.fromEntries(
-        Object.entries(sample.lease || {}).filter(([k]) =>
-          k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') ||
-          k.toLowerCase().includes('past') || k.toLowerCase().includes('amount')
-        )
-      ),
-    });
-  } catch(e) { res.json({ error: e.message }); }
 });
 
 app.get('/debug/properties', async function(req, res) {
