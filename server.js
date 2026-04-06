@@ -13,7 +13,8 @@ const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
 
 const APTLY_BOARDS = [
-  { id: 'location',            name: 'Properties / Locations',     who: 'Alexes',    description: 'All properties — status (Vacant/Occupied), owner, address, unit details. Source of truth for property availability.' },
+  { id: 'unit',                 name: 'Units',                       who: 'Dhyana',  description: 'PRIMARY source for unit availability. Stage = Occupied or Vacant. Has market rent, beds/baths, sq ft, residents, lease end date (Mirror Date Contract Ends), pet restrictions, marketing description, application link, virtual tour, lockbox info, and property photos. Use this FIRST for any availability question.' },
+  { id: 'location',            name: 'Properties / Locations',     who: 'Juan',    description: 'All properties — status (Vacant/Occupied), owner, address, unit details. Source of truth for property availability.' },
   { id: '4EMDSYKirhQaNdQKz',  name: 'Renter Leads',               who: 'Dhyana',  description: 'Prospective tenants — tour dates/times, showing feedback, interest level, lead source (Zillow etc.), all prospect info.' },
   { id: 'MJxaStgENouWrNEKd',  name: 'Applicants',                 who: 'Teri',  description: 'Rental applications — all adults 18+, $65 fee, 2 bank statements, 2 pay stubs, criteria verification, move date.' },
   { id: 'K9mMGGjKgQPqDykaa',  name: 'Move-Ins',                   who: 'Dhyana',  description: 'Approved applicants — $1,500 earnest deposit to take property off market, utility verification, renters insurance, lease sent/signed.' },
@@ -23,7 +24,7 @@ const APTLY_BOARDS = [
   { id: 'TEXBDbbQmjktAqyad',  name: 'Evictions',                  who: 'Rita',  description: 'Eviction tracking — filed to attorney, hearing date, judgement or tenant pays, tracked through full removal.' },
   { id: '8bazEHshdZNuMKCFE',  name: 'HOA Violations',             who: 'Juan',    description: 'HOA warnings and fines — $5 charge per violation either way, tenant or owner violations, tracked through resolution.' },
   { id: 'kt29ZGZC5PAe3QFGg',  name: 'HOA Registration',           who: 'Juan',    description: 'HOA registration — which HOA manages the home, tenant registration form, updated every move-in and renewal.' },
-  { id: 'qfBzBxfooJtfTQncd',  name: 'List Property',              who: 'Rita',  description: 'Relisting pipeline — hold until ready/price confirmed/closer to move-out, list on market, notify owner, take off when rented.' },
+  { id: 'qfBzBxfooJtfTQncd',  name: 'List Property',              who: 'Dhyana',  description: 'Relisting pipeline — hold until ready/price confirmed/closer to move-out, list on market, notify owner, take off when rented.' },
   { id: 'aSsiB5v3dMretri3m',  name: 'Lease Violations',           who: 'Juan',  description: 'Tenants not following lease terms — tracked through resolution.' },
   { id: 'fB9YrpvHdJyEXBJX4',  name: 'Former Tenant Collections',  who: 'Randi',   description: 'Collections on moved-out tenants with outstanding balances.' },
   { id: 'QySZ8yRWJ5KeYFcZt',  name: 'Owner Pipeline',             who: 'Alexes',  description: 'Prospective owners — source, referral, portfolio size, comps sent, info sent, conversation notes, PMA sent/signed, close rate vs lost leads.' },
@@ -37,7 +38,7 @@ const APTLY_BOARDS = [
   { id: 'PEQCns2CTq9xH3QWz',  name: 'Agent Referrals',            who: 'Alexes',  description: 'Real estate agents referring new owner clients — $200 paid per referral.' },
   { id: 'rWD7LF6RWWE9awiZ8',  name: 'Owner Referrals',            who: 'Alexes',  description: 'Owner-to-owner referrals for new property management clients.' },
   { id: 'YP8cNFwrkRiAZuBDs',  name: 'Early Pay Out Owners',       who: 'Randi',   description: 'Owner requests for early disbursement outside the standard 15th of month payout.' },
-  { id: 'jcXPF6Ev8QyaQoELL',  name: 'Owner Requested Walk Throughs', who: 'Roberto', description: 'Owner-requested property walk-throughs and inspections.' },
+  { id: 'jcXPF6Ev8QyaQoELL',  name: 'Owner Requested Walk Throughs', who: 'Teri', description: 'Owner-requested property walk-throughs and inspections.' },
   { id: 'Dyo25kcQkQsZxNdfw',  name: 'Pay Bills',                  who: 'Randi',   description: 'Bill payment workflow.' },
   { id: 'bPiaHdFSBbFccS45z',  name: 'Pay Owners',                 who: 'Randi',   description: 'Owner disbursement processing.' },
   { id: '6nzBd7wfdjvnFLdQK',  name: 'Pay HOA Dues',               who: 'Randi',    description: 'HOA dues payment tracking.' },
@@ -78,7 +79,8 @@ NOTION — Company policies and SOPs:
 - HOA violation procedures, maintenance escalation, all SOPs
 
 Aptly has 32 boards covering all operations. Use aptly_list_boards to see all. Key boards for common questions:
-- "location" → property status, vacant/occupied, owner, address
+- "unit" → PRIMARY availability source. Stage=Occupied/Vacant, market rent, beds/baths, residents, lease end date, pet policy, marketing copy, application link, virtual tour. Use this FIRST for availability questions.
+- "location" → property/owner details, Rentvine ID cross-reference
 - "4EMDSYKirhQaNdQKz" → Renter Leads: tours, showing dates/feedback, interest, lead source
 - "MJxaStgENouWrNEKd" → Applicants: applications, $65 fee, criteria, move date
 - "K9mMGGjKgQPqDykaa" → Move-Ins: earnest deposit ($1,500 min), utilities, insurance, lease
@@ -103,11 +105,11 @@ Quick lookup for the most common questions (skip the index for these, go direct)
 - Property availability / earnest deposit → 33976555273a81e093d9d062009a206c
 
 Property availability workflow (follow this order):
-1. Check Aptly Applications board for approved applications on the property
-2. If approved: check whether the earnest deposit has been paid — deposit paid = property is OFF the market
-3. Check Rentvine → Future Leases for the property — confirm move-in is scheduled and deposit receipt exists
-4. Check lease status: if Pending = future lease = off market
-5. Only if none of the above apply = property is available
+1. Search Aptly "unit" board (ID: unit) for the address — Stage field tells you Occupied or Vacant instantly
+2. If Vacant: report market rent, beds/baths, available date, pet restrictions, and application link from the unit card
+3. If Occupied: report residents, lease end date (Mirror Date Contract Ends), and check Renter Leads for active showing interest
+4. Check Aptly Applications/Move-Ins boards for approved applications with earnest deposit paid — deposit paid = off market even if showing as vacant
+5. Check Rentvine for active lease confirmation if needed
 
 SLACK — Team communications:
 - Recent team messages, announcements, decisions
@@ -133,7 +135,7 @@ Rules:
   - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
   - HOA violations or HOA questions → "Reach out to Juan directly."
   - Move-out or lease renewal questions → "Reach out to Persia directly."
-  - Any property in Maricopa if no one else can help → "Reach out to Teri directly."
+  - Any property in Maricopa where BOTH Rentvine AND Aptly return zero data → "Reach out to Teri directly." Do NOT route to Teri if you found the property in Rentvine — search Aptly before giving up.
   - Owner or landlord related issues → "Reach out to Alexes directly."
   - Accounting questions → "Reach out to Randi directly."
 - NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
@@ -404,17 +406,8 @@ async function rvFetch(path, params = {}) {
 }
 
 async function aptlyFetch(boardId, params = {}) {
-  // Correct base URL and auth per Aptly API docs
-  const url = new URL('https://core-api.getaptly.com/api/board/' + boardId);
-  Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
-  const r = await fetch(url.toString(), {
-    headers: {
-      'x-token': APTLY_TOKEN,
-      'Accept': 'application/json',
-    }
-  });
-  if (!r.ok) return { error: 'Aptly ' + r.status, boardId };
-  return r.json();
+  // Try core-api first, fall back to app.getaptly.com
+  return aptlySearch(boardId, params.query || null, params.pageSize || 20);
 }
 
 async function aptlySchema(boardId) {
@@ -426,25 +419,36 @@ async function aptlySchema(boardId) {
 }
 
 async function aptlySearch(boardId, query, pageSize = 20) {
-  const url = new URL('https://core-api.getaptly.com/api/board/' + boardId);
-  url.searchParams.set('page', '0');
-  url.searchParams.set('pageSize', String(pageSize));
-  if (query) url.searchParams.set('search', query);
-  const r = await fetch(url.toString(), {
-    headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' }
-  });
-  if (!r.ok) return { error: 'Aptly ' + r.status, boardId };
-  const data = await r.json();
-  // Filter results client-side too for accuracy
-  if (query && Array.isArray(data)) {
-    const q = query.toLowerCase();
-    return data.filter(c => JSON.stringify(c).toLowerCase().includes(q));
+  // Try both base URLs — core-api is correct per docs, app is legacy fallback
+  const bases = [
+    { base: 'https://core-api.getaptly.com/api/board/', pageParam: 'page' },
+    { base: 'https://app.getaptly.com/api/aptlet/',    pageParam: 'page' },
+  ];
+  for (const { base, pageParam } of bases) {
+    try {
+      const url = new URL(base + boardId);
+      url.searchParams.set(pageParam, '0');
+      url.searchParams.set('pageSize', String(pageSize));
+      if (query) url.searchParams.set('query', query);
+      const r = await fetch(url.toString(), {
+        headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (data && data.error) continue;
+      // Client-side filter for accuracy
+      const q = query ? query.toLowerCase() : '';
+      if (q && Array.isArray(data)) {
+        return data.filter(c => JSON.stringify(c).toLowerCase().includes(q));
+      }
+      if (q && data && Array.isArray(data.cards)) {
+        return { ...data, cards: data.cards.filter(c => JSON.stringify(c).toLowerCase().includes(q)) };
+      }
+      return data;
+    } catch(e) { continue; }
   }
-  if (query && data && Array.isArray(data.cards)) {
-    const q = query.toLowerCase();
-    return { ...data, cards: data.cards.filter(c => JSON.stringify(c).toLowerCase().includes(q)) };
-  }
-  return data;
+  return { error: 'Aptly unreachable', boardId };
 }
 
 async function ziFetch(path, params = {}) {
@@ -711,7 +715,7 @@ async function executeTool(name, input) {
         // Search specific board or all key operational boards
         const boardsToSearch = input.boardId
           ? [input.boardId]
-          : ['location', '4EMDSYKirhQaNdQKz', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj', 'MJxaStgENouWrNEKd', 'wk228jktWTWibWNhT', 'qfBzBxfooJtfTQncd'];
+          : ['unit', 'location', '4EMDSYKirhQaNdQKz', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj', 'MJxaStgENouWrNEKd', 'wk228jktWTWibWNhT', 'qfBzBxfooJtfTQncd'];
         const results = [];
         for (const bid of boardsToSearch) {
           const data = await aptlySearch(bid, q);
