@@ -516,38 +516,89 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'rv_get_delinquencies': {
-        // Fetch active leases and filter to those with past due balances
-        let page = 1;
-        const allLeases = [];
-        while (page <= 5) {
-          const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page });
-          if (!Array.isArray(batch) || batch.length === 0) break;
-          allLeases.push(...batch);
-          if (batch.length < 200) break;
-          page++;
+        // Try Rentvine lease balances report endpoint first
+        const reportEndpoints = [
+          '/reports/leaseBalances',
+          '/reports/lease-balances',
+          '/accounting/leaseBalances',
+          '/leases/balances',
+          '/reports/delinquency',
+        ];
+        let reportData = null;
+        for (const ep of reportEndpoints) {
+          try {
+            const r = await rvFetch(ep, { pageSize: 200, 'primaryLeaseStatusIDs[]': 1 });
+            if (r && !r.error && (Array.isArray(r) ? r.length > 0 : true)) {
+              reportData = r;
+              break;
+            }
+          } catch(e) {}
         }
-        const delinquent = allLeases
-          .filter(function(l) {
-            const b = l.lease || l;
-            const past = parseFloat(b.pastDueTotalAmount || b.pastDueRentAmount || 0);
-            return past > 0;
-          })
-          .map(function(l) {
-            const b = l.lease || l;
-            const t = l.tenants || [];
-            const p = l.property || {};
-            return {
-              address: p.address || b.address,
-              city: p.city,
-              tenants: t.map(function(x) { return x.firstName + ' ' + x.lastName; }).join(', '),
-              pastDueTotal: b.pastDueTotalAmount,
-              pastDueRent: b.pastDueRentAmount,
-              currentBalance: b.currentBalance,
-              leaseStatus: b.leaseStatusText || b.leaseStatus,
-              leaseEnd: b.leaseEndDate,
-            };
-          });
-        return JSON.stringify({ total: delinquent.length, delinquent });
+
+        // Fallback: use lease export and look for any balance fields
+        let allLeases = [];
+        if (!reportData) {
+          let page = 1;
+          while (page <= 5) {
+            const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page });
+            if (!Array.isArray(batch) || batch.length === 0) break;
+            allLeases.push(...batch);
+            if (batch.length < 200) break;
+            page++;
+          }
+        } else {
+          allLeases = Array.isArray(reportData) ? reportData : (reportData.records || reportData.data || []);
+        }
+        if (!allLeases.length) return JSON.stringify({ error: 'No lease data returned from Rentvine', tried: reportEndpoints });
+
+        // Helper: extract balance from any level of the object using all known field names
+        function getBalance(obj) {
+          if (!obj) return 0;
+          const fields = [
+            'pastDueTotalAmount','pastDueRentAmount','pastDueTotal','pastDueRent',
+            'balance','pastBalance','currentBalance','totalBalance','amountDue',
+            'pastDue','overdueBalance','delinquentAmount','outstandingBalance',
+          ];
+          for (const f of fields) {
+            const val = parseFloat(obj[f] || 0);
+            if (val > 0) return val;
+          }
+          return 0;
+        }
+
+        // Debug: show first lease raw to help identify field names
+        const firstLease = allLeases[0];
+        const sampleKeys = Object.keys(firstLease || {}).slice(0, 30);
+
+        const delinquent = allLeases.filter(function(l) {
+          return getBalance(l) > 0 || getBalance(l.lease) > 0 || getBalance(l.tenant) > 0;
+        }).map(function(l) {
+          const b = l.lease || l;
+          const t = Array.isArray(l.tenants) ? l.tenants : (l.tenant ? [l.tenant] : []);
+          const p = l.property || {};
+          const bal = getBalance(l) || getBalance(b);
+          return {
+            address: p.address || b.address || l.address,
+            city: p.city || l.city,
+            tenants: t.map(function(x) { return (x.firstName || '') + ' ' + (x.lastName || ''); }).join(', '),
+            balance: bal,
+            leaseStatus: b.leaseStatusText || b.leaseStatus || l.leaseStatus,
+            leaseEnd: b.leaseEndDate || l.leaseEndDate,
+            rawBalanceFields: Object.fromEntries(
+              Object.entries(l).filter(([k,v]) => k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') || k.toLowerCase().includes('past') || k.toLowerCase().includes('amount'))
+            ),
+          };
+        });
+
+        return JSON.stringify({
+          total_active_leases: allLeases.length,
+          delinquent_count: delinquent.length,
+          delinquent,
+          debug_first_lease_keys: sampleKeys,
+          debug_first_lease_balance_fields: Object.fromEntries(
+            Object.entries(firstLease || {}).filter(([k]) => k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') || k.toLowerCase().includes('past') || k.toLowerCase().includes('amount'))
+          ),
+        });
       }
 
       case 'rv_get_leases': {
@@ -978,6 +1029,58 @@ app.get('/health', function(req, res) {
     notion: !!NOTION_TOKEN,
     slack: !!SLACK_TOKEN,
   });
+});
+
+app.get('/debug/rentvine-balance-endpoints', async function(req, res) {
+  const endpoints = [
+    '/reports/leaseBalances',
+    '/reports/lease-balances',
+    '/accounting/leaseBalances',
+    '/leases/balances',
+    '/reports/delinquency',
+    '/accounting/delinquencies',
+    '/leases/export?includeBalance=true',
+  ];
+  const results = {};
+  for (const ep of endpoints) {
+    try {
+      const r = await rvFetch(ep, { pageSize: 5 });
+      results[ep] = { status: 'ok', type: typeof r, isArray: Array.isArray(r), sample: Array.isArray(r) ? r[0] : r };
+    } catch(e) {
+      results[ep] = { status: 'error', message: e.message };
+    }
+  }
+  res.json(results);
+});
+
+app.get('/debug/lease-fields', async function(req, res) {
+  try {
+    const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 3, page: 1 });
+    if (!Array.isArray(batch) || !batch.length) return res.json({ error: 'No leases returned', batch });
+    const sample = batch[0];
+    res.json({
+      total_returned: batch.length,
+      all_top_level_keys: Object.keys(sample),
+      balance_related: Object.fromEntries(
+        Object.entries(sample).filter(([k]) =>
+          k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') ||
+          k.toLowerCase().includes('past') || k.toLowerCase().includes('amount') ||
+          k.toLowerCase().includes('charge') || k.toLowerCase().includes('unpaid')
+        )
+      ),
+      nested_keys: {
+        lease: Object.keys(sample.lease || {}),
+        tenant: Object.keys(sample.tenant || {}),
+        property: Object.keys(sample.property || {}),
+      },
+      lease_balance_fields: Object.fromEntries(
+        Object.entries(sample.lease || {}).filter(([k]) =>
+          k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') ||
+          k.toLowerCase().includes('past') || k.toLowerCase().includes('amount')
+        )
+      ),
+    });
+  } catch(e) { res.json({ error: e.message }); }
 });
 
 app.get('/debug/properties', async function(req, res) {
