@@ -232,7 +232,7 @@ const ALL_TOOLS = [
     },
   },
   {
-    name: 'aptly_get_board_cards',
+    name: 'aptly_get_board',
     description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz. Use aptly_list_boards to find other board IDs.',
     input_schema: {
       type: 'object',
@@ -245,11 +245,11 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_list_boards',
-    description: 'List all available Aptly boards to find board IDs for Move-Ins, Move-Outs, HOA Violations, Renewals etc.',
+    description: 'Returns the list of all known Aptly board IDs and their purposes. Call this if unsure which board to search.',
     input_schema: { type: 'object', properties: {} },
   },
   {
-    name: 'aptly_search_cards',
+    name: 'aptly_search',
     description: 'Search for specific leads or cards in an Aptly board by name, address, or keyword',
     input_schema: {
       type: 'object',
@@ -581,7 +581,7 @@ async function executeTool(name, input) {
         return JSON.stringify(data);
       }
 
-      case 'aptly_get_board_cards': {
+      case 'aptly_get_board': {
         // Try query endpoint first, fallback to page endpoint
         const boardId = input.boardId;
         let data = await aptlyFetch('/aptlet/' + boardId, { page: input.page || 0 });
@@ -603,7 +603,7 @@ async function executeTool(name, input) {
         ]);
       }
 
-      case 'aptly_search_cards': {
+      case 'aptly_search': {
         // Search across key boards for the query
         const q = (input.query || '').toLowerCase();
         const boardsToSearch = input.boardId 
@@ -726,7 +726,7 @@ function getRelevantTools(msg) {
     ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
-    ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+    ['aptly_get_board', 'aptly_list_boards', 'aptly_search'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
