@@ -53,8 +53,10 @@ For ANY policy, SOP, fee, or procedure question: ALWAYS start by fetching the Al
 
 Quick lookup for the most common questions (skip the index for these, go direct):
 - Lease break / early termination → 18776555273a81049822eca6abae6fbb
-- Fees, pricing, plans, what we charge → 26376555273a80a9ba89d61d5159e8c2
-- Management fee / what's included → 18776555273a81508b17fe8e936dc9c0
+- Management fee amount / required fees / what we charge / onboarding fee / leasing fee → 26576555273a80c1bea4fa858c5b6c03
+  (Management fee is $89/mo flat, no charge when vacant. Leasing fee $750. Onboarding $99 vacant / $150 occupied. Annual renewal $99.)
+- Pricing plan comparison / plan options / DIY / executive plan → 26376555273a80a9ba89d61d5159e8c2
+- Management fee what's included → 18776555273a81508b17fe8e936dc9c0
 - Property availability / earnest deposit → 33976555273a81e093d9d062009a206c
 
 Property availability workflow (follow this order):
