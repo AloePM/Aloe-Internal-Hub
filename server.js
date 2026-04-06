@@ -761,9 +761,29 @@ app.post('/api/chat', async function(req, res) {
     const tools = getRelevantTools(lastMsg ? lastMsg.content : '');
     console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
+    // Server-side shortcut for broad availability questions — skip Claude loop entirely
+    const lowerMsg = (messages[messages.length - 1]?.content || '').toLowerCase();
+    if (lowerMsg.match(/what (unit|propert|home|house|listing)s? (are |is )?(available|vacant|for rent|on market)/i) && !lowerMsg.match(/[0-9]{4,6}/)) {
+      try {
+        const unitBoard = await aptlyFetch('/aptlet/unit', { page: 0, query: '' });
+        const cards = (unitBoard && unitBoard.cards) || (Array.isArray(unitBoard) ? unitBoard : []);
+        const vacant = cards.filter(function(c) { return c.Stage === 'Vacant' || c.Status === 'Vacant'; });
+        if (vacant.length > 0) {
+          const summary = vacant.map(function(c) {
+            return (c.Title || c.Address || c.Street || 'Unknown') +
+              (c.Beds ? ' — ' + c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '') +
+              (c['Market Rent'] ? ', ' + c['Market Rent'] + '/mo' : '') +
+              (c['Available Date'] ? ', avail ' + c['Available Date'] : '') +
+              (c['Lockbox Description'] ? ' [' + c['Lockbox Description'] + ']' : '');
+          }).join('\n');
+          return res.json({ content: [{ type: 'text', text: 'Currently vacant units (' + vacant.length + '):\n\n' + summary }] });
+        }
+      } catch(e) { /* fall through to normal flow */ }
+    }
+
     let current = messages.slice();
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -788,10 +808,48 @@ app.post('/api/chat', async function(req, res) {
 
       const tbs = data.content.filter(function(b) { return b.type === 'tool_use'; });
       const results = await Promise.all(tbs.map(async function(tb) {
+        let result = await executeTool(tb.name, tb.input);
+        // Trim large results to prevent context overflow (30k TPM rate limit)
+        if (typeof result === 'string' && result.length > 12000) {
+          try {
+            const parsed = JSON.parse(result);
+            // If it's an array, limit to 20 items and strip bulky fields
+            if (Array.isArray(parsed)) {
+              const trimmed = parsed.slice(0, 20).map(function(item) {
+                // Remove large photo/file arrays and long descriptions
+                const clean = Object.assign({}, item);
+                delete clean['Property Photos'];
+                delete clean['Mirror Marketing Description'];
+                delete clean['Marketing Description'];
+                delete clean.comments;
+                delete clean['Files'];
+                return clean;
+              });
+              result = JSON.stringify({ 
+                total: parsed.length, 
+                shown: trimmed.length, 
+                note: parsed.length > 20 ? 'Results trimmed — ' + (parsed.length - 20) + ' more not shown' : undefined,
+                data: trimmed 
+              });
+            } else if (parsed && parsed.cards && Array.isArray(parsed.cards)) {
+              const trimmed = parsed.cards.slice(0, 20).map(function(c) {
+                const clean = Object.assign({}, c);
+                delete clean['Property Photos'];
+                delete clean['Mirror Marketing Description'];
+                delete clean['Marketing Description'];
+                delete clean.comments;
+                return clean;
+              });
+              result = JSON.stringify({ total: parsed.cards.length, shown: trimmed.length, cards: trimmed });
+            }
+          } catch(e) {
+            result = result.slice(0, 12000) + '...[truncated]';
+          }
+        }
         return {
           type: 'tool_result',
           tool_use_id: tb.id,
-          content: await executeTool(tb.name, tb.input),
+          content: result,
         };
       }));
 
