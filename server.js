@@ -49,11 +49,13 @@ Known Aptly board IDs:
 - "K9mMGGjKgQPqDykaa" — Move-Ins  
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals
 
-Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
-- Lease Break Policy: 18776555273a81049822eca6abae6fbb
-  → Use this for ANY question about lease break fees, early termination, tenant breaking lease, lease termination
-- Checking Property Availability — Tenant Inquiry SOP: 33976555273a81e093d9d062009a206c
-  → Use this when asked how to check if a property is available, or when a tenant calls about availability
+For ANY policy, SOP, fee, or procedure question: ALWAYS start by fetching the Aloe AI Knowledge Index page using notion_get_page with pageId "33a76555273a81c6b785c4218f855be8". This index maps every topic to the exact Notion page ID. Then fetch that specific page directly. Do NOT use notion_search — use the index instead.
+
+Quick lookup for the most common questions (skip the index for these, go direct):
+- Lease break / early termination → 18776555273a81049822eca6abae6fbb
+- Fees, pricing, plans, what we charge → 26376555273a80a9ba89d61d5159e8c2
+- Management fee / what's included → 18776555273a81508b17fe8e936dc9c0
+- Property availability / earnest deposit → 33976555273a81e093d9d062009a206c
 
 Property availability workflow (follow this order):
 1. Check Aptly Applications board for approved applications on the property
@@ -94,7 +96,7 @@ Rules:
 - NEVER say "I'm unable to access" or "I cannot access" any board or data source — you have Rentvine, Aptly, Notion, and Slack tools available. Always actually try them before concluding data isn't available.
 - NEVER route to a team member as a substitute for using your tools. Always use all relevant tools first (Rentvine AND Aptly), then only route if the tools genuinely return no data.
 - NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
-- For ANY question about tours, showings, scheduling, or why a property isn't available, or what work is being done: check Rentvine for (1) active lease status, (2) latest inspections via rv_get_inspections — these are synced from zInspector and show the most recent move-in, move-out, or maintenance inspection with date and type. Then search Aptly for pipeline status. Report all three together.
+- For ANY question about tours, showings, scheduling, or why a property isn't available, or what work is being done: check Rentvine for (1) active lease status, (2) latest inspections via rv_get_inspections. Then use aptly_search to find the property in Aptly — do NOT call aptly_get_board without a query, and do NOT call aptly_list_boards (you already know all board IDs). Use aptly_search with the address as the query — it searches all boards automatically.
 - When reporting inspection activity: state the inspection type (move-in, move-out, maintenance, periodic), the date it was completed, and any notes. This tells the team whether turnover work or make-ready is in progress.
 - When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions, do NOT tell the user what to do. Just report what the data shows.
 - NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
@@ -609,14 +611,20 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_board': {
-        // Try query endpoint first, fallback to page endpoint
-        const boardId = input.boardId;
-        let data = await aptlyFetch('/aptlet/' + boardId, { page: input.page || 0 });
-        if (data && data.error) {
-          // Try with query param
-          data = await aptlyFetch('/aptlet/' + boardId, { page: 0, query: '' });
+        if (!input.boardId) return JSON.stringify({ error: 'boardId is required' });
+        if (!input.query && !input.search) {
+          return JSON.stringify({ error: 'query or search is required for aptly_get_board — use aptly_search instead to search by address or name across all boards' });
         }
-        return JSON.stringify(data);
+        const boardId = input.boardId;
+        const q = input.query || input.search || '';
+        let data = await aptlyFetch('/aptlet/' + boardId, { page: 0, query: q });
+        if (data && data.error) {
+          data = await aptlyFetch('/aptlet/' + boardId, { page: 0 });
+        }
+        // Cap and filter
+        const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+        const matched = q ? cards.filter(c => JSON.stringify(c).toLowerCase().includes(q.toLowerCase())) : cards.slice(0, 5);
+        return JSON.stringify({ board: boardId, total: matched.length, cards: matched.slice(0, 10) });
       }
 
       case 'aptly_list_boards': {
@@ -753,11 +761,11 @@ function getRelevantTools(msg) {
     ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/lead|pipeline|move.?in|move.?out|hoa|renewal|board|card|aptly|tour|showing|schedul|appointment|visit/)) {
-    ['aptly_get_board', 'aptly_list_boards', 'aptly_search'].forEach(function(t) { tools.add(t); });
+    ['aptly_search'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
-    ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule|price|pricing|plan|cost|charge|management.?fee|how much|what.?we.?charge|our.?fee|evict|hoa|lockout|deposit|maintenance|work.?order|move.?in|move.?out|late.?fee|payment|screening/)) {
+    ['notion_get_page', 'notion_search'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/slack|team|announce|update|channel|said|message/)) {
     ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
@@ -782,7 +790,7 @@ app.post('/api/chat', async function(req, res) {
 
     let current = messages.slice();
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -792,7 +800,7 @@ app.post('/api/chat', async function(req, res) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
+          max_tokens: 4096,
           system: SYSTEM_PROMPT,
           messages: current,
           tools: tools,
