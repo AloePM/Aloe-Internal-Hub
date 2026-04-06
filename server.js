@@ -426,7 +426,7 @@ async function aptlySchema(boardId) {
 }
 
 async function aptlySearch(boardId, query, pageSize = 50) {
-  // Try both base URLs — core-api is correct per docs, app is legacy fallback
+  // Try both base URLs — core-api supports includeArchived, app.getaptly.com does not
   const bases = [
     { base: 'https://core-api.getaptly.com/api/board/', pageParam: 'page' },
     { base: 'https://app.getaptly.com/api/aptlet/',    pageParam: 'page' },
@@ -436,6 +436,7 @@ async function aptlySearch(boardId, query, pageSize = 50) {
       const url = new URL(base + boardId);
       url.searchParams.set(pageParam, '0');
       url.searchParams.set('pageSize', String(pageSize));
+      // includeArchived required for AR board delinquent cards (they are archived in Aptly)
       url.searchParams.set('includeArchived', 'true');
       if (query) url.searchParams.set('query', query);
       const r = await fetch(url.toString(), {
@@ -516,88 +517,74 @@ async function executeTool(name, input) {
     switch (name) {
 
       case 'rv_get_delinquencies': {
-        // Try Rentvine lease balances report endpoint first
-        const reportEndpoints = [
-          '/reports/leaseBalances',
-          '/reports/lease-balances',
-          '/accounting/leaseBalances',
-          '/leases/balances',
-          '/reports/delinquency',
-        ];
-        let reportData = null;
-        for (const ep of reportEndpoints) {
-          try {
-            const r = await rvFetch(ep, { pageSize: 200, 'primaryLeaseStatusIDs[]': 1 });
-            if (r && !r.error && (Array.isArray(r) ? r.length > 0 : true)) {
-              reportData = r;
-              break;
-            }
-          } catch(e) {}
-        }
-
-        // Fallback: use lease export and look for any balance fields
+        // Fetch all active leases from Rentvine with full pagination
         let allLeases = [];
-        if (!reportData) {
-          let page = 1;
-          while (page <= 5) {
-            const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page });
-            if (!Array.isArray(batch) || batch.length === 0) break;
-            allLeases.push(...batch);
-            if (batch.length < 200) break;
-            page++;
-          }
-        } else {
-          allLeases = Array.isArray(reportData) ? reportData : (reportData.records || reportData.data || []);
+        let page = 1;
+        while (page <= 10) {
+          const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page: page });
+          if (!Array.isArray(batch) || batch.length === 0) break;
+          allLeases = allLeases.concat(batch);
+          if (batch.length < 200) break;
+          page++;
         }
-        if (!allLeases.length) return JSON.stringify({ error: 'No lease data returned from Rentvine', tried: reportEndpoints });
+        if (!allLeases.length) return JSON.stringify({ error: 'No leases returned from Rentvine' });
 
-        // Helper: extract balance from any level of the object using all known field names
-        function getBalance(obj) {
-          if (!obj) return 0;
-          const fields = [
-            'pastDueTotalAmount','pastDueRentAmount','pastDueTotal','pastDueRent',
-            'balance','pastBalance','currentBalance','totalBalance','amountDue',
-            'pastDue','overdueBalance','delinquentAmount','outstandingBalance',
-          ];
-          for (const f of fields) {
-            const val = parseFloat(obj[f] || 0);
-            if (val > 0) return val;
+        // Check all possible balance field paths
+        function extractBalance(obj) {
+          if (!obj || typeof obj !== 'object') return 0;
+          const allFields = Object.keys(obj);
+          for (const k of allFields) {
+            if (k.toLowerCase().includes('past') || k.toLowerCase().includes('due') ||
+                k.toLowerCase().includes('balance') || k.toLowerCase().includes('overdue') ||
+                k.toLowerCase().includes('delinquent')) {
+              const v = parseFloat(String(obj[k]).replace(/[^0-9.-]/g, ''));
+              if (v > 0) return v;
+            }
           }
           return 0;
         }
 
-        // Debug: show first lease raw to help identify field names
-        const firstLease = allLeases[0];
-        const sampleKeys = Object.keys(firstLease || {}).slice(0, 30);
+        const firstLease = allLeases[0] || {};
+        const allBalanceFields = Object.fromEntries(
+          Object.entries(firstLease).filter(([k]) =>
+            k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') ||
+            k.toLowerCase().includes('past') || k.toLowerCase().includes('amount') ||
+            k.toLowerCase().includes('charge')
+          )
+        );
+        const nestedBalanceFields = Object.fromEntries(
+          Object.entries(firstLease.lease || {}).filter(([k]) =>
+            k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') || k.toLowerCase().includes('past')
+          )
+        );
 
         const delinquent = allLeases.filter(function(l) {
-          return getBalance(l) > 0 || getBalance(l.lease) > 0 || getBalance(l.tenant) > 0;
+          return extractBalance(l) > 0 || extractBalance(l.lease) > 0;
         }).map(function(l) {
-          const b = l.lease || l;
-          const t = Array.isArray(l.tenants) ? l.tenants : (l.tenant ? [l.tenant] : []);
+          const b = l.lease || {};
+          const t = Array.isArray(l.tenants) ? l.tenants : [];
           const p = l.property || {};
-          const bal = getBalance(l) || getBalance(b);
           return {
             address: p.address || b.address || l.address,
             city: p.city || l.city,
-            tenants: t.map(function(x) { return (x.firstName || '') + ' ' + (x.lastName || ''); }).join(', '),
-            balance: bal,
-            leaseStatus: b.leaseStatusText || b.leaseStatus || l.leaseStatus,
+            tenants: t.map(function(x) { return (x.firstName || '') + ' ' + (x.lastName || ''); }).join(', ') || b.tenantName || l.tenantName,
+            pastDueRent: l.pastDueRentAmount || b.pastDueRentAmount || l.pastDue || 0,
+            totalPastDue: l.pastDueTotalAmount || b.pastDueTotalAmount || l.totalPastDue || 0,
+            balance: extractBalance(l) || extractBalance(b),
+            leaseStatus: b.leaseStatusText || l.leaseStatusText || b.leaseStatus || l.leaseStatus,
             leaseEnd: b.leaseEndDate || l.leaseEndDate,
-            rawBalanceFields: Object.fromEntries(
-              Object.entries(l).filter(([k,v]) => k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') || k.toLowerCase().includes('past') || k.toLowerCase().includes('amount'))
-            ),
           };
         });
 
         return JSON.stringify({
+          source: 'Rentvine lease export',
           total_active_leases: allLeases.length,
+          pages_fetched: page - 1,
           delinquent_count: delinquent.length,
           delinquent,
-          debug_first_lease_keys: sampleKeys,
-          debug_first_lease_balance_fields: Object.fromEntries(
-            Object.entries(firstLease || {}).filter(([k]) => k.toLowerCase().includes('balance') || k.toLowerCase().includes('due') || k.toLowerCase().includes('past') || k.toLowerCase().includes('amount'))
-          ),
+          debug_balance_fields_in_first_lease: allBalanceFields,
+          debug_nested_lease_balance_fields: nestedBalanceFields,
+          debug_first_lease_all_keys: Object.keys(firstLease).join(', '),
         });
       }
 
