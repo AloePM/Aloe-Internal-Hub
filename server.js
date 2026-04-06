@@ -765,18 +765,32 @@ app.post('/api/chat', async function(req, res) {
     const lowerMsg = (messages[messages.length - 1]?.content || '').toLowerCase();
     if (lowerMsg.match(/what (unit|propert|home|house|listing)s? (are |is )?(available|vacant|for rent|on market)/i) && !lowerMsg.match(/[0-9]{4,6}/)) {
       try {
-        const unitBoard = await aptlyFetch('/aptlet/unit', { page: 0, query: '' });
-        const cards = (unitBoard && unitBoard.cards) || (Array.isArray(unitBoard) ? unitBoard : []);
-        const vacant = cards.filter(function(c) { return c.Stage === 'Vacant' || c.Status === 'Vacant'; });
-        if (vacant.length > 0) {
-          const summary = vacant.map(function(c) {
-            return (c.Title || c.Address || c.Street || 'Unknown') +
-              (c.Beds ? ' — ' + c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '') +
-              (c['Market Rent'] ? ', ' + c['Market Rent'] + '/mo' : '') +
-              (c['Available Date'] ? ', avail ' + c['Available Date'] : '') +
-              (c['Lockbox Description'] ? ' [' + c['Lockbox Description'] + ']' : '');
-          }).join('\n');
-          return res.json({ content: [{ type: 'text', text: 'Currently vacant units (' + vacant.length + '):\n\n' + summary }] });
+        // Use the List Property board (qfBzBxfooJtfTQncd) — this is the source of truth for all active listings
+        const listBoard = await aptlyFetch('/aptlet/qfBzBxfooJtfTQncd', { page: 0, query: '' });
+        const cards = (listBoard && listBoard.cards) || (Array.isArray(listBoard) ? listBoard : []);
+        if (cards.length > 0) {
+          // Separate On Market (available now/soon) from List Property (coming soon, not yet listed)
+          const onMarket = cards.filter(function(c) { return c.Stage === 'On Market'; });
+          const comingSoon = cards.filter(function(c) { return c.Stage === 'List Property'; });
+          
+          const fmt = function(c) {
+            const addr = c.Title || c['Mirror Address'] || '?';
+            const rent = c['Mirror Market Rent'] || '';
+            const beds = c['Mirror Beds'] ? c['Mirror Beds'] + 'bd/' + (c['Mirror Baths'] || '?') + 'ba' : '';
+            const avail = c['Mirror Available Date'] || '';
+            const status = c['Mirror Status'] || '';
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + (status === 'Occupied' ? ' (occupied)' : '');
+          };
+          
+          let text = 'Currently listed properties (' + onMarket.length + ' on market, ' + comingSoon.length + ' coming soon):\n';
+          if (onMarket.length > 0) {
+            text += '\n**ON MARKET NOW:**\n' + onMarket.map(fmt).join('\n');
+          }
+          if (comingSoon.length > 0) {
+            text += '\n\n**COMING SOON (not yet listed):**\n' + comingSoon.map(fmt).join('\n');
+          }
+          text += '\n\nAsk me about any specific address for more details.';
+          return res.json({ content: [{ type: 'text', text }] });
         }
       } catch(e) { /* fall through to normal flow */ }
     }
