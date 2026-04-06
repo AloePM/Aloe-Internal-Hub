@@ -88,7 +88,7 @@ Aptly has 32 boards covering all operations. Use aptly_list_boards to see all. K
 - "K9mMGGjKgQPqDykaa" → Move-Ins: earnest deposit ($1,500 min), utilities, insurance, lease
 - "YA3QWmPebvMwLwbB3" → Move-Outs: notice, owner decision, inspection, deposit return
 - "86YrLPbwdkxtdyZoj" → Tenant Renewals: 90-day pipeline, inspections, owner rent decision
-- "wk228jktWTWibWNhT" → Accounts Receivable: use aptly_get_board with boardId="wk228jktWTWibWNhT" and stage="Delinquent" to get all late tenants. Stage="Delinquent" = owes money. Fields: Mirror Current Balance, Mirror Overdue Rent Balance.
+- For "who is late on rent" or delinquencies: use rv_get_delinquencies (Rentvine) AND aptly_get_board with boardId="wk228jktWTWibWNhT" stage="Delinquent" (Aptly AR board). Both sources together give the complete picture. Never use rv_get_leases or aptly_search with keyword "late rent" for this question.
 - "TEXBDbbQmjktAqyad" → Evictions: attorney filed, hearing date, judgement
 - "8bazEHshdZNuMKCFE" → HOA Violations: warnings/fines, $5 charge
 - "qfBzBxfooJtfTQncd" → List Property: relisting pipeline
@@ -152,6 +152,11 @@ Rules:
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
 const ALL_TOOLS = [
+  {
+    name: 'rv_get_delinquencies',
+    description: 'Get all tenants with past due balances from Rentvine. Use this for "who is late on rent" or delinquency questions. Returns only tenants who owe money.',
+    input_schema: { type: 'object', properties: {} }
+  },
   {
     name: 'rv_get_leases',
     description: 'Search leases from Rentvine with tenant info, balances, unpaid charges, and property details. Best tool for tenant lookups and balance checks.',
@@ -420,7 +425,7 @@ async function aptlySchema(boardId) {
   return r.json();
 }
 
-async function aptlySearch(boardId, query, pageSize = 20) {
+async function aptlySearch(boardId, query, pageSize = 50) {
   // Try both base URLs — core-api is correct per docs, app is legacy fallback
   const bases = [
     { base: 'https://core-api.getaptly.com/api/board/', pageParam: 'page' },
@@ -431,6 +436,7 @@ async function aptlySearch(boardId, query, pageSize = 20) {
       const url = new URL(base + boardId);
       url.searchParams.set(pageParam, '0');
       url.searchParams.set('pageSize', String(pageSize));
+      url.searchParams.set('includeArchived', 'true');
       if (query) url.searchParams.set('query', query);
       const r = await fetch(url.toString(), {
         headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' },
@@ -508,6 +514,41 @@ async function executeTool(name, input) {
   console.log('Tool: ' + name, JSON.stringify(input).slice(0, 80));
   try {
     switch (name) {
+
+      case 'rv_get_delinquencies': {
+        // Fetch active leases and filter to those with past due balances
+        let page = 1;
+        const allLeases = [];
+        while (page <= 5) {
+          const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page });
+          if (!Array.isArray(batch) || batch.length === 0) break;
+          allLeases.push(...batch);
+          if (batch.length < 200) break;
+          page++;
+        }
+        const delinquent = allLeases
+          .filter(function(l) {
+            const b = l.lease || l;
+            const past = parseFloat(b.pastDueTotalAmount || b.pastDueRentAmount || 0);
+            return past > 0;
+          })
+          .map(function(l) {
+            const b = l.lease || l;
+            const t = l.tenants || [];
+            const p = l.property || {};
+            return {
+              address: p.address || b.address,
+              city: p.city,
+              tenants: t.map(function(x) { return x.firstName + ' ' + x.lastName; }).join(', '),
+              pastDueTotal: b.pastDueTotalAmount,
+              pastDueRent: b.pastDueRentAmount,
+              currentBalance: b.currentBalance,
+              leaseStatus: b.leaseStatusText || b.leaseStatus,
+              leaseEnd: b.leaseEndDate,
+            };
+          });
+        return JSON.stringify({ total: delinquent.length, delinquent });
+      }
 
       case 'rv_get_leases': {
         const params = { pageSize: 200, page: input.page || 1 };
@@ -835,8 +876,8 @@ function getRelevantTools(msg) {
   msg = (msg || '').toLowerCase();
   const tools = new Set();
 
-  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
-    ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
+  if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much|late|delinquent|who hasn.?t paid|behind on rent/)) {
+    ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions', 'rv_get_delinquencies'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
     ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
