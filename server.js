@@ -16,32 +16,32 @@ const APTLY_BOARDS = [
   { id: 'unit',                 name: 'Units',                       who: 'Dhyana',  description: 'PRIMARY source for unit availability. Stage = Occupied or Vacant. Has market rent, beds/baths, sq ft, residents, lease end date (Mirror Date Contract Ends), pet restrictions, marketing description, application link, virtual tour, lockbox info, and property photos. Use this FIRST for any availability question.' },
   { id: 'location',            name: 'Properties / Locations',     who: 'Juan',    description: 'All properties — status (Vacant/Occupied), owner, address, unit details. Source of truth for property availability.' },
   { id: '4EMDSYKirhQaNdQKz',  name: 'Renter Leads',               who: 'Dhyana',  description: 'Prospective tenants — tour dates/times, showing feedback, interest level, lead source (Zillow etc.), all prospect info.' },
-  { id: 'MJxaStgENouWrNEKd',  name: 'Applicants',                 who: 'Teri',  description: 'Rental applications — all adults 18+, $65 fee, 2 bank statements, 2 pay stubs, criteria verification, move date.' },
+  { id: 'MJxaStgENouWrNEKd',  name: 'Applicants',                 who: 'Teri',    description: 'Rental applications — all adults 18+, $65 fee, 2 bank statements, 2 pay stubs, criteria verification, move date.' },
   { id: 'K9mMGGjKgQPqDykaa',  name: 'Move-Ins',                   who: 'Dhyana',  description: 'Approved applicants — $1,500 earnest deposit to take property off market, utility verification, renters insurance, lease sent/signed.' },
   { id: 'YA3QWmPebvMwLwbB3',  name: 'Move-Outs',                  who: 'Persia',  description: 'Tenant notice — expected move-out date, lease end date, owner decision (relist/sell/cancel mgmt), comp request, inspection type ($150 comprehensive or standard), deposit return within 14 business days, unit turn.' },
   { id: '86YrLPbwdkxtdyZoj',  name: 'Tenant Renewals',            who: 'Persia',  description: '90-day renewal pipeline — inspection scheduling (John\'s Google Drive spreadsheet), owner rent decision (increase/same), terms accepted, lease sent/signed, walk-through scheduled.' },
-  { id: 'wk228jktWTWibWNhT',  name: 'Accounts Receivable',        who: 'Rita',   description: 'Tenants with a balance — late rent, missed air filter fee, admin fee, violation fee. 5-day notice sent on 5th, eviction filed on 10th. Tracks how many times late and balance amount.' },
-  { id: 'TEXBDbbQmjktAqyad',  name: 'Evictions',                  who: 'Rita',  description: 'Eviction tracking — filed to attorney, hearing date, judgement or tenant pays, tracked through full removal.' },
+  { id: 'wk228jktWTWibWNhT',  name: 'Accounts Receivable',        who: 'Rita',    description: 'Tenants with a balance — late rent, missed air filter fee, admin fee, violation fee. 5-day notice sent on 5th, eviction filed on 10th. Tracks how many times late and balance amount.' },
+  { id: 'TEXBDbbQmjktAqyad',  name: 'Evictions',                  who: 'Rita',    description: 'Eviction tracking — filed to attorney, hearing date, judgement or tenant pays, tracked through full removal.' },
   { id: '8bazEHshdZNuMKCFE',  name: 'HOA Violations',             who: 'Juan',    description: 'HOA warnings and fines — $5 charge per violation either way, tenant or owner violations, tracked through resolution.' },
   { id: 'kt29ZGZC5PAe3QFGg',  name: 'HOA Registration',           who: 'Juan',    description: 'HOA registration — which HOA manages the home, tenant registration form, updated every move-in and renewal.' },
   { id: 'qfBzBxfooJtfTQncd',  name: 'List Property',              who: 'Dhyana',  description: 'Relisting pipeline — hold until ready/price confirmed/closer to move-out, list on market, notify owner, take off when rented.' },
-  { id: 'aSsiB5v3dMretri3m',  name: 'Lease Violations',           who: 'Juan',  description: 'Tenants not following lease terms — tracked through resolution.' },
+  { id: 'aSsiB5v3dMretri3m',  name: 'Lease Violations',           who: 'Juan',    description: 'Tenants not following lease terms — tracked through resolution.' },
   { id: 'fB9YrpvHdJyEXBJX4',  name: 'Former Tenant Collections',  who: 'Randi',   description: 'Collections on moved-out tenants with outstanding balances.' },
   { id: 'QySZ8yRWJ5KeYFcZt',  name: 'Owner Pipeline',             who: 'Alexes',  description: 'Prospective owners — source, referral, portfolio size, comps sent, info sent, conversation notes, PMA sent/signed, close rate vs lost leads.' },
   { id: 'LDhqFFos8fsQLavv8',  name: 'Owner Onboarding',           who: 'Alexes',  description: 'New owners post-PMA — home info collection, payment/ACH setup, portal registration, onboarding fee, completion tracking.' },
   { id: 'ioQSgk9CMDAoT8Ddy',  name: 'Current Owners',             who: 'Alexes',  description: 'Active owner contacts and their property portfolio.' },
   { id: 'BaMiriNFDZBtWd5rR',  name: 'Offboard Owner',             who: 'Alexes',  description: 'Owners ending management — reason tracked.' },
   { id: 'kfyX2CWx67FwYkKkB',  name: 'PM Agreement Update',        who: 'Alexes',  description: 'Expiring PMAs — send updated property management agreements to owners for renewal.' },
-  { id: '5Tu3fnHAgRitofMWv',  name: 'Pet Request',                who: 'Juan',  description: 'Pet registration requests — approval, pet fee added. Tracks unauthorized pets found at inspections.' },
+  { id: '5Tu3fnHAgRitofMWv',  name: 'Pet Request',                who: 'Juan',    description: 'Pet registration requests — approval, pet fee added. Tracks unauthorized pets found at inspections.' },
   { id: 'ZJQtoaxSsvLSXu9vE',  name: 'Renters Insurance',          who: 'Persia',  description: 'Renters insurance tracking — verify policy meets Aloe requirements or enroll in Aloe\'s plan, renewed at lease renewal.' },
   { id: 'Z6Rgnp7M4d8CqHqb5',  name: 'Leases Keys',               who: 'Alexes',  description: 'Keyless deadbolt opt-in — front door only, all doors, or opt out.' },
   { id: 'PEQCns2CTq9xH3QWz',  name: 'Agent Referrals',            who: 'Alexes',  description: 'Real estate agents referring new owner clients — $200 paid per referral.' },
   { id: 'rWD7LF6RWWE9awiZ8',  name: 'Owner Referrals',            who: 'Alexes',  description: 'Owner-to-owner referrals for new property management clients.' },
   { id: 'YP8cNFwrkRiAZuBDs',  name: 'Early Pay Out Owners',       who: 'Randi',   description: 'Owner requests for early disbursement outside the standard 15th of month payout.' },
-  { id: 'jcXPF6Ev8QyaQoELL',  name: 'Owner Requested Walk Throughs', who: 'Teri', description: 'Owner-requested property walk-throughs and inspections.' },
+  { id: 'jcXPF6Ev8QyaQoELL',  name: 'Owner Requested Walk Throughs', who: 'Teri',    description: 'Owner-requested property walk-throughs and inspections.' },
   { id: 'Dyo25kcQkQsZxNdfw',  name: 'Pay Bills',                  who: 'Randi',   description: 'Bill payment workflow.' },
   { id: 'bPiaHdFSBbFccS45z',  name: 'Pay Owners',                 who: 'Randi',   description: 'Owner disbursement processing.' },
-  { id: '6nzBd7wfdjvnFLdQK',  name: 'Pay HOA Dues',               who: 'Randi',    description: 'HOA dues payment tracking.' },
+  { id: '6nzBd7wfdjvnFLdQK',  name: 'Pay HOA Dues',               who: 'Randi',   description: 'HOA dues payment tracking.' },
   { id: 'nCz8qCLhcWLSYdewD',  name: 'Help Desk',                  who: 'Persia',  description: 'Internal help desk and support tickets.' },
   { id: 'BpL6Pd2CHJM9sb9Af',  name: 'Salt Water System',          who: 'Roberto', description: 'Salt water system maintenance and service tracking.' },
   { id: 'N3BAqaoXJ2ZgbQk47',  name: 'New Hire',                   who: 'Randi',   description: 'New employee onboarding workflow.' },
@@ -132,7 +132,7 @@ Rules:
 - Use the context of the question to determine audience. "A tenant wants to know..." or "what should I tell a tenant" = tenant audience only.
 - If you cannot find something in the data after multiple searches, say so clearly and direct to the right person based on the topic:
   - Leasing questions (applications, showings, availability, move-ins) → "Reach out to Dhyana directly."
-  - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
+  - Maintenance issues (repairs, vendors, work orders) → Roberto directly. Roberto manages all work orders in Rentvine — use rv_get_work_orders with a propertyId or search term to find work orders.
   - HOA violations or HOA questions → "Reach out to Juan directly."
   - Move-out or lease renewal questions → "Reach out to Persia directly."
   - Any property in Maricopa where BOTH Rentvine AND Aptly return zero data → "Reach out to Teri directly." Do NOT route to Teri if you found the property in Rentvine — search Aptly before giving up.
