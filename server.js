@@ -11,6 +11,41 @@ const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
 const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
+
+const APTLY_BOARDS = [
+  { id: 'location',            name: 'Properties / Locations',     who: 'Juan',    description: 'All properties — status (Vacant/Occupied), owner, address, unit details. Source of truth for property availability.' },
+  { id: '4EMDSYKirhQaNdQKz',  name: 'Renter Leads',               who: 'Dhyana',  description: 'Prospective tenants — tour dates/times, showing feedback, interest level, lead source (Zillow etc.), all prospect info.' },
+  { id: 'MJxaStgENouWrNEKd',  name: 'Applicants',                 who: 'Dhyana',  description: 'Rental applications — all adults 18+, $65 fee, 2 bank statements, 2 pay stubs, criteria verification, move date.' },
+  { id: 'K9mMGGjKgQPqDykaa',  name: 'Move-Ins',                   who: 'Dhyana',  description: 'Approved applicants — $1,500 earnest deposit to take property off market, utility verification, renters insurance, lease sent/signed.' },
+  { id: 'YA3QWmPebvMwLwbB3',  name: 'Move-Outs',                  who: 'Persia',  description: 'Tenant notice — expected move-out date, lease end date, owner decision (relist/sell/cancel mgmt), comp request, inspection type ($150 comprehensive or standard), deposit return within 14 business days, unit turn.' },
+  { id: '86YrLPbwdkxtdyZoj',  name: 'Tenant Renewals',            who: 'Persia',  description: '90-day renewal pipeline — inspection scheduling (John's Google Drive spreadsheet), owner rent decision (increase/same), terms accepted, lease sent/signed, walk-through scheduled.' },
+  { id: 'wk228jktWTWibWNhT',  name: 'Accounts Receivable',        who: 'Randi',   description: 'Tenants with a balance — late rent, missed air filter fee, admin fee, violation fee. 5-day notice sent on 5th, eviction filed on 10th. Tracks how many times late and balance amount.' },
+  { id: 'TEXBDbbQmjktAqyad',  name: 'Evictions',                  who: 'Persia',  description: 'Eviction tracking — filed to attorney, hearing date, judgement or tenant pays, tracked through full removal.' },
+  { id: '8bazEHshdZNuMKCFE',  name: 'HOA Violations',             who: 'Juan',    description: 'HOA warnings and fines — $5 charge per violation either way, tenant or owner violations, tracked through resolution.' },
+  { id: 'kt29ZGZC5PAe3QFGg',  name: 'HOA Registration',           who: 'Juan',    description: 'HOA registration — which HOA manages the home, tenant registration form, updated every move-in and renewal.' },
+  { id: 'qfBzBxfooJtfTQncd',  name: 'List Property',              who: 'Dhyana',  description: 'Relisting pipeline — hold until ready/price confirmed/closer to move-out, list on market, notify owner, take off when rented.' },
+  { id: 'aSsiB5v3dMretri3m',  name: 'Lease Violations',           who: 'Persia',  description: 'Tenants not following lease terms — tracked through resolution.' },
+  { id: 'fB9YrpvHdJyEXBJX4',  name: 'Former Tenant Collections',  who: 'Randi',   description: 'Collections on moved-out tenants with outstanding balances.' },
+  { id: 'QySZ8yRWJ5KeYFcZt',  name: 'Owner Pipeline',             who: 'Alexes',  description: 'Prospective owners — source, referral, portfolio size, comps sent, info sent, conversation notes, PMA sent/signed, close rate vs lost leads.' },
+  { id: 'LDhqFFos8fsQLavv8',  name: 'Owner Onboarding',           who: 'Alexes',  description: 'New owners post-PMA — home info collection, payment/ACH setup, portal registration, onboarding fee, completion tracking.' },
+  { id: 'ioQSgk9CMDAoT8Ddy',  name: 'Current Owners',             who: 'Alexes',  description: 'Active owner contacts and their property portfolio.' },
+  { id: 'BaMiriNFDZBtWd5rR',  name: 'Offboard Owner',             who: 'Alexes',  description: 'Owners ending management — reason tracked.' },
+  { id: 'kfyX2CWx67FwYkKkB',  name: 'PM Agreement Update',        who: 'Alexes',  description: 'Expiring PMAs — send updated property management agreements to owners for renewal.' },
+  { id: '5Tu3fnHAgRitofMWv',  name: 'Pet Request',                who: 'Persia',  description: 'Pet registration requests — approval, pet fee added. Tracks unauthorized pets found at inspections.' },
+  { id: 'ZJQtoaxSsvLSXu9vE',  name: 'Renters Insurance',          who: 'Persia',  description: 'Renters insurance tracking — verify policy meets Aloe requirements or enroll in Aloe's plan, renewed at lease renewal.' },
+  { id: 'Z6Rgnp7M4d8CqHqb5',  name: 'Leases Keys',               who: 'Persia',  description: 'Keyless deadbolt opt-in — front door only, all doors, or opt out.' },
+  { id: 'PEQCns2CTq9xH3QWz',  name: 'Agent Referrals',            who: 'Alexes',  description: 'Real estate agents referring new owner clients — $200 paid per referral.' },
+  { id: 'rWD7LF6RWWE9awiZ8',  name: 'Owner Referrals',            who: 'Alexes',  description: 'Owner-to-owner referrals for new property management clients.' },
+  { id: 'YP8cNFwrkRiAZuBDs',  name: 'Early Pay Out Owners',       who: 'Randi',   description: 'Owner requests for early disbursement outside the standard 15th of month payout.' },
+  { id: 'jcXPF6Ev8QyaQoELL',  name: 'Owner Requested Walk Throughs', who: 'Roberto', description: 'Owner-requested property walk-throughs and inspections.' },
+  { id: 'Dyo25kcQkQsZxNdfw',  name: 'Pay Bills',                  who: 'Randi',   description: 'Bill payment workflow.' },
+  { id: 'bPiaHdFSBbFccS45z',  name: 'Pay Owners',                 who: 'Randi',   description: 'Owner disbursement processing.' },
+  { id: '6nzBd7wfdjvnFLdQK',  name: 'Pay HOA Dues',               who: 'Juan',    description: 'HOA dues payment tracking.' },
+  { id: 'nCz8qCLhcWLSYdewD',  name: 'Help Desk',                  who: 'Persia',  description: 'Internal help desk and support tickets.' },
+  { id: 'BpL6Pd2CHJM9sb9Af',  name: 'Salt Water System',          who: 'Roberto', description: 'Salt water system maintenance and service tracking.' },
+  { id: 'N3BAqaoXJ2ZgbQk47',  name: 'New Hire',                   who: 'Randi',   description: 'New employee onboarding workflow.' },
+  { id: 'yK8kg7KD6qsA7uCfa',  name: 'Time Off Board',             who: 'Randi',   description: 'Team time off requests and tracking.' },
+];
 const NOTION_TOKEN        = process.env.NOTION_TOKEN;
 const ZINSPECTOR_API_KEY  = process.env.ZINSPECTOR_API_KEY;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
@@ -42,12 +77,20 @@ NOTION — Company policies and SOPs:
 - Pet policy, screening criteria, fee schedules
 - HOA violation procedures, maintenance escalation, all SOPs
 
-Known Aptly board IDs:
-- "location" — Properties/Locations board. Has Status (Vacant/Occupied), owner, address for every property. ALWAYS check this board when asked about property availability or status.
-- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects and whether a property is published for rent (Mirror Published For Rent field).
-- "YA3QWmPebvMwLwbB3" — Move-Outs
-- "K9mMGGjKgQPqDykaa" — Move-Ins  
-- "86YrLPbwdkxtdyZoj" — Tenant Renewals
+Aptly has 32 boards covering all operations. Use aptly_list_boards to see all. Key boards for common questions:
+- "location" → property status, vacant/occupied, owner, address
+- "4EMDSYKirhQaNdQKz" → Renter Leads: tours, showing dates/feedback, interest, lead source
+- "MJxaStgENouWrNEKd" → Applicants: applications, $65 fee, criteria, move date
+- "K9mMGGjKgQPqDykaa" → Move-Ins: earnest deposit ($1,500 min), utilities, insurance, lease
+- "YA3QWmPebvMwLwbB3" → Move-Outs: notice, owner decision, inspection, deposit return
+- "86YrLPbwdkxtdyZoj" → Tenant Renewals: 90-day pipeline, inspections, owner rent decision
+- "wk228jktWTWibWNhT" → Accounts Receivable: late rent, balances, 5-day notices
+- "TEXBDbbQmjktAqyad" → Evictions: attorney filed, hearing date, judgement
+- "8bazEHshdZNuMKCFE" → HOA Violations: warnings/fines, $5 charge
+- "qfBzBxfooJtfTQncd" → List Property: relisting pipeline
+- "QySZ8yRWJ5KeYFcZt" → Owner Pipeline: prospects, PMA sent/signed, close rate
+- "LDhqFFos8fsQLavv8" → Owner Onboarding: post-PMA setup, portal, fees
+For ANY Aptly search: use aptly_search with the address or name — it searches all key boards automatically.
 
 For ANY policy, SOP, fee, or procedure question: ALWAYS start by fetching the Aloe AI Knowledge Index page using notion_get_page with pageId "33a76555273a81c6b785c4218f855be8". This index maps every topic to the exact Notion page ID. Then fetch that specific page directly. Do NOT use notion_search — use the index instead.
 
@@ -360,13 +403,48 @@ async function rvFetch(path, params = {}) {
   return r.json();
 }
 
-async function aptlyFetch(path, params = {}) {
-  const url = new URL('https://app.getaptly.com/api' + path);
-  url.searchParams.set('x-token', APTLY_TOKEN);
+async function aptlyFetch(boardId, params = {}) {
+  // Correct base URL and auth per Aptly API docs
+  const url = new URL('https://core-api.getaptly.com/api/board/' + boardId);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
-  const r = await fetch(url.toString());
-  if (!r.ok) return { error: 'Aptly ' + r.status };
+  const r = await fetch(url.toString(), {
+    headers: {
+      'x-token': APTLY_TOKEN,
+      'Accept': 'application/json',
+    }
+  });
+  if (!r.ok) return { error: 'Aptly ' + r.status, boardId };
   return r.json();
+}
+
+async function aptlySchema(boardId) {
+  const r = await fetch('https://core-api.getaptly.com/api/schema/' + boardId, {
+    headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' }
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+async function aptlySearch(boardId, query, pageSize = 20) {
+  const url = new URL('https://core-api.getaptly.com/api/board/' + boardId);
+  url.searchParams.set('page', '0');
+  url.searchParams.set('pageSize', String(pageSize));
+  if (query) url.searchParams.set('search', query);
+  const r = await fetch(url.toString(), {
+    headers: { 'x-token': APTLY_TOKEN, 'Accept': 'application/json' }
+  });
+  if (!r.ok) return { error: 'Aptly ' + r.status, boardId };
+  const data = await r.json();
+  // Filter results client-side too for accuracy
+  if (query && Array.isArray(data)) {
+    const q = query.toLowerCase();
+    return data.filter(c => JSON.stringify(c).toLowerCase().includes(q));
+  }
+  if (query && data && Array.isArray(data.cards)) {
+    const q = query.toLowerCase();
+    return { ...data, cards: data.cards.filter(c => JSON.stringify(c).toLowerCase().includes(q)) };
+  }
+  return data;
 }
 
 async function ziFetch(path, params = {}) {
@@ -615,44 +693,30 @@ async function executeTool(name, input) {
       case 'aptly_get_board': {
         if (!input.boardId) return JSON.stringify({ error: 'boardId is required' });
         if (!input.query && !input.search) {
-          return JSON.stringify({ error: 'query or search is required for aptly_get_board — use aptly_search instead to search by address or name across all boards' });
+          return JSON.stringify({ error: 'query or search is required — use aptly_search to search by address or name across all boards' });
         }
-        const boardId = input.boardId;
         const q = input.query || input.search || '';
-        let data = await aptlyFetch('/aptlet/' + boardId, { page: 0, query: q });
-        if (data && data.error) {
-          data = await aptlyFetch('/aptlet/' + boardId, { page: 0 });
-        }
-        // Cap and filter
-        const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
-        const matched = q ? cards.filter(c => JSON.stringify(c).toLowerCase().includes(q.toLowerCase())) : cards.slice(0, 5);
-        return JSON.stringify({ board: boardId, total: matched.length, cards: matched.slice(0, 10) });
+        const data = await aptlySearch(input.boardId, q);
+        const cards = Array.isArray(data) ? data : (data && data.cards ? data.cards : []);
+        return JSON.stringify({ board: input.boardId, total: cards.length, cards: cards.slice(0, 10) });
       }
 
       case 'aptly_list_boards': {
-        // Return hardcoded known boards since /aptlets endpoint is unreliable
-        return JSON.stringify([
-          { id: 'location', name: 'Properties / Locations', description: 'All properties with status (Vacant/Occupied), owner, address, unit details' },
-          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline, mirror shows if property is published for rent' },
-          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline and scheduled move-outs' },
-          { id: 'K9mMGGjKgQPqDykaa', name: 'Move-Ins', description: 'Move-in pipeline' },
-          { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
-        ]);
+        return JSON.stringify(APTLY_BOARDS);
       }
 
       case 'aptly_search': {
-        // Search across key boards for the query
         const q = (input.query || '').toLowerCase();
-        const boardsToSearch = input.boardId 
-          ? [input.boardId] 
-          : ['location', '4EMDSYKirhQaNdQKz', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj'];
-        
+        if (!q) return JSON.stringify({ error: 'query is required' });
+        // Search specific board or all key operational boards
+        const boardsToSearch = input.boardId
+          ? [input.boardId]
+          : ['location', '4EMDSYKirhQaNdQKz', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj', 'MJxaStgENouWrNEKd', 'wk228jktWTWibWNhT', 'qfBzBxfooJtfTQncd'];
         const results = [];
         for (const bid of boardsToSearch) {
-          const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
-          const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
-          const matched = cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); });
-          if (matched.length > 0) results.push({ board: bid, cards: matched });
+          const data = await aptlySearch(bid, q);
+          const cards = Array.isArray(data) ? data : (data && data.cards ? data.cards : []);
+          if (cards.length > 0) results.push({ board: bid, boardName: (APTLY_BOARDS.find(b => b.id === bid) || {}).name, cards: cards.slice(0, 5) });
         }
         return JSON.stringify(results.length > 0 ? results : { message: 'No results found for: ' + q });
       }
