@@ -43,7 +43,8 @@ const APTLY_BOARDS = [
   { id: 'bPiaHdFSBbFccS45z',  name: 'Pay Owners',                 who: 'Randi',   description: 'Owner disbursement processing.' },
   { id: '6nzBd7wfdjvnFLdQK',  name: 'Pay HOA Dues',               who: 'Randi',   description: 'HOA dues payment tracking.' },
   { id: 'nCz8qCLhcWLSYdewD',  name: 'Help Desk',                  who: 'Persia',  description: 'Internal help desk and support tickets.' },
-  { id: 'BpL6Pd2CHJM9sb9Af',  name: 'Salt Water System',          who: 'Roberto', description: 'Salt water system maintenance and service tracking.' },
+  { id: 'workOrder',            name: 'Work Orders',                 who: 'Roberto', description: 'All maintenance work orders — repairs, vendors, status tracking, property issues. Roberto manages all work orders in both Aptly and Rentvine.' },
+  { id: 'BpL6Pd2CHJM9sb9Af',  name: 'Salt Water System',          who: 'Roberto', description: 'Salt water pool system maintenance and service tracking.' },
   { id: 'N3BAqaoXJ2ZgbQk47',  name: 'New Hire',                   who: 'Randi',   description: 'New employee onboarding workflow.' },
   { id: 'yK8kg7KD6qsA7uCfa',  name: 'Time Off Board',             who: 'Randi',   description: 'Team time off requests and tracking.' },
 ];
@@ -79,6 +80,7 @@ NOTION — Company policies and SOPs:
 - HOA violation procedures, maintenance escalation, all SOPs
 
 Aptly has 32 boards covering all operations. Use aptly_list_boards to see all. Key boards for common questions:
+- "workOrder" → Work Orders board (Roberto). All maintenance requests, repairs, vendor assignments, status. Check this for any maintenance or repair question.
 - "unit" → PRIMARY availability source. Stage=Occupied/Vacant, market rent, beds/baths, residents, lease end date, pet policy, marketing copy, application link, virtual tour. Use this FIRST for availability questions.
 - "location" → property/owner details, Rentvine ID cross-reference
 - "4EMDSYKirhQaNdQKz" → Renter Leads: tours, showing dates/feedback, interest, lead source
@@ -132,7 +134,7 @@ Rules:
 - Use the context of the question to determine audience. "A tenant wants to know..." or "what should I tell a tenant" = tenant audience only.
 - If you cannot find something in the data after multiple searches, say so clearly and direct to the right person based on the topic:
   - Leasing questions (applications, showings, availability, move-ins) → "Reach out to Dhyana directly."
-  - Maintenance issues (repairs, vendors, work orders) → Roberto directly. Roberto manages all work orders in Rentvine — use rv_get_work_orders with a propertyId or search term to find work orders.
+  - Maintenance issues (repairs, vendors, work orders) → Roberto. Work orders are in BOTH Aptly (board ID: workOrder) AND Rentvine (rv_get_work_orders). Always check Aptly workOrder board first, then Rentvine for additional detail.
   - HOA violations or HOA questions → "Reach out to Juan directly."
   - Move-out or lease renewal questions → "Reach out to Persia directly."
   - Any property in Maricopa where BOTH Rentvine AND Aptly return zero data → "Reach out to Teri directly." Do NOT route to Teri if you found the property in Rentvine — search Aptly before giving up.
@@ -715,7 +717,7 @@ async function executeTool(name, input) {
         // Search specific board or all key operational boards
         const boardsToSearch = input.boardId
           ? [input.boardId]
-          : ['unit', 'location', '4EMDSYKirhQaNdQKz', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj', 'MJxaStgENouWrNEKd', 'wk228jktWTWibWNhT', 'qfBzBxfooJtfTQncd'];
+          : ['unit', 'location', '4EMDSYKirhQaNdQKz', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj', 'MJxaStgENouWrNEKd', 'wk228jktWTWibWNhT', 'qfBzBxfooJtfTQncd', 'workOrder'];
         const results = [];
         for (const bid of boardsToSearch) {
           const data = await aptlySearch(bid, q);
@@ -818,7 +820,7 @@ function getRelevantTools(msg) {
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
     ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
+  if (msg.match(/work.?order|maintenance|repair|fix|broken|vendor|contractor|hvac|plumb|electric|leak|damage/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/inspect/)) {
