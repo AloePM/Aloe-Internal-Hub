@@ -88,7 +88,7 @@ Aptly has 32 boards covering all operations. Use aptly_list_boards to see all. K
 - "K9mMGGjKgQPqDykaa" → Move-Ins: earnest deposit ($1,500 min), utilities, insurance, lease
 - "YA3QWmPebvMwLwbB3" → Move-Outs: notice, owner decision, inspection, deposit return
 - "86YrLPbwdkxtdyZoj" → Tenant Renewals: 90-day pipeline, inspections, owner rent decision
-- "wk228jktWTWibWNhT" → Accounts Receivable: late rent, balances, 5-day notices
+- "wk228jktWTWibWNhT" → Accounts Receivable: use aptly_get_board with boardId="wk228jktWTWibWNhT" and stage="Delinquent" to get all late tenants. Stage="Delinquent" = owes money. Fields: Mirror Current Balance, Mirror Overdue Rent Balance.
 - "TEXBDbbQmjktAqyad" → Evictions: attorney filed, hearing date, judgement
 - "8bazEHshdZNuMKCFE" → HOA Violations: warnings/fines, $5 charge
 - "qfBzBxfooJtfTQncd" → List Property: relisting pipeline
@@ -698,13 +698,34 @@ async function executeTool(name, input) {
 
       case 'aptly_get_board': {
         if (!input.boardId) return JSON.stringify({ error: 'boardId is required' });
-        if (!input.query && !input.search) {
-          return JSON.stringify({ error: 'query or search is required — use aptly_search to search by address or name across all boards' });
+        const q = input.query || input.search || null;
+        const data = await aptlySearch(input.boardId, q, input.pageSize || 50);
+        let cards = Array.isArray(data) ? data : (data && data.cards ? data.cards : []);
+        // Filter by stage if provided (e.g. stage="Delinquent" for AR board)
+        if (input.stage) {
+          cards = cards.filter(c => (c.Stage || '').toLowerCase() === input.stage.toLowerCase());
         }
-        const q = input.query || input.search || '';
-        const data = await aptlySearch(input.boardId, q);
-        const cards = Array.isArray(data) ? data : (data && data.cards ? data.cards : []);
-        return JSON.stringify({ board: input.boardId, total: cards.length, cards: cards.slice(0, 10) });
+        // Trim each card to key fields to avoid context overflow
+        const trimmed = cards.slice(0, 25).map(function(c) {
+          return {
+            id: c._id,
+            title: c.Title,
+            stage: c.Stage,
+            tenants: c.Tenants || c.Residents,
+            address: c['Mirror Address'] || c.Address,
+            balance: c['Mirror Current Balance'],
+            overdueRent: c['Mirror Overdue Rent Balance'],
+            overdueCharges: c['Mirror Overdue Charge Balance'],
+            rent: c.Rent,
+            leaseStatus: c['Lease Status'],
+            leaseEnd: c['Lease End Date'],
+            lastActivity: c['Last Activity Date'],
+            owners: c.Owners,
+            // Include all other fields for non-AR boards
+            ...(input.boardId !== 'wk228jktWTWibWNhT' ? c : {}),
+          };
+        });
+        return JSON.stringify({ board: input.boardId, total: cards.length, shown: trimmed.length, cards: trimmed });
       }
 
       case 'aptly_list_boards': {
