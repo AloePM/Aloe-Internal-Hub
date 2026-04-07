@@ -18,6 +18,34 @@ const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
+// Master knowledge base — fetched from Notion at startup and cached
+let KNOWLEDGE_BASE = '';
+async function loadKnowledgeBase() {
+  try {
+    const r = await fetch('https://api.notion.com/v1/blocks/33b76555273a81de9958f69e7f2ecd7c/children?page_size=100', {
+      headers: {
+        'Authorization': 'Bearer ' + NOTION_TOKEN,
+        'Notion-Version': '2022-06-28',
+      }
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const lines = [];
+    for (const block of (data.results || [])) {
+      const type = block.type;
+      const rich = block[type]?.rich_text || [];
+      const text = rich.map(function(t) { return t.plain_text || ''; }).join('');
+      if (text) lines.push(text);
+    }
+    KNOWLEDGE_BASE = lines.join('\n');
+    console.log('Knowledge base loaded: ' + KNOWLEDGE_BASE.length + ' chars');
+  } catch(e) {
+    console.error('Knowledge base load error:', e.message);
+  }
+}
+// Load on startup
+loadKnowledgeBase();
+
 const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
 
 You have access to these live data sources via tools:
@@ -887,7 +915,7 @@ app.post('/api/chat', async function(req, res) {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
-          system: SYSTEM_PROMPT,
+          system: SYSTEM_PROMPT + (KNOWLEDGE_BASE ? '\n\n---\nOPERATIONAL KNOWLEDGE BASE (loaded from Notion):\n' + KNOWLEDGE_BASE : ''),
           messages: current,
           tools: tools,
         }),
@@ -978,6 +1006,11 @@ app.get('/debug/properties', async function(req, res) {
 app.get('/debug/units', async function(req, res) {
   const data = await rvFetch('/units/export', { pageSize: 200 });
   res.json(data);
+});
+
+app.get('/reload-knowledge', async function(req, res) {
+  await loadKnowledgeBase();
+  res.json({ loaded: true, chars: KNOWLEDGE_BASE.length });
 });
 
 app.get('/debug/units-api', async function(req, res) {
