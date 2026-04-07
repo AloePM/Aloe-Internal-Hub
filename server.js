@@ -393,7 +393,17 @@ async function getUnitsSchema() {
 async function getUnitsCards() {
   const schema = await getUnitsSchema();
   const data = await unitsFetch('/api/board/unit', { page: 0, pageSize: 200 });
-  const cards = Array.isArray(data) ? data : (data && data.cards) || [];
+  // Log raw structure to help debug
+  if (data && !Array.isArray(data)) {
+    console.log('Units API response keys:', Object.keys(data).join(', '));
+    console.log('Units API response sample:', JSON.stringify(data).slice(0, 300));
+  }
+  // Try all possible response shapes
+  const cards = Array.isArray(data) ? data :
+    (data && data.cards) ? data.cards :
+    (data && data.data) ? data.data :
+    (data && data.results) ? data.results :
+    (data && data.items) ? data.items : [];
   // Map field keys to human-readable labels using schema
   return cards.map(function(card) {
     const mapped = { _cardId: card.cardId };
@@ -947,6 +957,30 @@ app.get('/debug/properties', async function(req, res) {
 app.get('/debug/units', async function(req, res) {
   const data = await rvFetch('/units/export', { pageSize: 200 });
   res.json(data);
+});
+
+app.get('/debug/units-api', async function(req, res) {
+  try {
+    const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || 'NOT SET';
+    const schema = await unitsFetch('/api/schema/unit');
+    const rawCards = await unitsFetch('/api/board/unit', { page: 0, pageSize: 3 });
+    const mappedCards = await getUnitsCards();
+    res.json({ 
+      tokenSet: token !== 'NOT SET',
+      tokenPrefix: token.slice(0, 8) + '...',
+      schemaIsArray: Array.isArray(schema),
+      schemaLength: Array.isArray(schema) ? schema.length : null,
+      schemaSample: Array.isArray(schema) ? schema.slice(0,3) : schema,
+      rawResponseType: Array.isArray(rawCards) ? 'array' : typeof rawCards,
+      rawResponseKeys: rawCards && typeof rawCards === 'object' && !Array.isArray(rawCards) ? Object.keys(rawCards) : null,
+      rawLength: Array.isArray(rawCards) ? rawCards.length : null,
+      rawSample: Array.isArray(rawCards) ? rawCards.slice(0,2) : rawCards,
+      mappedCount: mappedCards.length,
+      mappedSample: mappedCards.slice(0, 2)
+    });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
 });
 
 app.get('*', function(req, res) {
