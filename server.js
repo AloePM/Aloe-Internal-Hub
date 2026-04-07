@@ -392,18 +392,22 @@ async function getUnitsSchema() {
 }
 async function getUnitsCards() {
   const schema = await getUnitsSchema();
-  const data = await unitsFetch('/api/board/unit', { page: 0, pageSize: 200 });
-  // Log raw structure to help debug
-  if (data && !Array.isArray(data)) {
-    console.log('Units API response keys:', Object.keys(data).join(', '));
-    console.log('Units API response sample:', JSON.stringify(data).slice(0, 300));
+  // Paginate to get all cards
+  let allCards = [];
+  let page = 0;
+  while (true) {
+    const data = await unitsFetch('/api/board/unit', { page, pageSize: 100 });
+    const batch = Array.isArray(data) ? data :
+      (data && data.cards) ? data.cards :
+      (data && data.data) ? data.data :
+      (data && data.results) ? data.results :
+      (data && data.items) ? data.items : [];
+    if (batch.length === 0) break;
+    allCards = allCards.concat(batch);
+    if (batch.length < 100) break;
+    page++;
   }
-  // Try all possible response shapes
-  const cards = Array.isArray(data) ? data :
-    (data && data.cards) ? data.cards :
-    (data && data.data) ? data.data :
-    (data && data.results) ? data.results :
-    (data && data.items) ? data.items : [];
+  const cards = allCards;
   // Map field keys to human-readable labels using schema
   return cards.map(function(card) {
     const mapped = { _cardId: card.cardId };
@@ -835,12 +839,16 @@ app.post('/api/chat', async function(req, res) {
         }).slice(0, 50);
         if (listCards.length > 0) {
           const fmt = function(c) {
-            const addr = c.Street || c.Address || c.Title || c['Marketing Name'] || '?';
-            const rent = c['Market Rent'] || c['Rent'] || '';
+            let addr = c.Street || c.Address || c['Marketing Name'] || c.Title || '?';
+            // Strip date prefixes like "03/31/2026 18671 Madison Road"
+            addr = addr.replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
+            const rentRaw = c['Market Rent'] || c['Rent'] || '';
+            const rent = rentRaw && typeof rentRaw === 'object' && rentRaw.amount ? '$' + Number(rentRaw.amount).toLocaleString() : rentRaw;
             const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
-            const avail = c['Available Date'] || '';
+            const availRaw = c['Available Date'] || '';
+            const avail = availRaw ? new Date(availRaw).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
             const stage = c.Stage || c.Status || '';
-            const occupied = stage === 'Occupied' ? ' (occupied)' : '';
+            const occupied = stage === 'Occupied' ? ' (occupied — tenants moving out)' : '';
             return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied;
           };
           const label = published.length > 0 ? 'Homes published for rent' : 'All units (schema debug)';
