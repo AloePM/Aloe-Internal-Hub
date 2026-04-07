@@ -22,20 +22,21 @@ const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Prope
 
 You have access to these live data sources via tools:
 
-RENTVINE — Source of truth for all property management data:
+APTLY — Source of truth for listings and availability:
+- Units board (ID: unit) — ALL published listings with beds, baths, rent, available date, Published For Rent field. THIS IS THE ONLY SOURCE for "what units are available" questions. Never use Rentvine for availability.
+- Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
+- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
+- Contact and lead details
+
+RENTVINE — Source of truth for tenant and accounting data:
 ZINSPECTOR — Inspection platform synced with Rentvine. Use zi_get_inspections tool to get latest move-in, move-out, maintenance, and periodic inspection activity for any property. Falls back to Rentvine inspection data if zInspector API is unavailable.
 - Tenant info, balances, ledger, payment history, unpaid charges with full breakdown
 - Lease details, move-in/out dates, lease terms, rent amounts, deposit
-- Property and unit details, availability, beds/baths, addresses
 - Owner info, portfolio details, contact information
 - Work orders and maintenance requests
 - Property inspections (move-in, move-out, periodic)
 - Vendors and contractors
-
-APTLY — CRM and workflow boards:
-- Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
-- Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
-- Contact and lead details
+- NOTE: Do NOT use Rentvine for availability/listings — use Aptly Units board instead
 
 NOTION — Company policies and SOPs:
 - Lease break policy, move-in/out procedures
@@ -369,18 +370,40 @@ async function aptlyFetch(path, params = {}) {
   return r.json();
 }
 
+let _unitsSchema = null;
 async function unitsFetch(path, params = {}) {
-  // Units board uses core-api.getaptly.com with x-token header, NOT query param
   const url = new URL('https://core-api.getaptly.com' + path);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
   const r = await fetch(url.toString(), {
-    headers: {
-      'x-token': APTLY_TOKEN,
-      'Accept': 'application/json',
-    }
+    headers: { 'x-token': APTLY_UNITS_TOKEN, 'Accept': 'application/json' }
   });
-  if (!r.ok) return { error: 'Units API ' + r.status, text: await r.text() };
+  if (!r.ok) return { error: 'Units API ' + r.status, body: await r.text() };
   return r.json();
+}
+async function getUnitsSchema() {
+  if (_unitsSchema) return _unitsSchema;
+  const schema = await unitsFetch('/api/schema/unit');
+  if (Array.isArray(schema)) {
+    _unitsSchema = {};
+    schema.forEach(function(f) { _unitsSchema[f.key] = f.label; });
+  }
+  return _unitsSchema || {};
+}
+async function getUnitsCards() {
+  const schema = await getUnitsSchema();
+  const data = await unitsFetch('/api/board/unit', { page: 0, pageSize: 200 });
+  const cards = Array.isArray(data) ? data : (data && data.cards) || [];
+  // Map field keys to human-readable labels using schema
+  return cards.map(function(card) {
+    const mapped = { _cardId: card.cardId };
+    Object.keys(card).forEach(function(k) {
+      const label = schema[k] || k;
+      const val = card[k];
+      // Handle money fields { amount, currency }
+      mapped[label] = (val && typeof val === 'object' && 'amount' in val) ? '$' + val.amount : val;
+    });
+    return mapped;
+  });
 }
 
 async function ziFetch(path, params = {}) {
@@ -788,26 +811,29 @@ app.post('/api/chat', async function(req, res) {
     const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house/) && !lowerMsg.match(/[0-9]{4,6}/);
     if (isAvailabilityQ) {
       try {
-        // Use core-api.getaptly.com Units board — correct API endpoint
-        const unitBoard = await unitsFetch('/api/board/unit', { page: 0, pageSize: 100 });
-        const cards = Array.isArray(unitBoard) ? unitBoard : (unitBoard && unitBoard.cards) || [];
+        const cards = await getUnitsCards();
+        console.log('Units cards total:', cards.length, 'Sample keys:', cards.length > 0 ? Object.keys(cards[0]).slice(0, 10).join(', ') : 'none');
+        // Find published field — schema maps keys to labels so search by label
         const published = cards.filter(function(c) {
-          return c['Published For Rent'] === 'checked';
+          return c['Published For Rent'] === 'checked' || c['Published For Rent'] === true ||
+                 c['Syndicate'] === 'checked' || c['Active'] === 'checked';
         });
-        if (published.length > 0) {
+        const listCards = published.length > 0 ? published : cards.filter(function(c) {
+          // fallback: any card with a street/address
+          return c.Street || c.Address;
+        }).slice(0, 50);
+        if (listCards.length > 0) {
           const fmt = function(c) {
             const addr = c.Street || c.Address || c.Title || c['Marketing Name'] || '?';
-            const rent = c['Market Rent'] ? (typeof c['Market Rent'] === 'object' ? '$' + c['Market Rent'].amount : c['Market Rent']) : '';
+            const rent = c['Market Rent'] || c['Rent'] || '';
             const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
             const avail = c['Available Date'] || '';
-            const occupied = c.Stage === 'Occupied' ? ' (occupied)' : '';
+            const stage = c.Stage || c.Status || '';
+            const occupied = stage === 'Occupied' ? ' (occupied)' : '';
             return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied;
           };
-          const text = 'Homes published for rent (' + published.length + '):\n\n' + published.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
-          return res.json({ content: [{ type: 'text', text }] });
-        } else if (cards.length > 0) {
-          // Got cards but none published — return all with status
-          const text = 'Units board returned ' + cards.length + ' cards but none marked Published For Rent. Sample fields: ' + JSON.stringify(Object.keys(cards[0])).slice(0, 200);
+          const label = published.length > 0 ? 'Homes published for rent' : 'All units (schema debug)';
+          const text = label + ' (' + listCards.length + '):\n\n' + listCards.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
           return res.json({ content: [{ type: 'text', text }] });
         }
       } catch(e) {
