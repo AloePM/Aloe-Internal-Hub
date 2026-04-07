@@ -762,42 +762,29 @@ app.post('/api/chat', async function(req, res) {
     console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
     // Server-side shortcut for broad availability questions — skip Claude loop entirely
-    const lowerMsg = (messages[messages.length - 1]?.content || '').toLowerCase();
-    if (lowerMsg.match(/what (unit|propert|home|house|listing)s? (are |is )?(available|vacant|for rent|on market)/i) && !lowerMsg.match(/[0-9]{4,6}/)) {
+    const lastContent = messages[messages.length - 1]?.content;
+    const lowerMsg = (typeof lastContent === 'string' ? lastContent : 
+      (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
+    ).toLowerCase();
+    const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house/) && !lowerMsg.match(/[0-9]{4,6}/);
+    if (isAvailabilityQ) {
       try {
-        // Use the List Property board (qfBzBxfooJtfTQncd) — this is the source of truth for all active listings
-        const listBoard = await aptlyFetch('/aptlet/qfBzBxfooJtfTQncd', { page: 0, query: '' });
-        const cards = (listBoard && listBoard.cards) || (Array.isArray(listBoard) ? listBoard : []);
-        if (cards.length > 0) {
+        // Use the unit board — source of truth for published listings
+        const unitBoard = await aptlyFetch('/aptlet/unit', { page: 0, query: '' });
+        const cards = (unitBoard && unitBoard.cards) || (Array.isArray(unitBoard) ? unitBoard : []);
+        const published = cards.filter(function(c) {
+          return c['Published For Rent'] === 'checked';
+        });
+        if (published.length > 0) {
           const fmt = function(c) {
-            const addr = c.Title || c['Mirror Address'] || '?';
-            const rent = c['Mirror Market Rent'] || '';
-            const beds = c['Mirror Beds'] ? c['Mirror Beds'] + 'bd/' + (c['Mirror Baths'] || '?') + 'ba' : '';
-            const avail = c['Mirror Available Date'] || '';
-            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '');
-          };
-
-          // All published listings regardless of occupancy status
-          const published = cards.filter(function(c) {
-            return c['Mirror Published For Rent'] === 'checked';
-          });
-
-          const fmt2 = function(c) {
-            const addr = c.Title || c['Mirror Address'] || '?';
-            const rent = c['Mirror Market Rent'] || '';
-            const beds = c['Mirror Beds'] ? c['Mirror Beds'] + 'bd/' + (c['Mirror Baths'] || '?') + 'ba' : '';
-            const avail = c['Mirror Available Date'] || '';
-            const occupied = c['Mirror Status'] === 'Occupied' ? ' ⚠️ occupied' : '';
+            const addr = c.Street || c.Title || c.Address || '?';
+            const rent = c['Market Rent'] || '';
+            const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
+            const avail = c['Available Date'] || '';
+            const occupied = c.Stage === 'Occupied' ? ' (occupied)' : '';
             return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied;
           };
-
-          let text = 'Homes published for rent (' + published.length + '):\n';
-          if (published.length > 0) {
-            text += '\n' + published.map(fmt2).join('\n');
-          } else {
-            text += '\nNo homes currently published for rent.';
-          }
-          text += '\n\nAsk me about any address for more details.';
+          const text = 'Homes published for rent (' + published.length + '):\n\n' + published.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
           return res.json({ content: [{ type: 'text', text }] });
         }
       } catch(e) { /* fall through to normal flow */ }
