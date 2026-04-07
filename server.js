@@ -75,7 +75,8 @@ Known Aptly board IDs:
 - "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board).
 - "qfBzBxfooJtfTQncd" — List Property / On Market board. Shows properties actively listed, showing start date, notes on occupancy, market status.
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
-- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects per property, whether published for rent.
+- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects, showings (Stage="Scheduled Tour"), tour history.
+- "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -83,8 +84,18 @@ Known Aptly board IDs:
 Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
 - Lease Break Policy: 18776555273a81049822eca6abae6fbb
   → Use this for ANY question about lease break fees, early termination, tenant breaking lease, lease termination
+- Application Terms / Approval Timeline: 25e76555273a8082ae8fef84ebd87a23
+  → Use this for ANY question about how long approval takes, application timeline, conditional approval, earnest deposit after approval
+- Applicant Criteria (screening standards): 18776555273a81beb216db69887d8266
+  → Use for questions about income requirements, credit requirements, screening criteria
+- FAQ Leasing Calls/Communication: 18776555273a8152b1a5d1309cfcee88
+  → Use for common leasing questions, what to say to prospects, FAQ about availability/showings
+- What To Expect During Approval: 31c76555273a80e587c9e38b9a279a57
+  → Use for questions about earnest deposit, approval process, taking unit off market
 - Checking Property Availability — Tenant Inquiry SOP: 33976555273a81e093d9d062009a206c
   → Use this when asked how to check if a property is available, or when a tenant calls about availability
+- Aloe Assistant Master Reference: 33b76555273a81de9958f69e7f2ecd7c
+  → Fetch when unsure what to do or need full operational context
 
 Property availability workflow (follow this order):
 1. Check Aptly Applications board for approved applications on the property
@@ -912,14 +923,57 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
+    // Server-side shortcut for application questions
+    const isApplicationQ = lowerMsg.match(/application|applicant|applied|applying/) && !lowerMsg.match(/[0-9]{5,6}/);
+    const applicationAddress = lowerMsg.match(/application.*?(\d+\s+\w[\w\s]+(?:dr|drive|st|street|ave|avenue|blvd|boulevard|rd|road|ln|lane|way|ct|court|pl|place))/i);
+    if (isApplicationQ) {
+      try {
+        const searchTerm = applicationAddress ? applicationAddress[1] : '';
+        const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: searchTerm });
+        const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+        // Filter by address if provided
+        const filtered = searchTerm
+          ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
+          : cards;
+        if (filtered.length > 0) {
+          const fmt = function(c) {
+            const applicant = c['Primary Applicant'] || c.Title || '?';
+            const loc = c['Application Location'] || '';
+            const stage = c.Stage || '';
+            const income = c['Total Household Mo. Income'] || '';
+            const credit = c['Avg. Household Credit'] || '';
+            const complete = c['Application Complete'] || '';
+            return applicant + (loc ? ' @ ' + loc : '') + ' — ' + stage +
+              (complete === 'All Applicants' ? ' ✓ Complete' : '') +
+              (income && income !== '$ 0.00' ? ', income: ' + income : '') +
+              (credit && credit !== 'N/A' ? ', credit: ' + credit : '');
+          };
+          const text = 'Applications' + (searchTerm ? ' for ' + searchTerm : '') + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n') + '\n\nAsk about any applicant for more details.';
+          return res.json({ content: [{ type: 'text', text }] });
+        } else {
+          return res.json({ content: [{ type: 'text', text: 'No applications found' + (searchTerm ? ' for ' + searchTerm : '') + ' in the Applicants board.' }] });
+        }
+      } catch(e) {
+        console.error('Applications shortcut error:', e.message);
+      }
+    }
+
     // Server-side shortcut for showing schedule questions
     const isShowingQ = lowerMsg.match(/showing|scheduled tour|who.*tour|tour.*today|showing.*today|today.*showing|past.*tour|recent.*tour/);
     if (isShowingQ) {
       try {
-        const data = await aptlyFetch('/aptlet/4EMDSYKirhQaNdQKz', { page: 0, query: '' });
-        const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
-        const showingStages = ['Scheduled Tour', 'Tour Completed', 'Tour Canceled / No Show', 'Showing Scheduled'];
-        const allShowings = cards.filter(function(c) { return showingStages.indexOf(c.Stage) !== -1 || c['Requested Showing Information']; });
+        // Search specifically for showing-related cards by querying multiple stages
+        const showingStages = ['Scheduled Tour', 'Tour Completed', 'Tour Canceled / No Show'];
+        let allShowings = [];
+        for (const stage of showingStages) {
+          const data = await aptlyFetch('/aptlet/4EMDSYKirhQaNdQKz', { page: 0, query: stage });
+          const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+          const matches = cards.filter(function(c) { return c.Stage === stage || c['Requested Showing Information']; });
+          allShowings = allShowings.concat(matches);
+        }
+        // Deduplicate by _id
+        const seen = {};
+        allShowings = allShowings.filter(function(c) { if (seen[c._id]) return false; seen[c._id] = true; return true; });
         const today = new Date();
         const mm = String(today.getMonth() + 1).padStart(2, '0');
         const dd = String(today.getDate()).padStart(2, '0');
