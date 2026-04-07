@@ -369,6 +369,20 @@ async function aptlyFetch(path, params = {}) {
   return r.json();
 }
 
+async function unitsFetch(path, params = {}) {
+  // Units board uses core-api.getaptly.com with x-token header, NOT query param
+  const url = new URL('https://core-api.getaptly.com' + path);
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
+  const r = await fetch(url.toString(), {
+    headers: {
+      'x-token': APTLY_TOKEN,
+      'Accept': 'application/json',
+    }
+  });
+  if (!r.ok) return { error: 'Units API ' + r.status, text: await r.text() };
+  return r.json();
+}
+
 async function ziFetch(path, params = {}) {
   if (!ZINSPECTOR_API_KEY) return { error: 'ZINSPECTOR_API_KEY not set' };
   const bases = [
@@ -774,16 +788,16 @@ app.post('/api/chat', async function(req, res) {
     const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house/) && !lowerMsg.match(/[0-9]{4,6}/);
     if (isAvailabilityQ) {
       try {
-        // Use the unit board — source of truth for published listings
-        const unitBoard = await aptlyFetch('/aptlet/unit', { page: 0, query: '' });
-        const cards = (unitBoard && unitBoard.cards) || (Array.isArray(unitBoard) ? unitBoard : []);
+        // Use core-api.getaptly.com Units board — correct API endpoint
+        const unitBoard = await unitsFetch('/api/board/unit', { page: 0, pageSize: 100 });
+        const cards = Array.isArray(unitBoard) ? unitBoard : (unitBoard && unitBoard.cards) || [];
         const published = cards.filter(function(c) {
           return c['Published For Rent'] === 'checked';
         });
         if (published.length > 0) {
           const fmt = function(c) {
-            const addr = c.Street || c.Title || c.Address || '?';
-            const rent = c['Market Rent'] || '';
+            const addr = c.Street || c.Address || c.Title || c['Marketing Name'] || '?';
+            const rent = c['Market Rent'] ? (typeof c['Market Rent'] === 'object' ? '$' + c['Market Rent'].amount : c['Market Rent']) : '';
             const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
             const avail = c['Available Date'] || '';
             const occupied = c.Stage === 'Occupied' ? ' (occupied)' : '';
@@ -791,8 +805,15 @@ app.post('/api/chat', async function(req, res) {
           };
           const text = 'Homes published for rent (' + published.length + '):\n\n' + published.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
           return res.json({ content: [{ type: 'text', text }] });
+        } else if (cards.length > 0) {
+          // Got cards but none published — return all with status
+          const text = 'Units board returned ' + cards.length + ' cards but none marked Published For Rent. Sample fields: ' + JSON.stringify(Object.keys(cards[0])).slice(0, 200);
+          return res.json({ content: [{ type: 'text', text }] });
         }
-      } catch(e) { /* fall through to normal flow */ }
+      } catch(e) {
+        console.error('Units shortcut error:', e.message);
+        /* fall through to normal flow */
+      }
     }
 
     let current = messages.slice();
