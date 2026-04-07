@@ -912,6 +912,43 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
+    // Server-side shortcut for showing schedule questions
+    const isShowingQ = lowerMsg.match(/showing|scheduled tour|tour.*schedul|schedul.*tour|who.*tour|tour.*today|showing.*today|today.*showing/) && !lowerMsg.match(/[0-9]{5,6}/);
+    if (isShowingQ) {
+      try {
+        const data = await aptlyFetch('/aptlet/4EMDSYKirhQaNdQKz', { page: 0, query: 'Scheduled Tour' });
+        const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+        const tours = cards.filter(function(c) { return c.Stage === 'Scheduled Tour'; });
+        if (tours.length >= 0) {
+          const today = new Date().toLocaleDateString('en-US', {month:'numeric', day:'numeric', year:'numeric'});
+          const todayTours = tours.filter(function(c) {
+            const d = c['Tour Date/Time'] || '';
+            return d.startsWith(today.split('/')[0] + '/' + today.split('/')[1]);
+          });
+          const fmt = function(c) {
+            const contact = c['Primary Contact'] || c.Title || '?';
+            const unit = c.Unit || c['Preferred Rental'] || '?';
+            const time = c['Requested Showing Information'] || c['Tour Date/Time'] || '';
+            const status = c['Requested Showing Status'] || '';
+            return contact + ' @ ' + unit + (time ? ' — ' + time : '') + (status ? ' (' + status + ')' : '');
+          };
+          let text;
+          if (lowerMsg.includes('today')) {
+            text = todayTours.length > 0
+              ? 'Showings scheduled for today (' + todayTours.length + '):\n\n' + todayTours.map(fmt).join('\n')
+              : 'No showings scheduled for today. There are ' + tours.length + ' total scheduled tours coming up.';
+          } else {
+            text = tours.length > 0
+              ? 'Scheduled tours (' + tours.length + '):\n\n' + tours.map(fmt).join('\n')
+              : 'No tours currently in Scheduled Tour stage in Aptly.';
+          }
+          return res.json({ content: [{ type: 'text', text }] });
+        }
+      } catch(e) {
+        console.error('Showing shortcut error:', e.message);
+      }
+    }
+
     let current = messages.slice();
 
     for (let i = 0; i < 10; i++) {
