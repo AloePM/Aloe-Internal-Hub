@@ -908,7 +908,9 @@ app.post('/api/chat', async function(req, res) {
             text = 'All published homes are currently vacant and available for tours.';
           } else {
             let label = published.length > 0 ? 'Homes published for rent' : 'All units';
-          if (maxPrice) label += ' under  + ' (' + listCards.length + '):\n\n' + listCards.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
+            if (maxPrice) label += ' under $' + maxPrice.toLocaleString();
+            if (minBeds) label += ', ' + minBeds + ' bed';
+            text = label + ' (' + listCards.length + '):\n\n' + listCards.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
           }
           return res.json({ content: [{ type: 'text', text }] });
         }
