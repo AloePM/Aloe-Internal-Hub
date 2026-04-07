@@ -374,8 +374,9 @@ let _unitsSchema = null;
 async function unitsFetch(path, params = {}) {
   const url = new URL('https://core-api.getaptly.com' + path);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
+  const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
   const r = await fetch(url.toString(), {
-    headers: { 'x-token': APTLY_UNITS_TOKEN, 'Accept': 'application/json' }
+    headers: { 'x-token': unitsToken, 'Accept': 'application/json' }
   });
   if (!r.ok) return { error: 'Units API ' + r.status, body: await r.text() };
   return r.json();
