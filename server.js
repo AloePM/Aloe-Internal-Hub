@@ -43,7 +43,7 @@ NOTION — Company policies and SOPs:
 - HOA violation procedures, maintenance escalation, all SOPs
 
 Known Aptly board IDs:
-- "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, application link, lockbox description, published status. USE THIS for "what units are available" or any broad availability question — search with query="" to get all units, filter Stage=Vacant.
+- "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board).
 - "qfBzBxfooJtfTQncd" — List Property / On Market board. Shows properties actively listed, showing start date, notes on occupancy, market status.
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
 - "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects per property, whether published for rent.
@@ -719,7 +719,12 @@ function getRelevantTools(msg) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
-    ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
+    // For availability questions: Aptly is the source of truth, NOT Rentvine
+    // Only add Rentvine tools if a specific address number is in the message
+    if (msg.match(/\d{3,6}/)) {
+      ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
+    }
+    ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
