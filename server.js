@@ -824,7 +824,8 @@ app.post('/api/chat', async function(req, res) {
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
     const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house/) && !lowerMsg.match(/[0-9]{4,6}/);
-    if (isAvailabilityQ) {
+    const isNotTourableQ = lowerMsg.match(/not.{0,20}(tour|showing|avail)|can.{0,10}t.{0,10}(tour|showing)|(tour|showing).{0,20}not/) && !lowerMsg.match(/[0-9]{4,6}/);
+    if (isAvailabilityQ || isNotTourableQ) {
       try {
         const cards = await getUnitsCards();
         console.log('Units cards total:', cards.length, 'Sample keys:', cards.length > 0 ? Object.keys(cards[0]).slice(0, 10).join(', ') : 'none');
@@ -851,8 +852,20 @@ app.post('/api/chat', async function(req, res) {
             const occupied = stage === 'Occupied' ? ' (occupied — tenants moving out)' : '';
             return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied;
           };
-          const label = published.length > 0 ? 'Homes published for rent' : 'All units (schema debug)';
-          const text = label + ' (' + listCards.length + '):\n\n' + listCards.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
+          // If asking about what's NOT available for tours, filter to occupied ones
+          const notTourable = isNotTourableQ
+            ? listCards.filter(function(c) { return (c.Stage || c.Status || '') === 'Occupied'; })
+            : null;
+
+          let text;
+          if (notTourable && notTourable.length > 0) {
+            text = 'Homes not yet available for tours — tenants still in place (' + notTourable.length + '):\n\n' + notTourable.map(fmt).join('\n') + '\n\nAsk me about any address for more details on when they become available.';
+          } else if (notTourable) {
+            text = 'All published homes are currently vacant and available for tours.';
+          } else {
+            const label = published.length > 0 ? 'Homes published for rent' : 'All units';
+            text = label + ' (' + listCards.length + '):\n\n' + listCards.map(fmt).join('\n') + '\n\nAsk me about any address for more details.';
+          }
           return res.json({ content: [{ type: 'text', text }] });
         }
       } catch(e) {
