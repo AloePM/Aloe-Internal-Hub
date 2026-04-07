@@ -925,7 +925,7 @@ app.post('/api/chat', async function(req, res) {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
-          system: SYSTEM_PROMPT + (KNOWLEDGE_BASE ? '\n\n---\nOPERATIONAL KNOWLEDGE BASE (loaded from Notion):\n' + KNOWLEDGE_BASE : ''),
+          system: SYSTEM_PROMPT + (KNOWLEDGE_BASE && i === 0 ? '\n\n---\nKEY OPERATIONAL RULES:\n' + KNOWLEDGE_BASE.slice(0, 2000) : ''),
           messages: current,
           tools: tools,
         }),
