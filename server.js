@@ -18,27 +18,41 @@ const SLACK_TOKEN         = process.env.SLACK_TOKEN;
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
-// Master knowledge base — fetched from Notion at startup and cached
+// Master knowledge base — fetched from critical Notion pages at startup
 let KNOWLEDGE_BASE = '';
-async function loadKnowledgeBase() {
+async function fetchNotionPageText(pageId) {
   try {
-    const r = await fetch('https://api.notion.com/v1/blocks/33b76555273a81de9958f69e7f2ecd7c/children?page_size=100', {
-      headers: {
-        'Authorization': 'Bearer ' + NOTION_TOKEN,
-        'Notion-Version': '2022-06-28',
-      }
+    const r = await fetch('https://api.notion.com/v1/blocks/' + pageId + '/children?page_size=100', {
+      headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
     });
-    if (!r.ok) return;
+    if (!r.ok) return '';
     const data = await r.json();
     const lines = [];
     for (const block of (data.results || [])) {
       const type = block.type;
-      const rich = block[type]?.rich_text || [];
+      const rich = (block[type] && block[type].rich_text) || [];
       const text = rich.map(function(t) { return t.plain_text || ''; }).join('');
       if (text) lines.push(text);
     }
-    KNOWLEDGE_BASE = lines.join('\n');
-    console.log('Knowledge base loaded: ' + KNOWLEDGE_BASE.length + ' chars');
+    return lines.join('\n');
+  } catch(e) { return ''; }
+}
+async function loadKnowledgeBase() {
+  try {
+    // Load master reference + the most frequently needed content pages
+    const pages = [
+      { id: '33b76555273a81de9958f69e7f2ecd7c', label: 'Master Reference' },
+      { id: '1fa76555273a80debda0f220cfb72400', label: 'Prospective Tenant FAQs' },
+      { id: '25e76555273a8082ae8fef84ebd87a23', label: 'Application Terms' },
+      { id: '18776555273a81049822eca6abae6fbb', label: 'Lease Break Policy' },
+    ];
+    const sections = [];
+    for (const p of pages) {
+      const text = await fetchNotionPageText(p.id);
+      if (text) sections.push('=== ' + p.label + ' ===\n' + text);
+    }
+    KNOWLEDGE_BASE = sections.join('\n\n');
+    console.log('Knowledge base loaded: ' + KNOWLEDGE_BASE.length + ' chars from ' + sections.length + ' pages');
   } catch(e) {
     console.error('Knowledge base load error:', e.message);
   }
@@ -150,6 +164,7 @@ Rules:
 - NEVER say "you can use X tool" or "the results will show" — just use the tool and show the results directly.
 - For known policy topics (lease break, early termination): use notion_get_page with the hardcoded page ID above — do NOT waste loops searching.
 - For ANY question about application approval time, how long it takes, timeline, earnest deposit, application fees: IMMEDIATELY use notion_get_page with ID 25e76555273a8082ae8fef84ebd87a23 — answer is "1-2 days after completed application received".
+- CRITICAL FEE FACTS — never get these wrong: Earnest deposit = $1,500 (NOT $500). Application fee = $65 per adult. Cleaning fee = $500 (move-out, non-refundable). Admin fee = $250. Pet fee = $250 per pet. Security deposit = 1x monthly rent. The $500 is the CLEANING FEE, not the earnest deposit.
 - For ANY question about applicant screening criteria, income requirements, credit score: IMMEDIATELY use notion_get_page with ID 18776555273a81beb216db69887d8266.
 - For unknown policy topics: search Notion 2-3 times with different keywords before giving up.
 - NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
@@ -1067,7 +1082,7 @@ app.post('/api/chat', async function(req, res) {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
-          system: SYSTEM_PROMPT + (KNOWLEDGE_BASE && i === 0 ? '\n\n---\nKEY OPERATIONAL RULES:\n' + KNOWLEDGE_BASE.slice(0, 2000) : ''),
+          system: SYSTEM_PROMPT + (KNOWLEDGE_BASE && i === 0 ? '\n\n---\nKEY OPERATIONAL KNOWLEDGE (from Notion):\n' + KNOWLEDGE_BASE.slice(0, 6000) : ''),
           messages: current,
           tools: tools,
         }),
