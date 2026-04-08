@@ -972,30 +972,38 @@ app.post('/api/chat', async function(req, res) {
 
     // Server-side shortcut for application questions
     const isApplicationQ = lowerMsg.match(/application|applicant|applied|applying/) && !lowerMsg.match(/[0-9]{5,6}/);
-    const applicationAddress = lowerMsg.match(/application.*?(\d+\s+\w[\w\s]+(?:dr|drive|st|street|ave|avenue|blvd|boulevard|rd|road|ln|lane|way|ct|court|pl|place))/i);
+    const applicationAddress = lowerMsg.match(/(\d+\s+\w[\w\s]+(?:dr|drive|st|street|ave|avenue|blvd|boulevard|rd|road|ln|lane|way|ct|court|pl|place))/i);
     if (isApplicationQ) {
       try {
         const searchTerm = applicationAddress ? applicationAddress[1] : '';
-        const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: searchTerm });
+        // Use "Application" as query — this board requires a query term to return results
+        const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: searchTerm || 'Application' });
         const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
         // Filter by address if provided
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
           : cards;
+        // Group by stage
+        const active = filtered.filter(function(c) { return c.Stage === 'Application In Progress'; });
+        const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked'; });
+        const fmt = function(c) {
+          const applicant = c['Primary Applicant'] || c.Title || '?';
+          const loc = c['Application Location'] || '';
+          const stage = c.Stage || '';
+          const income = c['Total Household Mo. Income'] || '';
+          const credit = c['Avg. Household Credit'] || '';
+          const complete = c['Application Complete'] || '';
+          const isApproved = c['Application Approved'] === 'checked' ? ' ✓ APPROVED' : '';
+          return applicant + (loc ? ' @ ' + loc : '') + ' — ' + stage + isApproved +
+            (complete === 'All Applicants' ? ' (complete)' : '') +
+            (income && income !== '$ 0.00' ? ', income: ' + income : '') +
+            (credit && credit !== 'N/A' ? ', credit: ' + credit : '');
+        };
         if (filtered.length > 0) {
-          const fmt = function(c) {
-            const applicant = c['Primary Applicant'] || c.Title || '?';
-            const loc = c['Application Location'] || '';
-            const stage = c.Stage || '';
-            const income = c['Total Household Mo. Income'] || '';
-            const credit = c['Avg. Household Credit'] || '';
-            const complete = c['Application Complete'] || '';
-            return applicant + (loc ? ' @ ' + loc : '') + ' — ' + stage +
-              (complete === 'All Applicants' ? ' ✓ Complete' : '') +
-              (income && income !== '$ 0.00' ? ', income: ' + income : '') +
-              (credit && credit !== 'N/A' ? ', credit: ' + credit : '');
-          };
-          const text = 'Applications' + (searchTerm ? ' for ' + searchTerm : '') + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n') + '\n\nAsk about any applicant for more details.';
+          let text = 'Applications' + (searchTerm ? ' for ' + searchTerm : '') + ' (' + filtered.length + ' total';
+          if (active.length > 0) text += ', ' + active.length + ' in progress';
+          if (approved.length > 0) text += ', ' + approved.length + ' approved';
+          text += '):\n\n' + filtered.map(fmt).join('\n') + '\n\nAsk about any applicant for more details.';
           return res.json({ content: [{ type: 'text', text }] });
         } else {
           return res.json({ content: [{ type: 'text', text: 'No applications found' + (searchTerm ? ' for ' + searchTerm : '') + ' in the Applicants board.' }] });
