@@ -1010,6 +1010,7 @@ function getRelevantTools(msg) {
     tools.add('aptly_get_applicant');
     tools.add('aptly_search_cards');
   }
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/slack|team|announce|update|channel|said|message/)) {
