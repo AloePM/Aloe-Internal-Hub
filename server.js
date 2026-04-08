@@ -1229,25 +1229,44 @@ app.post('/api/chat', async function(req, res) {
     const isLeadsQ = lowerMsg.match(/new lead|lead.*came|lead.*this week|lead.*today|how many lead|what lead|recent lead|incoming lead/);
     if (isLeadsQ) {
       try {
-        // Get leads from this week using updatedAtMin filter
-        const now = new Date();
-        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100, updatedAtMin: weekAgo.toISOString() });
-        const cards = Array.isArray(data) ? data : (data && data.data) || [];
-        if (cards.length > 0) {
-          const fmt = function(c) {
-            const name = c.name || c.Title || '?';
-            const unit = (c.appLocation && c.appLocation[0] && c.appLocation[0].name) || c['Preferred Rental'] || c.Unit || '';
-            const source = c.createdConduit || c.Source || '';
-            const stage = c.stage || c.Stage || '';
-            const created = (c.createdAt || '').slice(0, 10);
-            return name.replace('Application: ', '') + (unit ? ' — ' + unit : '') + (source ? ' (' + source + ')' : '') + (stage ? ' [' + stage + ']' : '') + (created ? ' ' + created : '');
-          };
-          const text = 'New leads this week (' + cards.length + '):\n\n' + cards.map(fmt).join('\n');
-          return res.json({ content: [{ type: 'text', text }] });
-        } else {
-          return res.json({ content: [{ type: 'text', text: 'No new leads found in the past 7 days.' }] });
-        }
+        const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
+        const schemaMap = {};
+        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
+        // Fetch all leads with updatedAtMin from 7 days ago
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100, updatedAtMin: weekAgo });
+        const raw = Array.isArray(data) ? data : (data && data.data) || [];
+        // Map UUID keys to labels
+        const extractVal = function(v) {
+          if (!v) return '';
+          if (typeof v === 'string') return v;
+          if (Array.isArray(v)) return v.map(function(x) { return x.name || x; }).join(', ');
+          if (typeof v === 'object') return v.amount ? '$' + v.amount : (v.name || v.value || '');
+          return String(v);
+        };
+        const cards = raw.map(function(card) {
+          const m = { _cardId: card.cardId, name: card.name, stage: card.stage, createdAt: card.createdAt };
+          Object.keys(card).forEach(function(k) {
+            if (schemaMap[k]) m[schemaMap[k]] = extractVal(card[k]);
+          });
+          return m;
+        });
+        // Filter to only this week's new leads by createdAt
+        const weekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        const newLeads = cards.filter(function(c) {
+          return c.createdAt && new Date(c.createdAt).getTime() > weekAgoMs;
+        });
+        const toShow = newLeads.length > 0 ? newLeads : cards; // fallback to all if none this week
+        const fmt = function(c) {
+          const name = (c['Primary Contact'] || c.name || '?').replace(/^Application: /, '');
+          const property = c['Preferred Rental'] || c['Unit'] || '';
+          const source = c['Source'] || c['Lead Type'] || '';
+          const stage = c.stage || c['Stage'] || '';
+          const created = (c.createdAt || '').slice(0, 10);
+          return name + (property ? ' — ' + property : '') + (source ? ' (' + source + ')' : '') + (stage ? ' [' + stage + ']' : '') + (created ? ' ' + created : '');
+        };
+        const label = newLeads.length > 0 ? 'New leads this week (' + newLeads.length + ')' : 'No new leads found this week. Recent leads (' + toShow.length + ')';
+        return res.json({ content: [{ type: 'text', text: label + ':\n\n' + toShow.map(fmt).join('\n') }] });
       } catch(e) {
         console.error('Leads shortcut error:', e.message);
       }
