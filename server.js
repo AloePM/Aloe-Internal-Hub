@@ -905,15 +905,6 @@ async function executeTool(name, input) {
         }));
         return JSON.stringify(results.length === 1 ? results[0] : results);
       }
-            household: c.Household || '',
-            moveIn: c['Move-In Date'] || '',
-            income: c['Total Household Mo. Income'] || '',
-            credit: c['Avg. Household Credit'] || '',
-            comments: comments,
-          };
-        }));
-        return JSON.stringify(results.length === 1 ? results[0] : results);
-      }
 
       case 'aptly_search_cards': {
         const q = input.query || '';
