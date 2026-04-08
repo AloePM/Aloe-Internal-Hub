@@ -853,26 +853,29 @@ async function executeTool(name, input) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
         // Step 2: For each match, fetch comments via aptlyFetch using first name
-        // aptlyFetch on Applicants board works when query = first name of applicant
+        // Step 2: For each match, fetch comments via aptlyFetch using applicant name
         const results = await Promise.all(matched.map(async function(c) {
           const fullName = c['Primary Applicant'] || '';
-          const firstName = fullName.split(' ')[0] || '';
+          const titleName = (c.Title || '').replace('Application: ', '');
+          const nameToSearch = fullName || titleName;
+          const firstName = nameToSearch.split(' ')[0] || '';
           let comments = ['No comments'];
           if (firstName) {
             try {
               const rd = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: firstName });
               const rcards = (rd && rd.cards) || (Array.isArray(rd) ? rd : []);
-              // Find card matching this applicant by name
+              console.log('Comment fetch for', firstName, '- cards returned:', rcards.length);
+              // Match by full name or title containing first name
               const rmatch = rcards.find(function(rc) {
-                const title = rc['Primary Applicant'] || rc.Title || rc.name || '';
-                return title.toLowerCase().includes(firstName.toLowerCase());
+                const t = (rc['Primary Applicant'] || rc.Title || rc.name || '').toLowerCase();
+                return t.includes(nameToSearch.toLowerCase()) || t.includes(firstName.toLowerCase());
               });
               if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
                 comments = rmatch.comments.map(function(cm) {
                   return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
                 });
               }
-            } catch(e) { /* ignore */ }
+            } catch(e) { console.error('Comment fetch error:', e.message); }
           }
           return {
             applicant: fullName || c.Title || '?',
