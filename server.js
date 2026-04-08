@@ -548,6 +548,7 @@ async function getApplicantsCards() {
     page++;
   }
   // Map UUID field keys to human-readable labels, extracting .value from object fields
+  if (allCards.length > 0) console.log('Raw card sample:', JSON.stringify(allCards[0]).slice(0, 500));
   return allCards.map(function(card) {
     const mapped = { _cardId: card.cardId };
     Object.keys(card).forEach(function(k) {
