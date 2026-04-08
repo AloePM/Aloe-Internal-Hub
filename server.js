@@ -352,6 +352,17 @@ const ALL_TOOLS = [
     },
   },
   {
+    name: 'aptly_get_applicant',
+    description: 'Get full details and comments for a specific applicant by name or address from the Applicants board. Use when asked about a specific applicant, their notes, comments, status, income, credit, or history.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Applicant name or property address to look up' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'notion_search',
     description: 'Search Notion for company policies, SOPs, procedures, fee schedules, and guidelines',
     input_schema: {
@@ -575,6 +586,10 @@ async function getApplicantsCards() {
       'Move-In Date': card.appMoveInDate || '',
       'Total Household Mo. Income': card.appIncome ? '$' + card.appIncome.amount : '',
       'Avg. Household Credit': card.appCreditRating || '',
+      // Comments
+      'comments': Array.isArray(card.comments) ? card.comments.map(function(c) {
+        return { by: c.userName || 'Unknown', note: c.content || '', date: (c.createdAt || '').slice(0, 10) };
+      }) : [],
     };
     // Also map any remaining UUID schema fields
     Object.keys(card).forEach(function(k) {
@@ -825,6 +840,30 @@ async function executeTool(name, input) {
         ]);
       }
 
+      case 'aptly_get_applicant': {
+        const q = (input.query || '').toLowerCase();
+        const cards = await getApplicantsCards();
+        const matched = cards.filter(function(c) {
+          return JSON.stringify(c).toLowerCase().includes(q);
+        });
+        if (matched.length === 0) return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
+        const card = matched[0];
+        const comments = card.comments || [];
+        const out = {
+          applicant: card['Primary Applicant'],
+          location: card['Application Location'],
+          stage: card['Stage'],
+          complete: card['Application Complete'],
+          approved: card.appApproved,
+          household: card['Household'],
+          moveIn: card['Move-In Date'],
+          income: card['Total Household Mo. Income'],
+          credit: card['Avg. Household Credit'],
+          comments: comments.length > 0 ? comments : 'No comments on this application.',
+        };
+        return JSON.stringify(out);
+      }
+
       case 'aptly_search_cards': {
         const q = input.query || '';
         const boardsToSearch = input.boardId 
@@ -959,7 +998,10 @@ function getRelevantTools(msg) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
+  if (msg.match(/applicant|application|applied|applying|screening|comment.*applicant|applicant.*comment|applicant.*note/)) {
+    tools.add('aptly_get_applicant');
+    tools.add('aptly_search_cards');
+  }
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/slack|team|announce|update|channel|said|message/)) {
