@@ -93,6 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
+- "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders tool for ANY question about Aptly work orders. Returns stage, property, vendor, created date, days open, comment history, and summary metrics (total, open, unassigned, avg days open). Cross-reference with Rentvine rv_get_work_orders to compare both systems.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -373,6 +374,18 @@ const ALL_TOOLS = [
       properties: {
         daysBack: { type: 'number', description: 'How many days back to look for leads. Use 7 for "this week", 1 for "today", 30 for "this month". Default 7.' },
         property: { type: 'string', description: 'Optional: filter by property address' },
+      },
+    },
+  },
+  {
+    name: 'aptly_get_work_orders',
+    description: 'Get work orders from the Aptly Work Orders board. Use for ANY question about work orders in Aptly — open work orders, unassigned, how long open, vendor status, work order metrics, outstanding work orders. Returns stage, property, vendor, created date, days open, comments, and summary metrics.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'Filter by status/stage, e.g. "open", "pending", "closed". Omit for all.' },
+        property: { type: 'string', description: 'Filter by property address or name.' },
+        includeArchived: { type: 'boolean', description: 'Include archived/closed work orders. Default false.' },
       },
     },
   },
@@ -881,6 +894,7 @@ async function executeTool(name, input) {
           { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline, repair status, inspection notes' },
           { id: 'K9mMGGjKgQPqDykaa', name: 'Move-Ins', description: 'Move-in pipeline' },
           { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
+          { id: 'workOrder', name: 'Work Orders', description: 'Maintenance work orders — stage, vendor, property, created date, days open, comments' },
         ]);
       }
 
@@ -925,6 +939,76 @@ async function executeTool(name, input) {
           total: filtered.length,
           daysBack: daysBack,
           leads: filtered.map(fmt),
+        });
+      }
+
+      case 'aptly_get_work_orders': {
+        // Fetch work orders from Aptly core-api (board ID: workOrder)
+        const schema = await unitsFetch('/api/schema/workOrder');
+        const schemaMap = {};
+        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
+        let allWOs = [];
+        let page = 0;
+        while (true) {
+          const params = { page, pageSize: 50 };
+          if (input.includeArchived) params.includeArchived = true;
+          const data = await unitsFetch('/api/board/workOrder', params);
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          allWOs = allWOs.concat(batch);
+          if (batch.length < 50) break;
+          page++;
+        }
+        // Map UUID keys to labels
+        const extractVal = function(v) {
+          if (!v) return '';
+          if (typeof v === 'string') return v;
+          if (Array.isArray(v)) return v.map(function(x) { return x.name || x; }).join(', ');
+          if (typeof v === 'object') return v.amount ? '$' + v.amount : (v.name || v.value || String(v));
+          return String(v);
+        };
+        const mapped = allWOs.map(function(card) {
+          const m = {
+            _cardId: card.cardId,
+            title: card.name || '',
+            stage: card.stage || '',
+            createdAt: card.createdAt || '',
+            updatedAt: card.updatedAt || '',
+            comments: Array.isArray(card.comments) ? card.comments.map(function(c) {
+              return (c.userName || 'Unknown') + ' (' + (c.createdAt || '').slice(0, 10) + '): ' + (c.content || '');
+            }) : [],
+          };
+          Object.keys(card).forEach(function(k) {
+            if (schemaMap[k]) m[schemaMap[k]] = extractVal(card[k]);
+          });
+          return m;
+        });
+        // Apply filters
+        let filtered = mapped;
+        if (input.status) {
+          const s = input.status.toLowerCase();
+          filtered = filtered.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
+        }
+        if (input.property) {
+          const p = input.property.toLowerCase();
+          filtered = filtered.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(p); });
+        }
+        // Calculate metrics
+        const now = Date.now();
+        const withMetrics = filtered.map(function(c) {
+          const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
+          const daysOpen = created ? Math.floor((now - created) / 86400000) : null;
+          return Object.assign({}, c, { daysOpen });
+        });
+        // Summary stats
+        const open = withMetrics.filter(function(c) { return !/closed|complete|done|cancel/i.test(c.stage); });
+        const unassigned = open.filter(function(c) { return !c.Vendor && !c['Assigned To'] && !c.assignee; });
+        return JSON.stringify({
+          total: withMetrics.length,
+          open: open.length,
+          unassigned: unassigned.length,
+          avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
+          workOrders: withMetrics,
         });
       }
 
@@ -1107,6 +1191,9 @@ function getRelevantTools(msg) {
       ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
     }
     ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
+  }
+  if (msg.match(/work.?order|maintenance|repair|fix|broken|vendor|contractor/) && msg.match(/aptly|how many|open|unassign|pending|outstanding|count|metric|long/)) {
+    tools.add('aptly_get_work_orders');
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
