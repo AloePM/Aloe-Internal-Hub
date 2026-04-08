@@ -89,7 +89,7 @@ Known Aptly board IDs:
 - "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board).
 - "qfBzBxfooJtfTQncd" — List Property / On Market board. Shows properties actively listed, showing start date, notes on occupancy, market status.
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
-- "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects, showings (Stage="Scheduled Tour"), tour history.
+- "4EMDSYKirhQaNdQKz" — Renter Leads. For ANY question about leads (new leads, leads this week, leads today, how many leads, where leads came from, lead pipeline): use aptly_get_leads tool. It returns Primary Contact, Preferred Rental, Source, Stage, Created At. Pass daysBack=7 for this week, daysBack=1 for today, daysBack=30 for this month.
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
@@ -363,6 +363,17 @@ const ALL_TOOLS = [
         query: { type: 'string', description: 'Applicant name or property address to look up' },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'aptly_get_leads',
+    description: 'Get renter leads from the Renter Leads board. Use for ANY question about leads — new leads, leads this week, leads for a property, how many leads, where leads came from, lead pipeline. Returns Primary Contact, Preferred Rental, Source, Stage, Created At for each lead.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        daysBack: { type: 'number', description: 'How many days back to look for leads. Use 7 for "this week", 1 for "today", 30 for "this month". Default 7.' },
+        property: { type: 'string', description: 'Optional: filter by property address' },
+      },
     },
   },
   {
@@ -873,6 +884,50 @@ async function executeTool(name, input) {
         ]);
       }
 
+      case 'aptly_get_leads': {
+        const daysBack = input.daysBack || 7;
+        const cutoff = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+        const cutoffMs = cutoff.getTime();
+        // Fetch all leads using aptlyFetch (app.getaptly.com works for Renter Leads with query)
+        // Use multiple letter searches to get all leads
+        const seen = {};
+        let allLeads = [];
+        for (const letter of ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']) {
+          const data = await aptlyFetch('/aptlet/4EMDSYKirhQaNdQKz', { page: 0, query: letter });
+          const cards = (data && data.cards) || [];
+          for (const c of cards) {
+            if (!seen[c._id || c.Title]) {
+              seen[c._id || c.Title] = true;
+              allLeads.push(c);
+            }
+          }
+        }
+        // Filter by Created At
+        const newLeads = allLeads.filter(function(c) {
+          const created = c['Created At'] || '';
+          if (!created) return false;
+          try { return new Date(created).getTime() > cutoffMs; } catch(e) { return false; }
+        });
+        // Filter by property if specified
+        const filtered = input.property
+          ? newLeads.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(input.property.toLowerCase()); })
+          : newLeads;
+        const fmt = function(c) {
+          return {
+            contact: c['Primary Contact'] || c.Name || '?',
+            property: c['Preferred Rental'] || c.Unit || '',
+            source: c.Source || c['Lead Type'] || '',
+            stage: c.Stage || '',
+            createdAt: c['Created At'] || '',
+          };
+        };
+        return JSON.stringify({
+          total: filtered.length,
+          daysBack: daysBack,
+          leads: filtered.map(fmt),
+        });
+      }
+
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
         // Step 1: Find matching cards via getApplicantsCards (supports address + name search)
@@ -1069,6 +1124,9 @@ function getRelevantTools(msg) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
+  if (msg.match(/lead|prospect/) && msg.match(/new|this week|today|came|recent|incoming|how many|what|pipeline|count|source|zillow/)) {
+    tools.add('aptly_get_leads');
+  }
   if (msg.match(/applicant|application|applied|applying|screening|comment|note.*card|card.*note|what.*said|who.*said/)) {
     tools.add('aptly_get_applicant');
     tools.add('aptly_search_cards');
@@ -1227,7 +1285,7 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for new leads questions
-    const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many/);
+    const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many|come in|what.*lead|lead.*what/);
     if (isLeadsQ) {
       try {
         const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
