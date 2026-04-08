@@ -523,6 +523,42 @@ async function getUnitsCards() {
   });
 }
 
+let _applicantsSchema = null;
+async function getApplicantsSchema() {
+  if (_applicantsSchema) return _applicantsSchema;
+  const schema = await unitsFetch('/api/schema/MJxaStgENouWrNEKd');
+  if (Array.isArray(schema)) {
+    _applicantsSchema = {};
+    schema.forEach(function(f) { _applicantsSchema[f.key] = f.label; });
+  }
+  return _applicantsSchema || {};
+}
+async function getApplicantsCards() {
+  const schema = await getApplicantsSchema();
+  let allCards = [];
+  let page = 0;
+  while (true) {
+    const data = await unitsFetch('/api/board/MJxaStgENouWrNEKd', { page, pageSize: 50 });
+    const batch = Array.isArray(data) ? data :
+      (data && data.data) ? data.data :
+      (data && data.cards) ? data.cards : [];
+    if (batch.length === 0) break;
+    allCards = allCards.concat(batch);
+    if (batch.length < 50) break;
+    page++;
+  }
+  // Map UUID field keys to human-readable labels
+  return allCards.map(function(card) {
+    const mapped = { _cardId: card.cardId };
+    Object.keys(card).forEach(function(k) {
+      const label = schema[k] || k;
+      const val = card[k];
+      mapped[label] = (val && typeof val === 'object' && 'amount' in val) ? '$' + val.amount : val;
+    });
+    return mapped;
+  });
+}
+
 async function ziFetch(path, params = {}) {
   if (!ZINSPECTOR_API_KEY) return { error: 'ZINSPECTOR_API_KEY not set' };
   const bases = [
@@ -992,36 +1028,27 @@ app.post('/api/chat', async function(req, res) {
     if (isApplicationQ) {
       try {
         const searchTerm = applicationAddress ? applicationAddress[1] : '';
-        let cards = [];
-        // Applicants board uses core-api.getaptly.com with x-token header (same as Units board)
-        for (let page = 0; page < 5; page++) {
-          const params = { page: page, pageSize: 50 };
-          const data = await unitsFetch('/api/board/MJxaStgENouWrNEKd', params);
-          const batch = Array.isArray(data) ? data : (data && (data.cards || data.data || data.items || data.results)) || [];
-          console.log('Applications page ' + page + ':', batch.length, 'cards, raw keys:', data ? Object.keys(data).join(',') : 'null');
-          if (batch.length === 0) break;
-          cards = cards.concat(batch);
-          if (batch.length < 50) break;
-        }
-        console.log('Applications total:', cards.length);
+        // getApplicantsCards fetches with schema mapping so field names are human-readable
+        let cards = await getApplicantsCards();
+        console.log('Applications fetched:', cards.length, 'searchTerm:', searchTerm);
         // Filter by address if provided
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
           : cards;
         // Group by stage
-        const active = filtered.filter(function(c) { return c.Stage === 'Application In Progress'; });
-        const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked'; });
+        const active = filtered.filter(function(c) { return (c.Stage || c['Stage'] || '').toString().includes('Progress'); });
+        const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true; });
         const fmt = function(c) {
-          const applicant = c['Primary Applicant'] || c.Title || '?';
-          const loc = c['Application Location'] || '';
-          const stage = c.Stage || '';
-          const income = c['Total Household Mo. Income'] || '';
-          const credit = c['Avg. Household Credit'] || '';
+          const applicant = c['Primary Applicant'] || c.Title || c.Name || '?';
+          const loc = c['Application Location'] || c['Address'] || '';
+          const stage = c['Stage'] || '';
+          const income = c['Total Household Mo. Income'] || c['Total Monthly Income'] || '';
+          const credit = c['Avg. Household Credit'] || c['Average Credit'] || '';
           const complete = c['Application Complete'] || '';
-          const isApproved = c['Application Approved'] === 'checked' ? ' ✓ APPROVED' : '';
+          const isApproved = (c['Application Approved'] === 'checked' || c['Application Approved'] === true) ? ' ✓ APPROVED' : '';
           return applicant + (loc ? ' @ ' + loc : '') + ' — ' + stage + isApproved +
             (complete === 'All Applicants' ? ' (complete)' : '') +
-            (income && income !== '$ 0.00' ? ', income: ' + income : '') +
+            (income && String(income) !== '$ 0.00' && String(income) !== '$0' ? ', income: ' + income : '') +
             (credit && credit !== 'N/A' ? ', credit: ' + credit : '');
         };
         if (filtered.length > 0) {
@@ -1034,7 +1061,7 @@ app.post('/api/chat', async function(req, res) {
           return res.json({ content: [{ type: 'text', text: 'No applications found' + (searchTerm ? ' for ' + searchTerm : '') + ' in the Applicants board.' }] });
         }
       } catch(e) {
-        console.error('Applications shortcut error:', e.message);
+        console.error('Applications shortcut error:', e.message, e.stack);
       }
     }
 
