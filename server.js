@@ -820,7 +820,23 @@ async function executeTool(name, input) {
             filtered = allWOs.filter(function(wo) { return !!wo.closedDate || wo.status === 'Closed'; });
           }
         }
-        return JSON.stringify({ total: filtered.length, workOrders: filtered });
+        // Return slim data to avoid token limits
+        const now2 = Date.now();
+        const slim2 = filtered.map(function(wo) {
+          const created = wo.createdDate ? new Date(wo.createdDate).getTime() : null;
+          return {
+            id: wo.workOrderID || wo.id,
+            title: wo.description || wo.subject || '?',
+            status: wo.status,
+            property: wo.unitAddress || wo.propertyAddress || wo.address || '',
+            vendor: wo.vendorName || wo.vendor || '',
+            priority: wo.priority || '',
+            createdDate: (wo.createdDate || '').slice(0, 10),
+            daysOpen: created ? Math.floor((now2 - created) / 86400000) : null,
+          };
+        });
+        const openCount = filtered.filter(function(wo) { return !wo.closedDate && wo.status !== 'Closed' && wo.status !== 'Cancelled'; }).length;
+        return JSON.stringify({ total: filtered.length, open: openCount, workOrders: slim2 });
       }
 
       case 'rv_get_work_order_detail': {
@@ -1025,13 +1041,25 @@ async function executeTool(name, input) {
         const unassigned = open.filter(function(c) { return !c.Vendor && !c['Assigned To'] && !c.assignee && !c['vendor']; });
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
+        // Return slim summary to avoid token limits — full details only if filtering by property
+        const slim = withMetrics.map(function(c) {
+          return {
+            title: c.title || c['Work Order Title'] || c['Title'] || '?',
+            stage: c.stage,
+            property: c['Property'] || c['Unit'] || c['Address'] || '',
+            vendor: c['Vendor'] || c['vendor'] || '',
+            daysOpen: c.daysOpen,
+            createdAt: (c.createdAt || '').slice(0, 10),
+            comments: Array.isArray(c.comments) && c.comments.length > 0 ? c.comments.slice(-1) : [],
+          };
+        });
         return JSON.stringify({
           total: withMetrics.length,
           open: open.length,
           unassigned: unassigned.length,
           avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
           byStage: byStage,
-          workOrders: withMetrics,
+          workOrders: slim,
         });
       }
 
