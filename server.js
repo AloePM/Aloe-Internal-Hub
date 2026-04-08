@@ -1044,14 +1044,17 @@ app.post('/api/chat', async function(req, res) {
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
           : cards;
+        // Debug: log all keys of first mapped card
+        if (filtered.length > 0) console.log('Mapped card keys:', Object.keys(filtered[0]).join(', '));
         // Group by stage
-        const active = filtered.filter(function(c) { return (c.Stage || c['Stage'] || '').toString().includes('Progress'); });
-        const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true; });
+        const active = filtered.filter(function(c) { return String(c.stage || c.Stage || '').includes('Progress'); });
+        const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true; });
         const fmt = function(c) {
-          const applicant = c['Primary Applicant'] || c['Title'] || '?';
-          const loc = c['Application Location'] || '';
-          const complete = c['Application Complete'] || '';
-          const isApproved = c['Application Approved'] === 'checked' || c['Application Approved'] === true;
+          // core-api uses camelCase built-in fields; custom fields mapped to their label by schema
+          const applicant = c['Primary Applicant'] || c.primaryApplicant || c.name || c.Title || c.title || '?';
+          const loc = c['Application Location'] || c.applicationLocation || c['Application address'] || c['Property Address'] || '';
+          const complete = c['Application Complete'] || c.appInputCompleted || '';
+          const isApproved = c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true;
           return (loc || '(no address)') + ' — ' + applicant +
             (isApproved ? ' ✓ APPROVED' : '') +
             (complete === 'All Applicants' ? ' (complete)' : '');
