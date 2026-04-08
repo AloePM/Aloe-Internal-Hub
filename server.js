@@ -867,28 +867,26 @@ async function executeTool(name, input) {
         }
         // Step 2: For each match, search by applicant name using APTLY_METEOR_TOKEN
         // The Meteor token gives full access including comments on screening boards
-        const meteorToken = process.env.APTLY_METEOR_TOKEN || APTLY_TOKEN;
         const results = await Promise.all(matched.map(async function(c) {
           const fullName = c['Primary Applicant'] || '';
-          const firstName = fullName.split(' ')[0] || '';
+          const cardId = c._cardId || '';
           let comments = ['No comments'];
-          if (firstName) {
+          if (cardId) {
             try {
-              const searchUrl = 'https://app.getaptly.com/api/aptlet/MJxaStgENouWrNEKd?x-token=' + encodeURIComponent(meteorToken) + '&query=' + encodeURIComponent(firstName) + '&page=0';
-              const r = await fetch(searchUrl);
-              if (r.ok) {
-                const data = await r.json();
-                const rcards = (data && data.cards) || [];
-                const rmatch = rcards.find(function(rc) {
-                  return JSON.stringify(rc).toLowerCase().includes(firstName.toLowerCase());
+              // Try core-api comments endpoint
+              const commentsData = await unitsFetch('/api/board/MJxaStgENouWrNEKd/' + cardId + '/comments');
+              console.log('Comments for', fullName, ':', JSON.stringify(commentsData).slice(0, 200));
+              const commentList = Array.isArray(commentsData) ? commentsData : 
+                (commentsData && commentsData.comments) ? commentsData.comments :
+                (commentsData && commentsData.data) ? commentsData.data : [];
+              if (commentList.length > 0) {
+                comments = commentList.map(function(cm) {
+                  return (cm.userName || cm.name || cm.createdBy || 'Unknown') + 
+                    ' (' + (cm.createdAt || cm.date || '').slice(0, 10) + '): ' + 
+                    (cm.content || cm.text || cm.message || '');
                 });
-                if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
-                  comments = rmatch.comments.map(function(cm) {
-                    return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
-                  });
-                }
               }
-            } catch(e) { /* ignore */ }
+            } catch(e) { console.error('Comment fetch error:', e.message); }
           }
           return {
             applicant: fullName || c.Title || '?',
