@@ -843,26 +843,35 @@ async function executeTool(name, input) {
 
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
-        const cards = await getApplicantsCards();
-        const matched = cards.filter(function(c) {
+        // Search Applicants board directly via aptlyFetch (works reliably for name/address search)
+        const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: input.query || '' });
+        const raw = (data && data.cards) || (Array.isArray(data) ? data : []);
+        const matched = raw.filter(function(c) {
           return JSON.stringify(c).toLowerCase().includes(q);
         });
         if (matched.length === 0) return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
-        const card = matched[0];
-        const comments = card.comments || [];
-        const out = {
-          applicant: card['Primary Applicant'],
-          location: card['Application Location'],
-          stage: card['Stage'],
-          complete: card['Application Complete'],
-          approved: card.appApproved,
-          household: card['Household'],
-          moveIn: card['Move-In Date'],
-          income: card['Total Household Mo. Income'],
-          credit: card['Avg. Household Credit'],
-          comments: comments.length > 0 ? comments : 'No comments on this application.',
-        };
-        return JSON.stringify(out);
+        // Return all matching cards with full comments
+        const results = matched.map(function(c) {
+          const comments = Array.isArray(c.comments) && c.comments.length > 0
+            ? c.comments.map(function(cm) {
+                return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
+              })
+            : ['No comments'];
+          return {
+            applicant: c['Primary Applicant'] || c.Title || '?',
+            location: c['Application Location'] || '',
+            stage: c.Stage || '',
+            complete: c['Application Complete'] || '',
+            approved: c['Application Approved'] || false,
+            household: c.Household || '',
+            moveIn: c['Move-In Date'] || '',
+            income: c['Total Household Mo. Income'] || '',
+            credit: c['Avg. Household Credit'] || '',
+            declinedReason: c['Application Declined Justification'] || '',
+            comments: comments,
+          };
+        });
+        return JSON.stringify(results.length === 1 ? results[0] : results);
       }
 
       case 'aptly_search_cards': {
