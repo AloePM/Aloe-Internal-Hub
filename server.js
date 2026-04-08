@@ -1226,7 +1226,7 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for new leads questions
-    const isLeadsQ = lowerMsg.match(/new lead|lead.*came|lead.*this week|lead.*today|how many lead|what lead|recent lead|incoming lead/);
+    const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many/);
     if (isLeadsQ) {
       try {
         const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
