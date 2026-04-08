@@ -547,30 +547,39 @@ async function getApplicantsCards() {
     if (batch.length < 50) break;
     page++;
   }
-  if (allCards.length > 0) console.log('Raw card full:', JSON.stringify(allCards[0]).slice(0, 1500));
   return allCards.map(function(card) {
-    // Start with raw camelCase fields (built-in fields)
+    // Extract array fields (like appPrimaryApplicant, appLocation) to their first name value
+    const extractName = function(v) {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return v.length > 0 ? (v[0].name || '') : '';
+      if (typeof v === 'object') {
+        if ('amount' in v) return '$' + v.amount;
+        if ('name' in v) return v.name;
+        if ('value' in v) return v.value;
+      }
+      return String(v);
+    };
     const mapped = {
       _cardId: card.cardId,
-      name: card.name || '',
-      stage: card.stage || '',
-      appInputCompleted: card.appInputCompleted || '',
-      appApproved: card.appApproved || false,
-      createdAt: card.createdAt || '',
+      // Raw built-in fields
+      'Title': card.name || '',
+      'Stage': card.stage || '',
+      'Application Complete': card.appInputCompleted || card.readyToReview || '',
+      'appApproved': card.appApproved || false,
+      'Created At': card.createdAt || '',
+      // Key custom fields extracted directly from known raw keys
+      'Primary Applicant': extractName(card.appPrimaryApplicant),
+      'Application Location': extractName(card.appLocation),
+      'Household': card.appHousehold || '',
+      'Move-In Date': card.appMoveInDate || '',
+      'Total Household Mo. Income': card.appIncome ? '$' + card.appIncome.amount : '',
+      'Avg. Household Credit': card.appCreditRating || '',
     };
-    // Then overlay schema-mapped custom fields (UUID keys → human labels)
+    // Also map any remaining UUID schema fields
     Object.keys(card).forEach(function(k) {
-      if (schema[k]) {  // only map UUID keys that have a schema label
-        const label = schema[k];
-        let val = card[k];
-        if (val && typeof val === 'object' && !Array.isArray(val)) {
-          if ('amount' in val) val = '$' + val.amount;
-          else if ('value' in val) val = val.value;
-          else if ('name' in val) val = val.name;
-          else if ('label' in val) val = val.label;
-          else val = JSON.stringify(val);
-        }
-        mapped[label] = val;
+      if (schema[k] && !mapped[schema[k]]) {
+        mapped[schema[k]] = extractName(card[k]);
       }
     });
     return mapped;
@@ -1054,31 +1063,45 @@ app.post('/api/chat', async function(req, res) {
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
           : cards;
-        if (filtered.length > 0) {
-          const s = filtered[0];
-          console.log('Sample values — Primary Applicant:', JSON.stringify(s['Primary Applicant']), 'Application Location:', JSON.stringify(s['Application Location']), 'name:', JSON.stringify(s.name));
-        }
-        // Group by stage
-        const active = filtered.filter(function(c) { return String(c.stage || c.Stage || '').includes('Progress'); });
-        const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true; });
+        // Filter out archived/closed — only show active applications
+        const active = filtered.filter(function(c) {
+          return !c.archived && c.Stage !== 'Application Closed' && c.Stage !== 'Archived';
+        });
+        // Group active by completion status
+        const complete = active.filter(function(c) { return c['Application Complete'] === 'All Applicants'; });
+        const partial = active.filter(function(c) { return c['Application Complete'] === 'Some Applicants'; });
+        const approved = active.filter(function(c) { return c.appApproved === true; });
         const fmt = function(c) {
-          // Use raw camelCase fields + schema-mapped custom fields
-          const applicant = c['Primary Applicant'] || c.name || '?';
           const loc = c['Application Location'] || '(no address)';
-          const complete = c['Application Complete'] || c.appInputCompleted || '';
-          const isApproved = c['Application Approved'] === 'checked' || c.appApproved === true;
+          const applicant = c['Primary Applicant'] || c.Title || '?';
+          const isApproved = c.appApproved === true;
+          const appComplete = c['Application Complete'] || '';
           return loc + ' — ' + applicant +
             (isApproved ? ' ✓ APPROVED' : '') +
-            (complete === 'All Applicants' ? ' (complete)' : '');
+            (appComplete === 'All Applicants' ? ' (complete)' : appComplete === 'Some Applicants' ? ' (partial)' : '');
         };
-        if (filtered.length > 0) {
-          let text = 'Applications' + (searchTerm ? ' for ' + searchTerm : '') + ' (' + filtered.length + ' total';
-          if (active.length > 0) text += ', ' + active.length + ' in progress';
-          if (approved.length > 0) text += ', ' + approved.length + ' approved';
-          text += '):\n\n' + filtered.map(fmt).join('\n') + '\n\nAsk about any applicant for more details.';
+        // Only show complete, partial, and approved — not bare incomplete unless asked
+        const toShow = active.filter(function(c) {
+          return c['Application Complete'] === 'All Applicants' ||
+                 c['Application Complete'] === 'Some Applicants' ||
+                 c.appApproved === true;
+        });
+        if (active.length > 0) {
+          let text = 'Active applications (' + active.length + ' total';
+          if (complete.length) text += ', ' + complete.length + ' complete';
+          if (partial.length) text += ', ' + partial.length + ' partial';
+          if (approved.length) text += ', ' + approved.length + ' approved';
+          text += '):\n\n';
+          if (toShow.length > 0) {
+            text += toShow.map(fmt).join('\n');
+          } else {
+            text += active.map(fmt).join('\n');
+          }
+          if (searchTerm) text = 'Applications for ' + searchTerm + ':\n\n' + active.map(fmt).join('\n');
+          text += '\n\nAsk about any applicant for full details.';
           return res.json({ content: [{ type: 'text', text }] });
         } else {
-          return res.json({ content: [{ type: 'text', text: 'No applications found' + (searchTerm ? ' for ' + searchTerm : '') + ' in the Applicants board.' }] });
+          return res.json({ content: [{ type: 'text', text: 'No active applications found' + (searchTerm ? ' for ' + searchTerm : '') + '.' }] });
         }
       } catch(e) {
         console.error('Applications shortcut error:', e.message, e.stack);
