@@ -865,31 +865,30 @@ async function executeTool(name, input) {
         if (matched.length === 0) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
-        // Step 2: For each match, fetch comments via aptlyFetch using first name
-        // Step 2: For each match, fetch comments using Meteor token (works for screening board)
+        // Step 2: For each match, fetch comments by trying multiple Aptly endpoints
         const results = await Promise.all(matched.map(async function(c) {
           const fullName = c['Primary Applicant'] || '';
-          const firstName = fullName.split(' ')[0] || '';
+          const cardId = c._cardId || '';
           let comments = ['No comments'];
-          if (firstName) {
+          // Try endpoint 1: app.getaptly.com with APTLY_TOKEN
+          // Try endpoint 2: app.getaptly.com with APTLY_METEOR_TOKEN  
+          // Try endpoint 3: core-api single card endpoint
+          const tokens = [APTLY_TOKEN, process.env.APTLY_METEOR_TOKEN].filter(Boolean);
+          for (const tok of tokens) {
+            if (comments[0] !== 'No comments') break;
             try {
-              const meteorToken = process.env.APTLY_METEOR_TOKEN || APTLY_TOKEN;
-              const url = 'https://app.getaptly.com/api/aptlet/MJxaStgENouWrNEKd?x-token=' + encodeURIComponent(meteorToken) + '&query=' + encodeURIComponent(firstName);
-              const rd = await fetch(url);
-              if (rd.ok) {
-                const data = await rd.json();
-                const rcards = (data && data.cards) || (Array.isArray(data) ? data : []);
-                console.log('Meteor fetch for', firstName, '- cards:', rcards.length);
-                const rmatch = rcards.find(function(rc) {
-                  return JSON.stringify(rc).toLowerCase().includes(firstName.toLowerCase());
-                });
-                if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
-                  comments = rmatch.comments.map(function(cm) {
+              const u = 'https://app.getaptly.com/api/aptlet/MJxaStgENouWrNEKd/' + cardId + '?x-token=' + encodeURIComponent(tok);
+              const r = await fetch(u);
+              console.log('Card endpoint', tok.slice(0,8), '- status:', r.status);
+              if (r.ok) {
+                const d = await r.json();
+                if (d && Array.isArray(d.comments) && d.comments.length > 0) {
+                  comments = d.comments.map(function(cm) {
                     return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
                   });
                 }
               }
-            } catch(e) { console.error('Comment fetch error:', e.message); }
+            } catch(e) { /* try next */ }
           }
           return {
             applicant: fullName || c.Title || '?',
