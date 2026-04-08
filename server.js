@@ -547,13 +547,20 @@ async function getApplicantsCards() {
     if (batch.length < 50) break;
     page++;
   }
-  // Map UUID field keys to human-readable labels
+  // Map UUID field keys to human-readable labels, extracting .value from object fields
   return allCards.map(function(card) {
     const mapped = { _cardId: card.cardId };
     Object.keys(card).forEach(function(k) {
       const label = schema[k] || k;
-      const val = card[k];
-      mapped[label] = (val && typeof val === 'object' && 'amount' in val) ? '$' + val.amount : val;
+      let val = card[k];
+      // core-api returns fields as { value, type } objects — extract the value
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        if ('amount' in val) val = '$' + val.amount;
+        else if ('value' in val) val = val.value;
+        else if ('name' in val) val = val.name;
+        else if ('label' in val) val = val.label;
+      }
+      mapped[label] = val;
     });
     return mapped;
   });
@@ -1040,27 +1047,13 @@ app.post('/api/chat', async function(req, res) {
         const active = filtered.filter(function(c) { return (c.Stage || c['Stage'] || '').toString().includes('Progress'); });
         const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true; });
         const fmt = function(c) {
-          // Helper to extract string value from potentially nested objects
-          const str = function(v) {
-            if (!v) return '';
-            if (typeof v === 'string') return v;
-            if (typeof v === 'object') {
-              if ('amount' in v) return '$' + v.amount;
-              if ('name' in v) return v.name;
-              if ('label' in v) return v.label;
-              if ('value' in v) return String(v.value);
-              return Object.values(v).filter(function(x) { return typeof x === 'string'; })[0] || '';
-            }
-            return String(v);
-          };
-          // Find applicant name and address — try multiple possible field names
-          const applicant = str(c['Primary Applicant'] || c['Applicant'] || c['Name'] || c['primaryApplicant'] || c['title'] || c['Title']);
-          const loc = str(c['Application Location'] || c['applicationLocation'] || c['Address'] || c['Unit'] || c['Property']);
-          const stage = str(c['Stage'] || c['stage'] || c['Status']);
-          const complete = str(c['Application Complete'] || c['applicationComplete'] || '');
-          const approved = c['Application Approved'] === 'checked' || c['Application Approved'] === true || c['applicationApproved'] === true;
-          // Only show address + status, not personal details
-          return (loc || '(no address)') + ' — ' + (applicant || '?') + (approved ? ' ✓ APPROVED' : '') + (complete === 'All Applicants' ? ' (complete)' : '');
+          const applicant = c['Primary Applicant'] || c['Title'] || '?';
+          const loc = c['Application Location'] || '';
+          const complete = c['Application Complete'] || '';
+          const isApproved = c['Application Approved'] === 'checked' || c['Application Approved'] === true;
+          return (loc || '(no address)') + ' — ' + applicant +
+            (isApproved ? ' ✓ APPROVED' : '') +
+            (complete === 'All Applicants' ? ' (complete)' : '');
         };
         if (filtered.length > 0) {
           let text = 'Applications' + (searchTerm ? ' for ' + searchTerm : '') + ' (' + filtered.length + ' total';
