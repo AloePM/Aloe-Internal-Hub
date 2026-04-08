@@ -469,6 +469,19 @@ async function aptlyFetch(path, params = {}) {
   return r.json();
 }
 
+// Search using Aptly's Meteor/DDP token — works for screening boards
+async function aptlyMeteorSearch(boardId, query) {
+  const meteorToken = process.env.APTLY_METEOR_TOKEN || APTLY_TOKEN;
+  const url = new URL('https://app.getaptly.com/api/aptlet/' + boardId);
+  url.searchParams.set('x-token', meteorToken);
+  url.searchParams.set('query', query || '');
+  url.searchParams.set('page', '0');
+  const r = await fetch(url.toString());
+  if (!r.ok) return [];
+  const data = await r.json();
+  return (data && data.cards) || (Array.isArray(data) ? data : []);
+}
+
 // Dedicated search function using Aptly's search API — works for all board types including screening
 async function aptlySearch(boardId, query) {
   const url = new URL('https://app.getaptly.com/api/aptlet/' + boardId + '/search');
@@ -853,19 +866,28 @@ async function executeTool(name, input) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
         // Step 2: For each match, fetch comments via aptlyFetch using first name
-        // Step 2: For each match, fetch full card via core-api by cardId to get comments
+        // Step 2: For each match, fetch comments using Meteor token (works for screening board)
         const results = await Promise.all(matched.map(async function(c) {
           const fullName = c['Primary Applicant'] || '';
+          const firstName = fullName.split(' ')[0] || '';
           let comments = ['No comments'];
-          if (c._cardId) {
+          if (firstName) {
             try {
-              // GET /api/board/MJxaStgENouWrNEKd/<cardId> returns full card with comments
-              const fullCard = await unitsFetch('/api/board/MJxaStgENouWrNEKd/' + c._cardId);
-              console.log('Full card for', fullName, '- has comments:', Array.isArray(fullCard && fullCard.comments), fullCard && fullCard.comments && fullCard.comments.length);
-              if (fullCard && Array.isArray(fullCard.comments) && fullCard.comments.length > 0) {
-                comments = fullCard.comments.map(function(cm) {
-                  return (cm.userName || cm.name || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || cm.text || '');
+              const meteorToken = process.env.APTLY_METEOR_TOKEN || APTLY_TOKEN;
+              const url = 'https://app.getaptly.com/api/aptlet/MJxaStgENouWrNEKd?x-token=' + encodeURIComponent(meteorToken) + '&query=' + encodeURIComponent(firstName);
+              const rd = await fetch(url);
+              if (rd.ok) {
+                const data = await rd.json();
+                const rcards = (data && data.cards) || (Array.isArray(data) ? data : []);
+                console.log('Meteor fetch for', firstName, '- cards:', rcards.length);
+                const rmatch = rcards.find(function(rc) {
+                  return JSON.stringify(rc).toLowerCase().includes(firstName.toLowerCase());
                 });
+                if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
+                  comments = rmatch.comments.map(function(cm) {
+                    return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
+                  });
+                }
               }
             } catch(e) { console.error('Comment fetch error:', e.message); }
           }
