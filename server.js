@@ -547,21 +547,31 @@ async function getApplicantsCards() {
     if (batch.length < 50) break;
     page++;
   }
-  // Map UUID field keys to human-readable labels, extracting .value from object fields
-  if (allCards.length > 0) console.log('Raw card sample:', JSON.stringify(allCards[0]).slice(0, 500));
+  if (allCards.length > 0) console.log('Raw card full:', JSON.stringify(allCards[0]).slice(0, 1500));
   return allCards.map(function(card) {
-    const mapped = { _cardId: card.cardId };
+    // Start with raw camelCase fields (built-in fields)
+    const mapped = {
+      _cardId: card.cardId,
+      name: card.name || '',
+      stage: card.stage || '',
+      appInputCompleted: card.appInputCompleted || '',
+      appApproved: card.appApproved || false,
+      createdAt: card.createdAt || '',
+    };
+    // Then overlay schema-mapped custom fields (UUID keys → human labels)
     Object.keys(card).forEach(function(k) {
-      const label = schema[k] || k;
-      let val = card[k];
-      // core-api returns fields as { value, type } objects — extract the value
-      if (val && typeof val === 'object' && !Array.isArray(val)) {
-        if ('amount' in val) val = '$' + val.amount;
-        else if ('value' in val) val = val.value;
-        else if ('name' in val) val = val.name;
-        else if ('label' in val) val = val.label;
+      if (schema[k]) {  // only map UUID keys that have a schema label
+        const label = schema[k];
+        let val = card[k];
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+          if ('amount' in val) val = '$' + val.amount;
+          else if ('value' in val) val = val.value;
+          else if ('name' in val) val = val.name;
+          else if ('label' in val) val = val.label;
+          else val = JSON.stringify(val);
+        }
+        mapped[label] = val;
       }
-      mapped[label] = val;
     });
     return mapped;
   });
@@ -1052,12 +1062,12 @@ app.post('/api/chat', async function(req, res) {
         const active = filtered.filter(function(c) { return String(c.stage || c.Stage || '').includes('Progress'); });
         const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true; });
         const fmt = function(c) {
-          // Field names confirmed from schema mapping log
-          const applicant = c['Primary Applicant'] || c.name || c.Title || '?';
-          const loc = c['Application Location'] || '';
+          // Use raw camelCase fields + schema-mapped custom fields
+          const applicant = c['Primary Applicant'] || c.name || '?';
+          const loc = c['Application Location'] || '(no address)';
           const complete = c['Application Complete'] || c.appInputCompleted || '';
-          const isApproved = c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true;
-          return (loc || '(no address)') + ' — ' + applicant +
+          const isApproved = c['Application Approved'] === 'checked' || c.appApproved === true;
+          return loc + ' — ' + applicant +
             (isApproved ? ' ✓ APPROVED' : '') +
             (complete === 'All Applicants' ? ' (complete)' : '');
         };
