@@ -844,7 +844,7 @@ async function executeTool(name, input) {
 
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
-        // Step 1: Find matching cards via getApplicantsCards (supports address search)
+        // Step 1: Find matching cards via getApplicantsCards (supports address + name search)
         const allCards = await getApplicantsCards();
         const matched = allCards.filter(function(c) {
           return JSON.stringify(c).toLowerCase().includes(q);
@@ -852,16 +852,20 @@ async function executeTool(name, input) {
         if (matched.length === 0) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
-        // Step 2: For each match, re-fetch via aptlyFetch using applicant name to get comments
+        // Step 2: For each match, fetch comments via aptlyFetch using first name
+        // aptlyFetch on Applicants board works when query = first name of applicant
         const results = await Promise.all(matched.map(async function(c) {
-          const name = c['Primary Applicant'] || '';
+          const fullName = c['Primary Applicant'] || '';
+          const firstName = fullName.split(' ')[0] || '';
           let comments = ['No comments'];
-          if (name) {
+          if (firstName) {
             try {
-              const rd = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: name.split(' ')[0] });
-              const rcards = (rd && rd.cards) || [];
+              const rd = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: firstName });
+              const rcards = (rd && rd.cards) || (Array.isArray(rd) ? rd : []);
+              // Find card matching this applicant by name
               const rmatch = rcards.find(function(rc) {
-                return (rc['Primary Applicant'] || rc.Title || '').toLowerCase().includes(name.toLowerCase().split(' ')[0]);
+                const title = rc['Primary Applicant'] || rc.Title || rc.name || '';
+                return title.toLowerCase().includes(firstName.toLowerCase());
               });
               if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
                 comments = rmatch.comments.map(function(cm) {
@@ -871,7 +875,7 @@ async function executeTool(name, input) {
             } catch(e) { /* ignore */ }
           }
           return {
-            applicant: c['Primary Applicant'] || c.Title || '?',
+            applicant: fullName || c.Title || '?',
             location: c['Application Location'] || '',
             stage: c.Stage || '',
             complete: c['Application Complete'] || '',
@@ -880,6 +884,11 @@ async function executeTool(name, input) {
             moveIn: c['Move-In Date'] || '',
             income: c['Total Household Mo. Income'] || '',
             credit: c['Avg. Household Credit'] || '',
+            comments: comments,
+          };
+        }));
+        return JSON.stringify(results.length === 1 ? results[0] : results);
+      }
             comments: comments,
           };
         }));
