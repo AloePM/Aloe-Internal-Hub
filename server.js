@@ -159,7 +159,8 @@ Rules:
 - Use numbered steps for procedures
 - Always cite your source (Rentvine, Aptly, Notion, or Slack)
 - Never speculate on legal or fair housing matters
-- NEVER ask the user clarifying questions. Just search and answer.
+- ALWAYS include comments when showing card details from any Aptly board. Comments are in the `comments` array (standard boards) or `formatted_comments` field. Show them as: "Notes: [date] [person]: [comment]". If no comments, don't mention it.
+- Never ask clarifying questions
 - NEVER explain how a tool works or describe what it does. Always run the tool and report the actual results. If someone asks "where do I look for move-out inspections?" — run rv_get_inspections and report what's in there, don't describe the tool.
 - NEVER say "you can use X tool" or "the results will show" — just use the tool and show the results directly.
 - For known policy topics (lease break, early termination): use notion_get_page with the hardcoded page ID above — do NOT waste loops searching.
@@ -868,18 +869,25 @@ async function executeTool(name, input) {
         const q = input.query || '';
         const boardsToSearch = input.boardId 
           ? [input.boardId] 
-          : ['unit', 'qfBzBxfooJtfTQncd', 'location', '4EMDSYKirhQaNdQKz', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj'];
+          : ['4EMDSYKirhQaNdQKz', 'MJxaStgENouWrNEKd', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj', 'qfBzBxfooJtfTQncd', 'location'];
         
         const results = [];
         for (const bid of boardsToSearch) {
-          // Always pass query param — required for API to return results
           const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
           const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
-          // Client-side filter if query provided
           const matched = q 
             ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q.toLowerCase()); })
             : cards;
-          if (matched.length > 0) results.push({ board: bid, cards: matched });
+          if (matched.length > 0) {
+            // Format comments clearly for each matched card
+            const withComments = matched.map(function(c) {
+              const comments = Array.isArray(c.comments) && c.comments.length > 0
+                ? c.comments.map(function(cm) { return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || ''); })
+                : [];
+              return Object.assign({}, c, { formatted_comments: comments });
+            });
+            results.push({ board: bid, cards: withComments });
+          }
         }
         return JSON.stringify(results.length > 0 ? results : { message: 'No results found for: ' + (q || '(all)') });
       }
