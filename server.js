@@ -1044,15 +1044,17 @@ app.post('/api/chat', async function(req, res) {
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
           : cards;
-        // Debug: log all keys of first mapped card
-        if (filtered.length > 0) console.log('Mapped card keys:', Object.keys(filtered[0]).join(', '));
+        if (filtered.length > 0) {
+          const s = filtered[0];
+          console.log('Sample values — Primary Applicant:', JSON.stringify(s['Primary Applicant']), 'Application Location:', JSON.stringify(s['Application Location']), 'name:', JSON.stringify(s.name));
+        }
         // Group by stage
         const active = filtered.filter(function(c) { return String(c.stage || c.Stage || '').includes('Progress'); });
         const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true; });
         const fmt = function(c) {
-          // core-api uses camelCase built-in fields; custom fields mapped to their label by schema
-          const applicant = c['Primary Applicant'] || c.primaryApplicant || c.name || c.Title || c.title || '?';
-          const loc = c['Application Location'] || c.applicationLocation || c['Application address'] || c['Property Address'] || '';
+          // Field names confirmed from schema mapping log
+          const applicant = c['Primary Applicant'] || c.name || c.Title || '?';
+          const loc = c['Application Location'] || '';
           const complete = c['Application Complete'] || c.appInputCompleted || '';
           const isApproved = c['Application Approved'] === 'checked' || c['Application Approved'] === true || c.appApproved === true;
           return (loc || '(no address)') + ' — ' + applicant +
