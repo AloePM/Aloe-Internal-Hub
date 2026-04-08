@@ -1033,9 +1033,6 @@ async function executeTool(name, input) {
           byStage: byStage,
           workOrders: withMetrics,
         });
-          avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
-          workOrders: withMetrics,
-        });
       }
 
       case 'aptly_get_applicant': {
