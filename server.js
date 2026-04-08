@@ -843,18 +843,19 @@ async function executeTool(name, input) {
 
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
-        // Search Applicants board directly via aptlyFetch (works reliably for name/address search)
-        const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: input.query || '' });
-        const raw = (data && data.cards) || (Array.isArray(data) ? data : []);
-        const matched = raw.filter(function(c) {
+        // Use getApplicantsCards which fetches ALL cards via core-api — then filter in memory
+        // This works for both name and address searches
+        const allCards = await getApplicantsCards();
+        const matched = allCards.filter(function(c) {
           return JSON.stringify(c).toLowerCase().includes(q);
         });
-        if (matched.length === 0) return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
-        // Return all matching cards with full comments
+        if (matched.length === 0) {
+          return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
+        }
         const results = matched.map(function(c) {
           const comments = Array.isArray(c.comments) && c.comments.length > 0
             ? c.comments.map(function(cm) {
-                return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
+                return (cm.by || 'Unknown') + ' (' + (cm.date || '') + '): ' + (cm.note || '');
               })
             : ['No comments'];
           return {
@@ -862,12 +863,11 @@ async function executeTool(name, input) {
             location: c['Application Location'] || '',
             stage: c.Stage || '',
             complete: c['Application Complete'] || '',
-            approved: c['Application Approved'] || false,
+            approved: c.appApproved || false,
             household: c.Household || '',
             moveIn: c['Move-In Date'] || '',
             income: c['Total Household Mo. Income'] || '',
             credit: c['Avg. Household Credit'] || '',
-            declinedReason: c['Application Declined Justification'] || '',
             comments: comments,
           };
         });
