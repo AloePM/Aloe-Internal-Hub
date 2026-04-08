@@ -976,9 +976,23 @@ app.post('/api/chat', async function(req, res) {
     if (isApplicationQ) {
       try {
         const searchTerm = applicationAddress ? applicationAddress[1] : '';
-        // Use "Application" as query — this board requires a query term to return results
-        const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: searchTerm || 'Application' });
-        const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+        let cards = [];
+        if (searchTerm) {
+          // Address-specific search
+          const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: searchTerm });
+          cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+        } else {
+          // Broad fetch: search common name starts to get all active applications
+          const searches = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
+          const seen = {};
+          for (const letter of searches) {
+            const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: letter });
+            const batch = (data && data.cards) || (Array.isArray(data) ? data : []);
+            for (const c of batch) {
+              if (!seen[c._id]) { seen[c._id] = true; cards.push(c); }
+            }
+          }
+        }
         // Filter by address if provided
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
