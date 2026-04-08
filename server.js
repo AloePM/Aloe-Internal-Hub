@@ -798,15 +798,29 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        const params = { pageSize: 50, page: input.page || 1 };
-        if (input.propertyId) params.propertyID = input.propertyId;
-        const data = await rvFetch('/maintenance/work-orders', params);
-        if (input.status && input.status !== 'all' && Array.isArray(data)) {
-          return JSON.stringify(data.filter(function(wo) {
-            return input.status === 'open' ? !wo.closedDate : !!wo.closedDate;
-          }));
+        // Paginate through all work orders to get complete count
+        let allWOs = [];
+        let page = 1;
+        while (true) {
+          const params = { pageSize: 100, page };
+          if (input.propertyId) params.propertyID = input.propertyId;
+          const data = await rvFetch('/maintenance/work-orders', params);
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          allWOs = allWOs.concat(batch);
+          if (batch.length < 100) break;
+          page++;
         }
-        return JSON.stringify(data);
+        // Filter by status
+        let filtered = allWOs;
+        if (input.status && input.status !== 'all') {
+          if (input.status === 'open' || input.status === 'not closed') {
+            filtered = allWOs.filter(function(wo) { return !wo.closedDate && wo.status !== 'Closed' && wo.status !== 'Cancelled'; });
+          } else if (input.status === 'closed') {
+            filtered = allWOs.filter(function(wo) { return !!wo.closedDate || wo.status === 'Closed'; });
+          }
+        }
+        return JSON.stringify({ total: filtered.length, workOrders: filtered });
       }
 
       case 'rv_get_work_order_detail': {
@@ -950,15 +964,17 @@ async function executeTool(name, input) {
         let allWOs = [];
         let page = 0;
         while (true) {
-          const params = { page, pageSize: 50 };
+          const params = { page, pageSize: 100 };
           if (input.includeArchived) params.includeArchived = true;
           const data = await unitsFetch('/api/board/workOrder', params);
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          console.log('Aptly WO page', page, ':', batch.length, 'cards');
           if (batch.length === 0) break;
           allWOs = allWOs.concat(batch);
-          if (batch.length < 50) break;
+          if (batch.length < 100) break;
           page++;
         }
+        console.log('Aptly WO total fetched:', allWOs.length);
         // Map UUID keys to labels
         const extractVal = function(v) {
           if (!v) return '';
@@ -987,7 +1003,11 @@ async function executeTool(name, input) {
         let filtered = mapped;
         if (input.status) {
           const s = input.status.toLowerCase();
-          filtered = filtered.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
+          if (s === 'open' || s === 'not closed' || s === 'pending') {
+            filtered = filtered.filter(function(c) { return !/closed|complete|done|cancel/i.test(c.stage || ''); });
+          } else {
+            filtered = filtered.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
+          }
         }
         if (input.property) {
           const p = input.property.toLowerCase();
@@ -1000,13 +1020,19 @@ async function executeTool(name, input) {
           const daysOpen = created ? Math.floor((now - created) / 86400000) : null;
           return Object.assign({}, c, { daysOpen });
         });
-        // Summary stats
-        const open = withMetrics.filter(function(c) { return !/closed|complete|done|cancel/i.test(c.stage); });
-        const unassigned = open.filter(function(c) { return !c.Vendor && !c['Assigned To'] && !c.assignee; });
+        // Summary stats — open = not closed/cancelled
+        const open = withMetrics.filter(function(c) { return !/closed|complete|done|cancel/i.test(c.stage || ''); });
+        const unassigned = open.filter(function(c) { return !c.Vendor && !c['Assigned To'] && !c.assignee && !c['vendor']; });
+        const byStage = {};
+        withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
         return JSON.stringify({
           total: withMetrics.length,
           open: open.length,
           unassigned: unassigned.length,
+          avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
+          byStage: byStage,
+          workOrders: withMetrics,
+        });
           avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
           workOrders: withMetrics,
         });
@@ -1192,11 +1218,9 @@ function getRelevantTools(msg) {
     }
     ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/work.?order|maintenance|repair|fix|broken|vendor|contractor/) && msg.match(/aptly|how many|open|unassign|pending|outstanding|count|metric|long/)) {
-    tools.add('aptly_get_work_orders');
-  }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
     ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
+    tools.add('aptly_get_work_orders');
   }
   if (msg.match(/inspect/)) {
     ['rv_get_inspections', 'rv_get_inspection_detail'].forEach(function(t) { tools.add(t); });
