@@ -456,6 +456,22 @@ async function aptlyFetch(path, params = {}) {
   return r.json();
 }
 
+// Dedicated search function using Aptly's search API — works for all board types including screening
+async function aptlySearch(boardId, query) {
+  const url = new URL('https://app.getaptly.com/api/aptlet/' + boardId + '/search');
+  url.searchParams.set('x-token', APTLY_TOKEN);
+  url.searchParams.set('query', query || '');
+  url.searchParams.set('page', '0');
+  url.searchParams.set('pageSize', '100');
+  const r = await fetch(url.toString());
+  if (!r.ok) {
+    // Fallback to regular aptlet endpoint
+    return aptlyFetch('/aptlet/' + boardId, { page: 0, query: query || 'a' });
+  }
+  const data = await r.json();
+  return data;
+}
+
 let _unitsSchema = null;
 async function unitsFetch(path, params = {}) {
   const url = new URL('https://core-api.getaptly.com' + path);
@@ -977,22 +993,17 @@ app.post('/api/chat', async function(req, res) {
       try {
         const searchTerm = applicationAddress ? applicationAddress[1] : '';
         let cards = [];
-        if (searchTerm) {
-          // Address-specific search
-          const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: searchTerm });
-          cards = (data && data.cards) || (Array.isArray(data) ? data : []);
-        } else {
-          // Broad fetch: search common name starts to get all active applications
-          const searches = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
-          const seen = {};
-          for (const letter of searches) {
-            const data = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: letter });
-            const batch = (data && data.cards) || (Array.isArray(data) ? data : []);
-            for (const c of batch) {
-              if (!seen[c._id]) { seen[c._id] = true; cards.push(c); }
-            }
-          }
+        // Applicants board uses core-api.getaptly.com with x-token header (same as Units board)
+        for (let page = 0; page < 5; page++) {
+          const params = { page: page, pageSize: 50 };
+          const data = await unitsFetch('/api/board/MJxaStgENouWrNEKd', params);
+          const batch = Array.isArray(data) ? data : (data && (data.cards || data.data || data.items || data.results)) || [];
+          console.log('Applications page ' + page + ':', batch.length, 'cards, raw keys:', data ? Object.keys(data).join(',') : 'null');
+          if (batch.length === 0) break;
+          cards = cards.concat(batch);
+          if (batch.length < 50) break;
         }
+        console.log('Applications total:', cards.length);
         // Filter by address if provided
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
