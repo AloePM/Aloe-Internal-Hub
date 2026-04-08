@@ -865,30 +865,30 @@ async function executeTool(name, input) {
         if (matched.length === 0) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
-        // Step 2: For each match, fetch comments by trying multiple Aptly endpoints
+        // Step 2: For each match, search by applicant name using APTLY_METEOR_TOKEN
+        // The Meteor token gives full access including comments on screening boards
+        const meteorToken = process.env.APTLY_METEOR_TOKEN || APTLY_TOKEN;
         const results = await Promise.all(matched.map(async function(c) {
           const fullName = c['Primary Applicant'] || '';
-          const cardId = c._cardId || '';
+          const firstName = fullName.split(' ')[0] || '';
           let comments = ['No comments'];
-          // Try endpoint 1: app.getaptly.com with APTLY_TOKEN
-          // Try endpoint 2: app.getaptly.com with APTLY_METEOR_TOKEN  
-          // Try endpoint 3: core-api single card endpoint
-          const tokens = [APTLY_TOKEN, process.env.APTLY_METEOR_TOKEN].filter(Boolean);
-          for (const tok of tokens) {
-            if (comments[0] !== 'No comments') break;
+          if (firstName) {
             try {
-              const u = 'https://app.getaptly.com/api/aptlet/MJxaStgENouWrNEKd/' + cardId + '?x-token=' + encodeURIComponent(tok);
-              const r = await fetch(u);
-              console.log('Card endpoint', tok.slice(0,8), '- status:', r.status);
+              const searchUrl = 'https://app.getaptly.com/api/aptlet/MJxaStgENouWrNEKd?x-token=' + encodeURIComponent(meteorToken) + '&query=' + encodeURIComponent(firstName) + '&page=0';
+              const r = await fetch(searchUrl);
               if (r.ok) {
-                const d = await r.json();
-                if (d && Array.isArray(d.comments) && d.comments.length > 0) {
-                  comments = d.comments.map(function(cm) {
+                const data = await r.json();
+                const rcards = (data && data.cards) || [];
+                const rmatch = rcards.find(function(rc) {
+                  return JSON.stringify(rc).toLowerCase().includes(firstName.toLowerCase());
+                });
+                if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
+                  comments = rmatch.comments.map(function(cm) {
                     return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
                   });
                 }
               }
-            } catch(e) { /* try next */ }
+            } catch(e) { /* ignore */ }
           }
           return {
             applicant: fullName || c.Title || '?',
@@ -896,6 +896,15 @@ async function executeTool(name, input) {
             stage: c.Stage || '',
             complete: c['Application Complete'] || '',
             approved: c.appApproved || false,
+            household: c.Household || '',
+            moveIn: c['Move-In Date'] || '',
+            income: c['Total Household Mo. Income'] || '',
+            credit: c['Avg. Household Credit'] || '',
+            comments: comments,
+          };
+        }));
+        return JSON.stringify(results.length === 1 ? results[0] : results);
+      }
             household: c.Household || '',
             moveIn: c['Move-In Date'] || '',
             income: c['Total Household Mo. Income'] || '',
