@@ -882,13 +882,19 @@ async function executeTool(name, input) {
         
         const results = [];
         for (const bid of boardsToSearch) {
-          const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
-          const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+          let cards = [];
+          if (bid === 'MJxaStgENouWrNEKd') {
+            // Applicants board uses aptlyFetch with the search query directly
+            const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q || 'Application' });
+            cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+          } else {
+            const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
+            cards = (data && data.cards) || (Array.isArray(data) ? data : []);
+          }
           const matched = q 
             ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q.toLowerCase()); })
             : cards;
           if (matched.length > 0) {
-            // Format comments clearly for each matched card
             const withComments = matched.map(function(c) {
               const comments = Array.isArray(c.comments) && c.comments.length > 0
                 ? c.comments.map(function(cm) { return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || ''); })
@@ -1015,7 +1021,7 @@ function getRelevantTools(msg) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/applicant|application|applied|applying|screening|comment.*applicant|applicant.*comment|applicant.*note/)) {
+  if (msg.match(/applicant|application|applied|applying|screening|comment|note.*card|card.*note|what.*said|who.*said/)) {
     tools.add('aptly_get_applicant');
     tools.add('aptly_search_cards');
   }
