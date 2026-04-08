@@ -798,29 +798,39 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        // Paginate through all work orders to get complete count
+        // Fetch work orders — filter to active ones only to avoid historical empty records
+        const params = { pageSize: 100, page: 1, status: 'Open' };
+        if (input.propertyId) params.propertyID = input.propertyId;
+        // Try fetching with status filter first
         let allWOs = [];
-        let page = 1;
-        while (true) {
-          const params = { pageSize: 100, page };
-          if (input.propertyId) params.propertyID = input.propertyId;
-          const data = await rvFetch('/maintenance/work-orders', params);
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          allWOs = allWOs.concat(batch);
-          if (batch.length < 100) break;
-          page++;
-        }
-        // Filter by status
-        let filtered = allWOs;
-        if (input.status && input.status !== 'all') {
-          if (input.status === 'open' || input.status === 'not closed') {
-            filtered = allWOs.filter(function(wo) { return !wo.closedDate && wo.status !== 'Closed' && wo.status !== 'Cancelled'; });
-          } else if (input.status === 'closed') {
-            filtered = allWOs.filter(function(wo) { return !!wo.closedDate || wo.status === 'Closed'; });
+        const statuses = input.status === 'closed' ? ['Closed'] : ['Open', 'Pending', 'Scheduled', 'In Progress', 'On Hold'];
+        for (const status of statuses) {
+          let page = 1;
+          while (true) {
+            const p = { pageSize: 100, page, status };
+            if (input.propertyId) p.propertyID = input.propertyId;
+            const data = await rvFetch('/maintenance/work-orders', p);
+            const batch = Array.isArray(data) ? data : (data && data.data) || [];
+            if (batch.length === 0) break;
+            // Filter out empty records
+            const valid = batch.filter(function(wo) { return wo.workOrderID && (wo.description || wo.subject || wo.status); });
+            allWOs = allWOs.concat(valid);
+            if (batch.length < 100) break;
+            page++;
           }
         }
-        // Return slim data to avoid token limits
+        // Deduplicate
+        const seen = {};
+        allWOs = allWOs.filter(function(wo) {
+          if (seen[wo.workOrderID]) return false;
+          seen[wo.workOrderID] = true;
+          return true;
+        });
+        // Filter not closed/cancelled if requested
+        let filtered = allWOs;
+        if (!input.status || input.status === 'open' || input.status === 'not closed') {
+          filtered = allWOs.filter(function(wo) { return wo.status !== 'Closed' && wo.status !== 'Cancelled' && !wo.closedDate; });
+        }
         const now2 = Date.now();
         const slim2 = filtered.map(function(wo) {
           const created = wo.createdDate ? new Date(wo.createdDate).getTime() : null;
@@ -835,8 +845,7 @@ async function executeTool(name, input) {
             daysOpen: created ? Math.floor((now2 - created) / 86400000) : null,
           };
         });
-        const openCount = filtered.filter(function(wo) { return !wo.closedDate && wo.status !== 'Closed' && wo.status !== 'Cancelled'; }).length;
-        return JSON.stringify({ total: filtered.length, open: openCount, workOrders: slim2 });
+        return JSON.stringify({ total: filtered.length, open: filtered.filter(function(wo) { return wo.status !== 'Closed' && wo.status !== 'Cancelled'; }).length, workOrders: slim2 });
       }
 
       case 'rv_get_work_order_detail': {
