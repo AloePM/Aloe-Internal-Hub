@@ -1031,6 +1031,7 @@ app.post('/api/chat', async function(req, res) {
         // getApplicantsCards fetches with schema mapping so field names are human-readable
         let cards = await getApplicantsCards();
         console.log('Applications fetched:', cards.length, 'searchTerm:', searchTerm);
+        if (cards.length > 0) console.log('First card keys:', Object.keys(cards[0]).slice(0, 15).join(', '));
         // Filter by address if provided
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
@@ -1039,17 +1040,27 @@ app.post('/api/chat', async function(req, res) {
         const active = filtered.filter(function(c) { return (c.Stage || c['Stage'] || '').toString().includes('Progress'); });
         const approved = filtered.filter(function(c) { return c['Application Approved'] === 'checked' || c['Application Approved'] === true; });
         const fmt = function(c) {
-          const applicant = c['Primary Applicant'] || c.Title || c.Name || '?';
-          const loc = c['Application Location'] || c['Address'] || '';
-          const stage = c['Stage'] || '';
-          const income = c['Total Household Mo. Income'] || c['Total Monthly Income'] || '';
-          const credit = c['Avg. Household Credit'] || c['Average Credit'] || '';
-          const complete = c['Application Complete'] || '';
-          const isApproved = (c['Application Approved'] === 'checked' || c['Application Approved'] === true) ? ' ✓ APPROVED' : '';
-          return applicant + (loc ? ' @ ' + loc : '') + ' — ' + stage + isApproved +
-            (complete === 'All Applicants' ? ' (complete)' : '') +
-            (income && String(income) !== '$ 0.00' && String(income) !== '$0' ? ', income: ' + income : '') +
-            (credit && credit !== 'N/A' ? ', credit: ' + credit : '');
+          // Helper to extract string value from potentially nested objects
+          const str = function(v) {
+            if (!v) return '';
+            if (typeof v === 'string') return v;
+            if (typeof v === 'object') {
+              if ('amount' in v) return '$' + v.amount;
+              if ('name' in v) return v.name;
+              if ('label' in v) return v.label;
+              if ('value' in v) return String(v.value);
+              return Object.values(v).filter(function(x) { return typeof x === 'string'; })[0] || '';
+            }
+            return String(v);
+          };
+          // Find applicant name and address — try multiple possible field names
+          const applicant = str(c['Primary Applicant'] || c['Applicant'] || c['Name'] || c['primaryApplicant'] || c['title'] || c['Title']);
+          const loc = str(c['Application Location'] || c['applicationLocation'] || c['Address'] || c['Unit'] || c['Property']);
+          const stage = str(c['Stage'] || c['stage'] || c['Status']);
+          const complete = str(c['Application Complete'] || c['applicationComplete'] || '');
+          const approved = c['Application Approved'] === 'checked' || c['Application Approved'] === true || c['applicationApproved'] === true;
+          // Only show address + status, not personal details
+          return (loc || '(no address)') + ' — ' + (applicant || '?') + (approved ? ' ✓ APPROVED' : '') + (complete === 'All Applicants' ? ' (complete)' : '');
         };
         if (filtered.length > 0) {
           let text = 'Applications' + (searchTerm ? ' for ' + searchTerm : '') + ' (' + filtered.length + ' total';
