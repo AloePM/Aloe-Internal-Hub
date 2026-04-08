@@ -889,11 +889,6 @@ async function executeTool(name, input) {
         }));
         return JSON.stringify(results.length === 1 ? results[0] : results);
       }
-            comments: comments,
-          };
-        }));
-        return JSON.stringify(results.length === 1 ? results[0] : results);
-      }
 
       case 'aptly_search_cards': {
         const q = input.query || '';
