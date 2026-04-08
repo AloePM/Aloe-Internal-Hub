@@ -91,6 +91,7 @@ Known Aptly board IDs:
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
 - "4EMDSYKirhQaNdQKz" — Renter Leads. Shows active prospects, showings (Stage="Scheduled Tour"), tour history.
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
+- For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -587,9 +588,9 @@ async function getApplicantsCards() {
       'Move-In Date': card.appMoveInDate || '',
       'Total Household Mo. Income': card.appIncome ? '$' + card.appIncome.amount : '',
       'Avg. Household Credit': card.appCreditRating || '',
-      // Comments
+      // Comments — core-api may not return these; aptly_get_applicant re-fetches via aptlyFetch
       'comments': Array.isArray(card.comments) ? card.comments.map(function(c) {
-        return { by: c.userName || 'Unknown', note: c.content || '', date: (c.createdAt || '').slice(0, 10) };
+        return { by: c.userName || c.name || 'Unknown', note: c.content || c.text || '', date: (c.createdAt || '').slice(0, 10) };
       }) : [],
     };
     // Also map any remaining UUID schema fields
@@ -843,8 +844,7 @@ async function executeTool(name, input) {
 
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
-        // Use getApplicantsCards which fetches ALL cards via core-api — then filter in memory
-        // This works for both name and address searches
+        // Step 1: Find matching cards via getApplicantsCards (supports address search)
         const allCards = await getApplicantsCards();
         const matched = allCards.filter(function(c) {
           return JSON.stringify(c).toLowerCase().includes(q);
@@ -852,12 +852,24 @@ async function executeTool(name, input) {
         if (matched.length === 0) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
-        const results = matched.map(function(c) {
-          const comments = Array.isArray(c.comments) && c.comments.length > 0
-            ? c.comments.map(function(cm) {
-                return (cm.by || 'Unknown') + ' (' + (cm.date || '') + '): ' + (cm.note || '');
-              })
-            : ['No comments'];
+        // Step 2: For each match, re-fetch via aptlyFetch using applicant name to get comments
+        const results = await Promise.all(matched.map(async function(c) {
+          const name = c['Primary Applicant'] || '';
+          let comments = ['No comments'];
+          if (name) {
+            try {
+              const rd = await aptlyFetch('/aptlet/MJxaStgENouWrNEKd', { page: 0, query: name.split(' ')[0] });
+              const rcards = (rd && rd.cards) || [];
+              const rmatch = rcards.find(function(rc) {
+                return (rc['Primary Applicant'] || rc.Title || '').toLowerCase().includes(name.toLowerCase().split(' ')[0]);
+              });
+              if (rmatch && Array.isArray(rmatch.comments) && rmatch.comments.length > 0) {
+                comments = rmatch.comments.map(function(cm) {
+                  return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
+                });
+              }
+            } catch(e) { /* ignore */ }
+          }
           return {
             applicant: c['Primary Applicant'] || c.Title || '?',
             location: c['Application Location'] || '',
@@ -870,7 +882,7 @@ async function executeTool(name, input) {
             credit: c['Avg. Household Credit'] || '',
             comments: comments,
           };
-        });
+        }));
         return JSON.stringify(results.length === 1 ? results[0] : results);
       }
 
@@ -1024,6 +1036,10 @@ function getRelevantTools(msg) {
   if (msg.match(/applicant|application|applied|applying|screening|comment|note.*card|card.*note|what.*said|who.*said/)) {
     tools.add('aptly_get_applicant');
     tools.add('aptly_search_cards');
+  }
+  // Also add aptly_get_applicant when asking about a specific address with comment/note context
+  if (msg.match(/comment|note|said|pomf|update/) && msg.match(/\d+\s+\w/)) {
+    tools.add('aptly_get_applicant');
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
     ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
