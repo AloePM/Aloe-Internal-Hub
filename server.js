@@ -804,7 +804,14 @@ async function executeTool(name, input) {
         const data = await rvFetch('/maintenance/work-orders', p);
         console.log('RV WO raw:', typeof data, Array.isArray(data) ? 'arr:' + data.length : JSON.stringify(data).slice(0, 200));
         let allWOs = Array.isArray(data) ? data : (data && data.data) || [];
-        allWOs = allWOs.filter(function(wo) { return wo.workOrderID; });
+        // Log first record to see exact field names
+        if (allWOs.length > 0) console.log('RV WO first keys:', Object.keys(allWOs[0]).join(', '));
+        if (allWOs.length > 0) console.log('RV WO first record:', JSON.stringify(allWOs[0]).slice(0, 400));
+        // Try both workOrderID and workOrder.workOrderID (nested)
+        const getId = function(wo) { return wo.workOrderID || (wo.workOrder && wo.workOrder.workOrderID); };
+        allWOs = allWOs.filter(function(wo) { return getId(wo); });
+        // Flatten nested workOrder objects if present
+        allWOs = allWOs.map(function(wo) { return wo.workOrder ? Object.assign({}, wo.workOrder, wo) : wo; });
         if (allWOs.length > 0) console.log('RV WO sample:', JSON.stringify(allWOs[0]).slice(0, 600));
         console.log('RV WO total raw:', allWOs.length);
         // Rentvine uses primaryWorkOrderStatusID (integer):
