@@ -1689,16 +1689,74 @@ app.get('*', function(req, res) {
 const { useState, useRef, useEffect } = React;
 const PASSCODE = "aloe2024";
 
-const SUGGESTIONS = [
-  {icon:"🏠", text:"What units are available right now?"},
-  {icon:"💰", text:"What does [tenant name] owe and what is it from?"},
-  {icon:"👥", text:"What new leads came in this week?"},
-  {icon:"📋", text:"What's our lease break policy?"},
-  {icon:"🔧", text:"Show me all open work orders"},
-  {icon:"🔍", text:"Any inspections scheduled this week?"},
-  {icon:"💬", text:"Any recent announcements in Slack?"},
-  {icon:"🏚️", text:"How is [owner name]'s property performing?"},
+const FAQ_TABS = [
+  {
+    id: "maintenance", label: "🔧 Maintenance", color: "#fff7ed", border: "#f97316",
+    questions: [
+      {icon:"🔧", text:"Show me all open work orders in Aptly and Rentvine"},
+      {icon:"📅", text:"Which scheduled work orders are past their scheduled date?"},
+      {icon:"🚨", text:"Which work orders have no comments or follow-up?"},
+      {icon:"👤", text:"Which work orders are unassigned?"},
+      {icon:"⏱️", text:"What work orders have been open the longest?"},
+      {icon:"🏠", text:"Show me all open work orders for [property address]"},
+      {icon:"🏢", text:"Which vendor has the most open work orders?"},
+      {icon:"📊", text:"What's our average time to close a work order?"},
+    ]
+  },
+  {
+    id: "leasing", label: "🏠 Leasing", color: "#f0fdf4", border: "#22c55e",
+    questions: [
+      {icon:"🏠", text:"What units are available right now?"},
+      {icon:"👥", text:"What new leads came in this week?"},
+      {icon:"📅", text:"What showings are scheduled today?"},
+      {icon:"📝", text:"Show me all active applications"},
+      {icon:"🔍", text:"What is the status of applications at [address]?"},
+      {icon:"📋", text:"What are our applicant screening criteria?"},
+      {icon:"💰", text:"What is our application fee and deposit structure?"},
+      {icon:"📊", text:"How many leads came in this month and from what sources?"},
+    ]
+  },
+  {
+    id: "tenants", label: "👤 Tenants", color: "#eff6ff", border: "#3b82f6",
+    questions: [
+      {icon:"💰", text:"What does [tenant name] owe and what is it from?"},
+      {icon:"📋", text:"What's our lease break policy?"},
+      {icon:"📅", text:"When does [tenant name]'s lease expire?"},
+      {icon:"🔑", text:"What are the move-in requirements and fees?"},
+      {icon:"🏚️", text:"What is the move-out process and timeline?"},
+      {icon:"💳", text:"What is the late fee policy?"},
+      {icon:"🐾", text:"What is the pet policy and fees?"},
+      {icon:"🔧", text:"How do tenants submit maintenance requests?"},
+    ]
+  },
+  {
+    id: "owners", label: "🏢 Owners", color: "#fdf4ff", border: "#a855f7",
+    questions: [
+      {icon:"🏢", text:"How is [owner name]'s property performing?"},
+      {icon:"💸", text:"When are owner disbursements processed?"},
+      {icon:"📊", text:"What are our management fees?"},
+      {icon:"🔑", text:"What is our leasing process for new owners?"},
+      {icon:"🏚️", text:"Show me all move-outs in progress"},
+      {icon:"🔄", text:"Show me all leases up for renewal"},
+      {icon:"📋", text:"What does the rent-ready process look like?"},
+      {icon:"🛡️", text:"What guarantees do we offer owners?"},
+    ]
+  },
+  {
+    id: "general", label: "⚡ Quick", color: "#f9f9f7", border: "#d1d5db",
+    questions: [
+      {icon:"🔍", text:"Any inspections scheduled this week?"},
+      {icon:"💬", text:"Any recent announcements in Slack?"},
+      {icon:"📊", text:"How many open work orders do we have total?"},
+      {icon:"🏠", text:"How many units do we manage?"},
+      {icon:"📅", text:"What move-ins are happening this week?"},
+      {icon:"📋", text:"What move-outs are in progress?"},
+      {icon:"🔄", text:"What leases are expiring in the next 60 days?"},
+      {icon:"💰", text:"What is the RBP program and cost?"},
+    ]
+  },
 ];
+
 
 const SOURCES = [
   {label:"Rentvine",bg:"#e6f0fb",border:"#85B7EB"},
@@ -1768,6 +1826,7 @@ function Assistant() {
   const [input,setInput] = useState("");
   const [loading,setLoading] = useState(false);
   const [lastError,setLastError] = useState("");
+  const [activeTab,setActiveTab] = useState("maintenance");
   const endRef = useRef(null);
   const taRef = useRef(null);
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,loading]);
@@ -1789,6 +1848,8 @@ function Assistant() {
     setLoading(false);
   };
 
+  const currentTab = FAQ_TABS.find(t=>t.id===activeTab) || FAQ_TABS[0];
+
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
       {lastError && <div style={{padding:"8px 16px",background:"#fff5f5",borderBottom:"1px solid #fed7d7",display:"flex",justifyContent:"space-between",flexShrink:0}}><span style={{fontSize:12,color:"#c53030"}}>⚠ {lastError}</span><button onClick={()=>setLastError("")} style={{background:"none",border:"none",cursor:"pointer",color:"#c53030",fontSize:16}}>×</button></div>}
@@ -1801,18 +1862,25 @@ function Assistant() {
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
         {messages.length===0 ? (
-          <div style={{minHeight:400,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24}}>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:36,marginBottom:10}}>🌿</div>
-              <div style={{fontSize:20,fontWeight:600,color:"#1a1a1a",marginBottom:6}}>Hi, I'm Aloe</div>
-              <div style={{fontSize:14,color:"#666",maxWidth:420,lineHeight:1.6}}>Ask me anything — tenant balances, available homes, leads, policies, work orders, inspections, or team updates.</div>
+          <div style={{maxWidth:640,margin:"0 auto",paddingBottom:16}}>
+            <div style={{textAlign:"center",marginBottom:24}}>
+              <div style={{fontSize:32,marginBottom:8}}>🌿</div>
+              <div style={{fontSize:19,fontWeight:600,color:"#1a1a1a",marginBottom:4}}>Hi, I'm Aloe</div>
+              <div style={{fontSize:13,color:"#666",lineHeight:1.6}}>Ask me anything about tenants, properties, leads, work orders, or policies.</div>
+              <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginTop:10}}>
+                {SOURCES.map(s=>React.createElement('div',{key:s.label,style:{padding:"2px 9px",borderRadius:20,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:11,color:"#333"}},s.label))}
+              </div>
             </div>
-            <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-              {SOURCES.map(s=>React.createElement('div',{key:s.label,style:{padding:"3px 10px",borderRadius:20,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:12,color:"#333"}},s.label))}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,borderBottom:"1px solid #f0f0f0",paddingBottom:12}}>
+              {FAQ_TABS.map(tab=>(
+                <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{padding:"6px 12px",borderRadius:20,border:\`1px solid \${activeTab===tab.id?tab.border:"#e5e5e5"}\`,background:activeTab===tab.id?tab.color:"white",color:activeTab===tab.id?"#111":"#666",fontSize:12,fontWeight:activeTab===tab.id?600:400,cursor:"pointer",transition:"all 0.15s"}}>
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:8,width:"100%",maxWidth:540}}>
-              {SUGGESTIONS.map((s,i)=>(
-                <button key={i} className="chip" onClick={()=>send(s.text)} style={{background:"white",border:"1px solid #f0f0f0",borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",fontSize:13,color:"#666",lineHeight:1.4,display:"flex",alignItems:"flex-start",gap:6,transition:"background 0.1s"}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:8}}>
+              {currentTab.questions.map((s,i)=>(
+                <button key={i} className="chip" onClick={()=>send(s.text)} style={{background:"white",border:\`1px solid \${currentTab.border}22\`,borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",fontSize:13,color:"#555",lineHeight:1.4,display:"flex",alignItems:"flex-start",gap:6,transition:"background 0.1s"}}>
                   <span style={{fontSize:14,flexShrink:0}}>{s.icon}</span>{s.text}
                 </button>
               ))}
