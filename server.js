@@ -93,7 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders tool for ANY question about Aptly work orders. Returns stage, property, vendor, created date, days open, comment history, and summary metrics (total, open, unassigned, avg days open). Cross-reference with Rentvine rv_get_work_orders to compare both systems.
+- "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders tool for ANY question about Aptly work orders. Returns stage, property, vendor, created date, days open, comment history, and summary metrics (total, open, unassigned, avg days open). IMPORTANT: Aptly and Rentvine track THE SAME work orders — they are synced. Match them using workOrderNumber (Aptly field "workOrderNumber" = Rentvine field "number"). Count discrepancies are due to status filter differences, not missing work orders. Aptly stages: Requested, Scheduled, Open, Unit Turn, Waiting for parts, Troubleshooting Steps Sent, Completed, Cancelled. Rentvine primaryWorkOrderStatusID: 1=New, 2=In Progress, 3=On Hold, 4=Completed, 5=Cancelled.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -803,31 +803,27 @@ async function executeTool(name, input) {
         if (input.propertyId) p.propertyID = input.propertyId;
         const data = await rvFetch('/maintenance/work-orders', p);
         let rawWOs = Array.isArray(data) ? data : (data && data.data) || [];
-        // Response is nested: [{workOrder:{...}, contact:{...}}, ...]
-        // Flatten by merging workOrder fields to top level
+        // Response is nested: [{workOrder:{...}, contact:{...}, unit:{...}}, ...]
         let allWOs = rawWOs.map(function(rec) {
           if (rec.workOrder) {
-            // Merge contact info into the work order object
             return Object.assign({}, rec.workOrder, {
-              unitAddress: rec.unit && rec.unit.address || rec.workOrder.unitAddress || '',
-              vendorName: rec.contact && rec.contact.name || '',
+              unitAddress: (rec.unit && (rec.unit.address || rec.unit.name)) || '',
+              vendorName: (rec.contact && rec.contact.name) || '',
             });
           }
           return rec;
         }).filter(function(wo) { return wo.workOrderID; });
         console.log('RV WO total raw:', allWOs.length);
-        // primaryWorkOrderStatusID: 1=New/Open, 2=In Progress, 3=On Hold, 4=Completed, 5=Cancelled
-        // dateClosed presence also means closed
+        // primaryWorkOrderStatusID (string): 1=New, 2=In Progress, 3=On Hold, 4=Completed, 5=Cancelled
+        // dateClosed presence = closed
         let filtered = allWOs;
         if (input.status === 'closed') {
           filtered = allWOs.filter(function(wo) {
             return parseInt(wo.primaryWorkOrderStatusID) >= 4 || !!wo.dateClosed;
           });
         } else {
-          // Default: open/not closed — exclude completed (4) and cancelled (5)
           filtered = allWOs.filter(function(wo) {
-            const sid = parseInt(wo.primaryWorkOrderStatusID);
-            return (isNaN(sid) || sid < 4) && !wo.dateClosed;
+            return parseInt(wo.primaryWorkOrderStatusID) < 4 && !wo.dateClosed;
           });
         }
         console.log('RV WO filtered:', filtered.length);
@@ -836,9 +832,9 @@ async function executeTool(name, input) {
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : null;
           return {
             id: wo.workOrderID,
-            number: wo.workOrderNumber,
+            number: wo.workOrderNumber,  // matches Aptly's workOrderNumber field
             title: wo.description || '?',
-            status: wo.primaryWorkOrderStatusID,
+            statusId: wo.primaryWorkOrderStatusID,
             property: wo.unitAddress || '',
             vendor: wo.vendorName || '',
             priority: wo.priorityID || '',
