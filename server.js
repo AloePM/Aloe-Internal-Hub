@@ -802,45 +802,49 @@ async function executeTool(name, input) {
         const p = { pageSize: 100, page: 1 };
         if (input.propertyId) p.propertyID = input.propertyId;
         const data = await rvFetch('/maintenance/work-orders', p);
-        console.log('RV WO raw:', typeof data, Array.isArray(data) ? 'arr:' + data.length : JSON.stringify(data).slice(0, 200));
-        let allWOs = Array.isArray(data) ? data : (data && data.data) || [];
-        // Log first record to see exact field names
-        if (allWOs.length > 0) console.log('RV WO first keys:', Object.keys(allWOs[0]).join(', '));
-        if (allWOs.length > 0) console.log('RV WO first record:', JSON.stringify(allWOs[0]).slice(0, 400));
-        // Try both workOrderID and workOrder.workOrderID (nested)
-        const getId = function(wo) { return wo.workOrderID || (wo.workOrder && wo.workOrder.workOrderID); };
-        allWOs = allWOs.filter(function(wo) { return getId(wo); });
-        // Flatten nested workOrder objects if present
-        allWOs = allWOs.map(function(wo) { return wo.workOrder ? Object.assign({}, wo.workOrder, wo) : wo; });
-        if (allWOs.length > 0) console.log('RV WO sample:', JSON.stringify(allWOs[0]).slice(0, 600));
+        let rawWOs = Array.isArray(data) ? data : (data && data.data) || [];
+        // Response is nested: [{workOrder:{...}, contact:{...}}, ...]
+        // Flatten by merging workOrder fields to top level
+        let allWOs = rawWOs.map(function(rec) {
+          if (rec.workOrder) {
+            // Merge contact info into the work order object
+            return Object.assign({}, rec.workOrder, {
+              unitAddress: rec.unit && rec.unit.address || rec.workOrder.unitAddress || '',
+              vendorName: rec.contact && rec.contact.name || '',
+            });
+          }
+          return rec;
+        }).filter(function(wo) { return wo.workOrderID; });
         console.log('RV WO total raw:', allWOs.length);
-        // Rentvine uses primaryWorkOrderStatusID (integer):
-        // Open/active = 1,2,3; Completed = 4; Cancelled = 5
-        // Also check text fields as fallback
+        // primaryWorkOrderStatusID: 1=New/Open, 2=In Progress, 3=On Hold, 4=Completed, 5=Cancelled
+        // dateClosed presence also means closed
         let filtered = allWOs;
         if (input.status === 'closed') {
           filtered = allWOs.filter(function(wo) {
-            return (wo.primaryWorkOrderStatusID >= 4) || /closed|complet/i.test(wo.workOrderStatus || wo.status || '');
+            return parseInt(wo.primaryWorkOrderStatusID) >= 4 || !!wo.dateClosed;
           });
         } else {
+          // Default: open/not closed — exclude completed (4) and cancelled (5)
           filtered = allWOs.filter(function(wo) {
-            const sid = wo.primaryWorkOrderStatusID;
-            if (sid !== undefined && sid !== null) return sid < 4;
-            return !/closed|complet|cancel/i.test(wo.workOrderStatus || wo.status || '');
+            const sid = parseInt(wo.primaryWorkOrderStatusID);
+            return (isNaN(sid) || sid < 4) && !wo.dateClosed;
           });
         }
         console.log('RV WO filtered:', filtered.length);
         const now2 = Date.now();
         const slim2 = filtered.map(function(wo) {
-          const created = wo.createdDate ? new Date(wo.createdDate).getTime() : null;
+          const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : null;
           return {
             id: wo.workOrderID,
-            title: wo.description || wo.subject || '?',
-            status: wo.workOrderStatus || wo.status || String(wo.primaryWorkOrderStatusID || ''),
-            property: wo.unitAddress || wo.propertyAddress || wo.address || '',
-            vendor: wo.vendorName || wo.vendor || '',
-            priority: wo.priorityName || wo.priority || '',
-            createdDate: (wo.createdDate || '').slice(0, 10),
+            number: wo.workOrderNumber,
+            title: wo.description || '?',
+            status: wo.primaryWorkOrderStatusID,
+            property: wo.unitAddress || '',
+            vendor: wo.vendorName || '',
+            priority: wo.priorityID || '',
+            scheduledStart: (wo.scheduledStartDate || '').slice(0, 10),
+            scheduledEnd: (wo.scheduledEndDate || '').slice(0, 10),
+            createdDate: (wo.dateTimeCreated || '').slice(0, 10),
             daysOpen: created ? Math.floor((now2 - created) / 86400000) : null,
           };
         });
