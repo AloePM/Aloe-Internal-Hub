@@ -798,37 +798,20 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        // Fetch work orders — filter to active ones only to avoid historical empty records
-        const params = { pageSize: 100, page: 1, status: 'Open' };
-        if (input.propertyId) params.propertyID = input.propertyId;
-        // Try fetching with status filter first
-        let allWOs = [];
-        const statuses = input.status === 'closed' ? ['Closed'] : ['Open', 'Pending', 'Scheduled', 'In Progress', 'On Hold'];
-        for (const status of statuses) {
-          let page = 1;
-          while (true) {
-            const p = { pageSize: 100, page, status };
-            if (input.propertyId) p.propertyID = input.propertyId;
-            const data = await rvFetch('/maintenance/work-orders', p);
-            const batch = Array.isArray(data) ? data : (data && data.data) || [];
-            if (batch.length === 0) break;
-            // Filter out empty records
-            const valid = batch.filter(function(wo) { return wo.workOrderID && (wo.description || wo.subject || wo.status); });
-            allWOs = allWOs.concat(valid);
-            if (batch.length < 100) break;
-            page++;
-          }
-        }
-        // Deduplicate
-        const seen = {};
-        allWOs = allWOs.filter(function(wo) {
-          if (seen[wo.workOrderID]) return false;
-          seen[wo.workOrderID] = true;
-          return true;
-        });
-        // Filter not closed/cancelled if requested
+        // Fetch work orders — page 1 only to avoid pulling thousands of historical records
+        // Rentvine returns most recent first, so page 1 has current active ones
+        const p = { pageSize: 100, page: 1 };
+        if (input.propertyId) p.propertyID = input.propertyId;
+        const data = await rvFetch('/maintenance/work-orders', p);
+        let allWOs = Array.isArray(data) ? data : (data && data.data) || [];
+        // Filter out empty/invalid records
+        allWOs = allWOs.filter(function(wo) { return wo.workOrderID && (wo.description || wo.subject || wo.status); });
+        // Filter not closed/cancelled by default
         let filtered = allWOs;
-        if (!input.status || input.status === 'open' || input.status === 'not closed') {
+        if (input.status === 'closed') {
+          filtered = allWOs.filter(function(wo) { return wo.status === 'Closed' || !!wo.closedDate; });
+        } else {
+          // Default: exclude closed and cancelled
           filtered = allWOs.filter(function(wo) { return wo.status !== 'Closed' && wo.status !== 'Cancelled' && !wo.closedDate; });
         }
         const now2 = Date.now();
@@ -1000,6 +983,9 @@ async function executeTool(name, input) {
           page++;
         }
         console.log('Aptly WO total fetched:', allWOs.length);
+        if (allWOs.length > 0) {
+          console.log('Aptly WO sample fields:', Object.keys(allWOs[0]).join(', '));
+        }
         // Map UUID keys to labels
         const extractVal = function(v) {
           if (!v) return '';
@@ -1052,14 +1038,19 @@ async function executeTool(name, input) {
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
         // Return slim summary to avoid token limits — full details only if filtering by property
         const slim = withMetrics.map(function(c) {
+          // Dynamically find scheduled date field from schema-mapped keys
+          const schedKey = Object.keys(c).find(function(k) { return /sched/i.test(k); });
+          const dueKey = Object.keys(c).find(function(k) { return /due|target|complet/i.test(k) && k !== 'title'; });
           return {
             title: c.title || c['Work Order Title'] || c['Title'] || '?',
             stage: c.stage,
-            property: c['Property'] || c['Unit'] || c['Address'] || '',
-            vendor: c['Vendor'] || c['vendor'] || '',
+            property: c['Property'] || c['Unit'] || c['Address'] || c['Mirror Unit'] || '',
+            vendor: c['Vendor'] || c['vendor'] || c['Assigned To'] || '',
+            scheduledDate: (schedKey ? c[schedKey] : '') || '',
+            dueDate: (dueKey ? c[dueKey] : '') || '',
             daysOpen: c.daysOpen,
             createdAt: (c.createdAt || '').slice(0, 10),
-            comments: Array.isArray(c.comments) && c.comments.length > 0 ? c.comments.slice(-1) : [],
+            comments: Array.isArray(c.comments) && c.comments.length > 0 ? c.comments : [],
           };
         });
         return JSON.stringify({
