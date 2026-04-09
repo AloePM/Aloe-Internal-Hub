@@ -798,37 +798,45 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        // Fetch work orders — page 1 only to avoid pulling thousands of historical records
-        // Rentvine returns most recent first, so page 1 has current active ones
+        // Fetch work orders — page 1 only
         const p = { pageSize: 100, page: 1 };
         if (input.propertyId) p.propertyID = input.propertyId;
         const data = await rvFetch('/maintenance/work-orders', p);
         let allWOs = Array.isArray(data) ? data : (data && data.data) || [];
-        // Filter out empty/invalid records
-        allWOs = allWOs.filter(function(wo) { return wo.workOrderID && (wo.description || wo.subject || wo.status); });
-        // Filter not closed/cancelled by default
+        allWOs = allWOs.filter(function(wo) { return wo.workOrderID; });
+        if (allWOs.length > 0) console.log('RV WO sample:', JSON.stringify(allWOs[0]).slice(0, 600));
+        console.log('RV WO total raw:', allWOs.length);
+        // Rentvine uses primaryWorkOrderStatusID (integer):
+        // Open/active = 1,2,3; Completed = 4; Cancelled = 5
+        // Also check text fields as fallback
         let filtered = allWOs;
         if (input.status === 'closed') {
-          filtered = allWOs.filter(function(wo) { return wo.status === 'Closed' || !!wo.closedDate; });
+          filtered = allWOs.filter(function(wo) {
+            return (wo.primaryWorkOrderStatusID >= 4) || /closed|complet/i.test(wo.workOrderStatus || wo.status || '');
+          });
         } else {
-          // Default: exclude closed and cancelled
-          filtered = allWOs.filter(function(wo) { return wo.status !== 'Closed' && wo.status !== 'Cancelled' && !wo.closedDate; });
+          filtered = allWOs.filter(function(wo) {
+            const sid = wo.primaryWorkOrderStatusID;
+            if (sid !== undefined && sid !== null) return sid < 4;
+            return !/closed|complet|cancel/i.test(wo.workOrderStatus || wo.status || '');
+          });
         }
+        console.log('RV WO filtered:', filtered.length);
         const now2 = Date.now();
         const slim2 = filtered.map(function(wo) {
           const created = wo.createdDate ? new Date(wo.createdDate).getTime() : null;
           return {
-            id: wo.workOrderID || wo.id,
+            id: wo.workOrderID,
             title: wo.description || wo.subject || '?',
-            status: wo.status,
+            status: wo.workOrderStatus || wo.status || String(wo.primaryWorkOrderStatusID || ''),
             property: wo.unitAddress || wo.propertyAddress || wo.address || '',
             vendor: wo.vendorName || wo.vendor || '',
-            priority: wo.priority || '',
+            priority: wo.priorityName || wo.priority || '',
             createdDate: (wo.createdDate || '').slice(0, 10),
             daysOpen: created ? Math.floor((now2 - created) / 86400000) : null,
           };
         });
-        return JSON.stringify({ total: filtered.length, open: filtered.filter(function(wo) { return wo.status !== 'Closed' && wo.status !== 'Cancelled'; }).length, workOrders: slim2 });
+        return JSON.stringify({ total: filtered.length, open: filtered.length, workOrders: slim2 });
       }
 
       case 'rv_get_work_order_detail': {
