@@ -802,6 +802,7 @@ async function executeTool(name, input) {
         const p = { pageSize: 100, page: 1 };
         if (input.propertyId) p.propertyID = input.propertyId;
         const data = await rvFetch('/maintenance/work-orders', p);
+        console.log('RV WO raw:', typeof data, Array.isArray(data) ? 'arr:' + data.length : JSON.stringify(data).slice(0, 200));
         let allWOs = Array.isArray(data) ? data : (data && data.data) || [];
         allWOs = allWOs.filter(function(wo) { return wo.workOrderID; });
         if (allWOs.length > 0) console.log('RV WO sample:', JSON.stringify(allWOs[0]).slice(0, 600));
