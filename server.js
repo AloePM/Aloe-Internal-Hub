@@ -399,6 +399,8 @@ const ALL_TOOLS = [
       },
     },
   },
+  {
+    name: 'compare_work_orders',
     description: 'Compare work orders between Aptly and Rentvine to find mismatches. Use when asked to cross-reference, compare, or find work orders that are in one system but not the other. Fetches both systems, matches by workOrderNumber, and returns: matched pairs, work orders only in Aptly, work orders only in Rentvine, and status mismatches.',
     input_schema: { type: 'object', properties: {} },
   },
