@@ -966,93 +966,72 @@ async function executeTool(name, input) {
 
       case 'aptly_get_work_orders': {
         // Fetch work orders from Aptly core-api (board ID: workOrder)
-        const schema = await unitsFetch('/api/schema/workOrder');
-        const schemaMap = {};
-        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
+        // NOTE: fields are already plain English (unit, vendor, stage, description, createdAt)
+        // NO schema mapping needed — use raw field names directly
         let allWOs = [];
         let page = 0;
         while (true) {
-          const params = { page, pageSize: 100 };
-          if (input.includeArchived) params.includeArchived = true;
+          const params = { page, pageSize: 100, includeArchived: false };
           const data = await unitsFetch('/api/board/workOrder', params);
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           console.log('Aptly WO page', page, ':', batch.length, 'cards');
           if (batch.length === 0) break;
-          allWOs = allWOs.concat(batch);
+          // Filter out archived/closed cards immediately
+          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
+          allWOs = allWOs.concat(active);
           if (batch.length < 100) break;
+          // Safety cap — stop at page 1 (max 200 cards) to avoid pulling thousands of historical records
+          if (page >= 1) break;
           page++;
         }
         console.log('Aptly WO total fetched:', allWOs.length);
-        if (allWOs.length > 0) {
-          console.log('Aptly WO sample fields:', Object.keys(allWOs[0]).join(', '));
-        }
-        // Map UUID keys to labels
-        const extractVal = function(v) {
-          if (!v) return '';
-          if (typeof v === 'string') return v;
-          if (Array.isArray(v)) return v.map(function(x) { return x.name || x; }).join(', ');
-          if (typeof v === 'object') return v.amount ? '$' + v.amount : (v.name || v.value || String(v));
-          return String(v);
-        };
-        const mapped = allWOs.map(function(card) {
-          const m = {
-            _cardId: card.cardId,
-            title: card.name || '',
-            stage: card.stage || '',
-            createdAt: card.createdAt || '',
-            updatedAt: card.updatedAt || '',
-            comments: Array.isArray(card.comments) ? card.comments.map(function(c) {
-              return (c.userName || 'Unknown') + ' (' + (c.createdAt || '').slice(0, 10) + '): ' + (c.content || '');
-            }) : [],
-          };
-          Object.keys(card).forEach(function(k) {
-            if (schemaMap[k]) m[schemaMap[k]] = extractVal(card[k]);
-          });
-          return m;
-        });
-        // Apply filters
-        let filtered = mapped;
+
+        // Filter by input
+        let filtered = allWOs;
         if (input.status) {
           const s = input.status.toLowerCase();
-          if (s === 'open' || s === 'not closed' || s === 'pending') {
-            filtered = filtered.filter(function(c) { return !/closed|complete|done|cancel/i.test(c.stage || ''); });
+          if (s === 'open' || s === 'not closed') {
+            filtered = allWOs; // already filtered above
           } else {
-            filtered = filtered.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
+            filtered = allWOs.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
           }
         }
         if (input.property) {
           const p = input.property.toLowerCase();
           filtered = filtered.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(p); });
         }
-        // Calculate metrics
+
+        // Calculate metrics using raw field names
         const now = Date.now();
         const withMetrics = filtered.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : null;
           return Object.assign({}, c, { daysOpen });
         });
-        // Summary stats — open = not closed/cancelled
-        const open = withMetrics.filter(function(c) { return !/closed|complete|done|cancel/i.test(c.stage || ''); });
-        const unassigned = open.filter(function(c) { return !c.Vendor && !c['Assigned To'] && !c.assignee && !c['vendor']; });
+
+        const open = withMetrics; // already filtered to non-closed
+        const unassigned = open.filter(function(c) { return !c.vendor; });
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
-        // Return slim summary to avoid token limits — full details only if filtering by property
+
+        // Slim output — use known raw field names
         const slim = withMetrics.map(function(c) {
-          // Dynamically find scheduled date field from schema-mapped keys
+          // Find scheduled date from UUID fields via schema map (built at top)
           const schedKey = Object.keys(c).find(function(k) { return /sched/i.test(k); });
-          const dueKey = Object.keys(c).find(function(k) { return /due|target|complet/i.test(k) && k !== 'title'; });
           return {
-            title: c.title || c['Work Order Title'] || c['Title'] || '?',
-            stage: c.stage,
-            property: c['Property'] || c['Unit'] || c['Address'] || c['Mirror Unit'] || '',
-            vendor: c['Vendor'] || c['vendor'] || c['Assigned To'] || '',
-            scheduledDate: (schedKey ? c[schedKey] : '') || '',
-            dueDate: (dueKey ? c[dueKey] : '') || '',
+            title: c.description || c.name || '?',
+            stage: c.stage || '',
+            property: (c.unit && c.unit.name) || (c.location && c.location.name) || c.unit || '',
+            vendor: (c.vendor && c.vendor.name) || c.vendor || '',
+            scheduledDate: schedKey ? c[schedKey] : '',
             daysOpen: c.daysOpen,
             createdAt: (c.createdAt || '').slice(0, 10),
-            comments: Array.isArray(c.comments) && c.comments.length > 0 ? c.comments : [],
+            comments: Array.isArray(c.comments) ? c.comments.map(function(cm) {
+              return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
+            }) : [],
           };
         });
+
         return JSON.stringify({
           total: withMetrics.length,
           open: open.length,
