@@ -93,7 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders tool for ANY question about Aptly work orders. Returns stage, property, vendor, created date, days open, comment history, and summary metrics (total, open, unassigned, avg days open). IMPORTANT: Aptly and Rentvine track THE SAME work orders — they are synced. Match them using workOrderNumber (Aptly field "workOrderNumber" = Rentvine field "number"). Count discrepancies are due to status filter differences, not missing work orders. Aptly stages: Requested, Scheduled, Open, Unit Turn, Waiting for parts, Troubleshooting Steps Sent, Completed, Cancelled. Rentvine primaryWorkOrderStatusID: 1=New, 2=In Progress, 3=On Hold, 4=Completed, 5=Cancelled.
+- "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders for counts/metrics. Use compare_work_orders to cross-reference Aptly vs Rentvine — it matches by workOrderNumber, returns exactly which work orders are only in Aptly, only in Rentvine, or have status mismatches. Aptly and Rentvine track the SAME work orders synced by workOrderNumber. "Not completed/closed" means: Aptly stages not in Completed/Cancelled/Rejected; Rentvine primaryWorkOrderStatusID < 4 and no dateClosed. For comments/notes on work orders: use rv_get_work_order_notes which fetches Rentvine work order status updates (these are the notes/follow-ups). Since Aptly and Rentvine are bidirectionally synced, Rentvine notes = Aptly comments.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -388,6 +388,19 @@ const ALL_TOOLS = [
         includeArchived: { type: 'boolean', description: 'Include archived/closed work orders. Default false.' },
       },
     },
+  },
+  {
+    name: 'rv_get_work_order_notes',
+    description: 'Get notes/status updates for Rentvine work orders. These are the comments/follow-up notes. Use when asked about comments, notes, follow-ups, or updates on work orders. Can filter by workOrderId for a specific work order.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        workOrderId: { type: 'string', description: 'Filter notes for a specific work order ID' },
+      },
+    },
+  },
+    description: 'Compare work orders between Aptly and Rentvine to find mismatches. Use when asked to cross-reference, compare, or find work orders that are in one system but not the other. Fetches both systems, matches by workOrderNumber, and returns: matched pairs, work orders only in Aptly, work orders only in Rentvine, and status mismatches.',
+    input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'notion_search',
@@ -848,7 +861,21 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_order_detail': {
-        return JSON.stringify(await rvFetch('/maintenance/work-orders/' + input.workOrderId));
+        // Returns full work order including notes/statuses
+        const detail = await rvFetch('/maintenance/work-orders/' + input.workOrderId);
+        // Also fetch status updates (notes) for this work order
+        const statuses = await rvFetch('/maintenance/work-order-statuses', { workOrderID: input.workOrderId, pageSize: 50, page: 1 });
+        return JSON.stringify({ detail, statuses });
+      }
+
+      case 'rv_get_work_order_notes': {
+        // Fetch all work order status updates/notes — these are the comments in Rentvine
+        // Supports workOrderID filter or fetches recent ones
+        const params = { pageSize: 100, page: 1 };
+        if (input.workOrderId) params.workOrderID = input.workOrderId;
+        const data = await rvFetch('/maintenance/work-order-statuses', params);
+        console.log('RV WO notes raw:', Array.isArray(data) ? data.length : JSON.stringify(data).slice(0, 100));
+        return JSON.stringify(data);
       }
 
       case 'zi_get_inspections': {
@@ -934,6 +961,87 @@ async function executeTool(name, input) {
           { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
           { id: 'workOrder', name: 'Work Orders', description: 'Maintenance work orders — stage, vendor, property, created date, days open, comments' },
         ]);
+      }
+
+      case 'compare_work_orders': {
+        // Fetch all active work orders from both systems simultaneously
+        const [rvData, aptlyData] = await Promise.all([
+          rvFetch('/maintenance/work-orders', { pageSize: 100, page: 1 }),
+          unitsFetch('/api/board/workOrder', { page: 0, pageSize: 100, includeArchived: false }),
+        ]);
+
+        // Process Rentvine — unwrap nested response
+        const rvRaw = Array.isArray(rvData) ? rvData : [];
+        const rvWOs = rvRaw.map(function(rec) {
+          return rec.workOrder ? Object.assign({}, rec.workOrder, {
+            unitAddress: (rec.unit && (rec.unit.address || rec.unit.name)) || '',
+            vendorName: (rec.contact && rec.contact.name) || '',
+          }) : rec;
+        }).filter(function(wo) {
+          return wo.workOrderID && parseInt(wo.primaryWorkOrderStatusID) < 4 && !wo.dateClosed;
+        });
+
+        // Process Aptly — filter to active only
+        const aptlyRaw = Array.isArray(aptlyData) ? aptlyData : (aptlyData && aptlyData.data) || [];
+        const aptlyWOs = aptlyRaw.filter(function(c) {
+          return !c.archived && !/completed|cancelled|rejected/i.test(c.stage || '');
+        });
+
+        // Build lookup maps by workOrderNumber
+        const rvByNumber = {};
+        rvWOs.forEach(function(wo) {
+          if (wo.workOrderNumber) rvByNumber[String(wo.workOrderNumber)] = wo;
+        });
+        const aptlyByNumber = {};
+        aptlyWOs.forEach(function(c) {
+          if (c.workOrderNumber) aptlyByNumber[String(c.workOrderNumber)] = c;
+        });
+
+        // Find matches and mismatches
+        const matched = [];
+        const aptlyOnly = [];
+        const statusMismatch = [];
+
+        aptlyWOs.forEach(function(c) {
+          const num = String(c.workOrderNumber || '');
+          if (!num) { aptlyOnly.push({ number: 'no number', title: c.description || c.name, aptlyStage: c.stage, property: (c.unit && c.unit.name) || '' }); return; }
+          const rv = rvByNumber[num];
+          if (!rv) {
+            aptlyOnly.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, property: (c.unit && c.unit.name) || '' });
+          } else {
+            // Check status alignment
+            const rvStatusId = parseInt(rv.primaryWorkOrderStatusID);
+            const aptlyStage = (c.stage || '').toLowerCase();
+            const rvIsOpen = rvStatusId <= 2;
+            const aptlyIsOpen = !/completed|cancelled|rejected/i.test(aptlyStage);
+            if (rvIsOpen !== aptlyIsOpen) {
+              statusMismatch.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, rvStatusId: rvStatusId, property: (c.unit && c.unit.name) || rv.unitAddress || '' });
+            } else {
+              matched.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, rvStatusId: rvStatusId });
+            }
+          }
+        });
+
+        // Find work orders in Rentvine but not Aptly
+        const rvOnly = rvWOs.filter(function(wo) {
+          return wo.workOrderNumber && !aptlyByNumber[String(wo.workOrderNumber)];
+        }).map(function(wo) {
+          return { number: String(wo.workOrderNumber), title: wo.description || '?', rvStatusId: wo.primaryWorkOrderStatusID, property: wo.unitAddress || '' };
+        });
+
+        return JSON.stringify({
+          summary: {
+            rvTotal: rvWOs.length,
+            aptlyTotal: aptlyWOs.length,
+            matched: matched.length,
+            aptlyOnly: aptlyOnly.length,
+            rvOnly: rvOnly.length,
+            statusMismatch: statusMismatch.length,
+          },
+          aptlyOnly: aptlyOnly,
+          rvOnly: rvOnly,
+          statusMismatch: statusMismatch,
+        });
       }
 
       case 'aptly_get_leads': {
@@ -1239,8 +1347,18 @@ function getRelevantTools(msg) {
     ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
-    ['rv_get_work_orders', 'rv_get_work_order_detail'].forEach(function(t) { tools.add(t); });
+    tools.add('rv_get_work_orders');
     tools.add('aptly_get_work_orders');
+  }
+  if (msg.match(/work.?order.*detail|detail.*work.?order|work.?order.*note|specific.*work.?order/)) {
+    tools.add('rv_get_work_order_detail');
+  }
+  if (msg.match(/comment|note|follow.?up|update.*work|work.*update|no.*comment|comment.*work/)) {
+    tools.add('rv_get_work_order_notes');
+    tools.add('aptly_get_work_orders');
+  }
+  if (msg.match(/compare|cross.?ref|match|mismatch|sync|discrepan|not in|missing.*work|work.*missing/)) {
+    tools.add('compare_work_orders');
   }
   if (msg.match(/inspect/)) {
     ['rv_get_inspections', 'rv_get_inspection_detail'].forEach(function(t) { tools.add(t); });
@@ -1296,11 +1414,50 @@ app.post('/api/chat', async function(req, res) {
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
     const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house|under \d|homes.*rent|rent.*home|\d\s*bed/) && !lowerMsg.match(/[0-9]{5,6}/);
+    const isMarketDaysQ = lowerMsg.match(/market.*(\d+).*day|(\d+).*day.*market|over.*\d+.*day|how long.*market|days.*listed|listed.*days|sitting.*market|market.*long/);
+    const marketDays = isMarketDaysQ ? parseInt((lowerMsg.match(/(\d+)\s*day/) || [])[1] || '30') : null;
     const isNotTourableQ = lowerMsg.match(/not.{0,20}(tour|showing|avail)|can.{0,10}t.{0,10}(tour|showing)|(tour|showing).{0,20}not/) && !lowerMsg.match(/[0-9]{5,6}/);
     const priceMatch = lowerMsg.match(/(?:under|less than|below|max|up to)\s*\$?(\d{3,5})/);
     const maxPrice = priceMatch ? parseInt(priceMatch[1]) : null;
     const bedMatch = lowerMsg.match(/(\d)\s*(?:bed|br|bedroom)/);
     const minBeds = bedMatch ? parseInt(bedMatch[1]) : null;
+    if (isMarketDaysQ) {
+      try {
+        const cards = await getUnitsCards();
+        const published = cards.filter(function(c) {
+          return c['Published For Rent'] === 'checked' || c['Published For Rent'] === true ||
+                 c['Syndicate'] === 'checked' || c['Active'] === 'checked';
+        });
+        const now = Date.now();
+        const threshold = marketDays * 24 * 60 * 60 * 1000;
+        const longListed = published.filter(function(c) {
+          // Check Available Date or Stage Changed date
+          const dateStr = c['Available Date'] || c['Stage Changed'] || c['Created At'] || '';
+          if (!dateStr) return false;
+          try {
+            return (now - new Date(dateStr).getTime()) > threshold;
+          } catch(e) { return false; }
+        }).sort(function(a, b) {
+          const da = new Date(a['Available Date'] || a['Stage Changed'] || 0).getTime();
+          const db = new Date(b['Available Date'] || b['Stage Changed'] || 0).getTime();
+          return da - db; // oldest first
+        });
+        const fmt = function(c) {
+          const addr = (c.Street || c.Address || c['Marketing Name'] || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
+          const dateStr = c['Available Date'] || c['Stage Changed'] || '';
+          const daysOn = dateStr ? Math.floor((now - new Date(dateStr).getTime()) / 86400000) : '?';
+          const rent = c['Market Rent'] && typeof c['Market Rent'] === 'object' ? '$' + Number(c['Market Rent'].amount).toLocaleString() : (c['Market Rent'] || '');
+          const beds = c.Beds ? c.Beds + 'bd' : '';
+          return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + ' — ' + daysOn + ' days on market';
+        };
+        const text = longListed.length > 0
+          ? 'Homes listed over ' + marketDays + ' days (' + longListed.length + '):\n\n' + longListed.map(fmt).join('\n')
+          : 'No homes have been listed over ' + marketDays + ' days.';
+        return res.json({ content: [{ type: 'text', text }] });
+      } catch(e) {
+        console.error('Market days shortcut error:', e.message);
+      }
+    }
     if (isAvailabilityQ || isNotTourableQ) {
       try {
         const cards = await getUnitsCards();
@@ -1691,33 +1848,43 @@ const PASSCODE = "aloe2024";
 
 const FAQ_TABS = [
   {
-    id: "maintenance", label: "🔧 Maintenance", color: "#fff7ed", border: "#f97316",
+    id: "maintenance", label: "🔧 Maintenance", color: "#fff7ed", border: "#f97316", accent: "#ea580c",
     questions: [
       {icon:"🔧", text:"Show me all open work orders in Aptly and Rentvine"},
       {icon:"📅", text:"Which scheduled work orders are past their scheduled date?"},
       {icon:"🚨", text:"Which work orders have no comments or follow-up?"},
       {icon:"👤", text:"Which work orders are unassigned?"},
       {icon:"⏱️", text:"What work orders have been open the longest?"},
+      {icon:"🔀", text:"Cross-reference work orders between Aptly and Rentvine"},
       {icon:"🏠", text:"Show me all open work orders for [property address]"},
       {icon:"🏢", text:"Which vendor has the most open work orders?"},
-      {icon:"📊", text:"What's our average time to close a work order?"},
+      {icon:"📊", text:"What's our average days to close a work order?"},
+      {icon:"🐜", text:"Show me all termite-related work orders"},
+      {icon:"❄️", text:"Show me all HVAC work orders"},
+      {icon:"💧", text:"Any water leak or plumbing emergencies open?"},
     ]
   },
   {
-    id: "leasing", label: "🏠 Leasing", color: "#f0fdf4", border: "#22c55e",
+    id: "leasing", label: "🏠 Leasing", color: "#f0fdf4", border: "#22c55e", accent: "#16a34a",
     questions: [
       {icon:"🏠", text:"What units are available right now?"},
       {icon:"👥", text:"What new leads came in this week?"},
       {icon:"📅", text:"What showings are scheduled today?"},
+      {icon:"📅", text:"What showings happened this week?"},
       {icon:"📝", text:"Show me all active applications"},
       {icon:"🔍", text:"What is the status of applications at [address]?"},
       {icon:"📋", text:"What are our applicant screening criteria?"},
       {icon:"💰", text:"What is our application fee and deposit structure?"},
-      {icon:"📊", text:"How many leads came in this month and from what sources?"},
+      {icon:"📊", text:"How many leads came in this month and what sources?"},
+      {icon:"🔎", text:"How many applications are pending approval?"},
+      {icon:"📆", text:"What units are coming available in the next 30 days?"},
+      {icon:"🏷️", text:"What is the current rent for [address]?"},
+      {icon:"⏱️", text:"Which homes have been on the market over 30 days?"},
+      {icon:"📉", text:"Which homes have been on the market over 14 days?"},
     ]
   },
   {
-    id: "tenants", label: "👤 Tenants", color: "#eff6ff", border: "#3b82f6",
+    id: "tenants", label: "👤 Tenants", color: "#eff6ff", border: "#3b82f6", accent: "#2563eb",
     questions: [
       {icon:"💰", text:"What does [tenant name] owe and what is it from?"},
       {icon:"📋", text:"What's our lease break policy?"},
@@ -1726,11 +1893,15 @@ const FAQ_TABS = [
       {icon:"🏚️", text:"What is the move-out process and timeline?"},
       {icon:"💳", text:"What is the late fee policy?"},
       {icon:"🐾", text:"What is the pet policy and fees?"},
-      {icon:"🔧", text:"How do tenants submit maintenance requests?"},
+      {icon:"🔧", text:"How do tenants submit a maintenance request?"},
+      {icon:"🏦", text:"What is the RBP program and what does it cost?"},
+      {icon:"📬", text:"How does a tenant give notice to vacate?"},
+      {icon:"🔒", text:"What happens if a tenant is locked out?"},
+      {icon:"💸", text:"Can a tenant set up a payment plan?"},
     ]
   },
   {
-    id: "owners", label: "🏢 Owners", color: "#fdf4ff", border: "#a855f7",
+    id: "owners", label: "🏢 Owners", color: "#fdf4ff", border: "#a855f7", accent: "#9333ea",
     questions: [
       {icon:"🏢", text:"How is [owner name]'s property performing?"},
       {icon:"💸", text:"When are owner disbursements processed?"},
@@ -1740,19 +1911,44 @@ const FAQ_TABS = [
       {icon:"🔄", text:"Show me all leases up for renewal"},
       {icon:"📋", text:"What does the rent-ready process look like?"},
       {icon:"🛡️", text:"What guarantees do we offer owners?"},
+      {icon:"📈", text:"What is the current occupancy rate?"},
+      {icon:"🔔", text:"What does an owner do when a tenant gives notice?"},
+      {icon:"🏗️", text:"What maintenance work requires owner approval?"},
+      {icon:"📄", text:"How do we handle owner statements?"},
     ]
   },
   {
-    id: "general", label: "⚡ Quick", color: "#f9f9f7", border: "#d1d5db",
+    id: "accounting", label: "💰 Accounting", color: "#fefce8", border: "#eab308", accent: "#ca8a04",
+    questions: [
+      {icon:"💰", text:"What does [tenant name] owe?"},
+      {icon:"📊", text:"Show me recent transactions for [property address]"},
+      {icon:"💳", text:"What are the outstanding balances across all tenants?"},
+      {icon:"🧾", text:"What charges are past due this month?"},
+      {icon:"💸", text:"What is the late fee policy and when is it applied?"},
+      {icon:"📑", text:"How are security deposits handled?"},
+      {icon:"🏦", text:"What is the earnest deposit amount?"},
+      {icon:"📋", text:"What fees are charged at move-out?"},
+      {icon:"🔄", text:"How are owner disbursements calculated?"},
+      {icon:"💡", text:"What utility bills are owner responsibility?"},
+      {icon:"📆", text:"When is rent due and what is the grace period?"},
+      {icon:"🏷️", text:"What admin fees do we charge?"},
+    ]
+  },
+  {
+    id: "operations", label: "⚡ Operations", color: "#f0f9ff", border: "#0ea5e9", accent: "#0284c7",
     questions: [
       {icon:"🔍", text:"Any inspections scheduled this week?"},
       {icon:"💬", text:"Any recent announcements in Slack?"},
-      {icon:"📊", text:"How many open work orders do we have total?"},
-      {icon:"🏠", text:"How many units do we manage?"},
       {icon:"📅", text:"What move-ins are happening this week?"},
       {icon:"📋", text:"What move-outs are in progress?"},
       {icon:"🔄", text:"What leases are expiring in the next 60 days?"},
-      {icon:"💰", text:"What is the RBP program and cost?"},
+      {icon:"🏠", text:"How many units do we currently manage?"},
+      {icon:"📊", text:"What is our current occupancy rate?"},
+      {icon:"🗓️", text:"What HOA violations are open?"},
+      {icon:"🔑", text:"What properties are vacant right now?"},
+      {icon:"📬", text:"Any pending move-out inspections?"},
+      {icon:"🔗", text:"What are all the active leases expiring this month?"},
+      {icon:"📈", text:"What new properties did we onboard recently?"},
     ]
   },
 ];
@@ -1821,12 +2017,53 @@ function PasscodeGate({onUnlock}) {
   );
 }
 
+function Sidebar({activeTab, setActiveTab, send}) {
+  const [expandedTab, setExpandedTab] = useState("maintenance");
+  const toggleTab = (id) => setExpandedTab(expandedTab === id ? null : id);
+  return (
+    <div style={{width:260,minWidth:260,background:"white",borderRight:"1px solid #f0f0f0",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
+      <div style={{padding:"14px 16px",borderBottom:"1px solid #f0f0f0",display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:30,height:30,borderRadius:8,background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🌿</div>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>Aloe Assistant</div>
+          <div style={{fontSize:10,color:"#888"}}>Internal · All live</div>
+        </div>
+      </div>
+      <div style={{padding:"8px 10px",flex:1}}>
+        {FAQ_TABS.map(tab => (
+          <div key={tab.id} style={{marginBottom:2}}>
+            <button onClick={()=>toggleTab(tab.id)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 8px",borderRadius:7,border:"none",background:expandedTab===tab.id?tab.color:"transparent",cursor:"pointer",textAlign:"left",transition:"background 0.1s"}}>
+              <span style={{fontSize:12,fontWeight:600,color:expandedTab===tab.id?tab.accent:"#444"}}>{tab.label}</span>
+              <span style={{fontSize:10,color:"#aaa",transform:expandedTab===tab.id?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▼</span>
+            </button>
+            {expandedTab===tab.id && (
+              <div style={{paddingLeft:4,paddingBottom:4}}>
+                {tab.questions.map((q,i)=>(
+                  <button key={i} onClick={()=>send(q.text)} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:6,padding:"5px 8px",borderRadius:6,border:"none",background:"transparent",cursor:"pointer",textAlign:"left",transition:"background 0.1s",marginBottom:1}}>
+                    <span style={{fontSize:11,flexShrink:0,marginTop:1}}>{q.icon}</span>
+                    <span style={{fontSize:11,color:"#555",lineHeight:1.4}}>{q.text}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div style={{padding:"10px 14px",borderTop:"1px solid #f0f0f0"}}>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+          {SOURCES.map(s=>React.createElement('div',{key:s.label,style:{padding:"2px 7px",borderRadius:10,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:10,color:"#333"}},s.label))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Assistant() {
   const [messages,setMessages] = useState([]);
   const [input,setInput] = useState("");
   const [loading,setLoading] = useState(false);
   const [lastError,setLastError] = useState("");
-  const [activeTab,setActiveTab] = useState("maintenance");
+  const [sidebarOpen,setSidebarOpen] = useState(true);
   const endRef = useRef(null);
   const taRef = useRef(null);
   useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,loading]);
@@ -1848,65 +2085,48 @@ function Assistant() {
     setLoading(false);
   };
 
-  const currentTab = FAQ_TABS.find(t=>t.id===activeTab) || FAQ_TABS[0];
+  const clearChat = () => { setMessages([]); setLastError(""); };
 
   return (
-    <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
-      {lastError && <div style={{padding:"8px 16px",background:"#fff5f5",borderBottom:"1px solid #fed7d7",display:"flex",justifyContent:"space-between",flexShrink:0}}><span style={{fontSize:12,color:"#c53030"}}>⚠ {lastError}</span><button onClick={()=>setLastError("")} style={{background:"none",border:"none",cursor:"pointer",color:"#c53030",fontSize:16}}>×</button></div>}
-      <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"white",borderBottom:"1px solid #f0f0f0",flexShrink:0,gap:10}}>
-        <div style={{width:36,height:36,borderRadius:8,background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌿</div>
-        <div>
-          <div style={{fontSize:15,fontWeight:600,color:"#1a1a1a"}}>Aloe Assistant</div>
-          <div style={{fontSize:11,color:"#888"}}>Rentvine · Aptly · Notion · Slack · All live</div>
+    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+      {sidebarOpen && <Sidebar send={(txt)=>{ send(txt); }} />}
+      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
+        {lastError && <div style={{padding:"8px 16px",background:"#fff5f5",borderBottom:"1px solid #fed7d7",display:"flex",justifyContent:"space-between",flexShrink:0}}><span style={{fontSize:12,color:"#c53030"}}>⚠ {lastError}</span><button onClick={()=>setLastError("")} style={{background:"none",border:"none",cursor:"pointer",color:"#c53030",fontSize:16}}>×</button></div>}
+        <div style={{display:"flex",alignItems:"center",padding:"10px 16px",background:"white",borderBottom:"1px solid #f0f0f0",flexShrink:0,gap:10}}>
+          <button onClick={()=>setSidebarOpen(!sidebarOpen)} style={{width:30,height:30,borderRadius:6,border:"1px solid #e5e5e5",background:"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}} title={sidebarOpen?"Hide sidebar":"Show sidebar"}>☰</button>
+          <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a",flex:1}}>Chat</div>
+          {messages.length>0 && <button onClick={clearChat} style={{fontSize:11,color:"#888",background:"none",border:"1px solid #e5e5e5",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}>New chat</button>}
         </div>
-      </div>
-      <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
-        {messages.length===0 ? (
-          <div style={{maxWidth:640,margin:"0 auto",paddingBottom:16}}>
-            <div style={{textAlign:"center",marginBottom:24}}>
-              <div style={{fontSize:32,marginBottom:8}}>🌿</div>
-              <div style={{fontSize:19,fontWeight:600,color:"#1a1a1a",marginBottom:4}}>Hi, I'm Aloe</div>
-              <div style={{fontSize:13,color:"#666",lineHeight:1.6}}>Ask me anything about tenants, properties, leads, work orders, or policies.</div>
-              <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginTop:10}}>
-                {SOURCES.map(s=>React.createElement('div',{key:s.label,style:{padding:"2px 9px",borderRadius:20,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:11,color:"#333"}},s.label))}
-              </div>
+        <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
+          {messages.length===0 ? (
+            <div style={{maxWidth:560,margin:"0 auto",paddingTop:40,textAlign:"center"}}>
+              <div style={{fontSize:30,marginBottom:10}}>🌿</div>
+              <div style={{fontSize:18,fontWeight:600,color:"#1a1a1a",marginBottom:6}}>Hi, I'm Aloe</div>
+              <div style={{fontSize:13,color:"#666",lineHeight:1.7,maxWidth:400,margin:"0 auto"}}>Your AI assistant for Aloe Property Management. Pick a shortcut from the left sidebar, or type any question below.</div>
+              <div style={{fontSize:12,color:"#aaa",marginTop:20}}>← Browse categories in the sidebar</div>
             </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,borderBottom:"1px solid #f0f0f0",paddingBottom:12}}>
-              {FAQ_TABS.map(tab=>(
-                <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{padding:"6px 12px",borderRadius:20,border:\`1px solid \${activeTab===tab.id?tab.border:"#e5e5e5"}\`,background:activeTab===tab.id?tab.color:"white",color:activeTab===tab.id?"#111":"#666",fontSize:12,fontWeight:activeTab===tab.id?600:400,cursor:"pointer",transition:"all 0.15s"}}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(2, minmax(0, 1fr))",gap:8}}>
-              {currentTab.questions.map((s,i)=>(
-                <button key={i} className="chip" onClick={()=>send(s.text)} style={{background:"white",border:\`1px solid \${currentTab.border}22\`,borderRadius:8,padding:"10px 12px",cursor:"pointer",textAlign:"left",fontSize:13,color:"#555",lineHeight:1.4,display:"flex",alignItems:"flex-start",gap:6,transition:"background 0.1s"}}>
-                  <span style={{fontSize:14,flexShrink:0}}>{s.icon}</span>{s.text}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div style={{maxWidth:680,width:"100%",margin:"0 auto"}}>
-            {messages.map((m,i)=>(
-              <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:12}}>
-                {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}>🌿</div>}
-                <div style={{maxWidth:"78%",padding:"10px 14px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?"#EAF3DE":"white",border:\`1px solid \${m.role==="user"?"#97C459":"#f0f0f0"}\`,color:m.role==="user"?"#173404":"#1a1a1a",fontSize:14,lineHeight:1.6}}>
-                  {m.role==="assistant"?renderMd(m.content):m.content}
+          ) : (
+            <div style={{maxWidth:680,width:"100%",margin:"0 auto"}}>
+              {messages.map((m,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:12}}>
+                  {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}>🌿</div>}
+                  <div style={{maxWidth:"78%",padding:"10px 14px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?"#EAF3DE":"white",border:\`1px solid \${m.role==="user"?"#97C459":"#f0f0f0"}\`,color:m.role==="user"?"#173404":"#1a1a1a",fontSize:14,lineHeight:1.6}}>
+                    {m.role==="assistant"?renderMd(m.content):m.content}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {loading&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>🌿</div><div style={{padding:"10px 14px",background:"white",border:"1px solid #f0f0f0",borderRadius:"12px 12px 12px 4px"}}><Dots/></div></div>}
-            <div ref={endRef}/>
-          </div>
-        )}
-      </div>
-      <div style={{padding:"12px 16px",background:"white",borderTop:"1px solid #f0f0f0",flexShrink:0}}>
-        <div style={{maxWidth:680,margin:"0 auto",display:"flex",gap:8,alignItems:"flex-end"}}>
-          <textarea ref={taRef} value={input} onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder="Ask about tenants, balances, leads, properties, policies, work orders, inspections..." rows={1} style={{flex:1,padding:"9px 12px",background:"#f9f9f7",border:"1px solid #e5e5e5",borderRadius:8,color:"#1a1a1a",fontSize:14,fontFamily:"inherit",resize:"none",lineHeight:1.5,minHeight:38,maxHeight:120}}/>
-          <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:38,height:38,borderRadius:8,background:input.trim()&&!loading?"#3B6D11":"#f0f0f0",border:"none",cursor:input.trim()&&!loading?"pointer":"default",color:input.trim()&&!loading?"white":"#aaa",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
+              ))}
+              {loading&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>🌿</div><div style={{padding:"10px 14px",background:"white",border:"1px solid #f0f0f0",borderRadius:"12px 12px 12px 4px"}}><Dots/></div></div>}
+              <div ref={endRef}/>
+            </div>
+          )}
         </div>
-        <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>Rentvine · Aptly · Notion · Slack · All data is live</div>
+        <div style={{padding:"12px 16px",background:"white",borderTop:"1px solid #f0f0f0",flexShrink:0}}>
+          <div style={{maxWidth:680,margin:"0 auto",display:"flex",gap:8,alignItems:"flex-end"}}>
+            <textarea ref={taRef} value={input} onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder="Ask anything — or pick a shortcut from the sidebar..." rows={1} style={{flex:1,padding:"9px 12px",background:"#f9f9f7",border:"1px solid #e5e5e5",borderRadius:8,color:"#1a1a1a",fontSize:14,fontFamily:"inherit",resize:"none",lineHeight:1.5,minHeight:38,maxHeight:120}}/>
+            <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:38,height:38,borderRadius:8,background:input.trim()&&!loading?"#3B6D11":"#f0f0f0",border:"none",cursor:input.trim()&&!loading?"pointer":"default",color:input.trim()&&!loading?"white":"#aaa",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
+          </div>
+          <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>Rentvine · Aptly · Notion · Slack · All data is live</div>
+        </div>
       </div>
     </div>
   );
