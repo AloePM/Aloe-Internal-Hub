@@ -830,20 +830,30 @@ async function executeTool(name, input) {
           }
           return rec;
         }).filter(function(wo) { return wo.workOrderID; });
-        console.log('RV WO total raw:', allWOs.length);
-        // primaryWorkOrderStatusID (string): 1=New, 2=In Progress, 3=On Hold, 4=Completed, 5=Cancelled
-        // dateClosed presence = closed
+        // Log status distribution
+        const statusDist = {};
+        allWOs.forEach(function(wo) {
+          const s = wo.primaryWorkOrderStatusID + '(' + (wo.workOrderStatusID || '') + ')';
+          statusDist[s] = (statusDist[s] || 0) + 1;
+        });
+        console.log('RV WO total raw:', allWOs.length, 'statuses:', JSON.stringify(statusDist));
+        // Filter: exclude only Completed (4) and Cancelled (5) — include 1,2,3 and anything else
         let filtered = allWOs;
         if (input.status === 'closed') {
           filtered = allWOs.filter(function(wo) {
-            return parseInt(wo.primaryWorkOrderStatusID) >= 4 || !!wo.dateClosed;
+            const sid = parseInt(wo.primaryWorkOrderStatusID);
+            return sid >= 4 || !!wo.dateClosed;
           });
         } else {
+          // Open = not completed (4) and not cancelled (5) and no dateClosed
           filtered = allWOs.filter(function(wo) {
-            return parseInt(wo.primaryWorkOrderStatusID) < 4 && !wo.dateClosed;
+            const sid = parseInt(wo.primaryWorkOrderStatusID);
+            return sid !== 4 && sid !== 5 && !wo.dateClosed;
           });
         }
-        console.log('RV WO filtered:', filtered.length);
+        // Check for unassigned: no vendorContactID
+        const unassigned = filtered.filter(function(wo) { return !wo.vendorContactID; });
+        console.log('RV WO filtered:', filtered.length, 'unassigned:', unassigned.length);
         const now2 = Date.now();
         const slim2 = filtered.map(function(wo) {
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : null;
@@ -861,7 +871,7 @@ async function executeTool(name, input) {
             daysOpen: created ? Math.floor((now2 - created) / 86400000) : null,
           };
         });
-        return JSON.stringify({ total: filtered.length, open: filtered.length, workOrders: slim2 });
+        return JSON.stringify({ total: filtered.length, open: filtered.length, unassigned: unassigned.length, workOrders: slim2 });
       }
 
       case 'rv_get_work_order_detail': {
