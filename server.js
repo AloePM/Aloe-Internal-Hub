@@ -89,7 +89,7 @@ Known Aptly board IDs:
 - "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board).
 - "qfBzBxfooJtfTQncd" — List Property / On Market board. Shows properties actively listed, showing start date, notes on occupancy, market status.
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
-- "4EMDSYKirhQaNdQKz" — Renter Leads. For ANY question about leads (new leads, leads this week, leads today, how many leads, where leads came from, lead pipeline): use aptly_get_leads tool. It returns Primary Contact, Preferred Rental, Source, Stage, Created At. Pass daysBack=7 for this week, daysBack=1 for today, daysBack=30 for this month.
+- "4EMDSYKirhQaNdQKz" — Renter Leads. Use aptly_get_leads for ANY question about leads, showings, tours, prospects, lead sources, conversion. Fields include: Primary Contact, Preferred Rental, Stage, Source, Requested Showing Information (contains date/time), Requested Showing Status, Tour Date/Time, Move Date, Household Income, Beds, Pets, Last Action, email counts, comments. Stages: Nurturing, Scheduled Tour, Tour Completed, Tour Canceled / No Show, Applied.
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
@@ -368,12 +368,14 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_get_leads',
-    description: 'Get renter leads from the Renter Leads board. Use for ANY question about leads — new leads, leads this week, leads for a property, how many leads, where leads came from, lead pipeline. Returns Primary Contact, Preferred Rental, Source, Stage, Created At for each lead.',
+    description: 'Get renter leads from the Renter Leads board. Use for ANY question about leads, showings, prospects, tours, lead activity, lead pipeline, conversion rates, tour feedback, who applied after showing, lead sources. Returns: contact, property, stage, source, showing info, tour date, move date, income, email activity, comments.',
     input_schema: {
       type: 'object',
       properties: {
-        daysBack: { type: 'number', description: 'How many days back to look for leads. Use 7 for "this week", 1 for "today", 30 for "this month". Default 7.' },
-        property: { type: 'string', description: 'Optional: filter by property address' },
+        daysBack: { type: 'number', description: 'Filter to leads created in last N days. Use 7 for this week, 30 for this month. Omit for all leads.' },
+        property: { type: 'string', description: 'Filter by property address' },
+        stage: { type: 'string', description: 'Filter by stage, e.g. "Scheduled Tour", "Tour Completed", "Nurturing", "Applied"' },
+        includeArchived: { type: 'boolean', description: 'Include archived leads. Default false.' },
       },
     },
   },
@@ -1047,47 +1049,67 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_leads': {
-        const daysBack = input.daysBack || 7;
-        const cutoff = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
-        const cutoffMs = cutoff.getTime();
-        // Fetch all leads using aptlyFetch (app.getaptly.com works for Renter Leads with query)
-        // Use multiple letter searches to get all leads
-        const seen = {};
-        let allLeads = [];
-        for (const letter of ['a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']) {
-          const data = await aptlyFetch('/aptlet/4EMDSYKirhQaNdQKz', { page: 0, query: letter });
-          const cards = (data && data.cards) || [];
-          for (const c of cards) {
-            if (!seen[c._id || c.Title]) {
-              seen[c._id || c.Title] = true;
-              allLeads.push(c);
-            }
-          }
-        }
-        // Filter by Created At
-        const newLeads = allLeads.filter(function(c) {
-          const created = c['Created At'] || '';
-          if (!created) return false;
-          try { return new Date(created).getTime() > cutoffMs; } catch(e) { return false; }
+        // Fetch all Renter Leads from core-api with schema mapping
+        const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
+        const schemaMap = {};
+        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
+        const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', {
+          page: 0, pageSize: 100,
+          includeArchived: input.includeArchived ? true : false,
         });
-        // Filter by property if specified
-        const filtered = input.property
-          ? newLeads.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(input.property.toLowerCase()); })
-          : newLeads;
-        const fmt = function(c) {
-          return {
-            contact: c['Primary Contact'] || c.Name || '?',
-            property: c['Preferred Rental'] || c.Unit || '',
-            source: c.Source || c['Lead Type'] || '',
-            stage: c.Stage || '',
-            createdAt: c['Created At'] || '',
+        const allCards = Array.isArray(data) ? data : (data && data.data) || [];
+        // Map UUID keys to labels
+        const mapCard = function(c) {
+          const m = {
+            _id: c.cardId, stage: c.stage,
+            createdAt: c.createdAt, updatedAt: c.updatedAt,
+            comments: Array.isArray(c.comments) ? c.comments.map(function(cm) {
+              return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
+            }) : [],
           };
+          Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
+          return m;
         };
-        return JSON.stringify({
-          total: filtered.length,
-          daysBack: daysBack,
-          leads: filtered.map(fmt),
+        let leads = allCards.map(mapCard);
+        // Filter by daysBack if specified
+        if (input.daysBack) {
+          const cutoffMs = Date.now() - input.daysBack * 24 * 60 * 60 * 1000;
+          leads = leads.filter(function(c) {
+            try { return new Date(c.createdAt).getTime() > cutoffMs; } catch(e) { return false; }
+          });
+        }
+        // Filter by property if specified
+        if (input.property) {
+          const p = input.property.toLowerCase();
+          leads = leads.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(p); });
+        }
+        // Filter by stage if specified
+        if (input.stage) {
+          const s = input.stage.toLowerCase();
+          leads = leads.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
+        }
+        // Return rich data for each lead
+        const slim = leads.map(function(c) {
+          return {
+            contact: c['Primary Contact'] || c['Name'] || '?',
+            property: c['Preferred Rental'] || c['Unit'] || '',
+            stage: c.stage,
+            source: c['Source'] || c['Lead Type'] || '',
+            createdAt: (c.createdAt || '').slice(0, 10),
+            showingInfo: c['Requested Showing Information'] || '',
+            showingStatus: c['Requested Showing Status'] || '',
+            tourDate: c['Tour Date/Time'] || '',
+            moveDate: c['Move Date'] || '',
+            income: c['Household Income'] || '',
+            beds: c['Beds'] || '',
+            pets: c['Pets'] || '',
+            lastActivity: c['Last Activity Date'] || '',
+            lastAction: c['Last Action'] || '',
+            emails: { inbound: c['Inbound Emails'] || 0, outbound: c['Outbound Emails'] || 0 },
+            comments: c.comments || [],
+          };
         });
+        return JSON.stringify({ total: slim.length, leads: slim });
       }
 
       case 'aptly_get_work_orders': {
@@ -1625,39 +1647,51 @@ app.post('/api/chat', async function(req, res) {
     const isShowingQ = lowerMsg.match(/showing|scheduled tour|who.*tour|tour.*today|showing.*today|today.*showing|past.*tour|recent.*tour|tour.*week|week.*tour|showing.*week|week.*showing/);
     if (isShowingQ) {
       try {
-        // Fetch Renter Leads via core-api (reliable source for showings)
+        // Fetch schema first so we can map UUID keys to labels
+        const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
+        const schemaMap = {};
+        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
+        // Fetch all Renter Leads cards
         const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100 });
         const allCards = Array.isArray(data) ? data : (data && data.data) || [];
-        // Get all cards that have a Requested Showing Information field
-        const showingCards = allCards.filter(function(c) {
+        // Map UUID keys to labels for each card
+        const mapCard = function(c) {
+          const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt, comments: c.comments };
+          Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
+          return m;
+        };
+        const mapped = allCards.map(mapCard);
+        // Get cards with any showing-related info
+        const showingCards = mapped.filter(function(c) {
           return c['Requested Showing Information'] || c['Tour Date/Time'] ||
-                 c.stage === 'Scheduled Tour' || c.stage === 'Tour Completed' || c.stage === 'Tour Canceled / No Show';
+                 /scheduled tour|tour completed|tour canceled/i.test(c.stage || '');
         });
         // Parse date from "Showing request for Name (MM/DD/YYYY HH:MM am-...)"
         const parseShowingDate = function(c) {
           const info = c['Requested Showing Information'] || '';
           const m = info.match(/\((\d{2}\/\d{2}\/\d{4})/);
-          if (m) return m[1]; // MM/DD/YYYY
-          const td = c['Tour Date/Time'] || '';
-          if (td) return td.slice(0, 10); // already MM/DD/YYYY or similar
-          return '';
+          if (m) return m[1];
+          const td = (c['Tour Date/Time'] || '').slice(0, 10);
+          return td;
         };
-        // Today and week boundaries in AZ time (UTC-7)
+        // AZ time boundaries (UTC-7, no DST)
         const nowUtc = Date.now();
         const azOffset = -7 * 60 * 60 * 1000;
         const nowAz = new Date(nowUtc + azOffset);
         const todayAz = new Date(nowAz); todayAz.setHours(0,0,0,0);
-        // Start of this week (Sunday)
         const weekStart = new Date(todayAz); weekStart.setDate(todayAz.getDate() - todayAz.getDay());
         const fmt = function(c) {
-          const contact = c['Primary Contact'] || c.name || '?';
-          const unit = (c.unit && (c.unit.name || c.unit)) || c['Preferred Rental'] || '?';
+          const contact = c['Primary Contact'] || c['Name'] || '?';
+          const unit = c['Preferred Rental'] || c['Unit'] || '?';
           const info = c['Requested Showing Information'] || '';
           const timeMatch = info.match(/\(([^)]+)\)/);
           const time = timeMatch ? timeMatch[1] : (c['Tour Date/Time'] || '');
-          const stage = c.stage || c.Stage || '';
+          const stage = c.stage || '';
           const status = c['Requested Showing Status'] || '';
-          return contact + ' @ ' + unit + (time ? ' — ' + time : '') + (stage ? ' [' + stage + ']' : '') + (status ? ' (' + status + ')' : '');
+          const source = c['Source'] || '';
+          return '• ' + contact + ' @ ' + unit + (time ? '\n  ' + time : '') +
+                 (stage ? ' [' + stage + ']' : '') + (status ? ' (' + status + ')' : '') +
+                 (source ? ' — ' + source : '');
         };
         const parseDateMs = function(c) {
           const ds = parseShowingDate(c);
@@ -1665,10 +1699,19 @@ app.post('/api/chat', async function(req, res) {
           try { return new Date(ds).getTime(); } catch(e) { return null; }
         };
         let filtered, label;
+        const todayStr = String(todayAz.getMonth()+1).padStart(2,'0') + '/' + String(todayAz.getDate()).padStart(2,'0') + '/' + todayAz.getFullYear();
         if (lowerMsg.match(/today/)) {
-          const todayStr = String(todayAz.getMonth()+1).padStart(2,'0') + '/' + String(todayAz.getDate()).padStart(2,'0') + '/' + todayAz.getFullYear();
           filtered = showingCards.filter(function(c) { return parseShowingDate(c) === todayStr; });
           label = 'Showings today (' + todayStr + ')';
+          // If none today, also show upcoming
+          if (filtered.length === 0) {
+            const upcoming = showingCards.filter(function(c) {
+              const ms = parseDateMs(c); return ms !== null && ms > todayAz.getTime();
+            }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
+            const text = 'No showings found for today (' + todayStr + ').' +
+              (upcoming.length > 0 ? '\n\nUpcoming showings (' + upcoming.length + '):\n\n' + upcoming.map(fmt).join('\n') : '\n\nNo upcoming showings scheduled either.');
+            return res.json({ content: [{ type: 'text', text }] });
+          }
         } else if (lowerMsg.match(/this week|week/)) {
           const weekStartMs = weekStart.getTime();
           const weekEndMs = weekStartMs + 7 * 24 * 60 * 60 * 1000;
@@ -1682,19 +1725,16 @@ app.post('/api/chat', async function(req, res) {
           filtered = showingCards.filter(function(c) {
             const ms = parseDateMs(c);
             return ms !== null && ms >= threeDaysAgo.getTime() && ms <= nowAz.getTime();
-          });
+          }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
           label = 'Showings in the past 3 days';
         } else {
-          // Default: all scheduled/upcoming
-          filtered = showingCards.filter(function(c) {
-            const ms = parseDateMs(c);
-            return ms !== null && ms >= todayAz.getTime();
-          }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
-          label = 'Upcoming showings';
+          // Default: show ALL showing activity
+          filtered = showingCards.sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
+          label = 'All showing activity';
         }
         const text = filtered.length > 0
-          ? label + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n')
-          : label + ': None found.\n\nAll showing activity (' + showingCards.length + ' total with showing info).';
+          ? label + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n\n')
+          : label + ': None found.\n\nTotal leads with showing info: ' + showingCards.length;
         return res.json({ content: [{ type: 'text', text }] });
       } catch(e) {
         console.error('Showing shortcut error:', e.message);
