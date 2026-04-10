@@ -1632,22 +1632,19 @@ app.post('/api/chat', async function(req, res) {
           });
           return m;
         });
-        // Parse date — check schema-mapped "Created At" FIRST (MM/DD/YYYY format), then fall back to raw createdAt ISO
+        // createdAt on core-api is a built-in ISO field - use it directly
+        // The schema-mapped "Created At" label is redundant here; core-api always has createdAt as ISO
         const parseMs = function(c) {
-          // Prefer the schema-mapped "Created At" field which reflects when the card was actually created in Aptly
-          const labeledDate = c['Created At'] || '';
-          if (labeledDate) {
-            const mmddyyyy = labeledDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-            if (mmddyyyy) {
-              const [, m, d, y] = mmddyyyy;
-              const ms = new Date(y + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0')).getTime();
-              if (!isNaN(ms)) return ms;
-            }
-            try { const ms = new Date(labeledDate).getTime(); if (!isNaN(ms)) return ms; } catch(e) {}
+          // c.createdAt is the raw ISO from core-api (most reliable)
+          const iso = c.createdAt || '';
+          if (iso) { try { const ms = new Date(iso).getTime(); if (!isNaN(ms)) return ms; } catch(e) {} }
+          // Fall back to schema-mapped "Created At" if available (MM/DD/YYYY format)
+          const labeled = c['Created At'] || '';
+          if (labeled) {
+            const m = labeled.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (m) { try { return new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
+            try { const ms = new Date(labeled).getTime(); if (!isNaN(ms)) return ms; } catch(e) {}
           }
-          // Fall back to raw ISO createdAt
-          const raw = c.createdAt || '';
-          if (raw) { try { const ms = new Date(raw).getTime(); if (!isNaN(ms)) return ms; } catch(e) {} }
           return null;
         };
         // Sort newest first
@@ -1668,17 +1665,16 @@ app.post('/api/chat', async function(req, res) {
           // Owner can be string or array of objects
           const rawOwner = c['Owner'] || c['Portfolio'] || '';
           const owner = Array.isArray(rawOwner)
-            ? rawOwner.map(function(o) { return typeof o === 'object' ? (o.name || o.label || JSON.stringify(o)) : o; }).join(', ')
+            ? rawOwner.map(function(o) { return typeof o === 'object' ? (o.name || o.label || '') : o; }).join(', ')
             : typeof rawOwner === 'object' ? (rawOwner.name || rawOwner.label || '') : String(rawOwner || '');
           const city = c['City'] || '';
           const type = c['Property Type'] || '';
-          // Contract date — may be ISO or MM/DD/YYYY
           const rawContract = c['Date Contract Begins'] || '';
-          const contractDate = rawContract ? new Date(rawContract).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+          const contractDate = rawContract ? (() => { const d = new Date(rawContract); return isNaN(d) ? rawContract : d.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}); })() : '';
           return addr + (city ? ', ' + city : '') + (type ? ' (' + type + ')' : '') +
             (owner ? '\n  Owner: ' + owner : '') +
             (date ? '\n  Added: ' + date : '') +
-            (contractDate && contractDate !== 'Invalid Date' ? '\n  Contract started: ' + contractDate : '');
+            (contractDate ? '\n  Contract started: ' + contractDate : '');
         };
         const list = newProps.length > 0 ? newProps : mapped.slice(0, 10);
         const label = newProps.length > 0
