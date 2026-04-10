@@ -1609,49 +1609,78 @@ app.post('/api/chat', async function(req, res) {
           else daysBack = n;
         }
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        const cutoffIso = new Date(cutoffMs).toISOString();
-        // Use Rentvine properties export — dateTimeCreated is when property was added to Rentvine
-        const data = await rvFetch('/properties/export', { pageSize: 100, page: 1, dateTimeModifiedMin: cutoffIso });
-        const props = Array.isArray(data) ? data : (data && data.data) || [];
-        console.log('RV onboard: fetched with dateTimeModifiedMin:', props.length);
-        // Filter to only newly CREATED within cutoff
-        const newProps = props.filter(function(p) {
-          const created = p.property && p.property.dateTimeCreated;
-          if (!created) return false;
-          return new Date(created).getTime() > cutoffMs;
-        }).sort(function(a, b) {
-          return new Date(b.property.dateTimeCreated).getTime() - new Date(a.property.dateTimeCreated).getTime();
+        // Use location board — Date Contract Begins is when Aloe PM started managing the property
+        const locSchema = await unitsFetch('/api/schema/location');
+        const locMap = {};
+        if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
+        let allLocations = [];
+        let page = 0;
+        while (true) {
+          const data = await unitsFetch('/api/board/location', { page, pageSize: 100 });
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          allLocations = allLocations.concat(batch);
+          if (batch.length < 100) break;
+          page++;
+        }
+        const mapped = allLocations.map(function(card) {
+          const m = {};
+          Object.keys(card).forEach(function(k) { m[locMap[k] || k] = card[k]; });
+          return m;
         });
-        console.log('RV onboard: new by dateTimeCreated:', newProps.length);
-        const fmt = function(item) {
-          const prop = item.property || {};
-          const port = item.portfolio || {};
-          const addr = prop.address || prop.name || '?';
-          const city = prop.city || '';
-          const state = prop.stateID || '';
-          const created = prop.dateTimeCreated ? new Date(prop.dateTimeCreated).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
-          const owners = Array.isArray(port.owners) ? port.owners.map(function(o) { return o.name || ''; }).filter(Boolean).join(', ') : (port.name || '');
-          return addr + (city ? ', ' + city : '') + (state ? ' ' + state : '') +
-            (owners ? '\n  Owner: ' + owners : '') +
-            (created ? '\n  Added: ' + created : '');
+        // Parse date from ISO or MM/DD/YYYY
+        const parseDate = function(raw) {
+          if (!raw) return null;
+          const mmdd = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (mmdd) { try { return new Date(mmdd[3]+'-'+mmdd[1].padStart(2,'0')+'-'+mmdd[2].padStart(2,'0')).getTime(); } catch(e) {} }
+          try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
+        };
+        // Get the best "onboarded" date — prefer Date Contract Begins, fall back to Created At
+        const getOnboardMs = function(c) {
+          return parseDate(c['Date Contract Begins'] || '') || parseDate(c['Created At'] || '') || null;
+        };
+        // Filter to properties onboarded within cutoff
+        const newProps = mapped.filter(function(c) {
+          const ms = getOnboardMs(c);
+          return ms !== null && ms > cutoffMs;
+        }).sort(function(a, b) { return (getOnboardMs(b) || 0) - (getOnboardMs(a) || 0); });
+        console.log('Onboard: total locations:', mapped.length, 'new in', daysBack, 'days:', newProps.length);
+        // Sample first card dates for debug
+        if (mapped.length > 0) { const s = mapped[0]; console.log('Sample Created At:', s['Created At'], '| Contract:', s['Date Contract Begins']); }
+        const extractOwner = function(c) {
+          const raw = c['Owner'] || c['Portfolio'] || '';
+          if (Array.isArray(raw)) return raw.map(function(o) { return typeof o === 'object' ? (o.name || '') : String(o); }).filter(Boolean).join(', ');
+          if (typeof raw === 'object') return raw.name || '';
+          return String(raw || '');
+        };
+        const fmt = function(c) {
+          const addr = c['Street'] || c.name || '?';
+          const city = c['City'] || '';
+          const type = c['Property Type'] || '';
+          const owner = extractOwner(c);
+          const onboardMs = getOnboardMs(c);
+          const onboardDate = onboardMs ? new Date(onboardMs).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+          const contractDate = parseDate(c['Date Contract Begins'] || '') ? new Date(parseDate(c['Date Contract Begins'])).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+          return addr + (city ? ', ' + city : '') + (type ? ' (' + type + ')' : '') +
+            (owner ? '\n  Owner: ' + owner : '') +
+            (onboardDate ? '\n  Added: ' + onboardDate : '') +
+            (contractDate ? '\n  Contract started: ' + contractDate : '');
         };
         if (newProps.length > 0) {
           return res.json({ content: [{ type: 'text', text: 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n\n') }] });
         } else {
-          // Fall back — fetch all and show most recently added
-          const allData = await rvFetch('/properties/export', { pageSize: 100, page: 1 });
-          const allProps = Array.isArray(allData) ? allData : (allData && allData.data) || [];
-          const sorted = allProps.filter(function(p) { return p.property && p.property.dateTimeCreated; })
-            .sort(function(a, b) { return new Date(b.property.dateTimeCreated).getTime() - new Date(a.property.dateTimeCreated).getTime(); });
-          const top = sorted.slice(0, 10);
-          return res.json({ content: [{ type: 'text', text: 'No new properties in last ' + daysBack + ' days. Most recently onboarded (total: ' + sorted.length + '):\n\n' + top.map(fmt).join('\n\n') }] });
+          // Show most recently contracted
+          const withContract = mapped.filter(function(c) { return getOnboardMs(c) !== null; })
+            .sort(function(a, b) { return (getOnboardMs(b) || 0) - (getOnboardMs(a) || 0); });
+          const top = withContract.slice(0, 10);
+          return res.json({ content: [{ type: 'text', text: 'No new properties in last ' + daysBack + ' days. Most recently onboarded by contract date (total: ' + withContract.length + '):\n\n' + top.map(fmt).join('\n\n') }] });
         }
       } catch(e) {
         console.error('Onboard shortcut error:', e.message);
       }
     }
 
-    // Server-side shortcut for new leads questions
+    // Server-side shortcut for new leads    // Server-side shortcut for new leads questions
     const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many|come in|what.*lead|lead.*what/);
     if (isLeadsQ) {
       try {
