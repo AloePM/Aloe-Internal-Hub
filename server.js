@@ -1632,17 +1632,23 @@ app.post('/api/chat', async function(req, res) {
           });
           return m;
         });
-        // Parse date — handles both ISO and "MM/DD/YYYY HH:MM am/pm" formats
+        // Parse date — check schema-mapped "Created At" FIRST (MM/DD/YYYY format), then fall back to raw createdAt ISO
         const parseMs = function(c) {
-          const raw = c.createdAt || c['Created At'] || '';
-          if (!raw) return null;
-          // If it looks like "04/01/2026 9:41 pm" parse manually
-          const mmddyyyy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          if (mmddyyyy) {
-            const [, m, d, y] = mmddyyyy;
-            return new Date(y + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0')).getTime();
+          // Prefer the schema-mapped "Created At" field which reflects when the card was actually created in Aptly
+          const labeledDate = c['Created At'] || '';
+          if (labeledDate) {
+            const mmddyyyy = labeledDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (mmddyyyy) {
+              const [, m, d, y] = mmddyyyy;
+              const ms = new Date(y + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0')).getTime();
+              if (!isNaN(ms)) return ms;
+            }
+            try { const ms = new Date(labeledDate).getTime(); if (!isNaN(ms)) return ms; } catch(e) {}
           }
-          try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
+          // Fall back to raw ISO createdAt
+          const raw = c.createdAt || '';
+          if (raw) { try { const ms = new Date(raw).getTime(); if (!isNaN(ms)) return ms; } catch(e) {} }
+          return null;
         };
         // Sort newest first
         mapped.sort(function(a, b) { return (parseMs(b) || 0) - (parseMs(a) || 0); });
