@@ -1622,63 +1622,79 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for showing schedule questions
-    const isShowingQ = lowerMsg.match(/showing|scheduled tour|who.*tour|tour.*today|showing.*today|today.*showing|past.*tour|recent.*tour/);
+    const isShowingQ = lowerMsg.match(/showing|scheduled tour|who.*tour|tour.*today|showing.*today|today.*showing|past.*tour|recent.*tour|tour.*week|week.*tour|showing.*week|week.*showing/);
     if (isShowingQ) {
       try {
-        // Search specifically for showing-related cards by querying multiple stages
-        const showingStages = ['Scheduled Tour', 'Tour Completed', 'Tour Canceled / No Show'];
-        let allShowings = [];
-        for (const stage of showingStages) {
-          const data = await aptlyFetch('/aptlet/4EMDSYKirhQaNdQKz', { page: 0, query: stage });
-          const cards = (data && data.cards) || (Array.isArray(data) ? data : []);
-          const matches = cards.filter(function(c) { return c.Stage === stage || c['Requested Showing Information']; });
-          allShowings = allShowings.concat(matches);
-        }
-        // Deduplicate by _id
-        const seen = {};
-        allShowings = allShowings.filter(function(c) { if (seen[c._id]) return false; seen[c._id] = true; return true; });
-        const today = new Date();
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const dd = String(today.getDate()).padStart(2, '0');
-        const yyyy = today.getFullYear();
-        const todayStr = mm + '/' + dd + '/' + yyyy;
-        const yday = new Date(today); yday.setDate(yday.getDate() - 1);
-        const ymm = String(yday.getMonth() + 1).padStart(2, '0');
-        const ydd = String(yday.getDate()).padStart(2, '0');
-        const yesterdayStr = ymm + '/' + ydd + '/' + yyyy;
+        // Fetch Renter Leads via core-api (reliable source for showings)
+        const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100 });
+        const allCards = Array.isArray(data) ? data : (data && data.data) || [];
+        // Get all cards that have a Requested Showing Information field
+        const showingCards = allCards.filter(function(c) {
+          return c['Requested Showing Information'] || c['Tour Date/Time'] ||
+                 c.stage === 'Scheduled Tour' || c.stage === 'Tour Completed' || c.stage === 'Tour Canceled / No Show';
+        });
+        // Parse date from "Showing request for Name (MM/DD/YYYY HH:MM am-...)"
+        const parseShowingDate = function(c) {
+          const info = c['Requested Showing Information'] || '';
+          const m = info.match(/\((\d{2}\/\d{2}\/\d{4})/);
+          if (m) return m[1]; // MM/DD/YYYY
+          const td = c['Tour Date/Time'] || '';
+          if (td) return td.slice(0, 10); // already MM/DD/YYYY or similar
+          return '';
+        };
+        // Today and week boundaries in AZ time (UTC-7)
+        const nowUtc = Date.now();
+        const azOffset = -7 * 60 * 60 * 1000;
+        const nowAz = new Date(nowUtc + azOffset);
+        const todayAz = new Date(nowAz); todayAz.setHours(0,0,0,0);
+        // Start of this week (Sunday)
+        const weekStart = new Date(todayAz); weekStart.setDate(todayAz.getDate() - todayAz.getDay());
         const fmt = function(c) {
-          const contact = c['Primary Contact'] || '?';
-          const unit = c.Unit || c['Preferred Rental'] || '?';
+          const contact = c['Primary Contact'] || c.name || '?';
+          const unit = (c.unit && (c.unit.name || c.unit)) || c['Preferred Rental'] || '?';
           const info = c['Requested Showing Information'] || '';
           const timeMatch = info.match(/\(([^)]+)\)/);
           const time = timeMatch ? timeMatch[1] : (c['Tour Date/Time'] || '');
-          const status = c['Requested Showing Status'] || c.Stage || '';
-          return contact + ' @ ' + unit + (time ? ' — ' + time : '') + (status ? ' [' + status + ']' : '');
+          const stage = c.stage || c.Stage || '';
+          const status = c['Requested Showing Status'] || '';
+          return contact + ' @ ' + unit + (time ? ' — ' + time : '') + (stage ? ' [' + stage + ']' : '') + (status ? ' (' + status + ')' : '');
         };
-        let text;
-        if (lowerMsg.match(/past|recent|yesterday|last.*2|2.*day/)) {
-          const recent = allShowings.filter(function(c) {
-            const info = c['Requested Showing Information'] || '';
-            return info.includes(todayStr) || info.includes(yesterdayStr);
+        const parseDateMs = function(c) {
+          const ds = parseShowingDate(c);
+          if (!ds) return null;
+          try { return new Date(ds).getTime(); } catch(e) { return null; }
+        };
+        let filtered, label;
+        if (lowerMsg.match(/today/)) {
+          const todayStr = String(todayAz.getMonth()+1).padStart(2,'0') + '/' + String(todayAz.getDate()).padStart(2,'0') + '/' + todayAz.getFullYear();
+          filtered = showingCards.filter(function(c) { return parseShowingDate(c) === todayStr; });
+          label = 'Showings today (' + todayStr + ')';
+        } else if (lowerMsg.match(/this week|week/)) {
+          const weekStartMs = weekStart.getTime();
+          const weekEndMs = weekStartMs + 7 * 24 * 60 * 60 * 1000;
+          filtered = showingCards.filter(function(c) {
+            const ms = parseDateMs(c);
+            return ms !== null && ms >= weekStartMs && ms < weekEndMs;
+          }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
+          label = 'Showings this week';
+        } else if (lowerMsg.match(/happened|completed|did.*happen|took place|past|yesterday/)) {
+          const threeDaysAgo = new Date(todayAz); threeDaysAgo.setDate(todayAz.getDate() - 3);
+          filtered = showingCards.filter(function(c) {
+            const ms = parseDateMs(c);
+            return ms !== null && ms >= threeDaysAgo.getTime() && ms <= nowAz.getTime();
           });
-          text = recent.length > 0
-            ? 'Showings in the past 2 days (' + recent.length + '):\n\n' + recent.map(fmt).join('\n')
-            : 'No showings found for today or yesterday.';
-        } else if (lowerMsg.includes('today')) {
-          const todayShowings = allShowings.filter(function(c) {
-            const info = c['Requested Showing Information'] || '';
-            return info.includes(todayStr);
-          });
-          const scheduled = allShowings.filter(function(c) { return c.Stage === 'Scheduled Tour'; });
-          text = todayShowings.length > 0
-            ? 'Showings for today ' + todayStr + ' (' + todayShowings.length + '):\n\n' + todayShowings.map(fmt).join('\n')
-            : 'No showings found for today (' + todayStr + ').' + (scheduled.length > 0 ? '\n\nUpcoming scheduled tours (' + scheduled.length + '):\n' + scheduled.slice(0, 5).map(fmt).join('\n') : '');
+          label = 'Showings in the past 3 days';
         } else {
-          const scheduled = allShowings.filter(function(c) { return c.Stage === 'Scheduled Tour'; });
-          text = scheduled.length > 0
-            ? 'Scheduled tours (' + scheduled.length + '):\n\n' + scheduled.map(fmt).join('\n')
-            : 'No upcoming scheduled tours.\n\nRecent showing activity (' + allShowings.length + '):\n' + allShowings.slice(0, 10).map(fmt).join('\n');
+          // Default: all scheduled/upcoming
+          filtered = showingCards.filter(function(c) {
+            const ms = parseDateMs(c);
+            return ms !== null && ms >= todayAz.getTime();
+          }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
+          label = 'Upcoming showings';
         }
+        const text = filtered.length > 0
+          ? label + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n')
+          : label + ': None found.\n\nAll showing activity (' + showingCards.length + ' total with showing info).';
         return res.json({ content: [{ type: 'text', text }] });
       } catch(e) {
         console.error('Showing shortcut error:', e.message);
