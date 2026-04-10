@@ -1609,7 +1609,11 @@ app.post('/api/chat', async function(req, res) {
           else daysBack = n;
         }
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        // Use location board — has Created At, Owner, Street, Date Contract Begins
+        // Get schema for location board to map UUID keys to labels
+        const locSchema = await unitsFetch('/api/schema/location');
+        const locMap = {};
+        if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
+        // Fetch all location cards
         let allLocations = [];
         let page = 0;
         while (true) {
@@ -1620,43 +1624,49 @@ app.post('/api/chat', async function(req, res) {
           if (batch.length < 100) break;
           page++;
         }
-        // Parse Created At — format is "MM/DD/YYYY HH:MM am/pm"
-        const parseMs = function(raw) {
+        // Map UUID keys to labels for each card
+        const mapped = allLocations.map(function(card) {
+          const m = { _id: card.cardId, createdAt: card.createdAt, stage: card.stage };
+          Object.keys(card).forEach(function(k) {
+            if (locMap[k]) m[locMap[k]] = card[k];
+          });
+          return m;
+        });
+        // Parse date — core-api createdAt is ISO, but schema-mapped "Created At" may be "MM/DD/YYYY HH:MM am"
+        const parseMs = function(c) {
+          const raw = c.createdAt || c['Created At'] || '';
           if (!raw) return null;
           try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
         };
-        // Sort by Created At descending
-        allLocations.sort(function(a, b) {
-          return (parseMs(b['Created At'] || b.createdAt) || 0) - (parseMs(a['Created At'] || a.createdAt) || 0);
+        // Sort newest first
+        mapped.sort(function(a, b) { return (parseMs(b) || 0) - (parseMs(a) || 0); });
+        // Debug first card
+        if (mapped.length > 0) {
+          const s = mapped[0];
+          console.log('Location card createdAt:', s.createdAt, '| Created At label:', s['Created At'], '| Street:', s['Street']);
+        }
+        const newProps = mapped.filter(function(c) {
+          const ms = parseMs(c); return ms !== null && ms > cutoffMs;
         });
-        const newProps = allLocations.filter(function(c) {
-          const ms = parseMs(c['Created At'] || c.createdAt);
-          return ms !== null && ms > cutoffMs;
-        });
-        console.log('Onboard: location board total:', allLocations.length, 'new in', daysBack, 'days:', newProps.length);
+        console.log('Onboard: location total:', mapped.length, 'new in', daysBack, 'days:', newProps.length);
         const fmt = function(c) {
           const addr = c['Street'] || c['Address'] || c.name || '?';
-          const raw = c['Created At'] || c.createdAt || '';
-          const ms = parseMs(raw);
+          const ms = parseMs(c);
           const date = ms ? new Date(ms).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
           const owner = c['Owner'] || c['Portfolio'] || '';
-          const contractStart = c['Date Contract Begins'] || '';
-          const type = c['Property Type'] || '';
           const city = c['City'] || '';
+          const type = c['Property Type'] || '';
+          const contractStart = c['Date Contract Begins'] || '';
           return addr + (city ? ', ' + city : '') + (type ? ' (' + type + ')' : '') +
             (owner ? '\n  Owner: ' + owner : '') +
-            (date ? '\n  Added to Aptly: ' + date : '') +
+            (date ? '\n  Added: ' + date : '') +
             (contractStart ? '\n  Contract started: ' + contractStart : '');
         };
-        if (newProps.length > 0) {
-          const text = 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n\n');
-          return res.json({ content: [{ type: 'text', text }] });
-        } else {
-          // Show most recently added regardless
-          const top10 = allLocations.slice(0, 10);
-          const text = 'No new properties in last ' + daysBack + ' days (total: ' + allLocations.length + ').\n\nMost recently onboarded:\n\n' + top10.map(fmt).join('\n\n');
-          return res.json({ content: [{ type: 'text', text }] });
-        }
+        const list = newProps.length > 0 ? newProps : mapped.slice(0, 10);
+        const label = newProps.length > 0
+          ? 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + ')'
+          : 'No new properties in last ' + daysBack + ' days. Most recently onboarded (total: ' + mapped.length + ')';
+        return res.json({ content: [{ type: 'text', text: label + ':\n\n' + list.map(fmt).join('\n\n') }] });
       } catch(e) {
         console.error('Onboard shortcut error:', e.message);
       }
