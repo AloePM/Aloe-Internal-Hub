@@ -1604,6 +1604,7 @@ app.post('/api/chat', async function(req, res) {
         const daysBack = daysMatch ? parseInt(daysMatch[1]) : 30;
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
         const cards = await getUnitsCards();
+        if (cards.length > 0) console.log('Unit card sample keys:', Object.keys(cards[0]).filter(k => /creat|date|time|onboard/i.test(k)).join(', '), '| createdAt raw:', cards[0]['Created At'] || cards[0]['createdAt'] || cards[0]['Created'] || 'NOT FOUND');
         const parseCreated = function(c) {
           const raw = c['Created At'] || c.createdAt || '';
           if (!raw) return null;
