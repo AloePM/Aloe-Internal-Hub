@@ -1632,10 +1632,16 @@ app.post('/api/chat', async function(req, res) {
           });
           return m;
         });
-        // Parse date — core-api createdAt is ISO, but schema-mapped "Created At" may be "MM/DD/YYYY HH:MM am"
+        // Parse date — handles both ISO and "MM/DD/YYYY HH:MM am/pm" formats
         const parseMs = function(c) {
           const raw = c.createdAt || c['Created At'] || '';
           if (!raw) return null;
+          // If it looks like "04/01/2026 9:41 pm" parse manually
+          const mmddyyyy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (mmddyyyy) {
+            const [, m, d, y] = mmddyyyy;
+            return new Date(y + '-' + m.padStart(2,'0') + '-' + d.padStart(2,'0')).getTime();
+          }
           try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
         };
         // Sort newest first
@@ -1653,14 +1659,20 @@ app.post('/api/chat', async function(req, res) {
           const addr = c['Street'] || c['Address'] || c.name || '?';
           const ms = parseMs(c);
           const date = ms ? new Date(ms).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
-          const owner = c['Owner'] || c['Portfolio'] || '';
+          // Owner can be string or array of objects
+          const rawOwner = c['Owner'] || c['Portfolio'] || '';
+          const owner = Array.isArray(rawOwner)
+            ? rawOwner.map(function(o) { return typeof o === 'object' ? (o.name || o.label || JSON.stringify(o)) : o; }).join(', ')
+            : typeof rawOwner === 'object' ? (rawOwner.name || rawOwner.label || '') : String(rawOwner || '');
           const city = c['City'] || '';
           const type = c['Property Type'] || '';
-          const contractStart = c['Date Contract Begins'] || '';
+          // Contract date — may be ISO or MM/DD/YYYY
+          const rawContract = c['Date Contract Begins'] || '';
+          const contractDate = rawContract ? new Date(rawContract).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
           return addr + (city ? ', ' + city : '') + (type ? ' (' + type + ')' : '') +
             (owner ? '\n  Owner: ' + owner : '') +
             (date ? '\n  Added: ' + date : '') +
-            (contractStart ? '\n  Contract started: ' + contractStart : '');
+            (contractDate && contractDate !== 'Invalid Date' ? '\n  Contract started: ' + contractDate : '');
         };
         const list = newProps.length > 0 ? newProps : mapped.slice(0, 10);
         const label = newProps.length > 0
