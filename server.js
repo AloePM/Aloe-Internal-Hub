@@ -86,7 +86,7 @@ NOTION — Company policies and SOPs:
 - HOA violation procedures, maintenance escalation, all SOPs
 
 Known Aptly board IDs:
-- "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board).
+- "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board). IMPORTANT: The "Created At" field on each unit = the date the property was onboarded into the portfolio — use this to answer questions about recently onboarded properties.
 - "qfBzBxfooJtfTQncd" — List Property / On Market board. Shows properties actively listed, showing start date, notes on occupancy, market status.
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
 - "4EMDSYKirhQaNdQKz" — Renter Leads. Use aptly_get_leads for ANY question about leads, showings, tours, prospects, lead sources, conversion. Fields include: Primary Contact, Preferred Rental, Stage, Source, Requested Showing Information (contains date/time), Requested Showing Status, Tour Date/Time, Move Date, Household Income, Beds, Pets, Last Action, email counts, comments. Stages: Nurturing, Scheduled Tour, Tour Completed, Tour Canceled / No Show, Applied.
@@ -1593,6 +1593,41 @@ app.post('/api/chat', async function(req, res) {
         }
       } catch(e) {
         console.error('Applications shortcut error:', e.message, e.stack);
+      }
+    }
+
+    // Server-side shortcut for new/recently onboarded properties
+    const isOnboardQ = lowerMsg.match(/onboard|new prop|recently add|new.*unit|unit.*new|propert.*add|add.*propert|when.*add|portfolio.*grow|grow.*portfolio/);
+    if (isOnboardQ) {
+      try {
+        const daysMatch = lowerMsg.match(/(\d+)\s*day/);
+        const daysBack = daysMatch ? parseInt(daysMatch[1]) : 30;
+        const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+        const cards = await getUnitsCards();
+        const newProps = cards.filter(function(c) {
+          const created = c['Created At'] || c.createdAt || '';
+          if (!created) return false;
+          try { return new Date(created).getTime() > cutoffMs; } catch(e) { return false; }
+        }).sort(function(a, b) {
+          return new Date(b['Created At'] || b.createdAt || 0).getTime() - new Date(a['Created At'] || a.createdAt || 0).getTime();
+        });
+        if (newProps.length > 0) {
+          const fmt = function(c) {
+            const addr = (c.Street || c.Address || c['Marketing Name'] || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
+            const created = c['Created At'] || c.createdAt || '';
+            const date = created ? new Date(created).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+            const rent = c['Market Rent'] && typeof c['Market Rent'] === 'object' ? '$' + Number(c['Market Rent'].amount).toLocaleString() : (c['Market Rent'] || '');
+            const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
+            const stage = c.Stage || '';
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (date ? ' (added ' + date + ')' : '') + (stage ? ' [' + stage + ']' : '');
+          };
+          const text = 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n');
+          return res.json({ content: [{ type: 'text', text }] });
+        } else {
+          return res.json({ content: [{ type: 'text', text: 'No new properties onboarded in the last ' + daysBack + ' days.' }] });
+        }
+      } catch(e) {
+        console.error('Onboard shortcut error:', e.message);
       }
     }
 
