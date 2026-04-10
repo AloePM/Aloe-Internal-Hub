@@ -1632,27 +1632,32 @@ app.post('/api/chat', async function(req, res) {
           });
           return m;
         });
-        // createdAt on core-api is a built-in ISO field - use it directly
-        // The schema-mapped "Created At" label is redundant here; core-api always has createdAt as ISO
         const parseMs = function(c) {
-          // c.createdAt is the raw ISO from core-api (most reliable)
-          const iso = c.createdAt || '';
-          if (iso) { try { const ms = new Date(iso).getTime(); if (!isNaN(ms)) return ms; } catch(e) {} }
-          // Fall back to schema-mapped "Created At" if available (MM/DD/YYYY format)
-          const labeled = c['Created At'] || '';
-          if (labeled) {
-            const m = labeled.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-            if (m) { try { return new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
-            try { const ms = new Date(labeled).getTime(); if (!isNaN(ms)) return ms; } catch(e) {}
+          // Try all possible date fields, prefer most recent
+          const candidates = [
+            c['Created At'],      // schema-mapped custom field
+            c.createdAt,          // built-in ISO
+            c['Stage Changed'],   // equals Created At for new cards
+          ];
+          let best = null;
+          for (const raw of candidates) {
+            if (!raw) continue;
+            let ms = null;
+            // MM/DD/YYYY format
+            const m = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (m) { try { ms = new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
+            else { try { ms = new Date(raw).getTime(); } catch(e) {} }
+            if (ms && !isNaN(ms) && (best === null || ms > best)) best = ms;
           }
-          return null;
+          return best;
         };
         // Sort newest first
         mapped.sort(function(a, b) { return (parseMs(b) || 0) - (parseMs(a) || 0); });
         // Debug first card
         if (mapped.length > 0) {
           const s = mapped[0];
-          console.log('Location card createdAt:', s.createdAt, '| Created At label:', s['Created At'], '| Street:', s['Street']);
+          console.log('Location card ALL keys:', Object.keys(s).join(', '));
+          console.log('Location card createdAt:', s.createdAt, '| Created At:', s['Created At'], '| Street:', s['Street']);
         }
         const newProps = mapped.filter(function(c) {
           const ms = parseMs(c); return ms !== null && ms > cutoffMs;
