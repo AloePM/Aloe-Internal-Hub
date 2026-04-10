@@ -815,16 +815,11 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        // Fetch up to 2 pages to capture all open work orders
-        let rawWOs = [];
-        for (let pg = 1; pg <= 2; pg++) {
-          const p = { pageSize: 100, page: pg };
-          if (input.propertyId) p.propertyID = input.propertyId;
-          const data = await rvFetch('/maintenance/work-orders', p);
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          rawWOs = rawWOs.concat(batch);
-          if (batch.length < 100) break;
-        }
+        // Fetch work orders — page 1 only (100 records, most recent first)
+        const p = { pageSize: 100, page: 1 };
+        if (input.propertyId) p.propertyID = input.propertyId;
+        const data = await rvFetch('/maintenance/work-orders', p);
+        let rawWOs = Array.isArray(data) ? data : (data && data.data) || [];
         // Response is nested: [{workOrder:{...}, contact:{...}, unit:{...}}, ...]
         let allWOs = rawWOs.map(function(rec) {
           if (rec.workOrder) {
@@ -835,31 +830,26 @@ async function executeTool(name, input) {
           }
           return rec;
         }).filter(function(wo) { return wo.workOrderID; });
-        // Deduplicate by workOrderID
-        const seen = {};
-        allWOs = allWOs.filter(function(wo) {
-          if (seen[wo.workOrderID]) return false;
-          seen[wo.workOrderID] = true;
-          return true;
-        });
         // Log status distribution
         const statusDist = {};
         allWOs.forEach(function(wo) {
-          const s = wo.primaryWorkOrderStatusID + '(' + (wo.workOrderStatusID || '') + ')';
-          statusDist[s] = (statusDist[s] || 0) + 1;
+          const sid = String(wo.primaryWorkOrderStatusID);
+          statusDist[sid] = (statusDist[sid] || 0) + 1;
         });
-        console.log('RV WO total raw:', allWOs.length, 'statuses:', JSON.stringify(statusDist));
-        // Sample a status-3 record to see dateClosed
-        const s3sample = allWOs.find(function(wo) { return String(wo.primaryWorkOrderStatusID) === '3'; });
-        if (s3sample) console.log('Status-3 sample dateClosed:', s3sample.dateClosed, 'workOrderStatusID:', s3sample.workOrderStatusID);
-        // Filter: not closed (dateClosed absent) AND not cancelled status
-        // Use both statusID and dateClosed check
+        console.log('RV WO total raw:', allWOs.length, 'by primaryStatus:', JSON.stringify(statusDist));
+        // Filter purely by primaryWorkOrderStatusID — dateClosed is unreliable in Rentvine
+        // Status 4 = Completed, Status 5 = Cancelled. Everything else = open/active
         let filtered = allWOs;
         if (input.status === 'closed') {
-          filtered = allWOs.filter(function(wo) { return !!wo.dateClosed; });
+          filtered = allWOs.filter(function(wo) {
+            const sid = parseInt(wo.primaryWorkOrderStatusID);
+            return sid === 4 || sid === 5;
+          });
         } else {
-          // Exclude only records with a dateClosed value (truly closed/completed)
-          filtered = allWOs.filter(function(wo) { return !wo.dateClosed; });
+          filtered = allWOs.filter(function(wo) {
+            const sid = parseInt(wo.primaryWorkOrderStatusID);
+            return sid !== 4 && sid !== 5;
+          });
         }
         // Check for unassigned: no vendorContactID
         const unassigned = filtered.filter(function(wo) { return !wo.vendorContactID; });
