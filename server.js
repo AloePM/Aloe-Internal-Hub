@@ -1609,83 +1609,43 @@ app.post('/api/chat', async function(req, res) {
           else daysBack = n;
         }
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        // Get schema for location board to map UUID keys to labels
-        const locSchema = await unitsFetch('/api/schema/location');
-        const locMap = {};
-        if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
-        // Fetch all location cards
-        let allLocations = [];
-        let page = 0;
-        while (true) {
-          const data = await unitsFetch('/api/board/location', { page, pageSize: 100 });
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          allLocations = allLocations.concat(batch);
-          if (batch.length < 100) break;
-          page++;
-        }
-        // Map UUID keys to labels for each card
-        const mapped = allLocations.map(function(card) {
-          const m = { _id: card.cardId, createdAt: card.createdAt, stage: card.stage };
-          Object.keys(card).forEach(function(k) {
-            if (locMap[k]) m[locMap[k]] = card[k];
-          });
-          return m;
+        const cutoffIso = new Date(cutoffMs).toISOString();
+        // Use Rentvine properties export — dateTimeCreated is when property was added to Rentvine
+        const data = await rvFetch('/properties/export', { pageSize: 100, page: 1, dateTimeModifiedMin: cutoffIso });
+        const props = Array.isArray(data) ? data : (data && data.data) || [];
+        console.log('RV onboard: fetched with dateTimeModifiedMin:', props.length);
+        // Filter to only newly CREATED within cutoff
+        const newProps = props.filter(function(p) {
+          const created = p.property && p.property.dateTimeCreated;
+          if (!created) return false;
+          return new Date(created).getTime() > cutoffMs;
+        }).sort(function(a, b) {
+          return new Date(b.property.dateTimeCreated).getTime() - new Date(a.property.dateTimeCreated).getTime();
         });
-        const parseMs = function(c) {
-          // Try all possible date fields, prefer most recent
-          const candidates = [
-            c['Created At'],      // schema-mapped custom field
-            c.createdAt,          // built-in ISO
-            c['Stage Changed'],   // equals Created At for new cards
-          ];
-          let best = null;
-          for (const raw of candidates) {
-            if (!raw) continue;
-            let ms = null;
-            // MM/DD/YYYY format
-            const m = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-            if (m) { try { ms = new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
-            else { try { ms = new Date(raw).getTime(); } catch(e) {} }
-            if (ms && !isNaN(ms) && (best === null || ms > best)) best = ms;
-          }
-          return best;
+        console.log('RV onboard: new by dateTimeCreated:', newProps.length);
+        const fmt = function(item) {
+          const prop = item.property || {};
+          const port = item.portfolio || {};
+          const addr = prop.address || prop.name || '?';
+          const city = prop.city || '';
+          const state = prop.stateID || '';
+          const created = prop.dateTimeCreated ? new Date(prop.dateTimeCreated).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+          const owners = Array.isArray(port.owners) ? port.owners.map(function(o) { return o.name || ''; }).filter(Boolean).join(', ') : (port.name || '');
+          return addr + (city ? ', ' + city : '') + (state ? ' ' + state : '') +
+            (owners ? '\n  Owner: ' + owners : '') +
+            (created ? '\n  Added: ' + created : '');
         };
-        // Sort newest first
-        mapped.sort(function(a, b) { return (parseMs(b) || 0) - (parseMs(a) || 0); });
-        // Debug first card
-        if (mapped.length > 0) {
-          const s = mapped[0];
-          console.log('Location card ALL keys:', Object.keys(s).join(', '));
-          console.log('Location card createdAt:', s.createdAt, '| Created At:', s['Created At'], '| Street:', s['Street']);
+        if (newProps.length > 0) {
+          return res.json({ content: [{ type: 'text', text: 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n\n') }] });
+        } else {
+          // Fall back — fetch all and show most recently added
+          const allData = await rvFetch('/properties/export', { pageSize: 100, page: 1 });
+          const allProps = Array.isArray(allData) ? allData : (allData && allData.data) || [];
+          const sorted = allProps.filter(function(p) { return p.property && p.property.dateTimeCreated; })
+            .sort(function(a, b) { return new Date(b.property.dateTimeCreated).getTime() - new Date(a.property.dateTimeCreated).getTime(); });
+          const top = sorted.slice(0, 10);
+          return res.json({ content: [{ type: 'text', text: 'No new properties in last ' + daysBack + ' days. Most recently onboarded (total: ' + sorted.length + '):\n\n' + top.map(fmt).join('\n\n') }] });
         }
-        const newProps = mapped.filter(function(c) {
-          const ms = parseMs(c); return ms !== null && ms > cutoffMs;
-        });
-        console.log('Onboard: location total:', mapped.length, 'new in', daysBack, 'days:', newProps.length);
-        const fmt = function(c) {
-          const addr = c['Street'] || c['Address'] || c.name || '?';
-          const ms = parseMs(c);
-          const date = ms ? new Date(ms).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
-          // Owner can be string or array of objects
-          const rawOwner = c['Owner'] || c['Portfolio'] || '';
-          const owner = Array.isArray(rawOwner)
-            ? rawOwner.map(function(o) { return typeof o === 'object' ? (o.name || o.label || '') : o; }).join(', ')
-            : typeof rawOwner === 'object' ? (rawOwner.name || rawOwner.label || '') : String(rawOwner || '');
-          const city = c['City'] || '';
-          const type = c['Property Type'] || '';
-          const rawContract = c['Date Contract Begins'] || '';
-          const contractDate = rawContract ? (() => { const d = new Date(rawContract); return isNaN(d) ? rawContract : d.toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}); })() : '';
-          return addr + (city ? ', ' + city : '') + (type ? ' (' + type + ')' : '') +
-            (owner ? '\n  Owner: ' + owner : '') +
-            (date ? '\n  Added: ' + date : '') +
-            (contractDate ? '\n  Contract started: ' + contractDate : '');
-        };
-        const list = newProps.length > 0 ? newProps : mapped.slice(0, 10);
-        const label = newProps.length > 0
-          ? 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + ')'
-          : 'No new properties in last ' + daysBack + ' days. Most recently onboarded (total: ' + mapped.length + ')';
-        return res.json({ content: [{ type: 'text', text: label + ':\n\n' + list.map(fmt).join('\n\n') }] });
       } catch(e) {
         console.error('Onboard shortcut error:', e.message);
       }
