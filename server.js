@@ -1604,27 +1604,36 @@ app.post('/api/chat', async function(req, res) {
         const daysBack = daysMatch ? parseInt(daysMatch[1]) : 30;
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
         const cards = await getUnitsCards();
+        const parseCreated = function(c) {
+          const raw = c['Created At'] || c.createdAt || '';
+          if (!raw) return null;
+          // Handle both ISO (2024-11-18T07:03:00Z) and MM/DD/YYYY formats
+          try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
+        };
         const newProps = cards.filter(function(c) {
-          const created = c['Created At'] || c.createdAt || '';
-          if (!created) return false;
-          try { return new Date(created).getTime() > cutoffMs; } catch(e) { return false; }
+          const ms = parseCreated(c);
+          return ms !== null && ms > cutoffMs;
         }).sort(function(a, b) {
-          return new Date(b['Created At'] || b.createdAt || 0).getTime() - new Date(a['Created At'] || a.createdAt || 0).getTime();
+          return (parseCreated(b) || 0) - (parseCreated(a) || 0);
         });
+        console.log('Onboard check: total cards:', cards.length, 'in last', daysBack, 'days:', newProps.length);
         if (newProps.length > 0) {
           const fmt = function(c) {
             const addr = (c.Street || c.Address || c['Marketing Name'] || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
-            const created = c['Created At'] || c.createdAt || '';
-            const date = created ? new Date(created).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+            const ms = parseCreated(c);
+            const date = ms ? new Date(ms).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
             const rent = c['Market Rent'] && typeof c['Market Rent'] === 'object' ? '$' + Number(c['Market Rent'].amount).toLocaleString() : (c['Market Rent'] || '');
             const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
+            const owner = c.Owners || c.Portfolio || '';
             const stage = c.Stage || '';
-            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (date ? ' (added ' + date + ')' : '') + (stage ? ' [' + stage + ']' : '');
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') +
+              (owner ? '\n  Owner: ' + owner : '') +
+              (date ? '\n  Onboarded: ' + date : '') + (stage ? ' [' + stage + ']' : '');
           };
-          const text = 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n');
+          const text = 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n\n');
           return res.json({ content: [{ type: 'text', text }] });
         } else {
-          return res.json({ content: [{ type: 'text', text: 'No new properties onboarded in the last ' + daysBack + ' days.' }] });
+          return res.json({ content: [{ type: 'text', text: 'No new properties onboarded in the last ' + daysBack + ' days. Total properties in portfolio: ' + cards.length } ] });
         }
       } catch(e) {
         console.error('Onboard shortcut error:', e.message);
