@@ -95,7 +95,7 @@ Known Aptly board IDs:
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
 - "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders for counts/metrics. Use compare_work_orders to cross-reference Aptly vs Rentvine — it matches by workOrderNumber, returns exactly which work orders are only in Aptly, only in Rentvine, or have status mismatches. Aptly and Rentvine track the SAME work orders synced by workOrderNumber. "Not completed/closed" means: Aptly stages not in Completed/Cancelled/Rejected; Rentvine primaryWorkOrderStatusID < 4 and no dateClosed. For comments/notes on work orders: use rv_get_work_order_notes which fetches Rentvine work order status updates (these are the notes/follow-ups). Since Aptly and Rentvine are bidirectionally synced, Rentvine notes = Aptly comments.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
-- "K9mMGGjKgQPqDykaa" — Move-Ins. Shows upcoming move-ins.
+- "K9mMGGjKgQPqDykaa" — Move-Ins board. Key fields after schema mapping: "Mirror Move-In Date" (MM/DD/YYYY), "Mirror Rent Amount", "Stage", "Title" (contains date+tenants+address), "Buildings", "Unit", "Mirror Residents", "Mirror Portfolio" (owner). Stages: Approved, Lease Sent, Lease Signed, Utilities, Move-In Day, Moved In, Abandoned. Filter by "Mirror Move-In Date" for upcoming move-ins. Exclude Abandoned and Moved In stages for upcoming.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
 
 Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
@@ -1705,6 +1705,90 @@ app.post('/api/chat', async function(req, res) {
         }
       } catch(e) {
         console.error('Onboard shortcut error:', e.message);
+      }
+    }
+
+    // Server-side shortcut for move-ins questions
+    const isMoveInQ = lowerMsg.match(/move.?in|moving in|move ins|movein/) && lowerMsg.match(/upcoming|next week|this week|today|scheduled|coming up|when|what|list|show/);
+    if (isMoveInQ) {
+      try {
+        // Fetch schema + all Move-Ins cards
+        const schemaData = await unitsFetch('/api/schema/K9mMGGjKgQPqDykaa');
+        const schemaMap = {};
+        if (Array.isArray(schemaData)) schemaData.forEach(function(f) { schemaMap[f.key] = f.label; });
+        let allCards = [];
+        let pg = 0;
+        while (true) {
+          const data = await unitsFetch('/api/board/K9mMGGjKgQPqDykaa', { page: pg, pageSize: 50 });
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          // Map UUID keys to labels
+          const mapped = batch.map(function(card) {
+            const m = { _stage: card.stage, _cardId: card.cardId };
+            Object.keys(card).forEach(function(k) { m[schemaMap[k] || k] = card[k]; });
+            return m;
+          });
+          allCards = allCards.concat(mapped);
+          if (batch.length < 50) break;
+          pg++;
+          if (pg > 5) break;
+        }
+        // AZ time
+        const azNow = new Date(Date.now() - 7 * 60 * 60 * 1000);
+        const azToday = new Date(azNow); azToday.setHours(0,0,0,0);
+        // Next week boundaries (Mon-Sun of next week, or just next 14 days)
+        const parseMoveinDate = function(c) {
+          const raw = c['Mirror Move-In Date'] || c['Mirror Offer Move In'] || '';
+          if (!raw) return null;
+          const m = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (m) { try { return new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
+          try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
+        };
+        const todayMs = azToday.getTime();
+        // Determine time window
+        let windowStart = todayMs;
+        let windowEnd = todayMs + 14 * 24 * 60 * 60 * 1000; // default 14 days
+        let windowLabel = 'upcoming (next 14 days)';
+        if (lowerMsg.includes('next week')) {
+          const dow = azToday.getDay(); // 0=Sun
+          const daysToNextMon = dow === 0 ? 1 : 8 - dow;
+          windowStart = todayMs + daysToNextMon * 24 * 60 * 60 * 1000;
+          windowEnd = windowStart + 7 * 24 * 60 * 60 * 1000;
+          windowLabel = 'next week';
+        } else if (lowerMsg.includes('this week')) {
+          const dow = azToday.getDay();
+          windowStart = todayMs - dow * 24 * 60 * 60 * 1000;
+          windowEnd = windowStart + 7 * 24 * 60 * 60 * 1000;
+          windowLabel = 'this week';
+        } else if (lowerMsg.includes('today')) {
+          windowEnd = todayMs + 24 * 60 * 60 * 1000;
+          windowLabel = 'today';
+        }
+        // Filter: active stages only, within window
+        const excluded = /abandoned|moved in/i;
+        const filtered = allCards.filter(function(c) {
+          if (excluded.test(c._stage || '')) return false;
+          const ms = parseMoveinDate(c);
+          return ms !== null && ms >= windowStart && ms < windowEnd;
+        }).sort(function(a, b) { return (parseMoveinDate(a) || 0) - (parseMoveinDate(b) || 0); });
+        const fmt = function(c) {
+          const residents = c['Mirror Residents'] || c['Title'] || '?';
+          const addr = c['Buildings'] || c['Unit'] || '';
+          const date = c['Mirror Move-In Date'] || '';
+          const rent = c['Mirror Rent Amount'] || '';
+          const stage = c._stage || '';
+          const rent_str = typeof rent === 'object' ? '$' + rent.amount : String(rent || '');
+          return '• ' + residents + (addr ? ' — ' + addr : '') +
+            (date ? '\n  Move-in: ' + date : '') +
+            (rent_str ? ', ' + rent_str + '/mo' : '') +
+            (stage ? ' [' + stage + ']' : '');
+        };
+        const text = filtered.length > 0
+          ? 'Move-ins ' + windowLabel + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n\n')
+          : 'No move-ins found for ' + windowLabel + '. Total active cards: ' + allCards.filter(function(c) { return !excluded.test(c._stage || ''); }).length;
+        return res.json({ content: [{ type: 'text', text }] });
+      } catch(e) {
+        console.error('Move-in shortcut error:', e.message);
       }
     }
 
