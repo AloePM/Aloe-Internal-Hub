@@ -944,19 +944,27 @@ async function executeTool(name, input) {
         // Renter Leads and other boards use core-api (same token as Units/Applicants)
         const coreApiBoards = ['4EMDSYKirhQaNdQKz', 'MJxaStgENouWrNEKd', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj'];
         if (coreApiBoards.indexOf(boardId) !== -1) {
-          const params = { page: input.page || 0, pageSize: 50 };
-          // Support date filtering — e.g. "this week" passes updatedAtMin
-          if (input.updatedAtMin) params.updatedAtMin = input.updatedAtMin;
-          const data = await unitsFetch('/api/board/' + boardId, params);
-          const cards = Array.isArray(data) ? data : (data && data.data) || [];
-          // Add formatted_comments to each card
-          const withComments = cards.map(function(c) {
+          // Paginate fully to get all cards
+          let allCards = [];
+          let pg = 0;
+          while (true) {
+            const params = { page: pg, pageSize: 50 };
+            if (input.updatedAtMin) params.updatedAtMin = input.updatedAtMin;
+            const data = await unitsFetch('/api/board/' + boardId, params);
+            const batch = Array.isArray(data) ? data : (data && data.data) || [];
+            allCards = allCards.concat(batch);
+            if (batch.length < 50) break;
+            pg++;
+            if (pg > 10) break; // safety cap
+          }
+          const withComments = allCards.map(function(c) {
             const comments = Array.isArray(c.comments) && c.comments.length > 0
               ? c.comments.map(function(cm) { return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || ''); })
               : [];
             return Object.assign({}, c, { formatted_comments: comments });
           });
-          return JSON.stringify({ cards: withComments, total: data && data.count });
+          console.log('Board', boardId, 'total cards fetched:', allCards.length);
+          return JSON.stringify({ cards: withComments, total: allCards.length });
         }
         // Other boards use app.getaptly.com
         const data = await aptlyFetch('/aptlet/' + boardId, { page: input.page || 0, query: input.query || '' });
