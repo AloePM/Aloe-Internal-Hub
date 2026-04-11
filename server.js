@@ -1737,10 +1737,18 @@ app.post('/api/chat', async function(req, res) {
         const azNow = new Date(Date.now() - 7 * 60 * 60 * 1000);
         const azToday = new Date(azNow); azToday.setHours(0,0,0,0);
         // Next week boundaries (Mon-Sun of next week, or just next 14 days)
+        // Helper to extract string value from field that may be object/array
+        const strField = function(v) {
+          if (!v) return '';
+          if (typeof v === 'string') return v;
+          if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || i.label || i.value || '') : String(i); }).filter(Boolean).join(', ');
+          if (typeof v === 'object') return v.name || v.label || v.value || v.amount || '';
+          return String(v);
+        };
         const parseMoveinDate = function(c) {
-          const raw = c['Mirror Move-In Date'] || c['Mirror Offer Move In'] || '';
+          const raw = strField(c['Mirror Move-In Date'] || c['Mirror Offer Move In'] || '');
           if (!raw) return null;
-          const m = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
           if (m) { try { return new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
           try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
         };
@@ -1772,12 +1780,12 @@ app.post('/api/chat', async function(req, res) {
           return ms !== null && ms >= windowStart && ms < windowEnd;
         }).sort(function(a, b) { return (parseMoveinDate(a) || 0) - (parseMoveinDate(b) || 0); });
         const fmt = function(c) {
-          const residents = c['Mirror Residents'] || c['Title'] || '?';
-          const addr = c['Buildings'] || c['Unit'] || '';
-          const date = c['Mirror Move-In Date'] || '';
-          const rent = c['Mirror Rent Amount'] || '';
+          const residents = strField(c['Mirror Residents']) || strField(c['Title']) || '?';
+          const addr = strField(c['Buildings']) || strField(c['Unit']) || '';
+          const date = strField(c['Mirror Move-In Date']) || '';
+          const rentRaw = c['Mirror Rent Amount'];
+          const rent_str = typeof rentRaw === 'object' && rentRaw ? '$' + rentRaw.amount : strField(rentRaw);
           const stage = c._stage || '';
-          const rent_str = typeof rent === 'object' ? '$' + rent.amount : String(rent || '');
           return '• ' + residents + (addr ? ' — ' + addr : '') +
             (date ? '\n  Move-in: ' + date : '') +
             (rent_str ? ', ' + rent_str + '/mo' : '') +
