@@ -944,6 +944,10 @@ async function executeTool(name, input) {
         // Renter Leads and other boards use core-api (same token as Units/Applicants)
         const coreApiBoards = ['4EMDSYKirhQaNdQKz', 'MJxaStgENouWrNEKd', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj'];
         if (coreApiBoards.indexOf(boardId) !== -1) {
+          // Fetch schema for label mapping
+          const schemaData = await unitsFetch('/api/schema/' + boardId);
+          const schemaMap = {};
+          if (Array.isArray(schemaData)) schemaData.forEach(function(f) { schemaMap[f.key] = f.label; });
           // Paginate fully to get all cards
           let allCards = [];
           let pg = 0;
@@ -957,13 +961,19 @@ async function executeTool(name, input) {
             pg++;
             if (pg > 10) break; // safety cap
           }
-          const withComments = allCards.map(function(c) {
-            const comments = Array.isArray(c.comments) && c.comments.length > 0
-              ? c.comments.map(function(cm) { return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || ''); })
+          // Map UUID keys to labels
+          const withComments = allCards.map(function(card) {
+            const m = { _cardId: card.cardId, stage: card.stage, createdAt: card.createdAt };
+            Object.keys(card).forEach(function(k) {
+              m[schemaMap[k] || k] = card[k];
+            });
+            // Add formatted comments
+            m.formatted_comments = Array.isArray(card.comments) && card.comments.length > 0
+              ? card.comments.map(function(cm) { return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || ''); })
               : [];
-            return Object.assign({}, c, { formatted_comments: comments });
+            return m;
           });
-          console.log('Board', boardId, 'total cards fetched:', allCards.length);
+          console.log('Board', boardId, 'total cards fetched:', allCards.length, 'schema fields:', Object.keys(schemaMap).length);
           return JSON.stringify({ cards: withComments, total: allCards.length });
         }
         // Other boards use app.getaptly.com
@@ -1770,10 +1780,11 @@ app.post('/api/chat', async function(req, res) {
         });
         // Parse date from "Showing request for Name (MM/DD/YYYY HH:MM am-...)"
         const parseShowingDate = function(c) {
-          const info = c['Requested Showing Information'] || '';
+          const raw = c['Requested Showing Information'];
+          const info = typeof raw === 'string' ? raw : (raw && (raw.value || raw.name || JSON.stringify(raw))) || '';
           const m = info.match(/\((\d{2}\/\d{2}\/\d{4})/);
           if (m) return m[1];
-          const td = (c['Tour Date/Time'] || '').slice(0, 10);
+          const td = String(c['Tour Date/Time'] || '').slice(0, 10);
           return td;
         };
         // AZ time boundaries (UTC-7, no DST)
@@ -1785,9 +1796,10 @@ app.post('/api/chat', async function(req, res) {
         const fmt = function(c) {
           const contact = c['Primary Contact'] || c['Name'] || '?';
           const unit = c['Preferred Rental'] || c['Unit'] || '?';
-          const info = c['Requested Showing Information'] || '';
+          const raw = c['Requested Showing Information'];
+          const info = typeof raw === 'string' ? raw : (raw && (raw.value || raw.name || '')) || '';
           const timeMatch = info.match(/\(([^)]+)\)/);
-          const time = timeMatch ? timeMatch[1] : (c['Tour Date/Time'] || '');
+          const time = timeMatch ? timeMatch[1] : String(c['Tour Date/Time'] || '');
           const stage = c.stage || '';
           const status = c['Requested Showing Status'] || '';
           const source = c['Source'] || '';
