@@ -1841,13 +1841,8 @@ app.post('/api/chat', async function(req, res) {
           const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           if (batch.length === 0) break;
-          // Map UUID keys to labels
-          const mapped = batch.map(function(c) {
-            const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt, workOrderNumber: c.workOrderNumber, name: c.name };
-            Object.keys(c).forEach(function(k) { if (woMap[k]) m[woMap[k]] = c[k]; });
-            return m;
-          });
-          const active = mapped.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
+          // Use raw cards — unit/location/vendor are built-in fields not UUID-keyed
+          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
           allWOs = allWOs.concat(active);
           if (batch.length < 100) break;
           if (page >= 1) break;
@@ -1856,7 +1851,7 @@ app.post('/api/chat', async function(req, res) {
         // Debug first card
         if (allWOs.length > 0) {
           const s = allWOs[0];
-          console.log('WO mapped keys:', Object.keys(s).join(', '));
+          console.log('WO sample - location[0]:', JSON.stringify((s.location||[])[0]).slice(0,80), 'vendor[0]:', JSON.stringify((s.vendor||[])[0]).slice(0,80));
         }
         const now = Date.now();
         const wos = allWOs.map(function(c) {
