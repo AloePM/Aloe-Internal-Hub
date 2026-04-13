@@ -1841,6 +1841,13 @@ app.post('/api/chat', async function(req, res) {
           page++;
         }
         const now = Date.now();
+        // Debug: log all keys of first card to find address field
+        if (allWOs.length > 0) {
+          const s = allWOs[0];
+          console.log('WO card keys:', Object.keys(s).join(', '));
+          console.log('WO unit:', JSON.stringify(s.unit || '').slice(0, 150));
+          console.log('WO location:', JSON.stringify(s.location || '').slice(0, 150));
+        }
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
