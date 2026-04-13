@@ -1175,27 +1175,6 @@ async function executeTool(name, input) {
         }
         console.log('Aptly WO total fetched:', allWOs.length);
 
-        // Fetch individual cards in parallel to get comments (bulk endpoint omits them)
-        // Limit to 60 concurrent fetches to avoid rate limiting
-        const cardIds = allWOs.map(function(c) { return c.cardId; }).filter(Boolean);
-        const fullCards = await Promise.all(cardIds.slice(0, 60).map(async function(id) {
-          try {
-            const card = await unitsFetch('/api/board/workOrder/' + id);
-            return card;
-          } catch(e) { return null; }
-        }));
-        // Merge comments from individual cards back into allWOs
-        const commentsById = {};
-        fullCards.forEach(function(card) {
-          if (card && card.cardId) {
-            commentsById[card.cardId] = Array.isArray(card.comments) ? card.comments : [];
-          }
-        });
-        allWOs = allWOs.map(function(c) {
-          return Object.assign({}, c, { comments: commentsById[c.cardId] || c.comments || [] });
-        });
-        console.log('Aptly WO with comments fetched:', Object.keys(commentsById).length);
-
         // Filter by input
         let filtered = allWOs;
         if (input.status) {
@@ -1224,30 +1203,16 @@ async function executeTool(name, input) {
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
 
-        // Slim output — use known raw field names
+        // Slim output — only what's needed
         const slim = withMetrics.map(function(c) {
-          const schedKey = Object.keys(c).find(function(k) { return /sched/i.test(k); });
-          // Comments may be in c.comments array OR indicated by c.commentCount
-          const commentsArr = Array.isArray(c.comments) ? c.comments : [];
-          const commentCount = c.commentCount || c.commentsCount || commentsArr.length || 0;
-          const formattedComments = commentsArr.map(function(cm) {
-            return (cm.userName || cm.user || 'Unknown') + ' (' + (cm.createdAt || cm.date || '').slice(0, 10) + '): ' + (cm.content || cm.text || cm.body || '');
-          });
           return {
-            title: c.description || c.name || '?',
-            stage: c.stage || '',
-            property: (c.unit && c.unit.name) || (c.location && c.location.name) || c.unit || '',
-            vendor: (c.vendor && c.vendor.name) || c.vendor || '',
-            scheduledDate: schedKey ? c[schedKey] : '',
-            daysOpen: c.daysOpen,
-            createdAt: (c.createdAt || '').slice(0, 10),
-            commentCount: commentCount,
-            comments: formattedComments,
+            num: c.workOrderNumber || c.number || '',
+            description: (c.description || c.name || '?').slice(0, 80),
+            opened: (c.createdAt || '').slice(0, 10),
+            status: c.stage || '',
           };
         });
-        // Log comment distribution for debug
-        const withComments = slim.filter(function(w) { return w.commentCount > 0 || w.comments.length > 0; });
-        console.log('Aptly WO comments: total:', slim.length, 'with comments:', withComments.length, 'sample keys:', slim.length > 0 ? Object.keys(withMetrics[0]).filter(function(k) { return /comment/i.test(k); }).join(',') : 'none');
+        console.log('Aptly WO slim:', slim.length, 'unassigned:', unassigned.length);
 
         return JSON.stringify({
           total: withMetrics.length,
