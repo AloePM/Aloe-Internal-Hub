@@ -922,6 +922,8 @@ async function executeTool(name, input) {
         console.log('RV property WO history for propId', propId, ': total', wos.length, 'open', open.length, 'closed', closed.length);
         return JSON.stringify({ propertyId: propId, address: input.address, total: wos.length, open: open.length, closed: closed.length, workOrders: wos });
       }
+
+      case 'rv_get_work_order_detail': {
         // Returns full work order including notes/statuses
         const detail = await rvFetch('/maintenance/work-orders/' + input.workOrderId);
         // Also fetch status updates (notes) for this work order
