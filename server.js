@@ -1206,7 +1206,9 @@ async function executeTool(name, input) {
         // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
           const unitRaw = c.unit || c.location || '';
-          const address = typeof unitRaw === 'object' ? (unitRaw.name || unitRaw.address || '') : String(unitRaw || '');
+          const address = typeof unitRaw === 'object'
+            ? (unitRaw.address || unitRaw.name || '')
+            : String(unitRaw || '');
           const vendorRaw = c.vendor || '';
           const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
           const rawDesc = c.description || c.name || '?';
@@ -1842,9 +1844,11 @@ app.post('/api/chat', async function(req, res) {
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
-          // Address — unit/location can be object or string
+          // Address — use unit.address (street address), fall back to location.name
           const unitRaw = c.unit || c.location || '';
-          const address = typeof unitRaw === 'object' ? (unitRaw.name || unitRaw.address || JSON.stringify(unitRaw).slice(0,40)) : String(unitRaw || '?');
+          const address = typeof unitRaw === 'object'
+            ? (unitRaw.address || unitRaw.name || '')
+            : String(unitRaw || '?');
           // Vendor — can be object or string
           const vendorRaw = c.vendor || '';
           const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
