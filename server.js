@@ -1826,68 +1826,82 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for work order questions — formats output directly
-    const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all/);
+    const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start/);
     if (isWOQ) {
       console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
       try {
-        // Fetch schema to map UUID keys to labels
+        // Fetch schema to find scheduled date UUID keys
         const woSchema = await unitsFetch('/api/schema/workOrder');
         const woMap = {};
-        if (Array.isArray(woSchema)) woSchema.forEach(function(f) { woMap[f.key] = f.label; });
-        // Fetch work orders from Aptly
+        if (Array.isArray(woSchema)) woSchema.forEach(function(f) { woMap[f.label] = f.key; });
+        const dateFields = Object.keys(woMap).filter(function(l) { return /date|start|window|appoint|sched/i.test(l); });
+        console.log('WO date fields from schema:', dateFields.join(', '));
+        const schedKey = woMap['Appointment Window Start'] || woMap['Scheduled Start Date'] || woMap['Start Date'] || woMap['Scheduled Date'] || null;
+        console.log('WO schedKey:', schedKey);
+        // Fetch work orders
         let allWOs = [];
         let page = 0;
         while (true) {
           const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           if (batch.length === 0) break;
-          // Use raw cards — unit/location/vendor are built-in fields not UUID-keyed
           const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
           allWOs = allWOs.concat(active);
           if (batch.length < 100) break;
           if (page >= 1) break;
           page++;
         }
-        // Debug first card
-        if (allWOs.length > 0) {
-          const s = allWOs[0];
-          console.log('WO sample - location[0]:', JSON.stringify((s.location||[])[0]).slice(0,80), 'vendor[0]:', JSON.stringify((s.vendor||[])[0]).slice(0,80));
-        }
         const now = Date.now();
+        const todayStr = new Date(now - 7*60*60*1000).toISOString().slice(0, 10); // AZ time approx
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
-          // unit and location are arrays — extract first element's name
-          const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
           const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
+          const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
           const address = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '?';
-          // vendor can be array or object
           const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
           const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
-          // Strip HTML from description
-          const rawDesc = c['Description'] || c.description || c.name || '?';
+          const rawDesc = c.description || c.name || '?';
           const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const schedRaw = schedKey ? (c[schedKey] || '') : '';
+          const schedDate = schedRaw ? String(schedRaw).slice(0, 10) : '';
+          const isPastScheduled = schedDate ? schedDate < todayStr : false;
           return {
-            address: String(address).replace(/<[^>]+>/g, '').trim() || '?',
-            num: c.workOrderNumber || c['Work Order Number'] || '',
+            address: address,
+            num: c.workOrderNumber || '',
             issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
             status: c.stage || '',
             daysOpen: daysOpen,
             vendor: vendor,
+            schedDate: schedDate,
+            isPastScheduled: isPastScheduled,
           };
         });
-        // Parse days filter if present
+
+        // Parse filter type
         const daysMatch = lowerMsg.match(/over\s+(\d+)\s*day|(\d+)\s*day/);
         const daysFilter = daysMatch ? parseInt(daysMatch[1] || daysMatch[2]) : null;
         const unassignedOnly = lowerMsg.match(/unassign/);
+        const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/);
         let filtered = wos;
-        if (daysFilter) filtered = wos.filter(function(w) { return w.daysOpen > daysFilter; });
-        if (unassignedOnly) filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
+        if (pastScheduled) {
+          filtered = wos.filter(function(w) { return w.isPastScheduled; });
+          if (filtered.length === 0 && !schedKey) {
+            // No scheduled date field found — fall back to Scheduled stage
+            filtered = wos.filter(function(w) { return /scheduled/i.test(w.status); });
+          }
+        } else if (daysFilter) {
+          filtered = wos.filter(function(w) { return w.daysOpen > daysFilter; });
+        } else if (unassignedOnly) {
+          filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
+        }
         filtered.sort(function(a, b) { return b.daysOpen - a.daysOpen; });
         const lines = filtered.map(function(w) {
-          return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days | ' + w.vendor;
+          const schedInfo = w.schedDate ? ' | Sched: ' + w.schedDate : '';
+          return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days' + schedInfo + ' | ' + w.vendor;
         });
-        const header = daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
+        const header = pastScheduled ? 'Work orders past scheduled start date (' + filtered.length + ' of ' + wos.length + '):'
+          : daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
           : unassignedOnly ? 'Unassigned work orders (' + filtered.length + '):'
           : 'Open work orders (' + filtered.length + '):';
         return res.json({ content: [{ type: 'text', text: header + '\n\n' + lines.join('\n') }] });
