@@ -1209,7 +1209,9 @@ async function executeTool(name, input) {
             num: c.workOrderNumber || c.number || '',
             description: (c.description || c.name || '?').slice(0, 80),
             opened: (c.createdAt || '').slice(0, 10),
+            daysOpen: c.daysOpen,
             status: c.stage || '',
+            property: (c.unit && c.unit.name) || (c.location && c.location.name) || '',
           };
         });
         console.log('Aptly WO slim:', slim.length, 'unassigned:', unassigned.length);
