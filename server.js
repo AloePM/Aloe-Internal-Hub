@@ -1203,12 +1203,15 @@ async function executeTool(name, input) {
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
 
-        // Slim output — only what's needed
+        // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
+          const desc = c.description || c.name || '';
+          // Derive issue type from first 2-3 words of description
+          const issueType = desc.split(/\s+/).slice(0, 4).join(' ').slice(0, 40);
           return {
-            num: c.workOrderNumber || c.number || '',
-            description: (c.description || c.name || '?').slice(0, 80),
             address: (c.unit && c.unit.name) || (c.location && c.location.name) || '',
+            num: c.workOrderNumber || c.number || '',
+            issue: issueType,
             vendor: (c.vendor && c.vendor.name) || c.vendor || 'Unassigned',
             opened: (c.createdAt || '').slice(0, 10),
             daysOpen: c.daysOpen,
