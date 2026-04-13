@@ -274,6 +274,17 @@ const ALL_TOOLS = [
     },
   },
   {
+    name: 'rv_get_property_work_order_history',
+    description: 'Get ALL work orders (open AND closed/completed) for a specific property by address or property ID. Use for: "show history for X address", "repeat issues at X", "what work has been done at X", "past work orders for X". Returns open + closed work orders sorted newest first.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        address: { type: 'string', description: 'Property address to search for' },
+        propertyId: { type: 'number', description: 'Rentvine property ID (use if known)' },
+      },
+    },
+  },
+  {
     name: 'rv_get_work_order_detail',
     description: 'Get full details for a specific work order by ID',
     input_schema: {
@@ -872,7 +883,45 @@ async function executeTool(name, input) {
         return JSON.stringify({ total: filtered.length, unassigned: unassigned.length, workOrders: slim2 });
       }
 
-      case 'rv_get_work_order_detail': {
+      case 'rv_get_property_work_order_history': {
+        // Find property ID from address if not provided
+        let propId = input.propertyId;
+        if (!propId && input.address) {
+          const props = await rvFetch('/properties/export', { pageSize: 200, page: 1 });
+          const propList = Array.isArray(props) ? props : (props && props.data) || [];
+          const q = input.address.toLowerCase().replace(/\s+/g, ' ').trim();
+          const match = propList.find(function(p) {
+            const addr = ((p.property && p.property.address) || '').toLowerCase();
+            return addr.includes(q.split(' ').slice(0, 3).join(' '));
+          });
+          if (match) propId = match.property && match.property.propertyID;
+        }
+        if (!propId) return JSON.stringify({ error: 'Property not found for: ' + input.address });
+        // Fetch ALL work orders for this property (no status filter)
+        const allPages = [];
+        for (let pg = 1; pg <= 5; pg++) {
+          const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg, propertyID: propId });
+          const batch = Array.isArray(d) ? d : (d && d.data) || [];
+          allPages.push(...batch);
+          if (batch.length < 100) break;
+        }
+        const wos = allPages.map(function(rec) {
+          const wo = rec.workOrder || rec;
+          const statusMap = { '1': 'New', '2': 'In Progress', '3': 'On Hold', '4': 'Completed', '5': 'Cancelled' };
+          return {
+            num: wo.workOrderNumber,
+            description: (wo.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80),
+            status: statusMap[String(wo.primaryWorkOrderStatusID)] || wo.primaryWorkOrderStatusID,
+            vendor: (rec.contact && rec.contact.name) || 'Unassigned',
+            created: (wo.dateTimeCreated || '').slice(0, 10),
+            closed: (wo.dateClosed || '').slice(0, 10),
+          };
+        }).sort(function(a, b) { return (b.created || '').localeCompare(a.created || ''); });
+        const open = wos.filter(function(w) { return w.status !== 'Completed' && w.status !== 'Cancelled'; });
+        const closed = wos.filter(function(w) { return w.status === 'Completed' || w.status === 'Cancelled'; });
+        console.log('RV property WO history for propId', propId, ': total', wos.length, 'open', open.length, 'closed', closed.length);
+        return JSON.stringify({ propertyId: propId, address: input.address, total: wos.length, open: open.length, closed: closed.length, workOrders: wos });
+      }
         // Returns full work order including notes/statuses
         const detail = await rvFetch('/maintenance/work-orders/' + input.workOrderId);
         // Also fetch status updates (notes) for this work order
@@ -1825,6 +1874,51 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
+    // Server-side shortcut for repeat issues / property work order history
+    const isRepeatQ = lowerMsg.match(/repeat.*issue|issue.*repeat|recurring|same.*issue|same.*problem|multiple.*work.*order|work.*order.*history|past.*work.*order|previous.*work.*order|work.*order.*before|history.*property/);
+    if (isRepeatQ && !lowerMsg.match(/\d{3,5}/) === false || isRepeatQ) {
+      try {
+        // Fetch all open Aptly WOs and group by address to find repeats
+        let allWOs = [];
+        let page = 0;
+        while (true) {
+          const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100 });
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          allWOs = allWOs.concat(batch);
+          if (batch.length < 100) break;
+          if (page >= 2) break;
+          page++;
+        }
+        // Group by address (use location[0].name)
+        const byAddress = {};
+        allWOs.forEach(function(c) {
+          const locArr = Array.isArray(c.location) ? c.location : [];
+          const unitArr = Array.isArray(c.unit) ? c.unit : [];
+          const addr = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '';
+          if (!addr) return;
+          if (!byAddress[addr]) byAddress[addr] = [];
+          const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          byAddress[addr].push({ num: c.workOrderNumber, desc: desc.slice(0, 50), stage: c.stage || '' });
+        });
+        // Find properties with 2+ work orders
+        const repeats = Object.entries(byAddress)
+          .filter(function(e) { return e[1].length >= 2; })
+          .sort(function(a, b) { return b[1].length - a[1].length; });
+        if (repeats.length === 0) {
+          return res.json({ content: [{ type: 'text', text: 'No properties have multiple open work orders currently.' }] });
+        }
+        const lines = repeats.map(function(e) {
+          const addr = e[0], wos = e[1];
+          const woList = wos.map(function(w) { return '  #' + w.num + ' ' + w.desc + ' [' + w.stage + ']'; }).join('\n');
+          return addr + ' (' + wos.length + ' open WOs):\n' + woList;
+        });
+        return res.json({ content: [{ type: 'text', text: 'Properties with multiple open work orders (' + repeats.length + ' properties):\n\n' + lines.join('\n\n') }] });
+      } catch(e) {
+        console.error('Repeat issues shortcut error:', e.message);
+      }
+    }
+
     // Server-side shortcut for work order questions — formats output directly
     const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start/);
     if (isWOQ) {
@@ -1883,7 +1977,7 @@ app.post('/api/chat', async function(req, res) {
         const daysFilter = daysMatch ? parseInt(daysMatch[1] || daysMatch[2]) : null;
         const unassignedOnly = lowerMsg.match(/unassign/);
         const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/);
-        const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor/);
+        const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
         let filtered = wos;
         if (pastScheduled) {
           filtered = wos.filter(function(w) { return w.isPastScheduled; });
