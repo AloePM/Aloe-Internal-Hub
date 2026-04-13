@@ -1962,7 +1962,7 @@ app.post('/api/chat', async function(req, res) {
         else if (lowerMsg.match(/appliance|fridge|dishwasher|washer|dryer|microwave/)) catFilter = 'Appliance';
         else if (lowerMsg.match(/roof/)) catFilter = 'Roofing';
         const daysMatch = lowerMsg.match(/(\d+)\s*(?:day|month|year)/);
-        let daysBack = 365;
+        let daysBack = 730; // default 2 years
         if (daysMatch) {
           const n = parseInt(daysMatch[1]);
           if (lowerMsg.includes('month')) daysBack = n * 30;
@@ -1984,12 +1984,16 @@ app.post('/api/chat', async function(req, res) {
         };
         // Fetch all WOs from Rentvine (open + closed)
         let allWOs = [];
-        for (let pg = 1; pg <= 10; pg++) {
+        for (let pg = 1; pg <= 25; pg++) {
           const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
           const batch = Array.isArray(d) ? d : (d && d.data) || [];
           if (batch.length === 0) break;
           allWOs = allWOs.concat(batch);
           if (batch.length < 100) break;
+          // Stop if last WO in batch is older than our cutoff
+          const lastRec = batch[batch.length - 1];
+          const lastCreated = ((lastRec.workOrder || lastRec).dateTimeCreated || '');
+          if (lastCreated && new Date(lastCreated).getTime() < cutoffMs) break;
         }
         console.log('Recurring shortcut: fetched', allWOs.length, 'WOs, catFilter:', catFilter || 'all');
         // Debug first few records to see address structure
@@ -1998,6 +2002,11 @@ app.post('/api/chat', async function(req, res) {
           const wo = rec.workOrder || rec;
           console.log('RV WO sample - unit:', JSON.stringify(rec.unit || '').slice(0, 120), '| created:', (wo.dateTimeCreated || '').slice(0, 10));
         });
+        // Count how many have addresses
+        const withAddr = allWOs.filter(function(rec) {
+          return !!(rec.unit && (rec.unit.address || rec.unit.name));
+        });
+        console.log('WOs with unit address:', withAddr.length, 'of', allWOs.length);
         // Group by normalized address + category
         const normalizeAddr = function(s) {
           return (s || '').toLowerCase()
@@ -2011,19 +2020,21 @@ app.post('/api/chat', async function(req, res) {
         const byAddrCat = {};
         allWOs.forEach(function(rec) {
           const wo = rec.workOrder || rec;
-          // Try multiple address fields
+          // Try multiple address fields — unit may be null on older WOs
           const rawAddr = (rec.unit && (rec.unit.address || rec.unit.name)) ||
                           (rec.property && (rec.property.address || rec.property.name)) || '';
-          if (!rawAddr) return;
-          const addr = rawAddr; // keep original for display
-          const addrKey = normalizeAddr(rawAddr); // normalized for grouping
+          // Fall back to propertyID as grouping key if no address
+          const groupKey = rawAddr || ('propID:' + (wo.propertyID || wo.unitID || ''));
+          if (!groupKey || groupKey === 'propID:') return;
+          const displayAddr = rawAddr || ('Property #' + (wo.propertyID || wo.unitID || '?'));
+          const addrKey = rawAddr ? normalizeAddr(rawAddr) : groupKey;
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
           if (created < cutoffMs) return;
           const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
           const cat = categorizeRV(desc);
           if (catFilter && cat !== catFilter) return;
           const key = addrKey + '||' + cat;
-          if (!byAddrCat[key]) byAddrCat[key] = { addr, cat, wos: [] };
+          if (!byAddrCat[key]) byAddrCat[key] = { addr: displayAddr, cat, wos: [] };
           const statusMap = { '1': 'New', '2': 'In Progress', '3': 'On Hold', '4': 'Completed', '5': 'Cancelled' };
           byAddrCat[key].wos.push({
             num: wo.workOrderNumber,
