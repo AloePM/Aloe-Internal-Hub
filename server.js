@@ -1609,7 +1609,8 @@ app.post('/api/chat', async function(req, res) {
     const lowerMsg = (typeof lastContent === 'string' ? lastContent : 
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
-    const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house|under \d|homes.*rent|rent.*home|\d\s*bed/) && !lowerMsg.match(/[0-9]{5,6}/);
+    const isAvailabilityQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor|submitted|most.*order|order.*most/) &&
+      lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house|under \d|homes.*rent|rent.*home|\d\s*bed/) && !lowerMsg.match(/[0-9]{5,6}/);
     const isMarketDaysQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor/) &&
       lowerMsg.match(/market.*(\d+).*day|(\d+).*day.*market|how long.*market|days.*listed|listed.*days|sitting.*market|market.*long|homes.*listed.*over|listed.*over.*\d+.*day/);
     const marketDays = isMarketDaysQ ? parseInt((lowerMsg.match(/(\d+)\s*day/) || [])[1] || '30') : null;
@@ -2119,7 +2120,7 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for work order questions — formats output directly
-    const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start/);
+    const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start|most|property|home|propert/);
     if (isWOQ) {
       console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
       try {
@@ -2177,6 +2178,7 @@ app.post('/api/chat', async function(req, res) {
         const unassignedOnly = lowerMsg.match(/unassign/);
         const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/);
         const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
+        const propertySummary = lowerMsg.match(/most.*work.*order|work.*order.*most|most.*submit|submit.*most|most.*open|propert.*most|home.*most|which.*home|which.*propert|by.*property|per.*property|property.*count|address.*most/);
         let filtered = wos;
         if (pastScheduled) {
           filtered = wos.filter(function(w) { return w.isPastScheduled; });
@@ -2187,6 +2189,14 @@ app.post('/api/chat', async function(req, res) {
           filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
         }
         filtered.sort(function(a, b) { return b.daysOpen - a.daysOpen; });
+        // Property summary mode
+        if (propertySummary) {
+          const propCounts = {};
+          wos.forEach(function(w) { if (w.address && w.address !== '?') propCounts[w.address] = (propCounts[w.address] || 0) + 1; });
+          const sorted = Object.entries(propCounts).sort(function(a, b) { return b[1] - a[1]; });
+          const lines = sorted.map(function(e) { return e[0] + ': ' + e[1] + ' work order' + (e[1] !== 1 ? 's' : ''); });
+          return res.json({ content: [{ type: 'text', text: 'Open work orders by property (' + wos.length + ' total):\n\n' + lines.join('\n') }] });
+        }
         // Vendor summary mode
         if (vendorSummary) {
           const vendorCounts = {};
