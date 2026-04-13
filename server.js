@@ -93,7 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). Use aptly_get_work_orders for counts/metrics. Use compare_work_orders to cross-reference Aptly vs Rentvine — it matches by workOrderNumber, returns exactly which work orders are only in Aptly, only in Rentvine, or have status mismatches. Aptly and Rentvine track the SAME work orders synced by workOrderNumber. "Not completed/closed" means: Aptly stages not in Completed/Cancelled/Rejected; Rentvine primaryWorkOrderStatusID < 4 and no dateClosed. For comments/notes on work orders: use rv_get_work_order_notes which fetches Rentvine work order status updates (these are the notes/follow-ups). Since Aptly and Rentvine are bidirectionally synced, Rentvine notes = Aptly comments.
+- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions — counts, metrics, comments, vendor info, days open, no-comment checks. Aptly work order cards include full comments from vendors and the Aloe team. Key fields: title/description, stage, property (unit.name), vendor (vendor.name), daysOpen, createdAt, scheduledDate, comments (array of {userName, date, content}). Open = stages not matching Completed/Cancelled/Rejected. Use rv_get_work_orders ONLY when specifically asked to compare Aptly vs Rentvine counts. NEVER say comments are unavailable — they are in the aptly_get_work_orders response.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins board. Key fields after schema mapping: "Mirror Move-In Date" (MM/DD/YYYY), "Mirror Rent Amount", "Stage", "Title" (contains date+tenants+address), "Buildings", "Unit", "Mirror Residents", "Mirror Portfolio" (owner). Stages: Approved, Lease Sent, Lease Signed, Utilities, Move-In Day, Moved In, Abandoned. Filter by "Mirror Move-In Date" for upcoming move-ins. Exclude Abandoned and Moved In stages for upcoming.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -381,7 +381,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_get_work_orders',
-    description: 'Get work orders from the Aptly Work Orders board. Use for ANY question about work orders in Aptly — open work orders, unassigned, how long open, vendor status, work order metrics, outstanding work orders. Returns stage, property, vendor, created date, days open, comments, and summary metrics.',
+    description: 'PRIMARY source for ALL work order questions. Returns open work orders from Aptly with full comments from vendors and Aloe team. Use for: counts, which WOs have no comments, vendor analysis, days open (7/14/30 days), repeat issues, unassigned WOs, HVAC/plumbing/pest queries, scheduled date analysis, average assignment time. Fields: title, stage, property, vendor, daysOpen, createdAt, scheduledDate, comments[].',
     input_schema: {
       type: 'object',
       properties: {
@@ -393,7 +393,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_work_order_notes',
-    description: 'Get notes/status updates for Rentvine work orders. These are the comments/follow-up notes. Use when asked about comments, notes, follow-ups, or updates on work orders. Can filter by workOrderId for a specific work order.',
+    description: 'Get notes for a SPECIFIC Rentvine work order by ID. Only use when looking up a specific work order by its Rentvine ID. Do NOT use for general comment analysis — use aptly_get_work_orders instead which already includes all comments.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1399,18 +1399,17 @@ function getRelevantTools(msg) {
     ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/work.?order|maintenance|repair|fix|broken/)) {
-    tools.add('rv_get_work_orders');
     tools.add('aptly_get_work_orders');
   }
-  if (msg.match(/work.?order.*detail|detail.*work.?order|work.?order.*note|specific.*work.?order/)) {
+  if (msg.match(/compare|cross.?ref|aptly.*rentvine|rentvine.*aptly|how many.*rentvine|rentvine.*how many/)) {
+    tools.add('rv_get_work_orders');
+    tools.add('compare_work_orders');
+  }
+  if (msg.match(/work.?order.*detail|detail.*work.?order|specific.*work.?order/)) {
     tools.add('rv_get_work_order_detail');
   }
   if (msg.match(/comment|note|follow.?up|update.*work|work.*update|no.*comment|comment.*work/)) {
-    tools.add('rv_get_work_order_notes');
     tools.add('aptly_get_work_orders');
-  }
-  if (msg.match(/compare|cross.?ref|match|mismatch|sync|discrepan|not in|missing.*work|work.*missing/)) {
-    tools.add('compare_work_orders');
   }
   if (msg.match(/inspect/)) {
     ['rv_get_inspections', 'rv_get_inspection_detail'].forEach(function(t) { tools.add(t); });
@@ -1780,15 +1779,19 @@ app.post('/api/chat', async function(req, res) {
           return ms !== null && ms >= windowStart && ms < windowEnd;
         }).sort(function(a, b) { return (parseMoveinDate(a) || 0) - (parseMoveinDate(b) || 0); });
         const fmt = function(c) {
-          const residents = strField(c['Mirror Residents']) || strField(c['Title']) || '?';
-          const addr = strField(c['Buildings']) || strField(c['Unit']) || '';
+          // Title is always a plain string: "04/17/2026 Erik Gunderson; Emeleen Adler 2705 W Estrella Dr..."
+          const title = strField(c['Title'] || c.name || '');
+          // Extract just the names from title (between date and address)
+          const titleMatch = title.match(/^\d{2}\/\d{2}\/\d{4}\s+(.+?)\s+\d+\s+[A-Z]/);
+          const residents = titleMatch ? titleMatch[1].replace(/;/g, ' &') : (strField(c['Mirror Residents']) || title);
+          const addr = strField(c['Mirror Address']) || strField(c['Buildings']) || strField(c['Unit']) || '';
           const date = strField(c['Mirror Move-In Date']) || '';
           const rentRaw = c['Mirror Rent Amount'];
-          const rent_str = typeof rentRaw === 'object' && rentRaw ? '$' + rentRaw.amount : strField(rentRaw);
+          const rent_str = typeof rentRaw === 'object' && rentRaw ? '$' + Number(rentRaw.amount).toLocaleString() : strField(rentRaw).replace('$ ', '$');
           const stage = c._stage || '';
-          return '• ' + residents + (addr ? ' — ' + addr : '') +
+          return '• ' + residents + (addr ? '\n  ' + addr : '') +
             (date ? '\n  Move-in: ' + date : '') +
-            (rent_str ? ', ' + rent_str + '/mo' : '') +
+            (rent_str ? ' — ' + rent_str + '/mo' : '') +
             (stage ? ' [' + stage + ']' : '');
         };
         const text = filtered.length > 0
@@ -2114,18 +2117,21 @@ const FAQ_TABS = [
   {
     id: "maintenance", label: "🔧 Maintenance", color: "#fff7ed", border: "#f97316", accent: "#ea580c",
     questions: [
-      {icon:"🔧", text:"Show me all open work orders in Aptly and Rentvine"},
-      {icon:"📅", text:"Which scheduled work orders are past their scheduled date?"},
-      {icon:"🚨", text:"Which work orders have no comments or follow-up?"},
-      {icon:"👤", text:"Which work orders are unassigned?"},
-      {icon:"⏱️", text:"What work orders have been open the longest?"},
-      {icon:"🔀", text:"Cross-reference work orders between Aptly and Rentvine"},
-      {icon:"🏠", text:"Show me all open work orders for [property address]"},
+      {icon:"📅", text:"What work orders have been open over 30 days?"},
+      {icon:"⏰", text:"What work orders have been open over 7 days?"},
+      {icon:"🗓️", text:"What work orders have been open over 14 days?"},
+      {icon:"🚨", text:"What work orders are still open past their scheduled start date?"},
       {icon:"🏢", text:"Which vendor has the most open work orders?"},
-      {icon:"📊", text:"What's our average days to close a work order?"},
-      {icon:"🐜", text:"Show me all termite-related work orders"},
+      {icon:"📊", text:"Show me the amount of work orders opened per vendor"},
+      {icon:"🔁", text:"Are there repeat issues at any property?"},
+      {icon:"👤", text:"What work orders are not scheduled yet with a vendor?"},
+      {icon:"💬", text:"Which work orders have no comments?"},
+      {icon:"🔢", text:"How many open work orders do we have?"},
+      {icon:"🏠", text:"What homes have the most submitted work orders?"},
+      {icon:"⚡", text:"What is the average time for a work order to get assigned to a vendor?"},
       {icon:"❄️", text:"Show me all HVAC work orders"},
       {icon:"💧", text:"Any water leak or plumbing emergencies open?"},
+      {icon:"🐛", text:"Show me pest control related work orders"},
     ]
   },
   {
