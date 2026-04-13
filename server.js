@@ -296,6 +296,18 @@ const ALL_TOOLS = [
     },
   },
   {
+    name: 'rv_get_recurring_issues',
+    description: 'Find properties with recurring work orders of the same category (HVAC, plumbing, electrical, appliance, etc.) within a time period. Use when asked: "which properties have had repeated HVAC issues?", "recurring plumbing problems", "same issue multiple times at a property", "has X address had AC problems before?". Searches ALL work orders including closed/completed ones in Rentvine.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        category: { type: 'string', description: 'Issue category to check: HVAC, Plumbing, Electrical, Appliance, Roofing, Landscaping, Pest Control, Pool, or leave blank for all categories' },
+        daysBack: { type: 'number', description: 'How far back to look in days. Default 365 (1 year). Use 730 for 2 years.' },
+        minCount: { type: 'number', description: 'Minimum number of same-category WOs to flag a property. Default 2.' },
+      },
+    },
+  },
+  {
     name: 'rv_get_inspections',
     description: 'Get property inspections from Rentvine — move-in, move-out, and periodic inspections with dates and status',
     input_schema: {
@@ -923,7 +935,66 @@ async function executeTool(name, input) {
         return JSON.stringify({ propertyId: propId, address: input.address, total: wos.length, open: open.length, closed: closed.length, workOrders: wos });
       }
 
-      case 'rv_get_work_order_detail': {
+      case 'rv_get_recurring_issues': {
+        const daysBack = input.daysBack || 365;
+        const minCount = input.minCount || 2;
+        const targetCat = (input.category || '').toLowerCase();
+        const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+        // Categorize from description
+        const categorizeRV = function(desc) {
+          const d = (desc || '').toLowerCase();
+          if (/ac|hvac|heat|cool|air.?condition|furnace|duct|compressor/i.test(d)) return 'HVAC';
+          if (/roof|shingle|tile.*roof|roof.*leak/i.test(d)) return 'Roofing';
+          if (/plumb|toilet|drain|faucet|water.*heat|pipe|sewage|clog|leak/i.test(d)) return 'Plumbing';
+          if (/electric|outlet|light|breaker|switch|wir/i.test(d)) return 'Electrical';
+          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/i.test(d)) return 'Appliance';
+          if (/pest|bug|termite|rodent|insect/i.test(d)) return 'Pest Control';
+          if (/landscap|lawn|yard|tree|palm|sprinkler|irrigation/i.test(d)) return 'Landscaping';
+          if (/pool|spa/i.test(d)) return 'Pool';
+          return 'General';
+        };
+        // Fetch multiple pages of ALL work orders (open + closed)
+        let allWOs = [];
+        for (let pg = 1; pg <= 10; pg++) {
+          const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+          const batch = Array.isArray(d) ? d : (d && d.data) || [];
+          if (batch.length === 0) break;
+          allWOs = allWOs.concat(batch);
+          if (batch.length < 100) break;
+        }
+        console.log('RV recurring: total WOs fetched:', allWOs.length);
+        // Group by address + category
+        const byAddrCat = {};
+        allWOs.forEach(function(rec) {
+          const wo = rec.workOrder || rec;
+          const addr = (rec.unit && (rec.unit.address || rec.unit.name)) || '';
+          if (!addr) return;
+          const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
+          if (created < cutoffMs) return;
+          const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
+          const cat = categorizeRV(desc);
+          if (targetCat && !cat.toLowerCase().includes(targetCat) && !targetCat.includes(cat.toLowerCase())) return;
+          const key = addr + '||' + cat;
+          if (!byAddrCat[key]) byAddrCat[key] = { addr, cat, wos: [] };
+          const statusMap = { '1': 'New', '2': 'In Progress', '3': 'On Hold', '4': 'Completed', '5': 'Cancelled' };
+          byAddrCat[key].wos.push({
+            num: wo.workOrderNumber,
+            desc: desc.replace(/\s+/g, ' ').trim().slice(0, 60),
+            status: statusMap[String(wo.primaryWorkOrderStatusID)] || 'Unknown',
+            date: (wo.dateTimeCreated || '').slice(0, 10),
+            vendor: (rec.contact && rec.contact.name) || 'Unassigned',
+          });
+        });
+        // Filter to those with minCount+ WOs
+        const flagged = Object.values(byAddrCat)
+          .filter(function(e) { return e.wos.length >= minCount; })
+          .sort(function(a, b) { return b.wos.length - a.wos.length; });
+        console.log('RV recurring: flagged properties:', flagged.length);
+        if (flagged.length === 0) {
+          return JSON.stringify({ message: 'No properties found with ' + minCount + '+ ' + (targetCat || '') + ' work orders in the last ' + daysBack + ' days.' });
+        }
+        return JSON.stringify({ total: flagged.length, daysBack, category: targetCat || 'all', results: flagged });
+      }
         // Returns full work order including notes/statuses
         const detail = await rvFetch('/maintenance/work-orders/' + input.workOrderId);
         // Also fetch status updates (notes) for this work order
@@ -1876,11 +1947,93 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
-    // Server-side shortcut for repeat issues / property work order history
-    const isRepeatQ = lowerMsg.match(/repeat.*issue|issue.*repeat|recurring|same.*issue|same.*problem|multiple.*work.*order|work.*order.*history|past.*work.*order|previous.*work.*order|work.*order.*before|history.*property/);
-    if (isRepeatQ && !lowerMsg.match(/\d{3,5}/) === false || isRepeatQ) {
+    // Server-side shortcut for recurring category issues across all work orders (open + closed)
+    const isRecurringQ = lowerMsg.match(/recurring|repeat.*hvac|hvac.*repeat|hvac.*multiple|multiple.*hvac|repeat.*ac|ac.*repeat|same.*hvac|hvac.*same|has.*had.*hvac|hvac.*problem|hvac.*issue|plumb.*repeat|repeat.*plumb|repeat.*appliance|appliance.*repeat|repeat.*electric|electric.*repeat|same.*issue.*before|issue.*before|before.*issue|previous.*issue|issue.*history|history.*issue|pattern|trend/);
+    if (isRecurringQ) {
       try {
-        // Fetch all open Aptly WOs and group by address to find repeats
+        // Determine category filter
+        let catFilter = '';
+        if (lowerMsg.match(/hvac|ac\b|air.?condition|heat/)) catFilter = 'HVAC';
+        else if (lowerMsg.match(/plumb|toilet|drain|leak|pipe/)) catFilter = 'Plumbing';
+        else if (lowerMsg.match(/electric|outlet|light/)) catFilter = 'Electrical';
+        else if (lowerMsg.match(/appliance|fridge|dishwasher|washer|dryer|microwave/)) catFilter = 'Appliance';
+        else if (lowerMsg.match(/roof/)) catFilter = 'Roofing';
+        const daysMatch = lowerMsg.match(/(\d+)\s*(?:day|month|year)/);
+        let daysBack = 365;
+        if (daysMatch) {
+          const n = parseInt(daysMatch[1]);
+          if (lowerMsg.includes('month')) daysBack = n * 30;
+          else if (lowerMsg.includes('year')) daysBack = n * 365;
+          else daysBack = n;
+        }
+        const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
+        const categorizeRV = function(desc) {
+          const d = (desc || '').toLowerCase();
+          if (/ac|hvac|heat|cool|air.?condition|furnace|duct|compressor/i.test(d)) return 'HVAC';
+          if (/roof|shingle|tile.*roof/i.test(d)) return 'Roofing';
+          if (/plumb|toilet|drain|faucet|water.*heat|pipe|sewage|clog|leak/i.test(d)) return 'Plumbing';
+          if (/electric|outlet|light|breaker|switch|wir/i.test(d)) return 'Electrical';
+          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/i.test(d)) return 'Appliance';
+          if (/pest|bug|termite|rodent/i.test(d)) return 'Pest Control';
+          if (/landscap|lawn|yard|tree|palm|sprinkler/i.test(d)) return 'Landscaping';
+          if (/pool|spa/i.test(d)) return 'Pool';
+          return 'General';
+        };
+        // Fetch all WOs from Rentvine (open + closed)
+        let allWOs = [];
+        for (let pg = 1; pg <= 10; pg++) {
+          const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+          const batch = Array.isArray(d) ? d : (d && d.data) || [];
+          if (batch.length === 0) break;
+          allWOs = allWOs.concat(batch);
+          if (batch.length < 100) break;
+        }
+        console.log('Recurring shortcut: fetched', allWOs.length, 'WOs, catFilter:', catFilter || 'all');
+        // Group by address + category
+        const byAddrCat = {};
+        allWOs.forEach(function(rec) {
+          const wo = rec.workOrder || rec;
+          const addr = (rec.unit && (rec.unit.address || rec.unit.name)) || '';
+          if (!addr) return;
+          const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
+          if (created < cutoffMs) return;
+          const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
+          const cat = categorizeRV(desc);
+          if (catFilter && cat !== catFilter) return;
+          const key = addr + '||' + cat;
+          if (!byAddrCat[key]) byAddrCat[key] = { addr, cat, wos: [] };
+          const statusMap = { '1': 'New', '2': 'In Progress', '3': 'On Hold', '4': 'Completed', '5': 'Cancelled' };
+          byAddrCat[key].wos.push({
+            num: wo.workOrderNumber,
+            desc: desc.replace(/\s+/g, ' ').trim().slice(0, 60),
+            status: statusMap[String(wo.primaryWorkOrderStatusID)] || 'Unknown',
+            date: (wo.dateTimeCreated || '').slice(0, 10),
+            vendor: (rec.contact && rec.contact.name) || 'Unassigned',
+          });
+        });
+        const flagged = Object.values(byAddrCat)
+          .filter(function(e) { return e.wos.length >= 2; })
+          .sort(function(a, b) { return b.wos.length - a.wos.length; });
+        if (flagged.length === 0) {
+          return res.json({ content: [{ type: 'text', text: 'No properties found with recurring ' + (catFilter || '') + ' work orders in the last ' + daysBack + ' days.' }] });
+        }
+        const label = catFilter ? catFilter + ' recurring issues' : 'Recurring issue patterns';
+        const lines = flagged.map(function(e) {
+          const woLines = e.wos.sort(function(a,b){ return b.date.localeCompare(a.date); })
+            .map(function(w) { return '  #' + w.num + ' ' + w.date + ' | ' + w.desc + ' | ' + w.status + ' | ' + w.vendor; }).join('\n');
+          return e.addr + ' — ' + e.wos.length + ' ' + e.cat + ' WOs:\n' + woLines;
+        });
+        return res.json({ content: [{ type: 'text', text: label + ' in the last ' + daysBack + ' days (' + flagged.length + ' properties):\n\n' + lines.join('\n\n') }] });
+      } catch(e) {
+        console.error('Recurring shortcut error:', e.message);
+      }
+    }
+
+    // Server-side shortcut for repeat issues / property work order history
+    const isRepeatQ = lowerMsg.match(/repeat.*issue|issue.*repeat|recurring|same.*issue|same.*problem|multiple.*work.*order|same.*type|issue.*type|category|any.*propert.*same/);
+    if (isRepeatQ) {
+      try {
+        // Fetch all open Aptly WOs
         let allWOs = [];
         let page = 0;
         while (true) {
@@ -1892,7 +2045,25 @@ app.post('/api/chat', async function(req, res) {
           if (page >= 2) break;
           page++;
         }
-        // Group by address (use location[0].name)
+        // Categorize issue type from description + vendorTrade
+        const categorize = function(c) {
+          const trade = (c.vendorTrade || '').toLowerCase();
+          const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').toLowerCase();
+          if (/ac|hvac|heat|cool|air.?condition|furnace|duct/i.test(desc + trade)) return 'HVAC';
+          if (/roof|leak.*roof|roof.*leak|shingle|tile.*roof/i.test(desc + trade)) return 'Roofing';
+          if (/plumb|toilet|drain|faucet|water.*heat|pipe|sewage|clog|leak/i.test(desc + trade)) return 'Plumbing';
+          if (/electric|outlet|light|breaker|switch|wir/i.test(desc + trade)) return 'Electrical';
+          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/i.test(desc + trade)) return 'Appliance';
+          if (/pest|bug|termite|rodent|insect|cockroach/i.test(desc + trade)) return 'Pest Control';
+          if (/landscap|lawn|yard|tree|bush|palm|sprinkler|irrigation/i.test(desc + trade)) return 'Landscaping';
+          if (/pool|spa/i.test(desc + trade)) return 'Pool';
+          if (/clean|carpet|paint|patch|drywall/i.test(desc + trade)) return 'Cleaning/Turnover';
+          if (/door|lock|window|blind|screen|garage/i.test(desc + trade)) return 'Door/Window/Lock';
+          if (/fence|gate|patio|deck|exterior/i.test(desc + trade)) return 'Exterior';
+          if (/inspect|walkthrough|walk.?through/i.test(desc)) return 'Inspection';
+          return 'General';
+        };
+        // Build per-property data
         const byAddress = {};
         allWOs.forEach(function(c) {
           const locArr = Array.isArray(c.location) ? c.location : [];
@@ -1901,9 +2072,33 @@ app.post('/api/chat', async function(req, res) {
           if (!addr) return;
           if (!byAddress[addr]) byAddress[addr] = [];
           const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          byAddress[addr].push({ num: c.workOrderNumber, desc: desc.slice(0, 50), stage: c.stage || '' });
+          byAddress[addr].push({ num: c.workOrderNumber, desc: desc.slice(0, 55), stage: c.stage || '', category: categorize(c) });
         });
-        // Find properties with 2+ work orders
+        const isSameTypeQ = lowerMsg.match(/same.*type|type.*same|category|same.*issue|issue.*type|any.*propert.*same/);
+        if (isSameTypeQ) {
+          // Cross-property: find issue categories that appear at multiple properties
+          const categoryAddresses = {};
+          Object.entries(byAddress).forEach(function(e) {
+            e[1].forEach(function(w) {
+              if (!categoryAddresses[w.category]) categoryAddresses[w.category] = {};
+              if (!categoryAddresses[w.category][e[0]]) categoryAddresses[w.category][e[0]] = 0;
+              categoryAddresses[w.category][e[0]]++;
+            });
+          });
+          const multiProp = Object.entries(categoryAddresses)
+            .filter(function(e) { return Object.keys(e[1]).length >= 2; })
+            .sort(function(a, b) { return Object.keys(b[1]).length - Object.keys(a[1]).length; });
+          if (multiProp.length === 0) {
+            return res.json({ content: [{ type: 'text', text: 'No issue categories currently appear across multiple properties.' }] });
+          }
+          const lines = multiProp.map(function(e) {
+            const cat = e[0], addrs = e[1];
+            const addrLines = Object.entries(addrs).map(function(a) { return '  ' + a[0] + ' (' + a[1] + ' WO' + (a[1] > 1 ? 's' : '') + ')'; }).join('\n');
+            return cat + ' — ' + Object.keys(addrs).length + ' properties:\n' + addrLines;
+          });
+          return res.json({ content: [{ type: 'text', text: 'Issue categories affecting multiple properties:\n\n' + lines.join('\n\n') }] });
+        }
+        // Default: properties with 2+ open WOs
         const repeats = Object.entries(byAddress)
           .filter(function(e) { return e[1].length >= 2; })
           .sort(function(a, b) { return b[1].length - a[1].length; });
@@ -1912,7 +2107,7 @@ app.post('/api/chat', async function(req, res) {
         }
         const lines = repeats.map(function(e) {
           const addr = e[0], wos = e[1];
-          const woList = wos.map(function(w) { return '  #' + w.num + ' ' + w.desc + ' [' + w.stage + ']'; }).join('\n');
+          const woList = wos.map(function(w) { return '  #' + w.num + ' [' + w.category + '] ' + w.desc + ' (' + w.stage + ')'; }).join('\n');
           return addr + ' (' + wos.length + ' open WOs):\n' + woList;
         });
         return res.json({ content: [{ type: 'text', text: 'Properties with multiple open work orders (' + repeats.length + ' properties):\n\n' + lines.join('\n\n') }] });
