@@ -1205,12 +1205,11 @@ async function executeTool(name, input) {
 
         // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
-          const unitRaw = c.unit || c.location || '';
-          const address = typeof unitRaw === 'object'
-            ? (unitRaw.address || unitRaw.name || '')
-            : String(unitRaw || '');
-          const vendorRaw = c.vendor || '';
-          const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
+          const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
+          const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
+          const address = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '';
+          const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
+          const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
           const rawDesc = c.description || c.name || '?';
           const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           return {
@@ -1224,6 +1223,10 @@ async function executeTool(name, input) {
           };
         });
         console.log('Aptly WO slim:', slim.length, 'unassigned:', unassigned.length);
+        if (slim.length > 0) {
+          const s = withMetrics[0];
+          console.log('WO[0] unit:', JSON.stringify(s.unit).slice(0,100), '| vendor:', JSON.stringify(s.vendor).slice(0,80), '| keys:', Object.keys(s).join(','));
+        }
 
         return JSON.stringify({
           total: withMetrics.length,
@@ -1859,13 +1862,13 @@ app.post('/api/chat', async function(req, res) {
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
-          // After schema mapping, address fields could be: Address, Property, Unit, Location, Building
-          const address = c['Address'] || c['Property'] || c['Unit'] || c['Location'] || c['Building'] ||
-            (c.unit && typeof c.unit === 'object' ? (c.unit.address || c.unit.name) : c.unit) ||
-            (c.location && typeof c.location === 'object' ? (c.location.address || c.location.name) : c.location) || '?';
-          // Vendor after schema mapping
-          const vendorRaw = c['Vendor'] || c['Assigned To'] || c.vendor || '';
-          const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
+          // unit and location are arrays — extract first element's name
+          const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
+          const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
+          const address = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '?';
+          // vendor can be array or object
+          const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
+          const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
           // Strip HTML from description
           const rawDesc = c['Description'] || c.description || c.name || '?';
           const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
