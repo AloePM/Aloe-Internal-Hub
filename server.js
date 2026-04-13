@@ -93,7 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for counts, vendor analysis, days open, unassigned, HVAC/plumbing/pest queries. For comments/notes analysis ("which have no comments", "show follow-ups"): use rv_get_work_order_notes which fetches notes from Rentvine per work order — this is the ONLY reliable source for comment data. The Aptly bulk API does not return comments in list responses. IMPORTANT: Never call aptly_get_work_orders AND rv_get_work_orders in the same loop — pick one. Use rv_get_work_orders only when specifically asked about Rentvine counts or vendor assignment.
+- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for counts, vendor analysis, days open, unassigned, HVAC/plumbing/pest queries. For comments/notes analysis ("which have no comments", "show follow-ups"): use rv_get_work_order_notes which fetches notes from Rentvine per work order — this is the ONLY reliable source for comment data. The Aptly bulk API does not return comments in list responses. IMPORTANT: Never call aptly_get_work_orders AND rv_get_work_orders in the same loop — pick one. Use rv_get_work_orders only when specifically asked about Rentvine counts or vendor assignment. FORMAT: When listing work orders always use this exact format per line: "[address] — WO #[num] | [issue] | [status] | [daysOpen] days | [vendor]"
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins board. Key fields after schema mapping: "Mirror Move-In Date" (MM/DD/YYYY), "Mirror Rent Amount", "Stage", "Title" (contains date+tenants+address), "Buildings", "Unit", "Mirror Residents", "Mirror Portfolio" (owner). Stages: Approved, Lease Sent, Lease Signed, Utilities, Move-In Day, Moved In, Abandoned. Filter by "Mirror Move-In Date" for upcoming move-ins. Exclude Abandoned and Moved In stages for upcoming.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -1814,6 +1814,57 @@ app.post('/api/chat', async function(req, res) {
         return res.json({ content: [{ type: 'text', text }] });
       } catch(e) {
         console.error('Move-in shortcut error:', e.message);
+      }
+    }
+
+    // Server-side shortcut for work order questions — formats output directly
+    const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all/);
+    if (isWOQ) {
+      console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
+      try {
+        // Fetch work orders from Aptly
+        let allWOs = [];
+        let page = 0;
+        while (true) {
+          const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
+          allWOs = allWOs.concat(active);
+          if (batch.length < 100) break;
+          if (page >= 1) break;
+          page++;
+        }
+        const now = Date.now();
+        const wos = allWOs.map(function(c) {
+          const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
+          const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
+          return {
+            address: (c.unit && c.unit.name) || (c.location && c.location.name) || '?',
+            num: c.workOrderNumber || '',
+            issue: (c.description || c.name || '?').split(/\s+/).slice(0, 5).join(' '),
+            status: c.stage || '',
+            daysOpen: daysOpen,
+            vendor: (c.vendor && c.vendor.name) || c.vendor || 'Unassigned',
+          };
+        });
+        // Parse days filter if present
+        const daysMatch = lowerMsg.match(/over\s+(\d+)\s*day|(\d+)\s*day/);
+        const daysFilter = daysMatch ? parseInt(daysMatch[1] || daysMatch[2]) : null;
+        const unassignedOnly = lowerMsg.match(/unassign/);
+        let filtered = wos;
+        if (daysFilter) filtered = wos.filter(function(w) { return w.daysOpen > daysFilter; });
+        if (unassignedOnly) filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
+        filtered.sort(function(a, b) { return b.daysOpen - a.daysOpen; });
+        const lines = filtered.map(function(w) {
+          return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days | ' + w.vendor;
+        });
+        const header = daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
+          : unassignedOnly ? 'Unassigned work orders (' + filtered.length + '):'
+          : 'Open work orders (' + filtered.length + '):';
+        return res.json({ content: [{ type: 'text', text: header + '\n\n' + lines.join('\n') }] });
+      } catch(e) {
+        console.error('WO shortcut error:', e.message);
       }
     }
 
