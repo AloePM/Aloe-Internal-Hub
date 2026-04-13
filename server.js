@@ -995,6 +995,8 @@ async function executeTool(name, input) {
         }
         return JSON.stringify({ total: flagged.length, daysBack, category: targetCat || 'all', results: flagged });
       }
+
+      case 'rv_get_work_order_detail': {
         // Returns full work order including notes/statuses
         const detail = await rvFetch('/maintenance/work-orders/' + input.workOrderId);
         // Also fetch status updates (notes) for this work order
