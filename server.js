@@ -1831,13 +1831,14 @@ app.post('/api/chat', async function(req, res) {
       console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
       try {
         // Fetch schema to find scheduled date UUID keys
-        const woSchema = await unitsFetch('/api/schema/workOrder');
-        const woMap = {};
-        if (Array.isArray(woSchema)) woSchema.forEach(function(f) { woMap[f.label] = f.key; });
-        const dateFields = Object.keys(woMap).filter(function(l) { return /date|start|window|appoint|sched/i.test(l); });
-        console.log('WO date fields from schema:', dateFields.join(', '));
-        const schedKey = woMap['Appointment Window Start'] || woMap['Scheduled Start Date'] || woMap['Start Date'] || woMap['Scheduled Date'] || null;
-        console.log('WO schedKey:', schedKey);
+        let schedKey = null;
+        try {
+          const woSchema = await unitsFetch('/api/schema/workOrder');
+          const woMap = {};
+          if (Array.isArray(woSchema)) woSchema.forEach(function(f) { if (f && f.label) woMap[f.label] = f.key; });
+          schedKey = woMap['Appointment Window Start'] || woMap['Scheduled Start Date'] || woMap['Start Date'] || woMap['Scheduled Date'] || null;
+          console.log('WO schedKey:', schedKey);
+        } catch(schemaErr) { console.log('WO schema fetch failed:', schemaErr.message); }
         // Fetch work orders
         let allWOs = [];
         let page = 0;
@@ -1878,24 +1879,29 @@ app.post('/api/chat', async function(req, res) {
           };
         });
 
-        // Parse filter type
         const daysMatch = lowerMsg.match(/over\s+(\d+)\s*day|(\d+)\s*day/);
         const daysFilter = daysMatch ? parseInt(daysMatch[1] || daysMatch[2]) : null;
         const unassignedOnly = lowerMsg.match(/unassign/);
         const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/);
+        const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor/);
         let filtered = wos;
         if (pastScheduled) {
           filtered = wos.filter(function(w) { return w.isPastScheduled; });
-          if (filtered.length === 0 && !schedKey) {
-            // No scheduled date field found — fall back to Scheduled stage
-            filtered = wos.filter(function(w) { return /scheduled/i.test(w.status); });
-          }
+          if (filtered.length === 0 && !schedKey) filtered = wos.filter(function(w) { return /scheduled/i.test(w.status); });
         } else if (daysFilter) {
           filtered = wos.filter(function(w) { return w.daysOpen > daysFilter; });
         } else if (unassignedOnly) {
           filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
         }
         filtered.sort(function(a, b) { return b.daysOpen - a.daysOpen; });
+        // Vendor summary mode
+        if (vendorSummary) {
+          const vendorCounts = {};
+          wos.forEach(function(w) { vendorCounts[w.vendor] = (vendorCounts[w.vendor] || 0) + 1; });
+          const sorted = Object.entries(vendorCounts).sort(function(a, b) { return b[1] - a[1]; });
+          const lines = sorted.map(function(e) { return e[0] + ': ' + e[1] + ' work order' + (e[1] !== 1 ? 's' : ''); });
+          return res.json({ content: [{ type: 'text', text: 'Open work orders by vendor (' + wos.length + ' total):\n\n' + lines.join('\n') }] });
+        }
         const lines = filtered.map(function(w) {
           const schedInfo = w.schedDate ? ' | Sched: ' + w.schedDate : '';
           return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days' + schedInfo + ' | ' + w.vendor;
