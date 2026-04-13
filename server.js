@@ -1827,6 +1827,10 @@ app.post('/api/chat', async function(req, res) {
     if (isWOQ) {
       console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
       try {
+        // Fetch schema to map UUID keys to labels
+        const woSchema = await unitsFetch('/api/schema/workOrder');
+        const woMap = {};
+        if (Array.isArray(woSchema)) woSchema.forEach(function(f) { woMap[f.key] = f.label; });
         // Fetch work orders from Aptly
         let allWOs = [];
         let page = 0;
@@ -1834,39 +1838,41 @@ app.post('/api/chat', async function(req, res) {
           const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           if (batch.length === 0) break;
-          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
+          // Map UUID keys to labels
+          const mapped = batch.map(function(c) {
+            const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt, workOrderNumber: c.workOrderNumber, name: c.name };
+            Object.keys(c).forEach(function(k) { if (woMap[k]) m[woMap[k]] = c[k]; });
+            return m;
+          });
+          const active = mapped.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
           allWOs = allWOs.concat(active);
           if (batch.length < 100) break;
           if (page >= 1) break;
           page++;
         }
-        const now = Date.now();
-        // Debug: log all keys of first card to find address field
+        // Debug first card
         if (allWOs.length > 0) {
           const s = allWOs[0];
-          console.log('WO card keys:', Object.keys(s).join(', '));
-          console.log('WO unit:', JSON.stringify(s.unit || '').slice(0, 150));
-          console.log('WO location:', JSON.stringify(s.location || '').slice(0, 150));
+          console.log('WO mapped keys:', Object.keys(s).join(', '));
         }
+        const now = Date.now();
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
-          // Address — use unit.address (street address), fall back to location.name
-          const unitRaw = c.unit || c.location || '';
-          const address = typeof unitRaw === 'object'
-            ? (unitRaw.address || unitRaw.name || '')
-            : String(unitRaw || '?');
-          // Vendor — can be object or string
-          const vendorRaw = c.vendor || '';
+          // After schema mapping, address fields could be: Address, Property, Unit, Location, Building
+          const address = c['Address'] || c['Property'] || c['Unit'] || c['Location'] || c['Building'] ||
+            (c.unit && typeof c.unit === 'object' ? (c.unit.address || c.unit.name) : c.unit) ||
+            (c.location && typeof c.location === 'object' ? (c.location.address || c.location.name) : c.location) || '?';
+          // Vendor after schema mapping
+          const vendorRaw = c['Vendor'] || c['Assigned To'] || c.vendor || '';
           const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
-          // Strip HTML tags from description
-          const rawDesc = c.description || c.name || '?';
+          // Strip HTML from description
+          const rawDesc = c['Description'] || c.description || c.name || '?';
           const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          const issue = cleanDesc.split(/\s+/).slice(0, 6).join(' ');
           return {
-            address: address || '?',
-            num: c.workOrderNumber || '',
-            issue: issue,
+            address: String(address).replace(/<[^>]+>/g, '').trim() || '?',
+            num: c.workOrderNumber || c['Work Order Number'] || '',
+            issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
             status: c.stage || '',
             daysOpen: daysOpen,
             vendor: vendor,
