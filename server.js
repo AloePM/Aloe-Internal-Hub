@@ -1192,8 +1192,13 @@ async function executeTool(name, input) {
 
         // Slim output — use known raw field names
         const slim = withMetrics.map(function(c) {
-          // Find scheduled date from UUID fields via schema map (built at top)
           const schedKey = Object.keys(c).find(function(k) { return /sched/i.test(k); });
+          // Comments may be in c.comments array OR indicated by c.commentCount
+          const commentsArr = Array.isArray(c.comments) ? c.comments : [];
+          const commentCount = c.commentCount || c.commentsCount || commentsArr.length || 0;
+          const formattedComments = commentsArr.map(function(cm) {
+            return (cm.userName || cm.user || 'Unknown') + ' (' + (cm.createdAt || cm.date || '').slice(0, 10) + '): ' + (cm.content || cm.text || cm.body || '');
+          });
           return {
             title: c.description || c.name || '?',
             stage: c.stage || '',
@@ -1202,11 +1207,13 @@ async function executeTool(name, input) {
             scheduledDate: schedKey ? c[schedKey] : '',
             daysOpen: c.daysOpen,
             createdAt: (c.createdAt || '').slice(0, 10),
-            comments: Array.isArray(c.comments) ? c.comments.map(function(cm) {
-              return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || '');
-            }) : [],
+            commentCount: commentCount,
+            comments: formattedComments,
           };
         });
+        // Log comment distribution for debug
+        const withComments = slim.filter(function(w) { return w.commentCount > 0 || w.comments.length > 0; });
+        console.log('Aptly WO comments: total:', slim.length, 'with comments:', withComments.length, 'sample keys:', slim.length > 0 ? Object.keys(withMetrics[0]).filter(function(k) { return /comment/i.test(k); }).join(',') : 'none');
 
         return JSON.stringify({
           total: withMetrics.length,
