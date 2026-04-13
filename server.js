@@ -1950,7 +1950,7 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for recurring category issues across all work orders (open + closed)
-    const isRecurringQ = lowerMsg.match(/recurring|repeat.*hvac|hvac.*repeat|hvac.*multiple|multiple.*hvac|repeat.*ac|ac.*repeat|same.*hvac|hvac.*same|has.*had.*hvac|hvac.*problem|hvac.*issue|plumb.*repeat|repeat.*plumb|repeat.*appliance|appliance.*repeat|repeat.*electric|electric.*repeat|same.*issue.*before|issue.*before|before.*issue|previous.*issue|issue.*history|history.*issue|pattern|trend/);
+    const isRecurringQ = lowerMsg.match(/recurring|came back|again|multiple.*time|more than once|history.*issue|issue.*history|closed.*work.*order|billed.*work.*order|past.*year|within.*year|how many times|repeat.*hvac|hvac.*repeat|same.*hvac|hvac.*same|hvac.*issue|plumb.*repeat|repeat.*plumb|repeat.*appliance|appliance.*repeat|repeat.*electric|same.*issue.*before|previous.*issue|pattern|trend/);
     if (isRecurringQ) {
       try {
         // Determine category filter
@@ -2028,78 +2028,6 @@ app.post('/api/chat', async function(req, res) {
         return res.json({ content: [{ type: 'text', text: label + ' in the last ' + daysBack + ' days (' + flagged.length + ' properties):\n\n' + lines.join('\n\n') }] });
       } catch(e) {
         console.error('Recurring shortcut error:', e.message);
-      }
-    }
-
-    // Recurring/historical issues shortcut — uses Rentvine open+closed WOs
-    const isRecurringQ = lowerMsg.match(/recurring|came back|came in.*again|again|multiple.*time|more than once|history.*issue|issue.*history|closed.*work.*order|billed.*work.*order|over.*year|past.*year|within.*year|how many times|times.*same/);
-    if (isRecurringQ) {
-      try {
-        const lookbackDays = 365;
-        const cutoffMs = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
-        // Fetch ALL RV work orders (open + closed) across 3 pages
-        let allRVWOs = [];
-        for (let pg = 1; pg <= 3; pg++) {
-          const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
-          const batch = Array.isArray(d) ? d : (d && d.data) || [];
-          if (batch.length === 0) break;
-          allRVWOs = allRVWOs.concat(batch);
-          if (batch.length < 100) break;
-        }
-        // Categorize
-        const categorize = function(desc, trade) {
-          const t = ((desc || '') + ' ' + (trade || '')).toLowerCase();
-          if (/ac|hvac|heat|cool|air.?condition|furnace|duct/.test(t)) return 'HVAC';
-          if (/roof|shingle|tile.*roof|roof.*leak/.test(t)) return 'Roofing';
-          if (/plumb|toilet|drain|faucet|water.*heat|pipe|clog|leak/.test(t)) return 'Plumbing';
-          if (/electric|outlet|light|breaker|switch|wir/.test(t)) return 'Electrical';
-          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/.test(t)) return 'Appliance';
-          if (/pest|bug|termite|rodent|insect/.test(t)) return 'Pest Control';
-          if (/landscap|lawn|yard|tree|palm|sprinkler|irrigation/.test(t)) return 'Landscaping';
-          if (/pool|spa/.test(t)) return 'Pool';
-          if (/clean|carpet|paint|patch|drywall/.test(t)) return 'Cleaning/Turnover';
-          if (/door|lock|window|blind|screen|garage/.test(t)) return 'Door/Window/Lock';
-          return 'General';
-        };
-        // Group by address + category
-        const byAddrCat = {};
-        allRVWOs.forEach(function(rec) {
-          const wo = rec.workOrder || rec;
-          const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
-          if (created < cutoffMs) return; // skip older than lookback
-          const addr = (rec.unit && (rec.unit.address || rec.unit.name)) || '';
-          if (!addr) return;
-          const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
-          const trade = (rec.contact && rec.contact.trade) || '';
-          const cat = categorize(desc, trade);
-          const key = addr + '||' + cat;
-          if (!byAddrCat[key]) byAddrCat[key] = [];
-          const statusMap = {'1':'New','2':'In Progress','3':'On Hold','4':'Completed','5':'Cancelled'};
-          byAddrCat[key].push({
-            num: wo.workOrderNumber,
-            desc: desc.replace(/\s+/g, ' ').trim().slice(0, 50),
-            status: statusMap[String(wo.primaryWorkOrderStatusID)] || '?',
-            date: (wo.dateTimeCreated || '').slice(0, 10),
-          });
-        });
-        // Find address+category combos with 2+ occurrences
-        const recurring = Object.entries(byAddrCat)
-          .filter(function(e) { return e[1].length >= 2; })
-          .sort(function(a, b) { return b[1].length - a[1].length; });
-        if (recurring.length === 0) {
-          return res.json({ content: [{ type: 'text', text: 'No properties show recurring issues of the same type in the past year.' }] });
-        }
-        const lines = recurring.map(function(e) {
-          const parts = e[0].split('||');
-          const addr = parts[0], cat = parts[1];
-          const wos = e[1].sort(function(a,b) { return b.date.localeCompare(a.date); });
-          const woList = wos.map(function(w) { return '  #' + w.num + ' ' + w.date + ' — ' + w.desc + ' [' + w.status + ']'; }).join('\n');
-          return addr + ' — ' + cat + ' (' + wos.length + 'x in past year):\n' + woList;
-        });
-        const header = 'Properties with recurring same-category issues in past year (' + recurring.length + '):\n';
-        return res.json({ content: [{ type: 'text', text: header + '\n' + lines.join('\n\n') }] });
-      } catch(e) {
-        console.error('Recurring issues shortcut error:', e.message);
       }
     }
 
