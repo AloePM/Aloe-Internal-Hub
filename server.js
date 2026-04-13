@@ -1992,18 +1992,37 @@ app.post('/api/chat', async function(req, res) {
           if (batch.length < 100) break;
         }
         console.log('Recurring shortcut: fetched', allWOs.length, 'WOs, catFilter:', catFilter || 'all');
-        // Group by address + category
+        // Debug first few records to see address structure
+        const sample = allWOs.slice(0, 3);
+        sample.forEach(function(rec) {
+          const wo = rec.workOrder || rec;
+          console.log('RV WO sample - unit:', JSON.stringify(rec.unit || '').slice(0, 120), '| created:', (wo.dateTimeCreated || '').slice(0, 10));
+        });
+        // Group by normalized address + category
+        const normalizeAddr = function(s) {
+          return (s || '').toLowerCase()
+            .replace(/\s+/g, ' ')
+            .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr').replace(/\bavenue\b/g, 'ave')
+            .replace(/\blane\b/g, 'ln').replace(/\broad\b/g, 'rd').replace(/\bcourt\b/g, 'ct')
+            .replace(/\bplace\b/g, 'pl').replace(/\bway\b/g, 'wy').replace(/\bcircle\b/g, 'cir')
+            .replace(/\bnorth\b/g, 'n').replace(/\bsouth\b/g, 's').replace(/\beast\b/g, 'e').replace(/\bwest\b/g, 'w')
+            .replace(/[,#]/g, '').trim();
+        };
         const byAddrCat = {};
         allWOs.forEach(function(rec) {
           const wo = rec.workOrder || rec;
-          const addr = (rec.unit && (rec.unit.address || rec.unit.name)) || '';
-          if (!addr) return;
+          // Try multiple address fields
+          const rawAddr = (rec.unit && (rec.unit.address || rec.unit.name)) ||
+                          (rec.property && (rec.property.address || rec.property.name)) || '';
+          if (!rawAddr) return;
+          const addr = rawAddr; // keep original for display
+          const addrKey = normalizeAddr(rawAddr); // normalized for grouping
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
           if (created < cutoffMs) return;
           const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
           const cat = categorizeRV(desc);
           if (catFilter && cat !== catFilter) return;
-          const key = addr + '||' + cat;
+          const key = addrKey + '||' + cat;
           if (!byAddrCat[key]) byAddrCat[key] = { addr, cat, wos: [] };
           const statusMap = { '1': 'New', '2': 'In Progress', '3': 'On Hold', '4': 'Completed', '5': 'Cancelled' };
           byAddrCat[key].wos.push({
@@ -2014,6 +2033,8 @@ app.post('/api/chat', async function(req, res) {
             vendor: (rec.contact && rec.contact.name) || 'Unassigned',
           });
         });
+        const addressCount = Object.keys(byAddrCat).length;
+        console.log('Recurring: unique addr+cat combos:', addressCount, '| with 2+:', Object.values(byAddrCat).filter(function(e){return e.wos.length>=2;}).length);
         const flagged = Object.values(byAddrCat)
           .filter(function(e) { return e.wos.length >= 2; })
           .sort(function(a, b) { return b.wos.length - a.wos.length; });
@@ -2540,6 +2561,7 @@ const FAQ_TABS = [
       {icon:"🏢", text:"Which vendor has the most open work orders?"},
       {icon:"📊", text:"Show me the amount of work orders opened per vendor"},
       {icon:"🔁", text:"Are there repeat issues at any property?"},
+      {icon:"📈", text:"Are there any recurring issues at any properties?"},
       {icon:"👤", text:"What work orders are not scheduled yet with a vendor?"},
       {icon:"💬", text:"Which work orders have no comments?"},
       {icon:"🔢", text:"How many open work orders do we have?"},
