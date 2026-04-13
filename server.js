@@ -1205,14 +1205,17 @@ async function executeTool(name, input) {
 
         // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
-          const desc = c.description || c.name || '';
-          // Derive issue type from first 2-3 words of description
-          const issueType = desc.split(/\s+/).slice(0, 4).join(' ').slice(0, 40);
+          const unitRaw = c.unit || c.location || '';
+          const address = typeof unitRaw === 'object' ? (unitRaw.name || unitRaw.address || '') : String(unitRaw || '');
+          const vendorRaw = c.vendor || '';
+          const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
+          const rawDesc = c.description || c.name || '?';
+          const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
           return {
-            address: (c.unit && c.unit.name) || (c.location && c.location.name) || '',
+            address: address,
             num: c.workOrderNumber || c.number || '',
-            issue: issueType,
-            vendor: (c.vendor && c.vendor.name) || c.vendor || 'Unassigned',
+            issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
+            vendor: vendor,
             opened: (c.createdAt || '').slice(0, 10),
             daysOpen: c.daysOpen,
             status: c.stage || '',
@@ -1839,13 +1842,23 @@ app.post('/api/chat', async function(req, res) {
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
+          // Address — unit/location can be object or string
+          const unitRaw = c.unit || c.location || '';
+          const address = typeof unitRaw === 'object' ? (unitRaw.name || unitRaw.address || JSON.stringify(unitRaw).slice(0,40)) : String(unitRaw || '?');
+          // Vendor — can be object or string
+          const vendorRaw = c.vendor || '';
+          const vendor = typeof vendorRaw === 'object' ? (vendorRaw.name || 'Unassigned') : (String(vendorRaw || '') || 'Unassigned');
+          // Strip HTML tags from description
+          const rawDesc = c.description || c.name || '?';
+          const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const issue = cleanDesc.split(/\s+/).slice(0, 6).join(' ');
           return {
-            address: (c.unit && c.unit.name) || (c.location && c.location.name) || '?',
+            address: address || '?',
             num: c.workOrderNumber || '',
-            issue: (c.description || c.name || '?').split(/\s+/).slice(0, 5).join(' '),
+            issue: issue,
             status: c.stage || '',
             daysOpen: daysOpen,
-            vendor: (c.vendor && c.vendor.name) || c.vendor || 'Unassigned',
+            vendor: vendor,
           };
         });
         // Parse days filter if present
