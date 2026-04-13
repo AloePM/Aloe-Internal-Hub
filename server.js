@@ -93,7 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions — counts, metrics, comments, vendor info, days open, no-comment checks. Aptly work order cards include full comments from vendors and the Aloe team. Key fields: title/description, stage, property (unit.name), vendor (vendor.name), daysOpen, createdAt, scheduledDate, comments (array of {userName, date, content}). Open = stages not matching Completed/Cancelled/Rejected. Use rv_get_work_orders ONLY when specifically asked to compare Aptly vs Rentvine counts. NEVER say comments are unavailable — they are in the aptly_get_work_orders response.
+- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for counts, vendor analysis, days open, unassigned, HVAC/plumbing/pest queries. For comments/notes analysis ("which have no comments", "show follow-ups"): use rv_get_work_order_notes which fetches notes from Rentvine per work order — this is the ONLY reliable source for comment data. The Aptly bulk API does not return comments in list responses. IMPORTANT: Never call aptly_get_work_orders AND rv_get_work_orders in the same loop — pick one. Use rv_get_work_orders only when specifically asked about Rentvine counts or vendor assignment.
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins board. Key fields after schema mapping: "Mirror Move-In Date" (MM/DD/YYYY), "Mirror Rent Amount", "Stage", "Title" (contains date+tenants+address), "Buildings", "Unit", "Mirror Residents", "Mirror Portfolio" (owner). Stages: Approved, Lease Sent, Lease Signed, Utilities, Move-In Day, Moved In, Abandoned. Filter by "Mirror Move-In Date" for upcoming move-ins. Exclude Abandoned and Moved In stages for upcoming.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -393,7 +393,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_work_order_notes',
-    description: 'Get notes for a SPECIFIC Rentvine work order by ID. Only use when looking up a specific work order by its Rentvine ID. Do NOT use for general comment analysis — use aptly_get_work_orders instead which already includes all comments.',
+    description: 'Get notes/comments for work orders from Rentvine — the ONLY way to check which work orders have comments. Use for: "which work orders have no comments", "which have no follow-up", "show comments on WO #X". When no workOrderId given, fetches notes for all open WOs and returns split: workOrdersWithNotes vs workOrdersWithNoNotes.',
     input_schema: {
       type: 'object',
       properties: {
@@ -858,20 +858,18 @@ async function executeTool(name, input) {
         const slim2 = filtered.map(function(wo) {
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : null;
           return {
-            id: wo.workOrderID,
-            number: wo.workOrderNumber,  // matches Aptly's workOrderNumber field
-            title: wo.description || '?',
-            statusId: wo.primaryWorkOrderStatusID,
-            property: wo.unitAddress || '',
-            vendor: wo.vendorName || '',
-            priority: wo.priorityID || '',
-            scheduledStart: (wo.scheduledStartDate || '').slice(0, 10),
-            scheduledEnd: (wo.scheduledEndDate || '').slice(0, 10),
-            createdDate: (wo.dateTimeCreated || '').slice(0, 10),
-            daysOpen: created ? Math.floor((now2 - created) / 86400000) : null,
+            num: wo.workOrderNumber,
+            title: (wo.description || '?').slice(0, 60),
+            status: wo.primaryWorkOrderStatusID,
+            prop: (wo.unitAddress || '').slice(0, 40),
+            vendor: (wo.vendorName || '').slice(0, 30),
+            scheduled: (wo.scheduledStartDate || '').slice(0, 10),
+            created: (wo.dateTimeCreated || '').slice(0, 10),
+            days: created ? Math.floor((now2 - created) / 86400000) : null,
+            assigned: !!wo.vendorContactID,
           };
         });
-        return JSON.stringify({ total: filtered.length, open: filtered.length, unassigned: unassigned.length, workOrders: slim2 });
+        return JSON.stringify({ total: filtered.length, unassigned: unassigned.length, workOrders: slim2 });
       }
 
       case 'rv_get_work_order_detail': {
@@ -883,13 +881,32 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_order_notes': {
-        // Fetch all work order status updates/notes — these are the comments in Rentvine
-        // Supports workOrderID filter or fetches recent ones
-        const params = { pageSize: 100, page: 1 };
-        if (input.workOrderId) params.workOrderID = input.workOrderId;
-        const data = await rvFetch('/maintenance/work-order-statuses', params);
-        console.log('RV WO notes raw:', Array.isArray(data) ? data.length : JSON.stringify(data).slice(0, 100));
-        return JSON.stringify(data);
+        // Get notes for a specific work order or all open work orders
+        if (input.workOrderId) {
+          const data = await rvFetch('/maintenance/work-orders/' + input.workOrderId + '/statuses');
+          console.log('RV WO notes for', input.workOrderId, ':', Array.isArray(data) ? data.length : JSON.stringify(data).slice(0, 100));
+          return JSON.stringify(data);
+        }
+        // For all open WOs: fetch WOs first, then fetch notes for each
+        const woData = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: 1 });
+        const rawWOs = Array.isArray(woData) ? woData : (woData && woData.data) || [];
+        const openWOs = rawWOs.map(function(rec) {
+          return rec.workOrder ? Object.assign({}, rec.workOrder, { vendorName: (rec.contact && rec.contact.name) || '' }) : rec;
+        }).filter(function(wo) {
+          const sid = parseInt(wo.primaryWorkOrderStatusID);
+          return wo.workOrderID && sid !== 4 && sid !== 5;
+        });
+        // Fetch notes for each open WO in parallel (limit 30 to avoid rate limits)
+        const notesResults = await Promise.all(openWOs.slice(0, 30).map(async function(wo) {
+          try {
+            const notes = await rvFetch('/maintenance/work-orders/' + wo.workOrderID + '/statuses');
+            return { workOrderID: wo.workOrderID, workOrderNumber: wo.workOrderNumber, description: wo.description, notes: Array.isArray(notes) ? notes : [] };
+          } catch(e) { return { workOrderID: wo.workOrderID, workOrderNumber: wo.workOrderNumber, description: wo.description, notes: [] }; }
+        }));
+        const withNotes = notesResults.filter(function(r) { return r.notes.length > 0; });
+        const noNotes = notesResults.filter(function(r) { return r.notes.length === 0; });
+        console.log('RV WO notes: checked', notesResults.length, 'WOs, with notes:', withNotes.length, 'no notes:', noNotes.length);
+        return JSON.stringify({ total: notesResults.length, withNotes: withNotes.length, noNotes: noNotes.length, workOrdersWithNoNotes: noNotes, workOrdersWithNotes: withNotes });
       }
 
       case 'zi_get_inspections': {
@@ -1433,6 +1450,7 @@ function getRelevantTools(msg) {
     tools.add('rv_get_work_order_detail');
   }
   if (msg.match(/comment|note|follow.?up|update.*work|work.*update|no.*comment|comment.*work/)) {
+    tools.add('rv_get_work_order_notes');
     tools.add('aptly_get_work_orders');
   }
   if (msg.match(/inspect/)) {
@@ -1489,7 +1507,8 @@ app.post('/api/chat', async function(req, res) {
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
     const isAvailabilityQ = lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house|under \d|homes.*rent|rent.*home|\d\s*bed/) && !lowerMsg.match(/[0-9]{5,6}/);
-    const isMarketDaysQ = lowerMsg.match(/market.*(\d+).*day|(\d+).*day.*market|over.*\d+.*day|how long.*market|days.*listed|listed.*days|sitting.*market|market.*long/);
+    const isMarketDaysQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor/) &&
+      lowerMsg.match(/market.*(\d+).*day|(\d+).*day.*market|how long.*market|days.*listed|listed.*days|sitting.*market|market.*long|homes.*listed.*over|listed.*over.*\d+.*day/);
     const marketDays = isMarketDaysQ ? parseInt((lowerMsg.match(/(\d+)\s*day/) || [])[1] || '30') : null;
     const isNotTourableQ = lowerMsg.match(/not.{0,20}(tour|showing|avail)|can.{0,10}t.{0,10}(tour|showing)|(tour|showing).{0,20}not/) && !lowerMsg.match(/[0-9]{5,6}/);
     const priceMatch = lowerMsg.match(/(?:under|less than|below|max|up to)\s*\$?(\d{3,5})/);
