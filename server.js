@@ -1142,8 +1142,6 @@ async function executeTool(name, input) {
 
       case 'aptly_get_work_orders': {
         // Fetch work orders from Aptly core-api (board ID: workOrder)
-        // NOTE: fields are already plain English (unit, vendor, stage, description, createdAt)
-        // NO schema mapping needed — use raw field names directly
         let allWOs = [];
         let page = 0;
         while (true) {
@@ -1152,15 +1150,34 @@ async function executeTool(name, input) {
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           console.log('Aptly WO page', page, ':', batch.length, 'cards');
           if (batch.length === 0) break;
-          // Filter out archived/closed cards immediately
           const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
           allWOs = allWOs.concat(active);
           if (batch.length < 100) break;
-          // Safety cap — stop at page 1 (max 200 cards) to avoid pulling thousands of historical records
           if (page >= 1) break;
           page++;
         }
         console.log('Aptly WO total fetched:', allWOs.length);
+
+        // Fetch individual cards in parallel to get comments (bulk endpoint omits them)
+        // Limit to 60 concurrent fetches to avoid rate limiting
+        const cardIds = allWOs.map(function(c) { return c.cardId; }).filter(Boolean);
+        const fullCards = await Promise.all(cardIds.slice(0, 60).map(async function(id) {
+          try {
+            const card = await unitsFetch('/api/board/workOrder/' + id);
+            return card;
+          } catch(e) { return null; }
+        }));
+        // Merge comments from individual cards back into allWOs
+        const commentsById = {};
+        fullCards.forEach(function(card) {
+          if (card && card.cardId) {
+            commentsById[card.cardId] = Array.isArray(card.comments) ? card.comments : [];
+          }
+        });
+        allWOs = allWOs.map(function(c) {
+          return Object.assign({}, c, { comments: commentsById[c.cardId] || c.comments || [] });
+        });
+        console.log('Aptly WO with comments fetched:', Object.keys(commentsById).length);
 
         // Filter by input
         let filtered = allWOs;
