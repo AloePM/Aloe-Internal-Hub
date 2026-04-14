@@ -2433,6 +2433,9 @@ app.post('/api/chat', async function(req, res) {
           if (/inspect|walkthrough|walk.?through/.test(t)) return 'Inspection';
           return 'General';
         };
+        // Emergency filter — cross-category, keyword-based urgency detection
+        const emergencyKeywords = /emergency|urgent|flood|no heat|no hot water|no cool|no ac|lock.*out|can.t lock|can.t enter|burst.*pipe|pipe.*burst|gas.*leak|gas.*smell|no power|carbon monoxide|sewage.*back|sewage.*overflow|ceiling.*collapse|fire|smoke/;
+        const isEmergencyQ = lowerMsg.match(/emergency|urgent|flood|critical|disaster|no heat|no hot water|lock.?out/);
         let catFilter = null;
         if (/pest|termite|rodent|insect/.test(lowerMsg)) catFilter = 'Pest Control';
         else if (/\bhvac\b|\bac\b|air.?condition|furnace|heat pump/.test(lowerMsg)) catFilter = 'HVAC';
@@ -2445,7 +2448,18 @@ app.post('/api/chat', async function(req, res) {
         else if (/\bgarage\b|window|blind|screen/.test(lowerMsg) && !/work order/.test(lowerMsg)) catFilter = 'Door/Window/Lock';
         else if (/inspect|walkthrough/.test(lowerMsg)) catFilter = 'Inspection';
         let filtered = wos;
-        if (catFilter) {
+        if (isEmergencyQ) {
+          // Emergency: leaks, no heat/AC, no hot water, lock issues, flood, burst pipe, no power
+          const emergencyPatterns = /leak|flood|burst|no heat|no hot water|no cool|no ac|lock.*out|can.t.*lock|can.t.*enter|gas.*leak|gas.*smell|no power|sewage|overflow|water.*damage|emergency|urgent/i;
+          filtered = wos.filter(function(w) { return emergencyPatterns.test(w.fullDesc); });
+          if (filtered.length === 0) {
+            // Fallback: HVAC + Plumbing issues that are likely emergencies by age/type
+            filtered = wos.filter(function(w) {
+              const cat = categorize(w.fullDesc, w.vendor, w.trade);
+              return (cat === 'HVAC' || cat === 'Plumbing') && w.daysOpen <= 3;
+            });
+          }
+        } else if (catFilter) {
           filtered = wos.filter(function(w) { return categorize(w.fullDesc, w.vendor, w.trade) === catFilter; });
         } else if (pastScheduled) {
           filtered = wos.filter(function(w) { return w.isPastScheduled; });
@@ -2476,7 +2490,8 @@ app.post('/api/chat', async function(req, res) {
           const schedInfo = w.schedDate ? ' | Sched: ' + w.schedDate : '';
           return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days' + schedInfo + ' | ' + w.vendor;
         });
-        const header = catFilter ? catFilter + ' work orders (' + filtered.length + ' of ' + wos.length + ' total):'
+        const header = isEmergencyQ ? '🚨 Emergency/urgent work orders (' + filtered.length + ' of ' + wos.length + ' total):'
+          : catFilter ? catFilter + ' work orders (' + filtered.length + ' of ' + wos.length + ' total):'
           : pastScheduled ? 'Work orders past scheduled start date (' + filtered.length + ' of ' + wos.length + '):'
           : daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
           : unassignedOnly ? 'Unassigned work orders (' + filtered.length + '):'
@@ -2801,6 +2816,7 @@ const FAQ_TABS = [
   {
     id: "maintenance", label: "🔧 Maintenance", color: "#fff7ed", border: "#f97316", accent: "#ea580c",
     questions: [
+      {icon:"🚨", text:"What emergency work orders do we have right now?"},
       {icon:"📅", text:"What work orders have been open over 30 days?"},
       {icon:"⏰", text:"What work orders have been open over 7 days?"},
       {icon:"🗓️", text:"What work orders have been open over 14 days?"},
