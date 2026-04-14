@@ -2192,60 +2192,138 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for work order comment questions
-    const isWOCommentQ = lowerMsg.match(/work.?order/) && lowerMsg.match(/comment|no comment|no note|follow.?up|without comment|has comment|have comment/);
+    // Server-side shortcut for work order comment intelligence
+    const isWOCommentQ = lowerMsg.match(/comment|no comment|no note|follow.?up|without comment|has comment|have comment|vendor.*said|vendor.*update|waiting|blocked|overdue.*comment|need.*follow/) &&
+      (lowerMsg.match(/work.?order/) || lowerMsg.match(/[0-9]{3,5}\s+\w+.*(?:drive|street|ave|lane|road|way|court|place|blvd|trail|circle)/i));
     if (isWOCommentQ) {
       try {
-        const wantNoComments = lowerMsg.match(/no comment|no note|without comment|don.t have|don.t have|haven.t|not have|lacking/);
+        const wantNoComments = lowerMsg.match(/no comment|no note|without comment|haven.t|not have|lacking|no follow/);
+        const wantFollowUp = lowerMsg.match(/follow.?up|overdue|need.*action|past.*date|need.*response/);
+        const wantVendorUpdates = lowerMsg.match(/vendor.*said|vendor.*update|vendor.*note|what.*vendor|vendor.*comment/);
+        const wantWaiting = lowerMsg.match(/waiting|blocked|on hold|waiting for|pending/);
+        // Check if asking about a specific property
+        const addrMatch = lowerMsg.match(/(?:for|at|on)\s+([0-9]+\s+[a-z].{5,40}?)(?:\?|$)/i) ||
+                          lowerMsg.match(/([0-9]{3,5}\s+(?:west|east|north|south|w\.|e\.|n\.|s\.)?.{5,35}?)(?:\?|$)/i);
         // Fetch all open WOs
         let allWOs = [];
-        let page = 0;
+        let pg = 0;
         while (true) {
-          const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
+          const data = await unitsFetch('/api/board/workOrder', { page: pg, pageSize: 100, includeArchived: false });
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           if (batch.length === 0) break;
           const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
           allWOs = allWOs.concat(active);
           if (batch.length < 100) break;
-          if (page >= 1) break;
-          page++;
+          if (pg >= 1) break;
+          pg++;
         }
-        // Fetch comments for ALL WOs using correct endpoint
+        // Filter by address if mentioned
+        if (addrMatch) {
+          const q = addrMatch[1].toLowerCase().trim().split(' ').slice(0,3).join(' ');
+          const filtered = allWOs.filter(function(c) {
+            const locArr = Array.isArray(c.location) ? c.location : [];
+            const unitArr = Array.isArray(c.unit) ? c.unit : [];
+            const addr = ((locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '').toLowerCase();
+            return addr.includes(q);
+          });
+          if (filtered.length > 0) allWOs = filtered;
+        }
+        // Fetch comments for all WOs
         const commentResults = await Promise.all(allWOs.map(async function(c) {
           try {
             const data = await unitsFetch('/api/board/workOrder/' + c.cardId + '/comments');
-            const comments = Array.isArray(data) ? data : (data && data.data) || [];
-            return { cardId: c.cardId, count: comments.length, latest: comments.length > 0 ? comments[comments.length-1] : null };
-          } catch(e) { return { cardId: c.cardId, count: 0, latest: null }; }
+            return { cardId: c.cardId, comments: Array.isArray(data) ? data : [] };
+          } catch(e) { return { cardId: c.cardId, comments: [] }; }
         }));
-        const commentsByCardId = {};
-        commentResults.forEach(function(r) { commentsByCardId[r.cardId] = r; });
-        // Filter and format
-        const filtered = allWOs.filter(function(c) {
-          const count = (commentsByCardId[c.cardId] || {}).count || 0;
-          return wantNoComments ? count === 0 : count > 0;
+        const commentsMap = {};
+        commentResults.forEach(function(r) { commentsMap[r.cardId] = r.comments; });
+        const todayMs = Date.now();
+        const todayStr = new Date(todayMs - 7*60*60*1000).toISOString().slice(0,10);
+        const getAddr = function(c) {
+          const l = Array.isArray(c.location) ? c.location : []; const u = Array.isArray(c.unit) ? c.unit : [];
+          return (l[0] && l[0].name) || (u[0] && u[0].name) || '?';
+        };
+        const getVendor = function(c) {
+          const v = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
+          return (v[0] && v[0].name) || 'Unassigned';
+        };
+        const getDesc = function(c) {
+          return (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim().split(/\s+/).slice(0,5).join(' ');
+        };
+        const getSchedDate = function(c) {
+          const key = 'appointmentWindowStartDateTime';
+          const raw = c[key] || '';
+          return raw ? String(raw).slice(0,10) : '';
+        };
+        // Score each WO for follow-up need
+        const scored = allWOs.map(function(c) {
+          const comments = commentsMap[c.cardId] || [];
+          const commentCount = comments.length;
+          const lastComment = comments.length > 0 ? comments[comments.length-1] : null;
+          const lastCommentDate = lastComment ? (lastComment.createdAt || '').slice(0,10) : '';
+          const lastCommentText = lastComment ? (lastComment.content || '').slice(0,120) : '';
+          const lastCommentUser = lastComment ? (lastComment.userName || 'Unknown') : '';
+          const daysSinceComment = lastCommentDate ? Math.floor((todayMs - new Date(lastCommentDate).getTime()) / 86400000) : null;
+          const schedDate = getSchedDate(c);
+          const isPastSched = schedDate && schedDate < todayStr;
+          const created = c.createdAt ? new Date(c.createdAt).getTime() : 0;
+          const daysOpen = created ? Math.floor((todayMs - created) / 86400000) : 0;
+          // Detect flags from comment text
+          const allCommentText = comments.map(function(cm) { return (cm.content||'').toLowerCase(); }).join(' ');
+          const isWaiting = /waiting|wait for|on hold|parts.*order|parts.*coming|order.*part|approval|awaiting/.test(allCommentText);
+          const vendorComments = comments.filter(function(cm) {
+            return !(cm.userName||'').match(/dhyana|roberto|persia|randi|alexes|teri|juan/i);
+          });
+          return {
+            c, addr: getAddr(c), vendor: getVendor(c), desc: getDesc(c),
+            commentCount, lastCommentDate, lastCommentText, lastCommentUser,
+            daysSinceComment, schedDate, isPastSched, daysOpen, isWaiting,
+            vendorComments, allCommentText,
+          };
         });
-        const locArr = function(c) { return Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []); };
-        const unitArr = function(c) { return Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []); };
-        const lines = filtered.map(function(c) {
-          const addr = (locArr(c)[0] && locArr(c)[0].name) || (unitArr(c)[0] && unitArr(c)[0].name) || '?';
-          const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
-          const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
-          const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().split(/\s+/).slice(0, 5).join(' ');
-          const info = commentsByCardId[c.cardId];
-          const commentNote = info && info.count > 0 ? ' (' + info.count + ' comment' + (info.count>1?'s':'') + ')' : '';
-          return addr + ' — WO #' + c.workOrderNumber + ' | ' + desc + ' | ' + (c.stage||'') + ' | ' + vendor + commentNote;
+        let results = [];
+        let label = '';
+        if (wantNoComments) {
+          results = scored.filter(function(s) { return s.commentCount === 0; });
+          label = 'Work orders with NO comments (' + results.length + ' of ' + scored.length + ')';
+        } else if (wantFollowUp) {
+          // Past scheduled date OR open 7+ days with no comment in 3+ days
+          results = scored.filter(function(s) {
+            return s.isPastSched || (s.daysOpen >= 7 && (s.daysSinceComment === null || s.daysSinceComment >= 3));
+          }).sort(function(a,b) { return (b.daysOpen||0) - (a.daysOpen||0); });
+          label = 'Work orders needing follow-up (' + results.length + ' of ' + scored.length + ')';
+        } else if (wantWaiting) {
+          results = scored.filter(function(s) { return s.isWaiting || /waiting|wait.*for|on hold/i.test(s.c.stage||''); });
+          label = 'Work orders waiting/blocked (' + results.length + ' of ' + scored.length + ')';
+        } else if (wantVendorUpdates) {
+          results = scored.filter(function(s) { return s.vendorComments.length > 0; });
+          label = 'Work orders with vendor comments (' + results.length + ' of ' + scored.length + ')';
+        } else {
+          // Default: show WOs with comments, showing the latest
+          results = scored.filter(function(s) { return s.commentCount > 0; });
+          label = 'Work orders with comments (' + results.length + ' of ' + scored.length + ')';
+        }
+        const lines = results.map(function(s) {
+          const header = s.addr + ' — WO #' + (s.c.workOrderNumber||'') + ' | ' + s.desc + ' | ' + (s.c.stage||'') + ' | ' + s.vendor;
+          const meta = [];
+          if (s.daysOpen) meta.push(s.daysOpen + ' days open');
+          if (s.schedDate) meta.push('Sched: ' + s.schedDate + (s.isPastSched ? ' ⚠️ PAST' : ''));
+          if (s.daysSinceComment !== null) meta.push('Last comment: ' + s.daysSinceComment + ' days ago');
+          if (s.isWaiting) meta.push('⏳ Waiting');
+          const metaLine = meta.length > 0 ? '  [' + meta.join(' | ') + ']' : '';
+          let commentLine = '';
+          if (s.lastCommentText) {
+            commentLine = '  → ' + s.lastCommentUser + ' (' + s.lastCommentDate + '): ' + s.lastCommentText;
+          }
+          return header + (metaLine ? '\n' + metaLine : '') + (commentLine ? '\n' + commentLine : '');
         });
-        const label = wantNoComments
-          ? 'Work orders with NO comments (' + filtered.length + ' of ' + allWOs.length + '):'
-          : 'Work orders WITH comments (' + filtered.length + ' of ' + allWOs.length + '):';
-        console.log('WO comment shortcut:', label);
-        return res.json({ content: [{ type: 'text', text: label + '\n\n' + lines.join('\n') }] });
+        return res.json({ content: [{ type: 'text', text: label + ':\n\n' + lines.join('\n\n') }] });
       } catch(e) {
         console.error('WO comment shortcut error:', e.message);
       }
     }
 
-    // Server-side shortcut for work order questions — formats output directly
+        // Server-side shortcut for work order questions — formats output directly
     const isWOQ = !lowerMsg.match(/comment|note|follow.?up/) &&
       lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start|most|property|home|propert/);
     if (isWOQ) {
