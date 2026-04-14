@@ -2397,9 +2397,11 @@ app.post('/api/chat', async function(req, res) {
             address: address,
             num: c.workOrderNumber || '',
             issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
+            fullDesc: cleanDesc, // full desc for categorization
             status: c.stage || '',
             daysOpen: daysOpen,
             vendor: vendor,
+            trade: (Array.isArray(c.vendorTrade) ? (c.vendorTrade[0]||'') : (c.vendorTrade||'')),
             schedDate: schedDate,
             isPastScheduled: isPastScheduled,
           };
@@ -2412,14 +2414,14 @@ app.post('/api/chat', async function(req, res) {
         const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
         const propertySummary = lowerMsg.match(/most.*work.*order|work.*order.*most|most.*submit|submit.*most|most.*open|propert.*most|home.*most|which.*home|which.*propert|by.*property|per.*property|property.*count|address.*most/);
         // Category filter — detect issue type from message
-        const categorize = function(issue, vendor) {
-          const t = ((issue||'') + ' ' + (vendor||'')).toLowerCase();
+        const categorize = function(issue, vendor, trade) {
+          const t = ((issue||'') + ' ' + (vendor||'') + ' ' + (trade||'')).toLowerCase();
+          if (/pest|bug|termite|rodent|insect|cockroach/.test(t)) return 'Pest Control';
           if (/ac|hvac|heat|cool|air.?condition|furnace|duct/.test(t)) return 'HVAC';
           if (/roof|shingle|tile.*roof/.test(t)) return 'Roofing';
           if (/plumb|toilet|drain|faucet|water.*heat|pipe|clog|leak/.test(t)) return 'Plumbing';
           if (/electric|outlet|light|breaker|switch|wir/.test(t)) return 'Electrical';
           if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/.test(t)) return 'Appliance';
-          if (/pest|bug|termite|rodent|insect|cockroach/.test(t)) return 'Pest Control';
           if (/landscap|lawn|yard|tree|palm|sprinkler|irrigation/.test(t)) return 'Landscaping';
           if (/pool|spa/.test(t)) return 'Pool';
           if (/clean|carpet|paint|drywall/.test(t)) return 'Cleaning';
@@ -2438,7 +2440,7 @@ app.post('/api/chat', async function(req, res) {
         else if (/garage/.test(lowerMsg)) catFilter = 'Door/Window/Lock';
         let filtered = wos;
         if (catFilter) {
-          filtered = wos.filter(function(w) { return categorize(w.issue, w.vendor) === catFilter; });
+          filtered = wos.filter(function(w) { return categorize(w.fullDesc, w.vendor, w.trade) === catFilter; });
         } else if (pastScheduled) {
           filtered = wos.filter(function(w) { return w.isPastScheduled; });
           if (filtered.length === 0 && !schedKey) filtered = wos.filter(function(w) { return /scheduled/i.test(w.status); });
