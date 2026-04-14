@@ -144,6 +144,18 @@ INTERNAL PAGES:
 - Checking Property Availability SOP: 33976555273a81e093d9d062009a206c → availability check process
 - Aloe Assistant Master Reference: 33b76555273a81de9958f69e7f2ecd7c → full operational context
 
+MAINTENANCE / WORK ORDER PAGES (use for any staff question about work orders, maintenance process, vendors):
+- Creating & Updating Work Orders: 18776555273a81279c2ee27aaec9d25f → how to create a work order, work order stages, tenant request process
+- Work Order Process: 32576555273a802f84dac4c9f147fd10 → full WO processing SOP, issue types, stages, troubleshooting
+- Work Order Scheduling: 19f76555273a80908e1ac1c8fd53051a → scheduling vendors, contacting tenants, scheduling scripts
+- How to Edit a Work Order: 27176555273a80738e1ef7fd29810cf6 → editing existing work orders
+- Merge Work Order: 27176555273a80aea40ec90e56bfd2ff → merging duplicate work orders
+- Vendor Work Order Note Templates: 18776555273a81f3b0b3f603162904c9 → vendor communication templates
+- Work Order Execution Instructions: 18776555273a81efb21cec89379db55c → vendor execution, invoice submission
+- Appliance Work Orders Processes: 22376555273a80a5e257c3fccf57 → appliance-specific WO intake
+- Maintenance Department: 18776555273a812998cecceebcb6c74e → maintenance team overview
+- Owner-Handled Maintenance & Vendors: 26576555273a80bb8aaaed52cce15662 → owner vs Aloe maintenance responsibilities
+
 Property availability workflow (follow this order):
 1. Check Aptly Applications board for approved applications on the property
 2. If approved: check whether the earnest deposit has been paid — deposit paid = property is OFF the market
@@ -2230,26 +2242,18 @@ app.post('/api/chat', async function(req, res) {
           });
           if (filtered.length > 0) allWOs = filtered;
         }
-        // Get comments from card data directly (bulk endpoint includes them)
-        // Also try /comments sub-endpoint as fallback for any card with 0 comments
+        // Fetch comments via /comments endpoint — bulk endpoint does NOT include comments
+        // Only fetch for filtered set if address-specific, otherwise fetch all
+        const cardsToCheck = allWOs;
+        const commentResults = await Promise.all(cardsToCheck.map(async function(c) {
+          try {
+            const data = await unitsFetch('/api/board/workOrder/' + c.cardId + '/comments');
+            return { cardId: c.cardId, comments: Array.isArray(data) ? data : (data && data.data) || [] };
+          } catch(e) { return { cardId: c.cardId, comments: [] }; }
+        }));
         const commentsMap = {};
-        allWOs.forEach(function(c) {
-          // Comments may be in c.comments array on the card itself
-          const cardComments = Array.isArray(c.comments) ? c.comments : [];
-          commentsMap[c.cardId] = cardComments;
-        });
-        // For cards with no comments from bulk, try the /comments endpoint
-        const zeroCommentCards = allWOs.filter(function(c) { return (commentsMap[c.cardId] || []).length === 0; });
-        if (zeroCommentCards.length <= 20) { // only if manageable count
-          const extraResults = await Promise.all(zeroCommentCards.map(async function(c) {
-            try {
-              const data = await unitsFetch('/api/board/workOrder/' + c.cardId + '/comments');
-              return { cardId: c.cardId, comments: Array.isArray(data) ? data : (data && data.data) || [] };
-            } catch(e) { return { cardId: c.cardId, comments: [] }; }
-          }));
-          extraResults.forEach(function(r) { if (r.comments.length > 0) commentsMap[r.cardId] = r.comments; });
-        }
-        console.log('WO comments: card-level found for', Object.values(commentsMap).filter(function(c){return c.length>0;}).length, 'of', allWOs.length);
+        commentResults.forEach(function(r) { commentsMap[r.cardId] = r.comments; });
+        console.log('WO comments fetched via /comments endpoint:', cardsToCheck.length, 'WOs, with comments:', commentResults.filter(function(r){return r.comments.length>0;}).length);
         const todayMs = Date.now();
         const todayStr = new Date(todayMs - 7*60*60*1000).toISOString().slice(0,10);
         const getAddr = function(c) {
