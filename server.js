@@ -157,6 +157,7 @@ MAINTENANCE / WORK ORDER PAGES (use for any staff question about work orders, ma
 - Owner-Handled Maintenance & Vendors: 26576555273a80bb8aaaed52cce15662 → owner vs Aloe maintenance responsibilities
 - Mailbox Issues: 28d76555273a80c9995fd3a6625725c4 → mailbox problems, lost mailbox key, mailbox repairs, USPS issues
 - Keys & Lockouts: 18776555273a81a08efbc3c9c3862301 → key issues, tenant lockout, rekeying, lockbox, lost keys
+- Water Leaks: 18776555273a8106b44ce926440e7ba3 → water leak troubleshooting by type: appliance leaks, exterior/irrigation, roof leaks, sink leaks, toilet leaks, how to shut off isolation valves
 
 Property availability workflow (follow this order):
 1. Check Aptly Applications board for approved applications on the property
@@ -189,6 +190,7 @@ Rules:
 - For ANY question about how to create a work order, how to submit a work order, work order steps, what to know about work orders, work order process: IMMEDIATELY use notion_get_page with ID 18776555273a81279c2ee27aaec9d25f (Creating & Updating Work Orders). If they ask about the full process/workflow, also fetch 32576555273a802f84dac4c9f147fd10 (Work Order Process).
 - For ANY question about mailbox issues, broken mailbox, lost mailbox key, mailbox repair, USPS mailbox: IMMEDIATELY use notion_get_page with ID 28d76555273a80c9995fd3a6625725c4.
 - For ANY question about keys, lockouts, tenant locked out, lost key, rekey, lock change, lockbox: IMMEDIATELY use notion_get_page with ID 18776555273a81a08efbc3c9c3862301.
+- For ANY question about water leak, active leak, leaking pipe, flooding, burst pipe, tenant calling about water, appliance leaking, roof leak, sink leak, toilet leak: IMMEDIATELY use notion_get_page with ID 18776555273a8106b44ce926440e7ba3. Ask the tenant where the leak is (appliance, sink, toilet, roof, exterior) and walk them through the relevant shutoff steps from the page content.
 - For unknown policy topics: search Notion 2-3 times with different keywords before giving up.
 - NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
 - Only route to a team member when you genuinely cannot answer the question from the data. If the question has been fully answered, do NOT add a 'reach out to X' closer — just stop after the answer.
@@ -737,8 +739,21 @@ async function notionFetch(path, method, body) {
     },
   };
   if (body) opts.body = JSON.stringify(body);
-  const r = await fetch('https://api.notion.com/v1' + path, opts);
-  return r.json();
+  // Retry up to 2 times on rate limit (429) or timeout
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch('https://api.notion.com/v1' + path, opts);
+      if (r.status === 429) {
+        const retryAfter = parseInt(r.headers.get('retry-after') || '2');
+        await new Promise(function(res) { setTimeout(res, (retryAfter + 1) * 1000); });
+        continue;
+      }
+      return r.json();
+    } catch(e) {
+      if (attempt === 2) throw e;
+      await new Promise(function(res) { setTimeout(res, 1500); });
+    }
+  }
 }
 
 async function slackFetch(path, params) {
