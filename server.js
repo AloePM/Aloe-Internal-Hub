@@ -2228,16 +2228,42 @@ app.post('/api/chat', async function(req, res) {
           });
           if (filtered.length > 0) allWOs = filtered;
         }
-        // Fetch comments for all WOs
-        const commentResults = await Promise.all(allWOs.map(async function(c) {
-          try {
-            const data = await unitsFetch('/api/board/workOrder/' + c.cardId + '/comments');
-            return { cardId: c.cardId, comments: Array.isArray(data) ? data : [] };
-          } catch(e) { return { cardId: c.cardId, comments: [] }; }
-        }));
+        // Get comments from card data directly (bulk endpoint includes them)
+        // Also try /comments sub-endpoint as fallback for any card with 0 comments
         const commentsMap = {};
-        commentResults.forEach(function(r) { commentsMap[r.cardId] = r.comments; });
-        const todayMs = Date.now();
+        allWOs.forEach(function(c) {
+          // Comments may be in c.comments array on the card itself
+          const cardComments = Array.isArray(c.comments) ? c.comments : [];
+          commentsMap[c.cardId] = cardComments;
+        });
+        // For cards with no comments from bulk, try the /comments endpoint
+        const zeroCommentCards = allWOs.filter(function(c) { return (commentsMap[c.cardId] || []).length === 0; });
+        if (zeroCommentCards.length <= 20) { // only if manageable count
+          const extraResults = await Promise.all(zeroCommentCards.map(async function(c) {
+            try {
+              const data = await unitsFetch('/api/board/workOrder/' + c.cardId + '/comments');
+              return { cardId: c.cardId, comments: Array.isArray(data) ? data : (data && data.data) || [] };
+            } catch(e) { return { cardId: c.cardId, comments: [] }; }
+          }));
+          extraResults.forEach(function(r) { if (r.comments.length > 0) commentsMap[r.cardId] = r.comments; });
+        }
+        console.log('WO comments: card-level found for', Object.values(commentsMap).filter(function(c){return c.length>0;}).length, 'of', allWOs.length);
+        // For address-specific questions, show all WOs with their comments regardless
+        const isAddressSpecific = !!(addrMatch && addrMatch[1].length > 5);
+        if (isAddressSpecific) {
+          const lines = allWOs.map(function(s) {
+            const addr = getAddr(s);
+            const comments = commentsMap[s.cardId] || [];
+            const desc = getDesc(s);
+            const vendor = getVendor(s);
+            const header = addr + ' — WO #' + (s.workOrderNumber||'') + ' | ' + desc + ' | ' + (s.stage||'') + ' | ' + vendor;
+            const commentLines = comments.length > 0
+              ? comments.map(function(cm) { return '  → ' + (cm.userName||'Unknown') + ' (' + (cm.createdAt||'').slice(0,10) + '): ' + (cm.content||'').slice(0,150); }).join('\n')
+              : '  (no comments)';
+            return header + '\n' + commentLines;
+          });
+          return res.json({ content: [{ type: 'text', text: 'Work order comments for ' + (addrMatch[1]||'property') + ':\n\n' + lines.join('\n\n') }] });
+        }
         const todayStr = new Date(todayMs - 7*60*60*1000).toISOString().slice(0,10);
         const getAddr = function(c) {
           const l = Array.isArray(c.location) ? c.location : []; const u = Array.isArray(c.unit) ? c.unit : [];
