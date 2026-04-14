@@ -404,13 +404,14 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_get_work_orders',
-    description: 'PRIMARY source for ALL work order questions. Returns open work orders from Aptly with full comments from vendors and Aloe team. Use for: counts, which WOs have no comments, vendor analysis, days open (7/14/30 days), repeat issues, unassigned WOs, HVAC/plumbing/pest queries, scheduled date analysis, average assignment time. Fields: title, stage, property, vendor, daysOpen, createdAt, scheduledDate, comments[].',
+    description: 'PRIMARY source for ALL work order questions. Returns open work orders from Aptly. Use for: counts, vendor analysis, days open, unassigned WOs, HVAC/plumbing/pest queries. For comment questions ("which have no comments", "show comments"), set includeComments: true — this fetches comments via /api/board/workOrder/:cardId/comments for each WO. Fields: address, num, issue, vendor, opened, daysOpen, status, commentCount, comments[].',
     input_schema: {
       type: 'object',
       properties: {
         status: { type: 'string', description: 'Filter by status/stage, e.g. "open", "pending", "closed". Omit for all.' },
         property: { type: 'string', description: 'Filter by property address or name.' },
         includeArchived: { type: 'boolean', description: 'Include archived/closed work orders. Default false.' },
+        includeComments: { type: 'boolean', description: 'Fetch comments for each WO. Set true when asked about comments, no comments, follow-ups. Default false.' },
       },
     },
   },
@@ -1327,11 +1328,10 @@ async function executeTool(name, input) {
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
 
-        // Fetch comments for each WO using correct endpoint: /api/board/workOrder/:cardId/comments
-        // Limit to 40 to avoid rate limits
-        const cardIdsForComments = withMetrics.slice(0, 40).map(function(c) { return c.cardId; }).filter(Boolean);
+        // Only fetch comments when explicitly requested (prevents rate limit on bulk queries)
         const commentsMap = {};
-        if (cardIdsForComments.length > 0) {
+        if (input.includeComments) {
+          const cardIdsForComments = withMetrics.map(function(c) { return c.cardId; }).filter(Boolean);
           const commentResults = await Promise.all(cardIdsForComments.map(async function(id) {
             try {
               const data = await unitsFetch('/api/board/workOrder/' + id + '/comments');
@@ -1340,8 +1340,8 @@ async function executeTool(name, input) {
             } catch(e) { return { id, comments: [] }; }
           }));
           commentResults.forEach(function(r) { commentsMap[r.id] = r.comments; });
+          console.log('Aptly WO comments fetched for:', cardIdsForComments.length, 'WOs');
         }
-        console.log('Aptly WO comments fetched for:', cardIdsForComments.length, 'WOs');
 
         // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
