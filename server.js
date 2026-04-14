@@ -2411,8 +2411,35 @@ app.post('/api/chat', async function(req, res) {
         const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/);
         const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
         const propertySummary = lowerMsg.match(/most.*work.*order|work.*order.*most|most.*submit|submit.*most|most.*open|propert.*most|home.*most|which.*home|which.*propert|by.*property|per.*property|property.*count|address.*most/);
+        // Category filter — detect issue type from message
+        const categorize = function(issue, vendor) {
+          const t = ((issue||'') + ' ' + (vendor||'')).toLowerCase();
+          if (/ac|hvac|heat|cool|air.?condition|furnace|duct/.test(t)) return 'HVAC';
+          if (/roof|shingle|tile.*roof/.test(t)) return 'Roofing';
+          if (/plumb|toilet|drain|faucet|water.*heat|pipe|clog|leak/.test(t)) return 'Plumbing';
+          if (/electric|outlet|light|breaker|switch|wir/.test(t)) return 'Electrical';
+          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/.test(t)) return 'Appliance';
+          if (/pest|bug|termite|rodent|insect|cockroach/.test(t)) return 'Pest Control';
+          if (/landscap|lawn|yard|tree|palm|sprinkler|irrigation/.test(t)) return 'Landscaping';
+          if (/pool|spa/.test(t)) return 'Pool';
+          if (/clean|carpet|paint|drywall/.test(t)) return 'Cleaning';
+          if (/door|lock|window|blind|screen|garage/.test(t)) return 'Door/Window/Lock';
+          return 'General';
+        };
+        let catFilter = null;
+        if (/pest|bug|termite|rodent|insect/.test(lowerMsg)) catFilter = 'Pest Control';
+        else if (/hvac|ac\b|air.?condition|heat(?!er)|furnace|duct/.test(lowerMsg)) catFilter = 'HVAC';
+        else if (/plumb|toilet|drain|water.*heat|clog/.test(lowerMsg)) catFilter = 'Plumbing';
+        else if (/electric|outlet|light(?!ing.*inspect)|breaker/.test(lowerMsg)) catFilter = 'Electrical';
+        else if (/appliance|dishwasher|fridge|refriger|microwave|washer|dryer|ice.?mak/.test(lowerMsg)) catFilter = 'Appliance';
+        else if (/roof/.test(lowerMsg)) catFilter = 'Roofing';
+        else if (/landscap|lawn|yard|sprinkler|tree|palm/.test(lowerMsg)) catFilter = 'Landscaping';
+        else if (/pool|spa/.test(lowerMsg)) catFilter = 'Pool';
+        else if (/garage/.test(lowerMsg)) catFilter = 'Door/Window/Lock';
         let filtered = wos;
-        if (pastScheduled) {
+        if (catFilter) {
+          filtered = wos.filter(function(w) { return categorize(w.issue, w.vendor) === catFilter; });
+        } else if (pastScheduled) {
           filtered = wos.filter(function(w) { return w.isPastScheduled; });
           if (filtered.length === 0 && !schedKey) filtered = wos.filter(function(w) { return /scheduled/i.test(w.status); });
         } else if (daysFilter) {
@@ -2441,7 +2468,8 @@ app.post('/api/chat', async function(req, res) {
           const schedInfo = w.schedDate ? ' | Sched: ' + w.schedDate : '';
           return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days' + schedInfo + ' | ' + w.vendor;
         });
-        const header = pastScheduled ? 'Work orders past scheduled start date (' + filtered.length + ' of ' + wos.length + '):'
+        const header = catFilter ? catFilter + ' work orders (' + filtered.length + ' of ' + wos.length + ' total):'
+          : pastScheduled ? 'Work orders past scheduled start date (' + filtered.length + ' of ' + wos.length + '):'
           : daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
           : unassignedOnly ? 'Unassigned work orders (' + filtered.length + '):'
           : 'Open work orders (' + filtered.length + '):';
