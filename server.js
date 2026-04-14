@@ -1327,6 +1327,22 @@ async function executeTool(name, input) {
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
 
+        // Fetch comments for each WO using correct endpoint: /api/board/workOrder/:cardId/comments
+        // Limit to 40 to avoid rate limits
+        const cardIdsForComments = withMetrics.slice(0, 40).map(function(c) { return c.cardId; }).filter(Boolean);
+        const commentsMap = {};
+        if (cardIdsForComments.length > 0) {
+          const commentResults = await Promise.all(cardIdsForComments.map(async function(id) {
+            try {
+              const data = await unitsFetch('/api/board/workOrder/' + id + '/comments');
+              const comments = Array.isArray(data) ? data : (data && data.data) || [];
+              return { id, comments };
+            } catch(e) { return { id, comments: [] }; }
+          }));
+          commentResults.forEach(function(r) { commentsMap[r.id] = r.comments; });
+        }
+        console.log('Aptly WO comments fetched for:', cardIdsForComments.length, 'WOs');
+
         // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
           const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
@@ -1336,6 +1352,10 @@ async function executeTool(name, input) {
           const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
           const rawDesc = c.description || c.name || '?';
           const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const rawComments = commentsMap[c.cardId] || [];
+          const comments = rawComments.map(function(cm) {
+            return (cm.userName || cm.user || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || cm.text || '');
+          });
           return {
             address: address,
             num: c.workOrderNumber || c.number || '',
@@ -1344,6 +1364,8 @@ async function executeTool(name, input) {
             opened: (c.createdAt || '').slice(0, 10),
             daysOpen: c.daysOpen,
             status: c.stage || '',
+            commentCount: comments.length,
+            comments: comments,
           };
         });
         console.log('Aptly WO slim:', slim.length, 'unassigned:', unassigned.length);
