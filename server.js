@@ -2248,22 +2248,7 @@ app.post('/api/chat', async function(req, res) {
           extraResults.forEach(function(r) { if (r.comments.length > 0) commentsMap[r.cardId] = r.comments; });
         }
         console.log('WO comments: card-level found for', Object.values(commentsMap).filter(function(c){return c.length>0;}).length, 'of', allWOs.length);
-        // For address-specific questions, show all WOs with their comments regardless
-        const isAddressSpecific = !!(addrMatch && addrMatch[1].length > 5);
-        if (isAddressSpecific) {
-          const lines = allWOs.map(function(s) {
-            const addr = getAddr(s);
-            const comments = commentsMap[s.cardId] || [];
-            const desc = getDesc(s);
-            const vendor = getVendor(s);
-            const header = addr + ' — WO #' + (s.workOrderNumber||'') + ' | ' + desc + ' | ' + (s.stage||'') + ' | ' + vendor;
-            const commentLines = comments.length > 0
-              ? comments.map(function(cm) { return '  → ' + (cm.userName||'Unknown') + ' (' + (cm.createdAt||'').slice(0,10) + '): ' + (cm.content||'').slice(0,150); }).join('\n')
-              : '  (no comments)';
-            return header + '\n' + commentLines;
-          });
-          return res.json({ content: [{ type: 'text', text: 'Work order comments for ' + (addrMatch[1]||'property') + ':\n\n' + lines.join('\n\n') }] });
-        }
+        const todayMs = Date.now();
         const todayStr = new Date(todayMs - 7*60*60*1000).toISOString().slice(0,10);
         const getAddr = function(c) {
           const l = Array.isArray(c.location) ? c.location : []; const u = Array.isArray(c.unit) ? c.unit : [];
@@ -2281,6 +2266,22 @@ app.post('/api/chat', async function(req, res) {
           const raw = c[key] || '';
           return raw ? String(raw).slice(0,10) : '';
         };
+        // For address-specific questions, show all WOs with their comments
+        const isAddressSpecific = !!(addrMatch && addrMatch[1].length > 5);
+        if (isAddressSpecific) {
+          const lines = allWOs.map(function(s) {
+            const addr = getAddr(s);
+            const comments = commentsMap[s.cardId] || [];
+            const desc = getDesc(s);
+            const vendor = getVendor(s);
+            const header = addr + ' — WO #' + (s.workOrderNumber||'') + ' | ' + desc + ' | ' + (s.stage||'') + ' | ' + vendor;
+            const commentLines = comments.length > 0
+              ? comments.map(function(cm) { return '  → ' + (cm.userName||'Unknown') + ' (' + (cm.createdAt||'').slice(0,10) + '): ' + (cm.content||'').slice(0,150); }).join('\n')
+              : '  (no comments yet)';
+            return header + '\n' + commentLines;
+          });
+          return res.json({ content: [{ type: 'text', text: 'Work order comments for ' + (addrMatch[1]||'property') + ':\n\n' + lines.join('\n\n') }] });
+        }
         // Score each WO for follow-up need
         const scored = allWOs.map(function(c) {
           const comments = commentsMap[c.cardId] || [];
