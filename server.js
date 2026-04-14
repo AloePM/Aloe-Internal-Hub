@@ -93,7 +93,7 @@ Known Aptly board IDs:
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
 - When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for counts, vendor analysis, days open, unassigned, HVAC/plumbing/pest queries. For comments/notes analysis ("which have no comments", "show follow-ups"): use rv_get_work_order_notes which fetches notes from Rentvine per work order — this is the ONLY reliable source for comment data. The Aptly bulk API does not return comments in list responses. IMPORTANT: Never call aptly_get_work_orders AND rv_get_work_orders in the same loop — pick one. Use rv_get_work_orders only when specifically asked about Rentvine counts or vendor assignment. FORMAT: When listing work orders always use this exact format per line: "[address] — WO #[num] | [issue] | [status] | [daysOpen] days | [vendor]"
+- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions including comments. The tool now fetches comments via /api/board/workOrder/:cardId/comments for each WO. Use for: counts, which WOs have no comments, vendor analysis, days open, unassigned WOs, HVAC/plumbing/pest queries. Each WO in the response includes commentCount and comments[]. IMPORTANT: Never call aptly_get_work_orders AND rv_get_work_orders in the same loop. FORMAT: When listing work orders always use this exact format per line: "[address] — WO #[num] | [issue] | [status] | [daysOpen] days | [vendor]"
 - "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
 - "K9mMGGjKgQPqDykaa" — Move-Ins board. Key fields after schema mapping: "Mirror Move-In Date" (MM/DD/YYYY), "Mirror Rent Amount", "Stage", "Title" (contains date+tenants+address), "Buildings", "Unit", "Mirror Residents", "Mirror Portfolio" (owner). Stages: Approved, Lease Sent, Lease Signed, Utilities, Move-In Day, Moved In, Abandoned. Filter by "Mirror Move-In Date" for upcoming move-ins. Exclude Abandoned and Moved In stages for upcoming.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
@@ -2004,6 +2004,23 @@ app.post('/api/chat', async function(req, res) {
           if (/pool|spa/i.test(d)) return 'Pool';
           return 'General';
         };
+        // Pre-load property ID -> address map from Rentvine
+        const propIdToAddr = {};
+        try {
+          let propPage = 1;
+          while (true) {
+            const propData = await rvFetch('/properties/export', { pageSize: 200, page: propPage });
+            const propBatch = Array.isArray(propData) ? propData : (propData && propData.data) || [];
+            propBatch.forEach(function(p) {
+              const prop = p.property || p;
+              if (prop.propertyID && prop.address) propIdToAddr[String(prop.propertyID)] = prop.address;
+            });
+            if (propBatch.length < 200) break;
+            propPage++;
+          }
+          console.log('Recurring: loaded', Object.keys(propIdToAddr).length, 'property addresses');
+        } catch(e) { console.log('Recurring: prop load error:', e.message); }
+
         // Fetch all WOs from Rentvine (open + closed)
         let allWOs = [];
         for (let pg = 1; pg <= 25; pg++) {
@@ -2041,14 +2058,15 @@ app.post('/api/chat', async function(req, res) {
         };
         const byAddrCat = {};
         allWOs.forEach(function(rec) {
-          const wo = rec.workOrder || rec;
-          // Try multiple address fields — unit may be null on older WOs
+          // Try unit address first, then resolve from property ID map
           const rawAddr = (rec.unit && (rec.unit.address || rec.unit.name)) ||
                           (rec.property && (rec.property.address || rec.property.name)) || '';
-          // Fall back to propertyID as grouping key if no address
-          const groupKey = rawAddr || ('propID:' + (wo.propertyID || wo.unitID || ''));
-          if (!groupKey || groupKey === 'propID:') return;
-          const displayAddr = rawAddr || ('Property #' + (wo.propertyID || wo.unitID || '?'));
+          const wo = rec.workOrder || rec;
+          const propId = String(wo.propertyID || wo.unitID || '');
+          const resolvedAddr = rawAddr || (propId && propIdToAddr[propId]) || '';
+          const groupKey = resolvedAddr || (propId ? 'propID:' + propId : '');
+          if (!groupKey) return;
+          const displayAddr = resolvedAddr || ('Property #' + propId);
           const addrKey = rawAddr ? normalizeAddr(rawAddr) : groupKey;
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
           if (created < cutoffMs) return;
@@ -2174,7 +2192,8 @@ app.post('/api/chat', async function(req, res) {
     }
 
     // Server-side shortcut for work order questions — formats output directly
-    const isWOQ = lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start|most|property|home|propert/);
+    const isWOQ = !lowerMsg.match(/comment|note|follow.?up/) &&
+      lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start|most|property|home|propert/);
     if (isWOQ) {
       console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
       try {
