@@ -163,7 +163,9 @@ Rules:
 - Always cite your source (Rentvine, Aptly, Notion, or Slack)
 - Never speculate on legal or fair housing matters
 - ALWAYS include comments when showing card details from any Aptly board. Comments are in the comments array (standard boards) or formatted_comments field. Show them as: "Notes: [date] [person]: [comment]". If no comments, don't mention it.
-- Never ask clarifying questions
+- Ask clarifying questions when the request is genuinely ambiguous — for example, if someone asks about "the property" without specifying which one, or asks a vague question like "what's going on?" — respond conversationally like "Sure! Are you looking for maintenance issues, lease activity, or something else?" Keep clarifying questions short and give 2-3 specific options when possible.
+- After answering a question, offer ONE relevant follow-up suggestion based on what was just shown. Keep it brief — e.g., "Would you also like to see which of these are past their scheduled date?" or "Want me to check if any of these have no comments yet?" Only suggest something genuinely useful in context, not generic offers.
+- If a question is unclear or uses vague terms, ask for clarification before running tools — don't guess wrong and waste a data fetch.
 - NEVER explain how a tool works or describe what it does. Always run the tool and report the actual results. If someone asks "where do I look for move-out inspections?" — run rv_get_inspections and report what's in there, don't describe the tool.
 - NEVER say "you can use X tool" or "the results will show" — just use the tool and show the results directly.
 - For known policy topics (lease break, early termination): use notion_get_page with the hardcoded page ID above — do NOT waste loops searching.
@@ -2416,28 +2418,32 @@ app.post('/api/chat', async function(req, res) {
         // Category filter — detect issue type from message
         const categorize = function(issue, vendor, trade) {
           const t = ((issue||'') + ' ' + (vendor||'') + ' ' + (trade||'')).toLowerCase();
-          if (/pest|bug|termite|rodent|insect|cockroach/.test(t)) return 'Pest Control';
-          if (/ac|hvac|heat|cool|air.?condition|furnace|duct/.test(t)) return 'HVAC';
-          if (/roof|shingle|tile.*roof/.test(t)) return 'Roofing';
-          if (/plumb|toilet|drain|faucet|water.*heat|pipe|clog|leak/.test(t)) return 'Plumbing';
-          if (/electric|outlet|light|breaker|switch|wir/.test(t)) return 'Electrical';
-          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/.test(t)) return 'Appliance';
-          if (/landscap|lawn|yard|tree|palm|sprinkler|irrigation/.test(t)) return 'Landscaping';
-          if (/pool|spa/.test(t)) return 'Pool';
-          if (/clean|carpet|paint|drywall/.test(t)) return 'Cleaning';
-          if (/door|lock|window|blind|screen|garage/.test(t)) return 'Door/Window/Lock';
+          if (/pest|termite|rodent|insect|cockroach|t2 pest|bug.*infestation/.test(t)) return 'Pest Control';
+          if (/\bpool\b|\bspa\b/.test(t)) return 'Pool';
+          if (/\bac\b|hvac|air.?condition|heat pump|furnace|ductwork|compressor|coolant|freon|ac unit|ac not work|air.*not.*cool/.test(t)) return 'HVAC';
+          if (/tune.?up.*owner|tune.?up.*unit|mac.?s air|air cooling/.test(t)) return 'HVAC';
+          if (/dishwasher|washing machine|washer|dryer|refriger|fridge|microwave|oven|stove|ice.?mak|appliance|freezer/.test(t)) return 'Appliance';
+          if (/roof|shingle|tile.*roof|roofing|roof.*damage/.test(t)) return 'Roofing';
+          if (/plumb|toilet|drain|faucet|water.?heat|pipe|sewage|clog|leak|sprinkler|irrigation|water.*not.*work|running water/.test(t)) return 'Plumbing';
+          if (/electric|outlet|\blight\b|\blights\b|breaker|switch|wiring|ceiling fan/.test(t)) return 'Electrical';
+          if (/landscap|lawn|\byard\b|\btree\b|\bpalm\b|trim.*branch|weed|sunrise landscape|rain or shine/.test(t)) return 'Landscaping';
+          if (/clean|carpet|paint|drywall|patch|power.?wash/.test(t)) return 'Cleaning';
+          if (/\bdoor\b|lock|window|blind|screen|garage.*door|garage.*opener|sliding.*door/.test(t)) return 'Door/Window/Lock';
+          if (/fence|gate|patio|deck|exterior|siding/.test(t)) return 'Exterior';
+          if (/inspect|walkthrough|walk.?through/.test(t)) return 'Inspection';
           return 'General';
         };
         let catFilter = null;
-        if (/pest|bug|termite|rodent|insect/.test(lowerMsg)) catFilter = 'Pest Control';
-        else if (/hvac|ac\b|air.?condition|heat(?!er)|furnace|duct/.test(lowerMsg)) catFilter = 'HVAC';
+        if (/pest|termite|rodent|insect/.test(lowerMsg)) catFilter = 'Pest Control';
+        else if (/\bhvac\b|\bac\b|air.?condition|furnace|heat pump/.test(lowerMsg)) catFilter = 'HVAC';
         else if (/plumb|toilet|drain|water.*heat|clog/.test(lowerMsg)) catFilter = 'Plumbing';
-        else if (/electric|outlet|light(?!ing.*inspect)|breaker/.test(lowerMsg)) catFilter = 'Electrical';
-        else if (/appliance|dishwasher|fridge|refriger|microwave|washer|dryer|ice.?mak/.test(lowerMsg)) catFilter = 'Appliance';
-        else if (/roof/.test(lowerMsg)) catFilter = 'Roofing';
-        else if (/landscap|lawn|yard|sprinkler|tree|palm/.test(lowerMsg)) catFilter = 'Landscaping';
-        else if (/pool|spa/.test(lowerMsg)) catFilter = 'Pool';
-        else if (/garage/.test(lowerMsg)) catFilter = 'Door/Window/Lock';
+        else if (/electric|outlet|\blight\b|breaker/.test(lowerMsg)) catFilter = 'Electrical';
+        else if (/appliance|dishwasher|fridge|refriger|microwave|washer|dryer|ice.?mak|freezer/.test(lowerMsg)) catFilter = 'Appliance';
+        else if (/\broof\b/.test(lowerMsg)) catFilter = 'Roofing';
+        else if (/landscap|lawn|\byard\b|sprinkler|\btree\b|\bpalm\b/.test(lowerMsg)) catFilter = 'Landscaping';
+        else if (/\bpool\b|\bspa\b/.test(lowerMsg)) catFilter = 'Pool';
+        else if (/\bgarage\b|window|blind|screen/.test(lowerMsg) && !/work order/.test(lowerMsg)) catFilter = 'Door/Window/Lock';
+        else if (/inspect|walkthrough/.test(lowerMsg)) catFilter = 'Inspection';
         let filtered = wos;
         if (catFilter) {
           filtered = wos.filter(function(w) { return categorize(w.fullDesc, w.vendor, w.trade) === catFilter; });
