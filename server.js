@@ -20,6 +20,9 @@ const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).
 
 // Master knowledge base — fetched from critical Notion pages at startup
 let KNOWLEDGE_BASE = '';
+let VENDOR_CACHE = '';
+let VENDOR_CACHE_LOADED_AT = 0;
+
 async function fetchNotionPageText(pageId) {
   try {
     const r = await fetch('https://api.notion.com/v1/blocks/' + pageId + '/children?page_size=100', {
@@ -59,6 +62,22 @@ async function loadKnowledgeBase() {
 }
 // Load on startup
 loadKnowledgeBase();
+
+async function loadVendorCache() {
+  try {
+    const text = await fetchNotionPageText('25076555273a80e9a6dfe4e551d42e70');
+    if (text) {
+      VENDOR_CACHE = text;
+      VENDOR_CACHE_LOADED_AT = Date.now();
+      console.log('Vendor cache loaded: ' + VENDOR_CACHE.length + ' chars');
+    }
+  } catch(e) {
+    console.error('Vendor cache load error:', e.message);
+  }
+}
+loadVendorCache();
+// Refresh vendor cache every 30 minutes since it changes frequently
+setInterval(loadVendorCache, 30 * 60 * 1000);
 
 const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
 
@@ -214,7 +233,7 @@ Rules:
 - For ANY question about HVAC, AC not working, heat not working, air conditioning troubleshooting, AC unit, furnace: IMMEDIATELY use notion_get_page with ID 26676555273a80fda5d5d7a149fd1b63.
 - For ANY question about water softener, salt, softener maintenance, water softener issues: IMMEDIATELY use notion_get_page with ID 26576555273a80b88904dcdf93dd2055.
 - For ANY question about high water bill, water usage, leak prevention, conserving water: IMMEDIATELY use notion_get_page with ID 26576555273a80cd9c72e95e09ee0ed3.
-- For ANY question about which vendor to assign, who to call for [service], vendor for HVAC/plumbing/roofing/appliance/pest/landscaping/cleaning/flooring/painting: IMMEDIATELY use notion_get_page with ID 25076555273a80e9a6dfe4e551d42e70. This page is updated constantly — always fetch it fresh.
+- For ANY question about which vendor to assign, who to call for [service], vendor for HVAC/plumbing/roofing/appliance/pest/landscaping/cleaning/flooring/painting: The vendor list is handled server-side from a live cache — do NOT call notion_get_page for vendors. Just answer the vendor question using your context.
 - For ANY question about water leak, active leak, leaking pipe, flooding, burst pipe, tenant calling about water, appliance leaking, roof leak, sink leak, toilet leak: IMMEDIATELY use notion_get_page with ID 18776555273a8106b44ce926440e7ba3. Ask the tenant where the leak is (appliance, sink, toilet, roof, exterior) and walk them through the relevant shutoff steps from the page content.
 - When staff asks for a text/SMS to send a tenant about a water leak, or asks "what do I say/text", IMMEDIATELY use notion_get_page with ID 34276555273a8186932eeb6d06a77a40 and return the matching template for that leak type.
 - For ANY question about pest control, bugs, roaches, scorpions, ants, termites, rodents, bees, pest issue, tenant reporting pests: IMMEDIATELY use notion_get_page with ID 18776555273a812fb90adca389d707fc. Determine if issue is owner or tenant responsibility, apply scorpion rule (5+ inside in 30 days = owner), bees/rodents/termites = always owner. Guide staff through next steps.
@@ -2250,6 +2269,35 @@ app.post('/api/chat', async function(req, res) {
         return res.json({ content: [{ type: 'text', text: 'Properties with multiple open work orders (' + repeats.length + ' properties):\n\n' + lines.join('\n\n') }] });
       } catch(e) {
         console.error('Repeat issues shortcut error:', e.message);
+      }
+    }
+
+    // Server-side shortcut for vendor questions — uses cached data, no token cost
+    const isVendorQ = lowerMsg.match(/vendor|who.*assign|who.*call|who.*use|which.*vendor|assign.*work.?order|who.*do.*hvac|who.*do.*plumb|who.*do.*roof|who.*do.*pest|who.*do.*landscap|who.*do.*clean|who.*do.*floor|who.*do.*paint|who.*do.*appli|who.*do.*garage|who.*do.*glass|preferred.*vendor|vendor.*list/);
+    if (isVendorQ && VENDOR_CACHE) {
+      // Route through Claude with cached vendor data injected as context — no tool call needed
+      const vendorPrompt = 'VENDOR REFERENCE (from Notion, last updated ' + new Date(VENDOR_CACHE_LOADED_AT).toLocaleTimeString('en-US', {timeZone:'America/Phoenix'}) + ' AZ time):\n\n' + VENDOR_CACHE;
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 1024,
+            system: 'You are Aloe Assistant, an internal AI for Aloe Property Management. Answer the vendor question using ONLY the vendor reference provided. Be specific about which vendor to use, their coverage area, and any notes. If the question mentions a city or area, make sure to match it to the right vendor.',
+            messages: [
+              { role: 'user', content: vendorPrompt + '\n\n---\nQuestion: ' + userMsg }
+            ]
+          })
+        });
+        const data = await resp.json();
+        const answer = (data.content && data.content[0] && data.content[0].text) || '';
+        if (answer) {
+          console.log('Vendor shortcut fired for:', userMsg.slice(0, 60));
+          return res.json({ content: [{ type: 'text', text: answer }] });
+        }
+      } catch(e) {
+        console.error('Vendor shortcut error:', e.message);
       }
     }
 
