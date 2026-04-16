@@ -54,10 +54,15 @@ async function loadNotionCache() {
   for (const p of CACHED_PAGES) {
     try {
       const text = await fetchNotionPageText(p.id);
-      if (text) { NOTION_CACHE[p.key] = { text, label: p.label, loadedAt: Date.now() }; loaded++; }
+      if (text && text.trim().length > 10) {
+        NOTION_CACHE[p.key] = { text, label: p.label, loadedAt: Date.now() };
+        loaded++;
+      } else {
+        console.log('Notion cache EMPTY for', p.key, '(' + p.id + ') len=' + (text||'').length);
+      }
     } catch(e) { console.error('Cache load error for', p.key, e.message); }
   }
-  console.log('Notion cache loaded: ' + loaded + ' pages');
+  console.log('Notion cache loaded: ' + loaded + ' of ' + CACHED_PAGES.length + ' pages');
 }
 
 // Detect which cached page is relevant to a question
@@ -942,7 +947,20 @@ async function executeTool(name, input) {
             const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
             return fuzzyMatch(input.search, full);
           });
-          return JSON.stringify(matches);
+          // Return slim summary to avoid context overflow
+          return JSON.stringify(matches.slice(0, 10).map(function(item) {
+            const p = item.property || {};
+            return {
+              propertyID: p.propertyID,
+              address: p.address,
+              city: p.city,
+              state: p.state,
+              zip: p.zip,
+              status: p.status,
+              ownerName: item.owner && item.owner.name,
+              portfolioName: p.portfolioName,
+            };
+          }));
         }
         // No search — return summary only to avoid context overflow
         return JSON.stringify({
@@ -2727,6 +2745,154 @@ BENCHMARK DATA:
       }
     }
 
+    // Server-side shortcut for leasing reports
+    const isLeasingReportQ = lowerMsg.match(/leasing report|leasing update|leasing activity|vacancy report|vacant.*report|report.*vacant|owner.*update.*leas|leas.*update.*owner|days on market|how long.*vacant|how long.*listed|listing.*activity|leas.*last.*week|leas.*last.*month|leas.*this.*week|leas.*this.*month|what.*happening.*leas|showings.*report|leads.*report|update.*owner.*property|property.*update.*owner/);
+    if (isLeasingReportQ) {
+      try {
+        // Detect time window
+        const now = Date.now();
+        const azNow = new Date(now - 7 * 60 * 60 * 1000);
+        let daysBack = 30;
+        if (lowerMsg.match(/last week|this week|past week|7 day/)) daysBack = 7;
+        else if (lowerMsg.match(/last month|this month|past month|30 day/)) daysBack = 30;
+        else if (lowerMsg.match(/last 2 week|14 day/)) daysBack = 14;
+        const cutoffMs = now - daysBack * 24 * 60 * 60 * 1000;
+        const cutoffStr = new Date(cutoffMs).toISOString().slice(0, 10);
+
+        // Detect specific property filter
+        const propMatch = lowerMsg.match(/(?:for|at|on)\s+([0-9]+\s+\w.{5,40}?)(?:\?|$)/i) ||
+                          lowerMsg.match(/([0-9]{3,5}\s+(?:west|east|north|south|w |e |n |s ).{5,35}?)(?:\?|$)/i);
+        const propFilter = propMatch ? propMatch[1].toLowerCase().trim() : null;
+
+        // Fetch all units
+        const unitsData = await unitsFetch('/api/board/unit', { page: 0, pageSize: 200, includeArchived: false });
+        let units = Array.isArray(unitsData) ? unitsData : (unitsData && unitsData.data) || [];
+
+        // Filter by property if specified
+        if (propFilter) {
+          const q = propFilter.split(' ').slice(0, 3).join(' ');
+          units = units.filter(function(u) {
+            return ((u['Address'] || '') + ' ' + (u['Street'] || '') + ' ' + (u.Title || '')).toLowerCase().includes(q);
+          });
+        }
+
+        // Fetch renter leads for activity
+        const schemaRaw = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
+        const schemaMap = {};
+        if (Array.isArray(schemaRaw)) schemaRaw.forEach(function(f) { schemaMap[f.key] = f.label; });
+        const leadsData = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 200, includeArchived: false });
+        const allLeads = Array.isArray(leadsData) ? leadsData : (leadsData && leadsData.data) || [];
+        const mapLead = function(c) {
+          const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt };
+          Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
+          return m;
+        };
+        const leads = allLeads.map(mapLead).filter(function(l) {
+          return !l.createdAt || new Date(l.createdAt).getTime() > cutoffMs;
+        });
+
+        const strVal = function(v) {
+          if (!v) return '';
+          if (typeof v === 'string') return v;
+          if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || i.value || '') : i; }).join(', ');
+          if (typeof v === 'object') return v.name || v.value || '';
+          return String(v);
+        };
+
+        const todayStr = azNow.toISOString().slice(0, 10);
+
+        // Build report sections
+        const vacantUnits = units.filter(function(u) { return /vacant|available/i.test(u.Stage || ''); });
+        const occupiedUnits = units.filter(function(u) { return /occupied/i.test(u.Stage || ''); });
+
+        const lines = [];
+        const period = daysBack === 7 ? 'Last 7 days' : daysBack === 14 ? 'Last 14 days' : 'Last 30 days';
+        lines.push('📊 LEASING REPORT — ' + period.toUpperCase() + (propFilter ? ' — ' + propFilter.toUpperCase() : ''));
+        lines.push('Generated: ' + todayStr);
+        lines.push('');
+
+        // VACANT / ACTIVE LISTINGS
+        if (vacantUnits.length > 0) {
+          lines.push('🏠 VACANT / ACTIVE LISTINGS (' + vacantUnits.length + ')');
+          lines.push('─────────────────────────────────');
+          vacantUnits.forEach(function(u) {
+            const addr = u.Address || u.Street || u.Title || '?';
+            const rent = u['Market Rent'] || '?';
+            const beds = u.Beds || '?';
+            const baths = u.Baths || '?';
+            const availDate = u['Available Date'] || '';
+            const daysOnMarket = availDate ? Math.floor((now - new Date(availDate).getTime()) / 86400000) : null;
+            const owner = u.Owners || u.Portfolio || '';
+
+            // Match leads for this property
+            const propLeads = leads.filter(function(l) {
+              const pref = strVal(l['Preferred Rental'] || l['Unit'] || '');
+              return addr && pref && (pref.toLowerCase().includes((u.Street || '').toLowerCase().slice(0, 10)) ||
+                     (u.Street || '').toLowerCase().includes(pref.toLowerCase().slice(0, 10)));
+            });
+            const showings = propLeads.filter(function(l) { return /scheduled tour|tour completed/i.test(l.stage || ''); });
+            const applications = propLeads.filter(function(l) { return /applied|applicant/i.test(l.stage || ''); });
+            const newLeads = propLeads.filter(function(l) { return /nurturing/i.test(l.stage || ''); });
+
+            lines.push('📍 ' + addr);
+            lines.push('   Rent: ' + rent + ' | ' + beds + 'bd/' + baths + 'ba | Owner: ' + owner);
+            if (availDate) lines.push('   Available: ' + availDate + (daysOnMarket !== null ? ' (' + daysOnMarket + ' days on market)' : ''));
+            lines.push('   Activity (' + period + '): ' + propLeads.length + ' total leads | ' + showings.length + ' showings | ' + applications.length + ' applications | ' + newLeads.length + ' new inquiries');
+            if (showings.length > 0) {
+              showings.slice(0, 3).forEach(function(l) {
+                const name = strVal(l['Primary Contact'] || l['Name']);
+                const info = strVal(l['Requested Showing Information'] || l['Tour Date/Time']);
+                if (name) lines.push('   ↳ Showing: ' + name + (info ? ' — ' + String(info).slice(0, 60) : ''));
+              });
+            }
+            if (applications.length > 0) {
+              applications.slice(0, 3).forEach(function(l) {
+                const name = strVal(l['Primary Contact'] || l['Name']);
+                if (name) lines.push('   ↳ Application: ' + name + ' [' + (l.stage || '') + ']');
+              });
+            }
+            lines.push('');
+          });
+        }
+
+        // RECENTLY OCCUPIED (leased in window)
+        const recentlyOccupied = occupiedUnits.filter(function(u) {
+          const stageChanged = u['Stage Changed'] || '';
+          return stageChanged && new Date(stageChanged).getTime() > cutoffMs;
+        });
+        if (recentlyOccupied.length > 0) {
+          lines.push('✅ LEASED IN THIS PERIOD (' + recentlyOccupied.length + ')');
+          lines.push('─────────────────────────────────');
+          recentlyOccupied.forEach(function(u) {
+            const addr = u.Address || u.Street || u.Title || '?';
+            const rent = u['Market Rent'] || '?';
+            const resident = u.Residents || '';
+            const leased = (u['Stage Changed'] || '').slice(0, 10);
+            lines.push('✅ ' + addr + ' — Leased ' + leased + ' @ ' + rent + (resident ? ' — ' + resident : ''));
+          });
+          lines.push('');
+        }
+
+        // SUMMARY STATS
+        lines.push('📈 SUMMARY');
+        lines.push('─────────────────────────────────');
+        lines.push('Total properties tracked: ' + units.length);
+        lines.push('Currently vacant: ' + vacantUnits.length);
+        lines.push('Currently occupied: ' + occupiedUnits.length);
+        lines.push('Leased this period: ' + recentlyOccupied.length);
+        lines.push('New leads this period: ' + leads.length);
+        const totalShowings = leads.filter(function(l) { return /scheduled tour|tour completed/i.test(l.stage || ''); }).length;
+        const totalApps = leads.filter(function(l) { return /applied/i.test(l.stage || ''); }).length;
+        lines.push('Showings this period: ' + totalShowings);
+        lines.push('Applications this period: ' + totalApps);
+
+        console.log('Leasing report shortcut fired, units:', units.length, 'vacant:', vacantUnits.length, 'leads:', leads.length);
+        return res.json({ content: [{ type: 'text', text: lines.join('\n') }] });
+      } catch(e) {
+        console.error('Leasing report shortcut error:', e.message);
+      }
+    }
+
     // Server-side shortcut for new leads    // Server-side shortcut for new leads questions
     const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many|come in|what.*lead|lead.*what/);
     if (isLeadsQ) {
@@ -2922,26 +3088,27 @@ BENCHMARK DATA:
       const results = await Promise.all(tbs.map(async function(tb) {
         let result = await executeTool(tb.name, tb.input);
         // Trim large results to prevent context overflow (30k TPM rate limit)
-        if (typeof result === 'string' && result.length > 12000) {
+        if (typeof result === 'string' && result.length > 8000) {
           try {
             const parsed = JSON.parse(result);
-            // If it's an array, limit to 20 items and strip bulky fields
+            // If it's an array, limit to 15 items and strip bulky fields
             if (Array.isArray(parsed)) {
-              const trimmed = parsed.slice(0, 20).map(function(item) {
-                // Remove large photo/file arrays and long descriptions
+              const trimmed = parsed.slice(0, 15).map(function(item) {
                 const clean = Object.assign({}, item);
                 delete clean['Property Photos'];
                 delete clean['Mirror Marketing Description'];
                 delete clean['Marketing Description'];
                 delete clean.comments;
                 delete clean['Files'];
+                delete clean.groups;
+                delete clean.amenities;
                 return clean;
               });
-              result = JSON.stringify({ 
-                total: parsed.length, 
-                shown: trimmed.length, 
-                note: parsed.length > 20 ? 'Results trimmed — ' + (parsed.length - 20) + ' more not shown' : undefined,
-                data: trimmed 
+              result = JSON.stringify({
+                total: parsed.length,
+                shown: trimmed.length,
+                note: parsed.length > 15 ? 'Results trimmed — ' + (parsed.length - 15) + ' more not shown' : undefined,
+                data: trimmed
               });
             } else if (parsed && parsed.cards && Array.isArray(parsed.cards)) {
               const trimmed = parsed.cards.slice(0, 20).map(function(c) {
@@ -2955,8 +3122,12 @@ BENCHMARK DATA:
               result = JSON.stringify({ total: parsed.cards.length, shown: trimmed.length, cards: trimmed });
             }
           } catch(e) {
-            result = result.slice(0, 12000) + '...[truncated]';
+            result = result.slice(0, 8000) + '...[truncated]';
           }
+        }
+        // Absolute hard cap — never send more than 10k chars to Claude per tool result
+        if (typeof result === 'string' && result.length > 10000) {
+          result = result.slice(0, 10000) + '...[truncated for context limit]';
         }
         return {
           type: 'tool_result',
@@ -3084,6 +3255,8 @@ const FAQ_TABS = [
     questions: [
       {icon:"🏠", text:"What units are available right now?"},
       {icon:"👥", text:"What new leads came in this week?"},
+      {icon:"📊", text:"Show me the leasing report for this week"},
+      {icon:"📊", text:"Show me the leasing report for last month"},
       {icon:"📅", text:"What showings are scheduled today?"},
       {icon:"📅", text:"What showings happened this week?"},
       {icon:"📝", text:"Show me all active applications"},
