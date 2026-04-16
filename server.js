@@ -94,9 +94,34 @@ async function fetchNotionPageText(pageId) {
     const lines = [];
     for (const block of (data.results || [])) {
       const type = block.type;
+      // Extract rich_text from standard blocks
       const rich = (block[type] && block[type].rich_text) || [];
       const text = rich.map(function(t) { return t.plain_text || ''; }).join('');
       if (text) lines.push(text);
+      // Extract table rows
+      if (type === 'table') {
+        try {
+          const tr = await fetch('https://api.notion.com/v1/blocks/' + block.id + '/children?page_size=100', {
+            headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
+          });
+          const tdata = await tr.json();
+          for (const row of (tdata.results || [])) {
+            if (row.type === 'table_row') {
+              const cells = (row.table_row && row.table_row.cells) || [];
+              const cellText = cells.map(function(cell) {
+                return cell.map(function(t) { return t.plain_text || ''; }).join('');
+              }).filter(Boolean).join(' | ');
+              if (cellText) lines.push(cellText);
+            }
+          }
+        } catch(e) { /* skip table fetch errors */ }
+      }
+      // Extract callout text
+      if (type === 'callout') {
+        const calloutRich = (block.callout && block.callout.rich_text) || [];
+        const calloutText = calloutRich.map(function(t) { return t.plain_text || ''; }).join('');
+        if (calloutText) lines.push(calloutText);
+      }
     }
     return lines.join('\n');
   } catch(e) { return ''; }
@@ -1762,6 +1787,7 @@ app.post('/api/chat', async function(req, res) {
     const lowerMsg = (typeof lastContent === 'string' ? lastContent : 
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
+    const userMsg = typeof lastContent === 'string' ? lastContent : (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '');
     const isAvailabilityQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor|submitted|most.*order|order.*most/) &&
       lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house|under \d|homes.*rent|rent.*home|\d\s*bed/) && !lowerMsg.match(/[0-9]{5,6}/);
     const isMarketDaysQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor/) &&
@@ -2786,9 +2812,16 @@ BENCHMARK DATA:
         const nowAz = new Date(nowUtc + azOffset);
         const todayAz = new Date(nowAz); todayAz.setHours(0,0,0,0);
         const weekStart = new Date(todayAz); weekStart.setDate(todayAz.getDate() - todayAz.getDay());
+        const strVal = function(v) {
+          if (!v) return '';
+          if (typeof v === 'string') return v;
+          if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || i.value || JSON.stringify(i)) : i; }).join(', ');
+          if (typeof v === 'object') return v.name || v.value || v.address || JSON.stringify(v);
+          return String(v);
+        };
         const fmt = function(c) {
-          const contact = c['Primary Contact'] || c['Name'] || '?';
-          const unit = c['Preferred Rental'] || c['Unit'] || '?';
+          const contact = strVal(c['Primary Contact'] || c['Name']) || '?';
+          const unit = strVal(c['Preferred Rental'] || c['Unit']) || '?';
           const raw = c['Requested Showing Information'];
           const info = typeof raw === 'string' ? raw : (raw && (raw.value || raw.name || '')) || '';
           const timeMatch = info.match(/\(([^)]+)\)/);
