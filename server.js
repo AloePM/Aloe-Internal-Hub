@@ -1898,6 +1898,44 @@ app.post('/api/chat', async function(req, res) {
       try {
         const cards = await getUnitsCards();
         console.log('Units cards total:', cards.length, 'maxPrice:', maxPrice, 'minBeds:', minBeds);
+
+        // "Coming available" / "next N days" query — filter by upcoming Available Date
+        const comingAvailMatch = lowerMsg.match(/coming.*availab|availab.*soon|next\s+(\d+)\s+day|upcoming.*availab|availab.*next|availab.*in.*(\d+)/);
+        if (comingAvailMatch || lowerMsg.match(/next \d+ days|next 30|next 60|next 90|upcoming vacant|coming up/)) {
+          const daysAhead = parseInt((lowerMsg.match(/next\s+(\d+)\s+day/)||[])[1] || '30');
+          const nowMs = Date.now();
+          const azOffset = -7 * 60 * 60 * 1000;
+          const todayStr = new Date(nowMs + azOffset).toISOString().slice(0,10);
+          const futureMs = nowMs + daysAhead * 24 * 60 * 60 * 1000;
+          const futureStr = new Date(futureMs + azOffset).toISOString().slice(0,10);
+          // Filter: Available Date exists and is within window (today → today+daysAhead)
+          const coming = cards.filter(function(c) {
+            const d = c['Available Date'];
+            if (!d) return false;
+            try {
+              const ds = new Date(d).toISOString().slice(0,10);
+              return ds >= todayStr && ds <= futureStr;
+            } catch(e) { return false; }
+          }).sort(function(a, b) {
+            return new Date(a['Available Date']).getTime() - new Date(b['Available Date']).getTime();
+          });
+          const fmt2 = function(c) {
+            const addr = (c.Street || c.Address || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
+            const rent = c['Market Rent'] && typeof c['Market Rent'] === 'object' ? '$' + Number(c['Market Rent'].amount).toLocaleString() : (c['Market Rent'] || '');
+            const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths||'?') + 'ba' : '';
+            const avail = new Date(c['Available Date']).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'});
+            const stage = c.Stage || c.Status || '';
+            const occupied = stage === 'Occupied' ? ' (currently occupied)' : stage === 'Vacant' ? ' (vacant now)' : '';
+            const owner = c.Owners || c.Portfolio || '';
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + ', avail ' + avail + occupied + (owner ? ' | ' + owner : '');
+          };
+          const label = 'Units coming available in the next ' + daysAhead + ' days (' + coming.length + '):';
+          const text = coming.length > 0
+            ? label + '\n\n' + coming.map(fmt2).join('\n')
+            : 'No units with an available date in the next ' + daysAhead + ' days found on the listings board.';
+          console.log('Coming available shortcut:', coming.length, 'units in next', daysAhead, 'days');
+          return res.json({ content: [{ type: 'text', text }] });
+        }
         let published = cards.filter(function(c) {
           return c['Published For Rent'] === 'checked' || c['Published For Rent'] === true ||
                  c['Syndicate'] === 'checked' || c['Active'] === 'checked';
