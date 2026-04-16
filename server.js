@@ -127,6 +127,30 @@ async function fetchNotionPageText(pageId) {
         const calloutText = calloutRich.map(function(t) { return t.plain_text || ''; }).join('');
         if (calloutText) lines.push(calloutText);
       }
+      // Extract toggle block content (heading + children)
+      if (type === 'toggle') {
+        const toggleRich = (block.toggle && block.toggle.rich_text) || [];
+        const toggleTitle = toggleRich.map(function(t) { return t.plain_text || ''; }).join('');
+        if (toggleTitle) lines.push(toggleTitle);
+        try {
+          const tr = await fetch('https://api.notion.com/v1/blocks/' + block.id + '/children?page_size=100', {
+            headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
+          });
+          const tdata = await tr.json();
+          for (const child of (tdata.results || [])) {
+            const ct = child.type;
+            const cRich = (child[ct] && child[ct].rich_text) || [];
+            const cText = cRich.map(function(t) { return t.plain_text || ''; }).join('');
+            if (cText) lines.push('  ' + cText);
+            // Nested numbered/bulleted lists inside toggles
+            if (ct === 'numbered_list_item' || ct === 'bulleted_list_item') {
+              const nRich = (child[ct] && child[ct].rich_text) || [];
+              const nText = nRich.map(function(t) { return t.plain_text || ''; }).join('');
+              if (nText) lines.push('  - ' + nText);
+            }
+          }
+        } catch(e) { /* skip toggle child fetch errors */ }
+      }
     }
     return lines.join('\n');
   } catch(e) { return ''; }
@@ -296,6 +320,8 @@ SLACK — Team communications:
 - Search across all channels for specific topics
 
 Rules:
+- CRITICAL RATE LIMIT RULE: Never call more than 2 tools in the same loop. For property lookups: call rv_get_properties first, then rv_get_units with the propertyId — do NOT also call rv_get_inspections, rv_get_leases, or rv_get_work_orders in the same turn unless specifically asked. Calling 3+ tools at once causes rate limit errors.
+- rv_get_inspections: ONLY call when user specifically asks about inspections. Never call it automatically during general property lookups.
 - Always use tools to get live data — never guess or make up numbers
 - For tenant balances always show the full breakdown (what charges, amounts, dates)
 - Be concise. Lead with the answer, then details
@@ -457,7 +483,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_inspections',
-    description: 'Get property inspections from Rentvine — move-in, move-out, and periodic inspections with dates and status',
+    description: 'Get property inspections from Rentvine — move-in, move-out, and periodic inspections with dates and status. Only call this when the user SPECIFICALLY asks about inspections. Do NOT call this automatically when looking up property activity — it causes rate limit errors.',
     input_schema: {
       type: 'object',
       properties: {
@@ -1224,9 +1250,24 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_inspections': {
-        const params = { pageSize: 50, page: input.page || 1 };
+        const params = { pageSize: 20, page: input.page || 1 };
         if (input.propertyId) params.propertyID = input.propertyId;
-        return JSON.stringify(await rvFetch('/maintenance/inspections', params));
+        const inspData = await rvFetch('/maintenance/inspections', params);
+        const inspList = Array.isArray(inspData) ? inspData : (inspData && inspData.data) || [];
+        // Slim output — only key fields to avoid rate limit
+        return JSON.stringify(inspList.map(function(i) {
+          return {
+            inspectionID: i.inspectionID,
+            type: i.inspectionType && i.inspectionType.name,
+            status: i.inspectionStatus && i.inspectionStatus.name,
+            scheduledDate: i.scheduledDate,
+            completedDate: i.completedDate,
+            propertyID: i.propertyID,
+            address: i.property && i.property.address,
+            inspector: i.inspector && i.inspector.name,
+            score: i.score,
+          };
+        }));
       }
 
       case 'rv_get_inspection_detail': {
