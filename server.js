@@ -23,6 +23,67 @@ let KNOWLEDGE_BASE = '';
 let VENDOR_CACHE = '';
 let VENDOR_CACHE_LOADED_AT = 0;
 
+// Unified cache for all troubleshooting/SOP pages — keyed by topic
+const NOTION_CACHE = {};
+
+// Pages to cache at startup and refresh every hour
+const CACHED_PAGES = [
+  { key: 'water_leaks',       id: '18776555273a8106b44ce926440e7ba3',  label: 'Water Leaks' },
+  { key: 'water_sms',         id: '34276555273a8186932eeb6d06a77a40',  label: 'Water Leak SMS Templates' },
+  { key: 'pest_sop',          id: '18776555273a812fb90adca389d707fc',  label: 'Pest Control SOP' },
+  { key: 'pest_resident',     id: '26576555273a809089a7e3878807f139',  label: 'Pest Control Resident' },
+  { key: 'pest_sms',          id: '34376555273a812fb84bc606eaa43df3',  label: 'Pest Control SMS Templates' },
+  { key: 'toilet',            id: '27076555273a80de8a09eb0e5c896176',  label: 'Toilet Issues' },
+  { key: 'washer_dryer',      id: '27e76555273a80efb8dffb9af4cb0aee',  label: 'Washer & Dryer' },
+  { key: 'kitchen_sink',      id: '27e76555273a809a9a38de2158f1b611',  label: 'Kitchen Sink & Drain' },
+  { key: 'disposal',          id: '27e76555273a80faac56fa6dcac5d533',  label: 'Garbage Disposal' },
+  { key: 'mold',              id: '27e76555273a80c4992bd974b90c59d4',  label: 'Mold & Mildew' },
+  { key: 'dishwasher',        id: '27e76555273a80a686bcc8f485824772',  label: 'Dishwasher' },
+  { key: 'hvac',              id: '26676555273a80fda5d5d7a149fd1b63',  label: 'HVAC Troubleshooting' },
+  { key: 'water_softener',    id: '26576555273a80b88904dcdf93dd2055',  label: 'Water Softener' },
+  { key: 'high_water_bill',   id: '26576555273a80cd9c72e95e09ee0ed3',  label: 'High Water Bills' },
+  { key: 'mailbox',           id: '28d76555273a80c9995fd3a6625725c4',  label: 'Mailbox Issues' },
+  { key: 'keys_lockouts',     id: '18776555273a81a08efbc3c9c3862301',  label: 'Keys & Lockouts' },
+  { key: 'wo_create',         id: '18776555273a81279c2ee27aaec9d25f',  label: 'Creating Work Orders' },
+  { key: 'wo_process',        id: '32576555273a802f84dac4c9f147fd10',  label: 'Work Order Process' },
+  { key: 'cost_benchmarks',   id: '34476555273a803482dcfbcd8c8b5421',  label: 'Maintenance Cost Benchmarks' },
+];
+
+async function loadNotionCache() {
+  let loaded = 0;
+  for (const p of CACHED_PAGES) {
+    try {
+      const text = await fetchNotionPageText(p.id);
+      if (text) { NOTION_CACHE[p.key] = { text, label: p.label, loadedAt: Date.now() }; loaded++; }
+    } catch(e) { console.error('Cache load error for', p.key, e.message); }
+  }
+  console.log('Notion cache loaded: ' + loaded + ' pages');
+}
+
+// Detect which cached page is relevant to a question
+function getCachedContext(msg) {
+  const m = msg.toLowerCase();
+  if (/water.*leak|leak.*water|leaking|flooded|burst.*pipe|pipe.*burst|water.*damage/.test(m)) return NOTION_CACHE.water_leaks;
+  if (/text.*leak|sms.*leak|what.*say.*leak|what.*tell.*leak/.test(m)) return NOTION_CACHE.water_sms;
+  if (/pest|scorpion|roach|termite|rodent|bee|ant.*infestat|bug.*infestat/.test(m)) return NOTION_CACHE.pest_sop;
+  if (/text.*pest|sms.*pest|what.*say.*pest|what.*tell.*pest/.test(m)) return NOTION_CACHE.pest_sms;
+  if (/toilet|running.*water|toilet.*leak|toilet.*clog|toilet.*flush/.test(m)) return NOTION_CACHE.toilet;
+  if (/washer|dryer|washing machine|laundry/.test(m)) return NOTION_CACHE.washer_dryer;
+  if (/kitchen sink|sink.*drain|drain.*clog|slow.*drain/.test(m)) return NOTION_CACHE.kitchen_sink;
+  if (/garbage disposal|disposal/.test(m)) return NOTION_CACHE.disposal;
+  if (/mold|mildew/.test(m)) return NOTION_CACHE.mold;
+  if (/dishwasher/.test(m)) return NOTION_CACHE.dishwasher;
+  if (/\bhvac\b|\bac\b|air.?condition|heat.*not.*work|ac.*not.*work|furnace/.test(m)) return NOTION_CACHE.hvac;
+  if (/water softener|softener/.test(m)) return NOTION_CACHE.water_softener;
+  if (/water bill|high.*bill.*water|leak.*prevent/.test(m)) return NOTION_CACHE.high_water_bill;
+  if (/mailbox/.test(m)) return NOTION_CACHE.mailbox;
+  if (/lock.*out|locked.*out|lost.*key|\bkey\b|rekey/.test(m)) return NOTION_CACHE.keys_lockouts;
+  if (/how.*creat.*work.?order|how.*submit.*work.?order|how.*make.*work.?order/.test(m)) return NOTION_CACHE.wo_create;
+  if (/work.?order.*process|process.*work.?order/.test(m)) return NOTION_CACHE.wo_process;
+  if (/cost|price|quote|charge|expensive|too much|fair price|good price|benchmark|should i approve|approve.*quote|how much.*should|is.*\$.*too|within range/.test(m)) return NOTION_CACHE.cost_benchmarks;
+  return null;
+}
+
 async function fetchNotionPageText(pageId) {
   try {
     const r = await fetch('https://api.notion.com/v1/blocks/' + pageId + '/children?page_size=100', {
@@ -60,8 +121,10 @@ async function loadKnowledgeBase() {
     console.error('Knowledge base load error:', e.message);
   }
 }
-// Load on startup
+// Load all caches on startup
 loadKnowledgeBase();
+loadNotionCache();
+setInterval(loadNotionCache, 60 * 60 * 1000); // refresh hourly
 
 async function loadVendorCache() {
   try {
@@ -76,7 +139,6 @@ async function loadVendorCache() {
   }
 }
 loadVendorCache();
-// Refresh vendor cache every 30 minutes since it changes frequently
 setInterval(loadVendorCache, 30 * 60 * 1000);
 
 const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
@@ -190,7 +252,7 @@ MAINTENANCE / WORK ORDER PAGES (use for any staff question about work orders, ma
 - HVAC Troubleshooting: 26676555273a80fda5d5d7a149fd1b63 → AC/heat troubleshooting, filter info, when to call vendor
 - Using Your Water Softener: 26576555273a80b88904dcdf93dd2055 → water softener operation, salt refill, maintenance, issues
 - Prevent High Water Bills & Protect Your Home from Leaks: 26576555273a80cd9c72e95e09ee0ed3 → water conservation, leak prevention, tenant education
-- Preferred Vendors by Service Type: 25076555273a80e9a6dfe4e551d42e70 → which vendor to assign for HVAC, plumbing, roofing, appliances, pest, landscaping, cleaning, flooring, painting — USE THIS for all vendor assignment questions
+- Cost Benchmarks: 34476555273a803482dcfbcd8c8b5421 → Phoenix-area pricing benchmarks for all common repairs: plumbing, HVAC, electrical, appliances, doors/windows, handyman. Includes typical range, high-but-acceptable, and too-high thresholds. Approval rules: under $125 approve, $125-$250 compare benchmarks, over $250 get 2-3 bids, over $500 owner approval required.
 
 Property availability workflow (follow this order):
 1. Check Aptly Applications board for approved applications on the property
@@ -220,24 +282,12 @@ Rules:
 - For ANY question about application approval time, how long it takes, timeline, earnest deposit, application fees: IMMEDIATELY use notion_get_page with ID 25e76555273a8082ae8fef84ebd87a23 — answer is "1-2 days after completed application received".
 - CRITICAL FEE FACTS — never get these wrong: Earnest deposit = $1,500 (NOT $500). Application fee = $65 per adult. Cleaning fee = $500 (move-out, non-refundable). Admin fee = $250. Pet fee = $250 per pet. Security deposit = 1x monthly rent. The $500 is the CLEANING FEE, not the earnest deposit.
 - For ANY question about applicant screening criteria, income requirements, credit score: IMMEDIATELY use notion_get_page with ID 18776555273a81beb216db69887d8266.
-- For ANY question about how to create a work order, how to submit a work order, work order steps, what to know about work orders, work order process: IMMEDIATELY use notion_get_page with ID 18776555273a81279c2ee27aaec9d25f (Creating & Updating Work Orders). If they ask about the full process/workflow, also fetch 32576555273a802f84dac4c9f147fd10 (Work Order Process).
-- For ANY question about mailbox issues, broken mailbox, lost mailbox key, mailbox repair, USPS mailbox: IMMEDIATELY use notion_get_page with ID 28d76555273a80c9995fd3a6625725c4.
-- For ANY question about keys, lockouts, tenant locked out, lost key, rekey, lock change, lockbox: IMMEDIATELY use notion_get_page with ID 18776555273a81a08efbc3c9c3862301.
-- For ANY question about toilet issues, running toilet, toilet leak, toilet clog, toilet won't flush, toilet troubleshooting: IMMEDIATELY use notion_get_page with ID 27076555273a80de8a09eb0e5c896176.
-- For ANY question about washer, dryer, washing machine, laundry appliance issues or care: IMMEDIATELY use notion_get_page with ID 27e76555273a80efb8dffb9af4cb0aee.
-- For ANY question about kitchen sink, drain, sink clog, slow drain, sink care: IMMEDIATELY use notion_get_page with ID 27e76555273a809a9a38de2158f1b611.
-- For ANY question about garbage disposal, disposal jammed, disposal not working, what to put in disposal: IMMEDIATELY use notion_get_page with ID 27e76555273a80faac56fa6dcac5d533.
-- For ANY question about mold, mildew, mold prevention, black mold, mold in bathroom: IMMEDIATELY use notion_get_page with ID 27e76555273a80c4992bd974b90c59d4.
-- For ANY question about bees specifically (as pest): IMMEDIATELY use notion_get_page with ID 18776555273a812fb90adca389d707fc (pest control SOP) — bees are always owner responsibility unless migrating swarm.
-- For ANY question about dishwasher, dishwasher not draining, dishwasher not cleaning, dishwasher troubleshooting: IMMEDIATELY use notion_get_page with ID 27e76555273a80a686bcc8f485824772.
-- For ANY question about HVAC, AC not working, heat not working, air conditioning troubleshooting, AC unit, furnace: IMMEDIATELY use notion_get_page with ID 26676555273a80fda5d5d7a149fd1b63.
-- For ANY question about water softener, salt, softener maintenance, water softener issues: IMMEDIATELY use notion_get_page with ID 26576555273a80b88904dcdf93dd2055.
-- For ANY question about high water bill, water usage, leak prevention, conserving water: IMMEDIATELY use notion_get_page with ID 26576555273a80cd9c72e95e09ee0ed3.
-- For ANY question about which vendor to assign, who to call for [service], vendor for HVAC/plumbing/roofing/appliance/pest/landscaping/cleaning/flooring/painting: The vendor list is handled server-side from a live cache — do NOT call notion_get_page for vendors. Just answer the vendor question using your context.
-- For ANY question about water leak, active leak, leaking pipe, flooding, burst pipe, tenant calling about water, appliance leaking, roof leak, sink leak, toilet leak: IMMEDIATELY use notion_get_page with ID 18776555273a8106b44ce926440e7ba3. Ask the tenant where the leak is (appliance, sink, toilet, roof, exterior) and walk them through the relevant shutoff steps from the page content.
-- When staff asks for a text/SMS to send a tenant about a water leak, or asks "what do I say/text", IMMEDIATELY use notion_get_page with ID 34276555273a8186932eeb6d06a77a40 and return the matching template for that leak type.
-- For ANY question about pest control, bugs, roaches, scorpions, ants, termites, rodents, bees, pest issue, tenant reporting pests: IMMEDIATELY use notion_get_page with ID 18776555273a812fb90adca389d707fc. Determine if issue is owner or tenant responsibility, apply scorpion rule (5+ inside in 30 days = owner), bees/rodents/termites = always owner. Guide staff through next steps.
-- When staff asks for a text/SMS to send a tenant about pests, or "what do I tell the tenant about [pest]": IMMEDIATELY use notion_get_page with ID 34376555273a812fb84bc606eaa43df3 and return the matching template.
+- For work orders, mailbox, keys/lockouts, toilet, washer/dryer, kitchen sink, disposal, mold, dishwasher, HVAC, water softener, high water bill, water leaks, pest control: The relevant Notion content is PRE-LOADED into your context above as "RELEVANT NOTION PAGE". Use that content directly — do NOT call notion_get_page for these topics.
+- For ANY question about how to create/submit a work order: use the pre-loaded work order content in your context.
+- For pest control: scorpion rule = 5+ inside in 30 days = owner responsibility. Bees/rodents/termites/birds = always owner. Under 30 days moved in = one-time goodwill service.
+- For water leaks: ask where the leak is (appliance/sink/toilet/roof/exterior) and give shutoff instructions from context.
+- For vendor assignment: handled server-side — do NOT call notion_get_page for vendors.
+- For application approval time: IMMEDIATELY use notion_get_page with ID 25e76555273a8082ae8fef84ebd87a23.
 - For unknown policy topics: search Notion 2-3 times with different keywords before giving up.
 - NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
 - Only route to a team member when you genuinely cannot answer the question from the data. If the question has been fully answered, do NOT add a 'reach out to X' closer — just stop after the answer.
@@ -2272,6 +2322,52 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
+    // Server-side shortcut for price/quote checks — uses cached benchmarks
+    const isPriceQ = lowerMsg.match(/cost|price|quote|charge|too (much|high|expensive)|fair price|good price|benchmark|should i approve|approve.*quote|is.*\$|how much.*should|within range|get.*bid|another.*quote|second.*quote/);
+    if (isPriceQ && NOTION_CACHE.cost_benchmarks && NOTION_CACHE.cost_benchmarks.text) {
+      try {
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 600,
+            system: `You are a maintenance cost advisor for Aloe Property Management in Phoenix, AZ.
+Use the benchmark data below to evaluate vendor quotes. Always give a clear verdict:
+✅ APPROVE — price is within typical range
+⚠️ HIGH BUT ACCEPTABLE — above typical but still reasonable, use judgment
+❌ GET ANOTHER QUOTE — price is too high, request additional bids
+🚨 NEEDS OWNER APPROVAL — over $250-$500, require owner sign-off
+
+Format your response as:
+**[Repair type]**
+Quoted: $[amount]
+Typical range: $[range]
+Verdict: [emoji + verdict]
+[1-2 sentence explanation + action if needed]
+
+General rules if specific item not listed:
+- Under $125 from trusted vendor: usually approve
+- $125–$250: compare to benchmarks, ask for photos if high
+- Over $250: get 2-3 bids unless emergency
+- Over $500: owner approval required
+
+BENCHMARK DATA:
+` + NOTION_CACHE.cost_benchmarks.text.slice(0, 5000),
+            messages: [{ role: 'user', content: userMsg }]
+          })
+        });
+        const data = await resp.json();
+        const answer = data.content && data.content[0] && data.content[0].text;
+        if (answer) {
+          console.log('Price check shortcut fired:', userMsg.slice(0, 80));
+          return res.json({ content: [{ type: 'text', text: answer }] });
+        }
+      } catch(e) {
+        console.error('Price check shortcut error:', e.message);
+      }
+    }
+
     // Server-side shortcut for vendor questions — uses cached data, no token cost
     const isVendorQ = lowerMsg.match(/vendor|who.*assign|who.*call|who.*use|which.*vendor|assign.*work.?order|who.*do.*hvac|who.*do.*plumb|who.*do.*roof|who.*do.*pest|who.*do.*landscap|who.*do.*clean|who.*do.*floor|who.*do.*paint|who.*do.*appli|who.*do.*garage|who.*do.*glass|preferred.*vendor|vendor.*list/);
     if (isVendorQ && VENDOR_CACHE) {
@@ -2762,7 +2858,19 @@ app.post('/api/chat', async function(req, res) {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
-          system: SYSTEM_PROMPT + (KNOWLEDGE_BASE && i === 0 ? '\n\n---\nKEY OPERATIONAL KNOWLEDGE (from Notion):\n' + KNOWLEDGE_BASE.slice(0, 6000) : ''),
+          system: (function() {
+            let sys = SYSTEM_PROMPT;
+            // Inject knowledge base on first loop
+            if (KNOWLEDGE_BASE && i === 0) sys += '\n\n---\nKEY OPERATIONAL KNOWLEDGE (from Notion):\n' + KNOWLEDGE_BASE.slice(0, 4000);
+            // Inject relevant cached Notion page content when topic matches
+            if (i === 0) {
+              const cached = getCachedContext(lowerMsg);
+              if (cached && cached.text) {
+                sys += '\n\n---\nRELEVANT NOTION PAGE (' + cached.label + '):\n' + cached.text.slice(0, 4000);
+              }
+            }
+            return sys;
+          })(),
           messages: current,
           tools: tools,
         }),
