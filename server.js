@@ -94,8 +94,15 @@ async function fetchNotionPageText(pageId) {
     const r = await fetch('https://api.notion.com/v1/blocks/' + pageId + '/children?page_size=100', {
       headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
     });
-    if (!r.ok) return '';
+    if (!r.ok) {
+      console.log('Notion blocks API error for', pageId, ':', r.status);
+      return '';
+    }
     const data = await r.json();
+    if (data.status === 404 || data.code === 'object_not_found') {
+      console.log('Notion page not found:', pageId);
+      return '';
+    }
     const lines = [];
     for (const block of (data.results || [])) {
       const type = block.type;
@@ -1899,41 +1906,53 @@ app.post('/api/chat', async function(req, res) {
         const cards = await getUnitsCards();
         console.log('Units cards total:', cards.length, 'maxPrice:', maxPrice, 'minBeds:', minBeds);
 
-        // "Coming available" / "next N days" query — filter by upcoming Available Date
+        // "Coming available" / "next N days" query — pull from List Property board (qfBzBxfooJtfTQncd)
         const comingAvailMatch = lowerMsg.match(/coming.*availab|availab.*soon|next\s+(\d+)\s+day|upcoming.*availab|availab.*next|availab.*in.*(\d+)/);
-        if (comingAvailMatch || lowerMsg.match(/next \d+ days|next 30|next 60|next 90|upcoming vacant|coming up/)) {
+        if (comingAvailMatch || lowerMsg.match(/next \d+ days|next 30|next 60|next 90|upcoming vacant|coming up|list.*property|list.*market|on market/)) {
           const daysAhead = parseInt((lowerMsg.match(/next\s+(\d+)\s+day/)||[])[1] || '30');
           const nowMs = Date.now();
           const azOffset = -7 * 60 * 60 * 1000;
           const todayStr = new Date(nowMs + azOffset).toISOString().slice(0,10);
           const futureMs = nowMs + daysAhead * 24 * 60 * 60 * 1000;
           const futureStr = new Date(futureMs + azOffset).toISOString().slice(0,10);
-          // Filter: Available Date exists and is within window (today → today+daysAhead)
-          const coming = cards.filter(function(c) {
-            const d = c['Available Date'];
-            if (!d) return false;
+          // Fetch from List Property board — the active marketing board
+          const listData = await unitsFetch('/api/board/qfBzBxfooJtfTQncd', { page: 0, pageSize: 100, includeArchived: false });
+          const listCards = Array.isArray(listData) ? listData : (listData && listData.data) || [];
+          // Filter to On Market stage and within available date window
+          const coming = listCards.filter(function(c) {
+            if (!/on market/i.test(c.Stage || '')) return false;
+            const d = c['Mirror Available Date'];
+            if (!d) return true; // include if no date set (recently listed)
             try {
               const ds = new Date(d).toISOString().slice(0,10);
-              return ds >= todayStr && ds <= futureStr;
+              return ds <= futureStr; // available within window or already available
             } catch(e) { return false; }
           }).sort(function(a, b) {
-            return new Date(a['Available Date']).getTime() - new Date(b['Available Date']).getTime();
+            const da = a['Mirror Available Date'] ? new Date(a['Mirror Available Date']).getTime() : 0;
+            const db = b['Mirror Available Date'] ? new Date(b['Mirror Available Date']).getTime() : 0;
+            return da - db;
           });
           const fmt2 = function(c) {
-            const addr = (c.Street || c.Address || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
-            const rent = c['Market Rent'] && typeof c['Market Rent'] === 'object' ? '$' + Number(c['Market Rent'].amount).toLocaleString() : (c['Market Rent'] || '');
-            const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths||'?') + 'ba' : '';
-            const avail = new Date(c['Available Date']).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'});
-            const stage = c.Stage || c.Status || '';
-            const occupied = stage === 'Occupied' ? ' (currently occupied)' : stage === 'Vacant' ? ' (vacant now)' : '';
-            const owner = c.Owners || c.Portfolio || '';
-            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + ', avail ' + avail + occupied + (owner ? ' | ' + owner : '');
+            const addr = (c['Mirror Address'] || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '').replace(/,.*$/, '').trim();
+            const rent = c['Mirror Market Rent'] || '';
+            const beds = c['Mirror Beds'] ? c['Mirror Beds'] + 'bd/' + (c['Mirror Baths']||'?') + 'ba' : '';
+            const availRaw = c['Mirror Available Date'];
+            const avail = availRaw ? new Date(availRaw).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : 'TBD';
+            const status = c['Mirror Status'] || '';
+            const occupied = /occupied/i.test(status) ? ' (currently occupied)' : /vacant/i.test(status) ? ' (vacant now)' : '';
+            const owner = c['Mirror Owners'] || '';
+            const showingStart = c['Showing Start Date'] ? ' | showings from ' + c['Showing Start Date'] : '';
+            const daysListed = c['Date Listed'] ? Math.floor((nowMs - new Date(c['Date Listed']).getTime()) / 86400000) + 'd on market' : '';
+            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') +
+              ', avail ' + avail + occupied + showingStart +
+              (daysListed ? ' | ' + daysListed : '') +
+              (owner ? ' | ' + owner : '');
           };
-          const label = 'Units coming available in the next ' + daysAhead + ' days (' + coming.length + '):';
+          const label = 'Active listings coming available in the next ' + daysAhead + ' days (' + coming.length + '):';
           const text = coming.length > 0
             ? label + '\n\n' + coming.map(fmt2).join('\n')
-            : 'No units with an available date in the next ' + daysAhead + ' days found on the listings board.';
-          console.log('Coming available shortcut:', coming.length, 'units in next', daysAhead, 'days');
+            : 'No active listings with available dates in the next ' + daysAhead + ' days.';
+          console.log('Coming available (List Property board):', coming.length, 'listings');
           return res.json({ content: [{ type: 'text', text }] });
         }
         let published = cards.filter(function(c) {
