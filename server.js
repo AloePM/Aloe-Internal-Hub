@@ -2376,7 +2376,7 @@ BENCHMARK DATA:
       try {
         const resp = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
           body: JSON.stringify({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 1024,
@@ -2608,7 +2608,8 @@ BENCHMARK DATA:
         const daysMatch = lowerMsg.match(/over\s+(\d+)\s*day|(\d+)\s*day/);
         const daysFilter = daysMatch ? parseInt(daysMatch[1] || daysMatch[2]) : null;
         const unassignedOnly = lowerMsg.match(/unassign/);
-        const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/);
+        const unscheduledOnly = lowerMsg.match(/not.*schedul|no.*schedul|without.*schedul|haven.t.*schedul|no.*appoint|no.*start.*date|missing.*schedul|need.*schedul/);
+        const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/) && !unscheduledOnly;
         const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
         const propertySummary = lowerMsg.match(/most.*work.*order|work.*order.*most|most.*submit|submit.*most|most.*open|propert.*most|home.*most|which.*home|which.*propert|by.*property|per.*property|property.*count|address.*most/);
         // Category filter — detect issue type from message
@@ -2645,16 +2646,17 @@ BENCHMARK DATA:
         else if (/inspect|walkthrough/.test(lowerMsg)) catFilter = 'Inspection';
         let filtered = wos;
         if (isEmergencyQ) {
-          // Emergency: leaks, no heat/AC, no hot water, lock issues, flood, burst pipe, no power
           const emergencyPatterns = /leak|flood|burst|no heat|no hot water|no cool|no ac|lock.*out|can.t.*lock|can.t.*enter|gas.*leak|gas.*smell|no power|sewage|overflow|water.*damage|emergency|urgent/i;
           filtered = wos.filter(function(w) { return emergencyPatterns.test(w.fullDesc); });
           if (filtered.length === 0) {
-            // Fallback: HVAC + Plumbing issues that are likely emergencies by age/type
             filtered = wos.filter(function(w) {
               const cat = categorize(w.fullDesc, w.vendor, w.trade);
               return (cat === 'HVAC' || cat === 'Plumbing') && w.daysOpen <= 3;
             });
           }
+        } else if (unscheduledOnly) {
+          // WOs with a vendor assigned but no scheduled date set yet
+          filtered = wos.filter(function(w) { return !w.schedDate; });
         } else if (catFilter) {
           filtered = wos.filter(function(w) { return categorize(w.fullDesc, w.vendor, w.trade) === catFilter; });
         } else if (pastScheduled) {
@@ -2687,6 +2689,7 @@ BENCHMARK DATA:
           return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days' + schedInfo + ' | ' + w.vendor;
         });
         const header = isEmergencyQ ? '🚨 Emergency/urgent work orders (' + filtered.length + ' of ' + wos.length + ' total):'
+          : unscheduledOnly ? 'Work orders with no scheduled date (' + filtered.length + ' of ' + wos.length + ' total):'
           : catFilter ? catFilter + ' work orders (' + filtered.length + ' of ' + wos.length + ' total):'
           : pastScheduled ? 'Work orders past scheduled start date (' + filtered.length + ' of ' + wos.length + '):'
           : daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
