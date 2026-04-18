@@ -1,9 +1,43 @@
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-app.get('/sandbox', (req, res) => {
-  res.sendFile(join(__dirname, 'sandbox.html'));
-});
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --bg2: #161b26; --bg3: #1e2535; --bg4: #252d3d;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0; --text2: #8b92a8; --text3: #555e75;
+    --accent: #4ade80; --accent2: #22c55e;
+    --accent-dim: rgba(74,222,128,0.12); --accent-dim2: rgba(74,222,128,0.06);
+    --coral: #f97316; --coral-dim: rgba(249,115,22,0.12);
+    --amber: #fbbf24; --amber-dim: rgba(251,191,36,0.1);
+    --red: #f87171; --red-dim: rgba(248,113,113,0.1);
+    --font: 'Sora', sans-serif; --mono: 'DM Mono', monospace;
+  }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+  .shell { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 48px 1fr; height: 100vh; overflow: hidden; }
+  .topbar { grid-column: 1/-1; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+  .logo { font-size: 13px; font-weight: 600; letter-spacing: -0.3px; display: flex; align-items: center; gap: 7px; }
+  .logo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 7px var(--accent); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 20px; background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(74,222,128,0.2); }
+  .badge.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(251,191,36,0.2); }
+  .badge.red { background: var(--red-dim); color: var(--red); border-color: rgba(248,113,113,0.2); }
+  .badge.gray { background: var(--bg3); color: var(--text3); border-color: var(--border2); }
+  .sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 14px 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .sidebar-label { font-family: var(--mono); font-size: 9px; letter-spacing: 1.2px; color: var(--text3); text-transform: uppercase; padding: 0 20px; margin-bottom: 6px; }
+  .sidebar-section { padding: 0 10px; margin-bottom: 16px; }
+  .agent-nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 8px; cursor: pointer; transition: all 0.15s; user-select: none; }
+  .agent-nav-item:hover { background: var(--bg3); }
+  .agent-nav-item.active { background: var(--accent-dim); }
+  .agent-nav-item.active .ani-name { color: var(--accent); }
+  .ani-icon { font-size: 15px; flex-shrink: 0; }
+  .ani-name { font-size: 12px; color: var(--text2); font-weight: 500; flex: 1; }
+  .ani-status { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .s-live { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+  .s-draft { background: var(--amber); }
+  .s-off { background: var(--text3); }
+  .preset-btn { display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 7px; font-size: 11px; font-family: var(--font); background: transparent; border: 1px solid var(--border); color: var(--text3); cursor: pointer; transition: all 0.15s; margin-bottom: 4px; }
+  .preset-btn:hover { background: var(--bg3); col
