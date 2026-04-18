@@ -40,4 +40,348 @@
   .s-draft { background: var(--amber); }
   .s-off { background: var(--text3); }
   .preset-btn { display: block; width: 100%; text-align: left; padding: 6px 10px; border-radius: 7px; font-size: 11px; font-family: var(--font); background: transparent; border: 1px solid var(--border); color: var(--text3); cursor: pointer; transition: all 0.15s; margin-bottom: 4px; }
-  .preset-btn:hover { background: var(--bg3); col
+  .preset-btn:hover { background: var(--bg3); color: var(--text2); border-color: var(--border2); }
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .chat-agent-icon { font-size: 20px; }
+  .chat-agent-name { font-size: 14px; font-weight: 600; }
+  .chat-agent-desc { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+  .chat-header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .btn-clear { font-size: 10px; font-family: var(--mono); padding: 4px 10px; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text3); cursor: pointer; transition: all 0.15s; }
+  .btn-clear:hover { color: var(--red); border-color: rgba(248,113,113,0.3); background: var(--red-dim); }
+  .sandbox-banner { padding: 5px 16px; background: rgba(251,191,36,0.06); border-bottom: 1px solid rgba(251,191,36,0.12); font-size: 10px; font-family: var(--mono); color: var(--amber); display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .toggle-sp-btn { padding: 5px 16px; background: transparent; border: none; font-size: 10px; font-family: var(--mono); color: var(--text3); cursor: pointer; display: flex; align-items: center; gap: 5px; transition: color 0.15s; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+  .toggle-sp-btn:hover { color: var(--text2); }
+  .system-prompt-panel { background: var(--bg2); border-bottom: 1px solid var(--border); flex-shrink: 0; overflow: hidden; transition: max-height 0.3s ease; max-height: 0; }
+  .system-prompt-panel.open { max-height: 180px; }
+  .sp-inner { padding: 10px 16px; }
+  .sp-label { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .sp-content { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 7px; padding: 8px 10px; font-family: var(--mono); font-size: 10px; color: var(--text2); outline: none; resize: none; height: 100px; line-height: 1.6; transition: border-color 0.15s; }
+  .sp-content:focus { border-color: rgba(74,222,128,0.3); }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 80%; display: flex; flex-direction: column; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.agent { align-self: flex-start; align-items: flex-start; }
+  .msg.system-msg { align-self: center; align-items: center; max-width: 100%; }
+  .msg-meta { font-size: 9px; font-family: var(--mono); color: var(--text3); margin-bottom: 3px; }
+  .msg-bubble { padding: 10px 14px; border-radius: 12px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .msg.user .msg-bubble { background: var(--accent-dim); border: 1px solid rgba(74,222,128,0.18); border-bottom-right-radius: 3px; color: var(--text); }
+  .msg.agent .msg-bubble { background: var(--bg3); border: 1px solid var(--border); border-bottom-left-radius: 3px; color: var(--text2); }
+  .msg.system-msg .msg-bubble { background: var(--bg3); border: 1px solid var(--border); color: var(--text3); font-size: 11px; font-family: var(--mono); padding: 5px 14px; border-radius: 20px; }
+  .confidence-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-family: var(--mono); padding: 2px 7px; border-radius: 20px; margin-top: 4px; }
+  .conf-high { background: var(--accent-dim); color: var(--accent); }
+  .conf-med { background: var(--amber-dim); color: var(--amber); }
+  .conf-low { background: var(--red-dim); color: var(--red); }
+  .escalation-flag { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; margin-top: 5px; background: var(--coral-dim); border: 1px solid rgba(249,115,22,0.2); font-size: 11px; color: var(--coral); }
+  .emergency-flag { background: var(--red-dim); border-color: rgba(248,113,113,0.25); color: var(--red); }
+  .msg-feedback { display: flex; gap: 5px; margin-top: 5px; }
+  .fb-btn { font-size: 10px; padding: 3px 8px; border-radius: 5px; cursor: pointer; background: var(--bg3); border: 1px solid var(--border); color: var(--text3); font-family: var(--mono); transition: all 0.15s; }
+  .fb-btn.good:hover, .fb-btn.active-good { background: var(--accent-dim); color: var(--accent); border-color: rgba(74,222,128,0.3); }
+  .fb-btn.bad:hover, .fb-btn.active-bad { background: var(--red-dim); color: var(--red); border-color: rgba(248,113,113,0.3); }
+  .typing-wrap { align-self: flex-start; }
+  .typing { display: flex; align-items: center; gap: 4px; padding: 10px 14px; background: var(--bg3); border-radius: 12px; border-bottom-left-radius: 3px; border: 1px solid var(--border); }
+  .td { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); animation: tp 1.2s infinite; }
+  .td:nth-child(2) { animation-delay: 0.2s; }
+  .td:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes tp { 0%,60%,100%{opacity:.3;transform:scale(1)} 30%{opacity:1;transform:scale(1.2)} }
+  .chat-input-area { padding: 12px 16px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+  .chat-input { flex: 1; background: var(--bg3); border: 1px solid var(--border2); border-radius: 10px; padding: 9px 13px; font-size: 12px; font-family: var(--font); color: var(--text); outline: none; resize: none; min-height: 38px; max-height: 100px; line-height: 1.5; transition: border-color 0.15s; }
+  .chat-input:focus { border-color: rgba(74,222,128,0.35); }
+  .btn-send { padding: 9px 16px; background: var(--accent); color: #0f1117; border: none; border-radius: 10px; font-size: 12px; font-family: var(--font); font-weight: 600; cursor: pointer; transition: all 0.15s; flex-shrink: 0; height: 38px; display: flex; align-items: center; }
+  .btn-send:hover { background: var(--accent2); }
+  .btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+  .stats-bar { padding: 5px 16px; background: var(--bg); border-top: 1px solid var(--border); display: flex; gap: 16px; flex-shrink: 0; }
+  .stat-item { font-size: 10px; font-family: var(--mono); color: var(--text3); }
+  .stat-item span { color: var(--text2); }
+  .error-msg { background: var(--red-dim); border: 1px solid rgba(248,113,113,0.25); border-radius: 8px; padding: 10px 14px; font-size: 11px; color: var(--red); font-family: var(--mono); align-self: stretch; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="logo"><div class="logo-dot"></div> Aloe Agent Hub — Sandbox</div>
+    <div class="topbar-right">
+      <span class="badge" id="session-badge">0 turns</span>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Agents</div>
+      <div class="agent-nav-item active" onclick="switchAgent('leasing',this)"><span class="ani-icon">🏠</span><span class="ani-name">Leasing</span><span class="ani-status s-live"></span></div>
+      <div class="agent-nav-item" onclick="switchAgent('maintenance',this)"><span class="ani-icon">🔧</span><span class="ani-name">Maintenance</span><span class="ani-status s-live"></span></div>
+      <div class="agent-nav-item" onclick="switchAgent('resident',this)"><span class="ani-icon">👥</span><span class="ani-name">Resident</span><span class="ani-status s-draft"></span></div>
+      <div class="agent-nav-item" onclick="switchAgent('owner',this)"><span class="ani-icon">🏦</span><span class="ani-name">Owner Relations</span><span class="ani-status s-draft"></span></div>
+      <div class="agent-nav-item" onclick="switchAgent('accounting',this)"><span class="ani-icon">💰</span><span class="ani-name">Accounting</span><span class="ani-status s-off"></span></div>
+      <div class="agent-nav-item" onclick="switchAgent('hoa',this)"><span class="ani-icon">📋</span><span class="ani-name">HOA Compliance</span><span class="ani-status s-off"></span></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label" style="margin-bottom:8px;">Test scenarios</div>
+      <button class="preset-btn" onclick="loadPreset('Hi I saw your listing on Zillow, is the 3BR in Gilbert still available?')">🏠 New lead inquiry</button>
+      <button class="preset-btn" onclick="loadPreset('I want to schedule a showing this weekend')">📅 Schedule showing</button>
+      <button class="preset-btn" onclick="loadPreset('My AC stopped working, it\'s 98° inside')">🌡️ Emergency maintenance</button>
+      <button class="preset-btn" onclick="loadPreset('Water is leaking under my kitchen sink')">💧 Water leak</button>
+      <button class="preset-btn" onclick="loadPreset('I want to break my lease early, what are my options?')">📄 Lease break</button>
+      <button class="preset-btn" onclick="loadPreset('When is rent due and how do I pay online?')">💳 Payment question</button>
+      <button class="preset-btn" onclick="loadPreset('My neighbor is being extremely loud every night')">😤 Neighbor complaint</button>
+      <button class="preset-btn" onclick="loadPreset('I\'m going to get a lawyer involved if this isn\'t fixed')">⚠️ Legal threat</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="chat-header">
+      <span class="chat-agent-icon" id="header-icon">🏠</span>
+      <div>
+        <div class="chat-agent-name" id="header-name">Leasing Assistant — Alex</div>
+        <div class="chat-agent-desc" id="header-desc">leads · showings · applications · Dhyana's domain</div>
+      </div>
+      <div class="chat-header-right">
+        <button class="btn-clear" onclick="clearChat()">clear</button>
+        <span class="badge">sandbox</span>
+      </div>
+    </div>
+
+    <div class="sandbox-banner">⚠ training sandbox — nothing sent to real contacts · rate responses to build coaching notes</div>
+
+    <button class="toggle-sp-btn" onclick="toggleSP()" id="sp-btn">▶ view / edit system prompt</button>
+    <div class="system-prompt-panel" id="sp-panel">
+      <div class="sp-inner">
+        <div class="sp-label">Live system prompt — edit here to coach this agent in real time</div>
+        <textarea class="sp-content" id="sp-ta"></textarea>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages"></div>
+
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chat-input" placeholder="Type as a tenant, owner, or lead…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"></textarea>
+      <button class="btn-send" id="send-btn" onclick="sendMsg()">Send</button>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-item">turns <span id="st-turns">0</span></div>
+      <div class="stat-item">👍 <span id="st-good">0</span></div>
+      <div class="stat-item">👎 <span id="st-bad">0</span></div>
+      <div class="stat-item">escalations <span id="st-esc">0</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY_URL = 'https://aloe-pm-assistant.onrender.com/api/chat';
+
+const AGENTS = {
+  leasing: {
+    name:'Leasing Assistant — Alex', desc:"leads · showings · applications · Dhyana's domain", icon:'🏠',
+    prompt:`You are Alex, the Leasing Assistant for Aloe Property Management — a residential property management company serving Phoenix metro (Chandler, Gilbert, Scottsdale, Maricopa, San Tan Valley).
+
+PERSONA: Friendly, warm, professional. SMS only — keep replies to 2-4 sentences max. No emojis. Represent Aloe PM well.
+
+ROLE: Help leads/prospects with property availability, scheduling showings (with Dhyana), application requirements (income 3x rent, credit + background check), pet policy, and leasing process questions.
+
+NEVER: Confirm a unit is approved without Dhyana's sign-off. Discuss discounts or concessions. Comment on whether someone qualifies. Make availability promises without checking.
+
+ESCALATE if message contains: sue, lawyer, discrimination, legal, complaint, threatening language. Say: "I want to make sure this gets proper attention — let me connect you with our property manager directly."
+
+End every response with these flags on new lines (staff-only):
+[CONFIDENCE:HIGH] or [CONFIDENCE:MEDIUM] or [CONFIDENCE:LOW]
+[ESCALATE:YES] or [ESCALATE:NO]`
+  },
+  maintenance: {
+    name:'Maintenance Coordinator', desc:"work orders · routing · Roberto's domain", icon:'🔧',
+    prompt:`You are the Maintenance Coordinator for Aloe Property Management, Phoenix metro area.
+
+PERSONA: Calm and reassuring. Tenants contacting maintenance are stressed. Acknowledge, then act. SMS — keep replies brief (2-3 sentences).
+
+EMERGENCIES (same-day flag): no AC in summer, active water leak, no heat, gas smell, electrical hazard, lockout, sewage backup.
+ROUTINE (1-3 business days): dripping faucet, appliance issues, cosmetic damage, pest control.
+
+NEVER: Guarantee a repair time without Roberto confirming. Diagnose problems. Authorize tenant to hire their own person. Discuss repair costs.
+
+End every response with:
+[CONFIDENCE:HIGH] or [CONFIDENCE:MEDIUM] or [CONFIDENCE:LOW]
+[ESCALATE:YES] or [ESCALATE:NO]
+[PRIORITY:EMERGENCY] or [PRIORITY:ROUTINE]`
+  },
+  resident: {
+    name:'Resident Relations', desc:"lease questions · renewals · Persia's domain", icon:'👥',
+    prompt:`You are a Resident Relations assistant for Aloe Property Management, working with Persia.
+
+PERSONA: Empathetic and clear. SMS — concise.
+
+LEASE BREAK POLICY:
+- Fee: 2 months rent + $250 admin fee
+- Notice: 30 days written notice via Rentvine resident portal ONLY (not email, not SMS)
+- Payment plans: email info@aloepm.com to request
+
+NEVER: Waive or negotiate fees. Accept lease break notice via SMS/email. Promise specific move-out inspection dates.
+
+End every response with:
+[CONFIDENCE:HIGH] or [CONFIDENCE:MEDIUM] or [CONFIDENCE:LOW]
+[ESCALATE:YES] or [ESCALATE:NO]`
+  },
+  owner: {
+    name:'Owner Relations Assistant', desc:"reporting · portfolio · Alexes's domain", icon:'🏦',
+    prompt:`You are an Owner Relations assistant for Aloe Property Management, working with Alexes.
+
+PERSONA: Professional, data-oriented, concise. Owners want facts.
+
+NEVER: Promise specific financial returns. Discuss other owners' properties. Share tenant personal information.
+
+End every response with:
+[CONFIDENCE:HIGH] or [CONFIDENCE:MEDIUM] or [CONFIDENCE:LOW]
+[ESCALATE:YES] or [ESCALATE:NO]`
+  },
+  accounting: {
+    name:'Accounting Assistant', desc:"payments · ledger · Randi's domain", icon:'💰',
+    prompt:`You are an Accounting Assistant for Aloe Property Management, supporting Randi.
+
+PAYMENT INFO: Rent due 1st, late after 5th. Portal: residents.rentvine.com. Payment arrangements: email info@aloepm.com.
+
+NEVER: Waive late fees. Accept payment info via SMS. Make promises about what accounting will do.
+
+End every response with:
+[CONFIDENCE:HIGH] or [CONFIDENCE:MEDIUM] or [CONFIDENCE:LOW]
+[ESCALATE:YES] or [ESCALATE:NO]`
+  },
+  hoa: {
+    name:'HOA Compliance Agent', desc:"violations · registrations · Juan's domain", icon:'📋',
+    prompt:`You are an HOA Compliance assistant for Aloe Property Management, supporting Juan.
+
+PERSONA: Direct and factual.
+
+NEVER: Promise a violation will be dismissed. Provide legal advice. Share portal credentials via SMS.
+
+End every response with:
+[CONFIDENCE:HIGH] or [CONFIDENCE:MEDIUM] or [CONFIDENCE:LOW]
+[ESCALATE:YES] or [ESCALATE:NO]`
+  }
+};
+
+let currentAgent = 'leasing';
+let history = [];
+let stats = { turns:0, good:0, bad:0, esc:0 };
+
+function switchAgent(key, el) {
+  currentAgent = key; history = [];
+  document.querySelectorAll('.agent-nav-item').forEach(i=>i.classList.remove('active'));
+  el.classList.add('active');
+  const a = AGENTS[key];
+  document.getElementById('header-icon').textContent = a.icon;
+  document.getElementById('header-name').textContent = a.name;
+  document.getElementById('header-desc').textContent = a.desc;
+  document.getElementById('sp-ta').value = a.prompt;
+  clearMessages();
+  sysMsg('Switched to ' + a.name + ' · conversation reset');
+}
+
+function toggleSP() {
+  const p = document.getElementById('sp-panel');
+  const b = document.getElementById('sp-btn');
+  p.classList.toggle('open');
+  b.textContent = (p.classList.contains('open') ? '▼' : '▶') + ' view / edit system prompt';
+}
+
+function clearChat() { history=[]; clearMessages(); sysMsg('Conversation cleared · memory reset'); stats.turns=0; updateStats(); }
+function clearMessages() { document.getElementById('chat-messages').innerHTML=''; }
+
+function sysMsg(t) {
+  const d=document.createElement('div'); d.className='msg system-msg';
+  d.innerHTML='<div class="msg-bubble">'+t+'</div>';
+  msgs().appendChild(d); scroll();
+}
+
+function addUserMsg(t) {
+  const d=document.createElement('div'); d.className='msg user';
+  d.innerHTML='<div class="msg-meta">you (testing)</div><div class="msg-bubble">'+esc(t)+'</div>';
+  msgs().appendChild(d); scroll();
+}
+
+function addAgentMsg(text, conf, escalate, priority) {
+  const id='m'+Date.now();
+  const d=document.createElement('div'); d.className='msg agent'; d.id=id;
+  const cc=conf==='HIGH'?'conf-high':conf==='MEDIUM'?'conf-med':'conf-low';
+  const cl=conf?('<span class="confidence-badge '+cc+'">● '+conf.toLowerCase()+' confidence</span>'):'';
+  let flags='';
+  if(escalate==='YES'){stats.esc++;document.getElementById('st-esc').textContent=stats.esc;flags+='<div class="escalation-flag">⚡ escalation flagged — routes to human staff</div>';}
+  if(priority==='EMERGENCY'){flags+='<div class="escalation-flag emergency-flag">🚨 emergency — same-day response triggered</div>';}
+  d.innerHTML=`<div class="msg-meta">${AGENTS[currentAgent].icon} ${AGENTS[currentAgent].name.split('—')[0].trim()}</div><div class="msg-bubble">${esc(text)}</div>${cl}${flags}<div class="msg-feedback"><button class="fb-btn good" onclick="rate('${id}','good')">👍 good</button><button class="fb-btn bad" onclick="rate('${id}','bad')">👎 needs coaching</button></div>`;
+  msgs().appendChild(d); scroll();
+}
+
+function addTyping() {
+  const d=document.createElement('div'); d.className='msg typing-wrap'; d.id='typing';
+  d.innerHTML='<div class="msg-meta">'+AGENTS[currentAgent].icon+' typing…</div><div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div>';
+  msgs().appendChild(d); scroll();
+}
+
+function rate(id, type) {
+  const el=document.getElementById(id); if(!el) return;
+  el.querySelectorAll('.fb-btn').forEach(b=>b.classList.remove('active-good','active-bad'));
+  el.querySelector('.fb-btn.'+type).classList.add(type==='good'?'active-good':'active-bad');
+  if(type==='good'){stats.good++;document.getElementById('st-good').textContent=stats.good;}
+  else{stats.bad++;document.getElementById('st-bad').textContent=stats.bad;}
+}
+
+function parseFlags(raw) {
+  const conf=(raw.match(/\[CONFIDENCE:(HIGH|MEDIUM|LOW)\]/)||[])[1]||null;
+  const esc2=(raw.match(/\[ESCALATE:(YES|NO)\]/)||[])[1]||null;
+  const prio=(raw.match(/\[PRIORITY:(EMERGENCY|ROUTINE)\]/)||[])[1]||null;
+  const clean=raw.replace(/\[(CONFIDENCE|ESCALATE|PRIORITY):[A-Z]+\]/g,'').trim();
+  return {text:clean, conf, escalate:esc2, priority:prio};
+}
+
+async function sendMsg() {
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim(); if(!text) return;
+  input.value='';
+  addUserMsg(text);
+  history.push({role:'user',content:text});
+  const btn=document.getElementById('send-btn');
+  btn.disabled=true;
+  addTyping();
+  const system=document.getElementById('sp-ta').value||AGENTS[currentAgent].prompt;
+  try {
+    const res=await fetch(PROXY_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages:history, system, model:'claude-sonnet-4-6', max_tokens:600})
+    });
+    const data=await res.json();
+    const t=document.getElementById('typing'); if(t) t.remove();
+    if(!res.ok){addErrMsg('Server error '+res.status+': '+(data?.error?.message||JSON.stringify(data)));history.pop();btn.disabled=false;return;}
+    const raw=data.content?.[0]?.text||'';
+    const parsed=parseFlags(raw);
+    history.push({role:'assistant',content:raw});
+    addAgentMsg(parsed.text, parsed.conf, parsed.escalate, parsed.priority);
+    stats.turns++; updateStats();
+  } catch(err) {
+    const t=document.getElementById('typing'); if(t) t.remove();
+    addErrMsg('Could not reach server: '+err.message);
+    history.pop();
+  }
+  btn.disabled=false;
+  input.focus();
+}
+
+function addErrMsg(t) {
+  const d=document.createElement('div'); d.className='msg system-msg';
+  d.innerHTML='<div class="error-msg">'+esc(t)+'</div>';
+  msgs().appendChild(d); scroll();
+}
+
+function loadPreset(t) { document.getElementById('chat-input').value=t; document.getElementById('chat-input').focus(); }
+function msgs() { return document.getElementById('chat-messages'); }
+function scroll() { const m=msgs(); m.scrollTop=m.scrollHeight; }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function updateStats() { document.getElementById('st-turns').textContent=stats.turns; document.getElementById('session-badge').textContent=stats.turns+' turns'; }
+
+document.getElementById('sp-ta').value=AGENTS[currentAgent].prompt;
+sysMsg('Ready · select an agent and start testing');
+</script>
+</body>
+</html>
