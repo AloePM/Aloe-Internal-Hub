@@ -5,7 +5,27 @@ import fetch from 'node-fetch';
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use('/api/chat', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages, system, model, max_tokens } = req.body;
+    const response = await anthropic.messages.create({
+      model: model || 'claude-sonnet-4-6',
+      max_tokens: max_tokens || 600,
+      system,
+      messages,
+    });
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
 const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
@@ -14,7 +34,8 @@ const APTLY_TOKEN         = process.env.APTLY_TOKEN;
 const NOTION_TOKEN        = process.env.NOTION_TOKEN;
 const ZINSPECTOR_API_KEY  = process.env.ZINSPECTOR_API_KEY;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
-
+const Anthropic = require('@anthropic-ai/sdk');
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
