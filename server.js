@@ -3317,7 +3317,9 @@ app.get('/debug/units-api', async function(req, res) {
     res.json({ error: e.message });
   }
 });
-
+app.get('/sandbox', function(req, res) {
+  res.sendFile(new URL('sandbox.html', import.meta.url).pathname);
+});
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
