@@ -13,20 +13,6 @@ app.use('/api/chat', (req, res, next) => {
   next();
 });
 
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { messages, system, model, max_tokens } = req.body;
-    const response = await anthropic.messages.create({
-      model: model || 'claude-sonnet-4-6',
-      max_tokens: max_tokens || 600,
-      system,
-      messages,
-    });
-    res.json(response);
-  } catch (err) {
-    res.status(500).json({ error: { message: err.message } });
-  }
-});
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
 const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
