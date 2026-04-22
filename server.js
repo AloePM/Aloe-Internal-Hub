@@ -372,7 +372,7 @@ Rules:
 - For water leaks: ask where the leak is (appliance/sink/toilet/roof/exterior) and give shutoff instructions from context.
 - For vendor assignment: handled server-side — do NOT call notion_get_page for vendors.
 - For application approval time: IMMEDIATELY use notion_get_page with ID 25e76555273a8082ae8fef84ebd87a23.
-- For unknown policy topics: search Notion 2-3 times with different keywords before giving up.
+- For unknown policy topics: first try hardcoded Notion page IDs above, then try kb_search for knowledge base content (the source of truth for new policies), then try notion_search as backup. Only route to a team member if all three return nothing. 
 - NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
 - Only route to a team member when you genuinely cannot answer the question from the data. If the question has been fully answered, do NOT add a 'reach out to X' closer — just stop after the answer.
 - When answering a question about a TENANT (what they owe, what they need to do, what their options are): only include information relevant to the tenant. Do NOT include owner fee splits, what the owner receives, re-leasing fees charged to owners, or any owner-facing financial details — that is irrelevant and confusing to a tenant conversation.
@@ -652,6 +652,19 @@ const ALL_TOOLS = [
         pageId: { type: 'string', description: 'Notion page ID' },
       },
       required: ['pageId'],
+    },
+  },
+  {
+    name: 'kb_search',
+    description: 'Search the Aloe Knowledge Base using semantic vector search. Use this AFTER checking hardcoded Notion pages and pre-loaded context but BEFORE concluding you cannot find an answer. Best for: policies or topics that may have been added recently, staff procedures, topics not covered by the hardcoded Notion page IDs. Returns the top matching documents with their content.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query — natural language question or topic' },
+        audience: { type: 'string', description: 'Filter by audience: tenant, owner, staff, or leave blank for all' },
+        department: { type: 'string', description: 'Filter by department: leasing, maintenance, resident_relations, owner_relations, hoa, accounting, general' },
+      },
+      required: ['query'],
     },
   },
   {
@@ -1781,7 +1794,30 @@ async function executeTool(name, input) {
         }
         return JSON.stringify({ error: data.error });
       }
-
+case 'kb_search': {
+        try {
+          const params = new URLSearchParams({ q: input.query, limit: '5' });
+          if (input.audience) params.set('audience', input.audience);
+          if (input.department) params.set('department', input.department);
+          const r = await fetch('https://aloe-knowledge-sync.onrender.com/search?' + params.toString());
+          if (!r.ok) return JSON.stringify({ error: 'Knowledge base unreachable', status: r.status });
+          const data = await r.json();
+          if (!data.results || data.results.length === 0) {
+            return JSON.stringify({ message: 'No matching documents in the knowledge base for: ' + input.query });
+          }
+          const slim = data.results.map(function(r) {
+            return {
+              title: r.document_title,
+              audience: r.audience,
+              department: r.department,
+              content: (r.content || '').slice(0, 1500),
+            };
+          });
+          return JSON.stringify({ total: data.results.length, results: slim });
+        } catch(e) {
+          return JSON.stringify({ error: 'kb_search failed: ' + e.message });
+        }
+      }
       default:
         return JSON.stringify({ error: 'Unknown tool: ' + name });
     }
@@ -1846,7 +1882,7 @@ function getRelevantTools(msg) {
     tools.add('aptly_get_applicant');
   }
   if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
-    ['notion_search', 'notion_get_page'].forEach(function(t) { tools.add(t); });
+    ['notion_search', 'notion_get_page', 'kb_search'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/slack|team|announce|update|channel|said|message/)) {
     ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
