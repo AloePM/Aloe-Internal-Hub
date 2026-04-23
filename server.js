@@ -3310,6 +3310,26 @@ app.use('/api/rentvine', async function(req, res) {
     res.status(500).json({ error: err.message });
   }
 });
+// ── Rentvine Proxy (for bank reconciliation) ─────────────────────────────────
+app.use('/api/rentvine', async function(req, res) {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  const rvPath = req.path;
+  const query = new URLSearchParams(req.query).toString();
+  const url = `${RENTVINE_BASE}${rvPath}${query ? '?' + query : ''}`;
+  try {
+    const r = await fetch(url, { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
+    const data = await r.json();
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Bank Recon Tool ───────────────────────────────────────────────────────────
+app.get('/recon', function(req, res) {
+  res.sendFile(new URL('recon.html', import.meta.url).pathname);
+});
 app.get('/health', function(req, res) {
   res.json({
     status: 'ok',
