@@ -3289,7 +3289,26 @@ BENCHMARK DATA:
     res.status(500).json({ error: err.message });
   }
 });
+// ── Rentvine Proxy (for bank reconciliation tool) ─────────────────────────────
+app.use('/api/rentvine', async function(req, res) {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
 
+  const rvPath = req.path;
+  const query = new URLSearchParams(req.query).toString();
+  const url = `${RENTVINE_BASE}${rvPath}${query ? '?' + query : ''}`;
+
+  try {
+    const r = await fetch(url, {
+      headers: { Authorization: `Basic ${RENTVINE_AUTH}` },
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get('/health', function(req, res) {
   res.json({
     status: 'ok',
