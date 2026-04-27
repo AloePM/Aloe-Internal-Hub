@@ -18,197 +18,96 @@ const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
 const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
-const NOTION_TOKEN        = process.env.NOTION_TOKEN;
 const ZINSPECTOR_API_KEY  = process.env.ZINSPECTOR_API_KEY;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
+const KB_URL              = process.env.KB_URL || 'https://aloe-knowledge-sync.onrender.com';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
 
-// Master knowledge base — fetched from critical Notion pages at startup
-let KNOWLEDGE_BASE = '';
-let VENDOR_CACHE = '';
-let VENDOR_CACHE_LOADED_AT = 0;
+// =============================================================================
+// KNOWLEDGE BASE — the sole source of truth for policies, procedures, training
+// =============================================================================
+// Topic-cache: shortcuts call kb_search once, cache for 30 min, reuse.
+// Same speed as the old Notion cache, but powered by the KB.
+const KB_TOPIC_CACHE = {};
+const KB_CACHE_TTL_MS = 30 * 60 * 1000;
 
-// Unified cache for all troubleshooting/SOP pages — keyed by topic
-const NOTION_CACHE = {};
-
-// Pages to cache at startup and refresh every hour
-const CACHED_PAGES = [
-  { key: 'water_leaks',       id: '18776555273a8106b44ce926440e7ba3',  label: 'Water Leaks' },
-  { key: 'water_sms',         id: '34276555273a8186932eeb6d06a77a40',  label: 'Water Leak SMS Templates' },
-  { key: 'pest_sop',          id: '18776555273a812fb90adca389d707fc',  label: 'Pest Control SOP' },
-  { key: 'pest_resident',     id: '26576555273a809089a7e3878807f139',  label: 'Pest Control Resident' },
-  { key: 'pest_sms',          id: '34376555273a812fb84bc606eaa43df3',  label: 'Pest Control SMS Templates' },
-  { key: 'toilet',            id: '27076555273a80de8a09eb0e5c896176',  label: 'Toilet Issues' },
-  { key: 'washer_dryer',      id: '27e76555273a80efb8dffb9af4cb0aee',  label: 'Washer & Dryer' },
-  { key: 'kitchen_sink',      id: '27e76555273a809a9a38de2158f1b611',  label: 'Kitchen Sink & Drain' },
-  { key: 'disposal',          id: '27e76555273a80faac56fa6dcac5d533',  label: 'Garbage Disposal' },
-  { key: 'mold',              id: '27e76555273a80c4992bd974b90c59d4',  label: 'Mold & Mildew' },
-  { key: 'dishwasher',        id: '27e76555273a80a686bcc8f485824772',  label: 'Dishwasher' },
-  { key: 'hvac',              id: '26676555273a80fda5d5d7a149fd1b63',  label: 'HVAC Troubleshooting' },
-  { key: 'water_softener',    id: '26576555273a80b88904dcdf93dd2055',  label: 'Water Softener' },
-  { key: 'high_water_bill',   id: '26576555273a80cd9c72e95e09ee0ed3',  label: 'High Water Bills' },
-  { key: 'mailbox',           id: '28d76555273a80c9995fd3a6625725c4',  label: 'Mailbox Issues' },
-  { key: 'keys_lockouts',     id: '18776555273a81a08efbc3c9c3862301',  label: 'Keys & Lockouts' },
-  { key: 'wo_create',         id: '18776555273a81279c2ee27aaec9d25f',  label: 'Creating Work Orders' },
-  { key: 'wo_process',        id: '32576555273a802f84dac4c9f147fd10',  label: 'Work Order Process' },
-  { key: 'cost_benchmarks',   id: '34476555273a803482dcfbcd8c8b5421',  label: 'Maintenance Cost Benchmarks' },
-];
-
-async function loadNotionCache() {
-  let loaded = 0;
-  for (const p of CACHED_PAGES) {
-    try {
-      const text = await fetchNotionPageText(p.id);
-      if (text && text.trim().length > 10) {
-        NOTION_CACHE[p.key] = { text, label: p.label, loadedAt: Date.now() };
-        loaded++;
-      } else {
-        console.log('Notion cache EMPTY for', p.key, '(' + p.id + ') len=' + (text||'').length);
-      }
-    } catch(e) { console.error('Cache load error for', p.key, e.message); }
+async function kbSearch(query, opts = {}) {
+  const params = new URLSearchParams({ q: query, limit: String(opts.limit || 5) });
+  if (opts.audience) params.set('audience', opts.audience);
+  if (opts.department) params.set('department', opts.department);
+  try {
+    const r = await fetch(`${KB_URL}/search?${params.toString()}`);
+    if (!r.ok) return { error: `KB ${r.status}`, results: [] };
+    const data = await r.json();
+    return { results: data.results || [] };
+  } catch (e) {
+    console.error('kbSearch error:', e.message);
+    return { error: e.message, results: [] };
   }
-  console.log('Notion cache loaded: ' + loaded + ' of ' + CACHED_PAGES.length + ' pages');
 }
 
-// Detect which cached page is relevant to a question
-function getCachedContext(msg) {
-  const m = msg.toLowerCase();
-  if (/water.*leak|leak.*water|leaking|flooded|burst.*pipe|pipe.*burst|water.*damage/.test(m)) return NOTION_CACHE.water_leaks;
-  if (/text.*leak|sms.*leak|what.*say.*leak|what.*tell.*leak/.test(m)) return NOTION_CACHE.water_sms;
-  if (/pest|scorpion|roach|termite|rodent|bee|ant.*infestat|bug.*infestat/.test(m)) return NOTION_CACHE.pest_sop;
-  if (/text.*pest|sms.*pest|what.*say.*pest|what.*tell.*pest/.test(m)) return NOTION_CACHE.pest_sms;
-  if (/toilet|running.*water|toilet.*leak|toilet.*clog|toilet.*flush/.test(m)) return NOTION_CACHE.toilet;
-  if (/washer|dryer|washing machine|laundry/.test(m)) return NOTION_CACHE.washer_dryer;
-  if (/kitchen sink|sink.*drain|drain.*clog|slow.*drain/.test(m)) return NOTION_CACHE.kitchen_sink;
-  if (/garbage disposal|disposal/.test(m)) return NOTION_CACHE.disposal;
-  if (/mold|mildew/.test(m)) return NOTION_CACHE.mold;
-  if (/dishwasher/.test(m)) return NOTION_CACHE.dishwasher;
-  if (/\bhvac\b|\bac\b|air.?condition|heat.*not.*work|ac.*not.*work|furnace/.test(m)) return NOTION_CACHE.hvac;
-  if (/water softener|softener/.test(m)) return NOTION_CACHE.water_softener;
-  if (/water bill|high.*bill.*water|leak.*prevent/.test(m)) return NOTION_CACHE.high_water_bill;
-  if (/mailbox/.test(m)) return NOTION_CACHE.mailbox;
-  if (/lock.*out|locked.*out|lost.*key|\bkey\b|rekey/.test(m)) return NOTION_CACHE.keys_lockouts;
-  if (/how.*creat.*work.?order|how.*submit.*work.?order|how.*make.*work.?order/.test(m)) return NOTION_CACHE.wo_create;
-  if (/work.?order.*process|process.*work.?order/.test(m)) return NOTION_CACHE.wo_process;
-  if (/cost|price|quote|charge|expensive|too much|fair price|good price|benchmark|should i approve|approve.*quote|how much.*should|is.*\$.*too|within range/.test(m)) return NOTION_CACHE.cost_benchmarks;
+// Fetch a topic's content from KB (with caching). Returns concatenated content
+// from the top matching docs as a single string for system-prompt injection.
+async function getKbTopic(cacheKey, query, opts = {}) {
+  const now = Date.now();
+  const cached = KB_TOPIC_CACHE[cacheKey];
+  if (cached && (now - cached.loadedAt) < KB_CACHE_TTL_MS) return cached.text;
+  const { results } = await kbSearch(query, { limit: opts.limit || 3, audience: opts.audience, department: opts.department });
+  if (!results || results.length === 0) return '';
+  // De-dup chunks by document_id, take the longest content per doc
+  const byDoc = new Map();
+  for (const r of results) {
+    if (!byDoc.has(r.document_id) || r.content.length > byDoc.get(r.document_id).content.length) {
+      byDoc.set(r.document_id, r);
+    }
+  }
+  const text = Array.from(byDoc.values())
+    .map(r => `=== ${r.document_title} ===\n${r.content}`)
+    .join('\n\n');
+  KB_TOPIC_CACHE[cacheKey] = { text, loadedAt: now };
+  return text;
+}
+
+// Topic detection — same regex patterns the Notion cache used, but routes to kb_search.
+// Each entry: { keys: regex, query: search query for the KB }
+const KB_TOPIC_ROUTES = [
+  { test: /water.*leak|leak.*water|leaking|flooded|burst.*pipe|pipe.*burst|water.*damage/, key: 'water_leaks',     q: 'water leak troubleshooting shut off valve' },
+  { test: /text.*leak|sms.*leak|what.*say.*leak|what.*tell.*leak/,                          key: 'water_sms',        q: 'water leak tenant SMS templates' },
+  { test: /pest|scorpion|roach|termite|rodent|bee|ant.*infestat|bug.*infestat/,             key: 'pest_sop',         q: 'pest control SOP scorpions bees rodents owner tenant' },
+  { test: /text.*pest|sms.*pest|what.*say.*pest|what.*tell.*pest/,                          key: 'pest_sms',         q: 'pest control tenant SMS templates' },
+  { test: /toilet|toilet.*leak|toilet.*clog|toilet.*flush/,                                 key: 'toilet',           q: 'toilet troubleshooting running toilet flush' },
+  { test: /washer|dryer|washing machine|laundry/,                                           key: 'washer_dryer',     q: 'washer dryer troubleshooting' },
+  { test: /kitchen sink|sink.*drain|drain.*clog|slow.*drain/,                               key: 'kitchen_sink',     q: 'kitchen sink drain clog prevention' },
+  { test: /garbage disposal|disposal/,                                                      key: 'disposal',         q: 'garbage disposal jams troubleshooting' },
+  { test: /mold|mildew/,                                                                    key: 'mold',             q: 'mold mildew prevention moisture' },
+  { test: /dishwasher/,                                                                     key: 'dishwasher',       q: 'dishwasher troubleshooting not draining cleaning' },
+  { test: /\bhvac\b|\bac\b|air.?condition|heat.*not.*work|ac.*not.*work|furnace/,           key: 'hvac',             q: 'HVAC AC heat troubleshooting filter' },
+  { test: /water softener|softener/,                                                        key: 'water_softener',   q: 'water softener salt operation maintenance' },
+  { test: /water bill|high.*bill.*water|leak.*prevent/,                                     key: 'high_water_bill',  q: 'high water bill leak prevention conservation' },
+  { test: /mailbox/,                                                                        key: 'mailbox',          q: 'mailbox issues lost key USPS' },
+  { test: /lock.*out|locked.*out|lost.*key|\bkey\b|rekey/,                                  key: 'keys_lockouts',    q: 'keys lockouts tenant rekey lockbox' },
+  { test: /how.*creat.*work.?order|how.*submit.*work.?order|how.*make.*work.?order/,        key: 'wo_create',        q: 'creating work order tenant request stages' },
+  { test: /work.?order.*process|process.*work.?order/,                                      key: 'wo_process',       q: 'work order process SOP issue types stages' },
+  { test: /cost|price|quote|charge|expensive|too much|fair price|good price|benchmark|should i approve|approve.*quote|how much.*should|is.*\$.*too|within range/, key: 'cost_benchmarks', q: 'maintenance cost benchmarks Phoenix repair pricing' },
+];
+
+async function getKbContext(msg) {
+  const m = (msg || '').toLowerCase();
+  for (const route of KB_TOPIC_ROUTES) {
+    if (route.test.test(m)) {
+      const text = await getKbTopic(route.key, route.q);
+      if (text) return { key: route.key, text, label: route.key.replace(/_/g, ' ') };
+      return null;
+    }
+  }
   return null;
 }
 
-async function fetchNotionPageText(pageId) {
-  try {
-    const r = await fetch('https://api.notion.com/v1/blocks/' + pageId + '/children?page_size=100', {
-      headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
-    });
-    if (!r.ok) {
-      console.log('Notion blocks API error for', pageId, ':', r.status);
-      return '';
-    }
-    const data = await r.json();
-    if (data.status === 404 || data.code === 'object_not_found') {
-      console.log('Notion page not found:', pageId);
-      return '';
-    }
-    const lines = [];
-    for (const block of (data.results || [])) {
-      const type = block.type;
-      // Extract rich_text from standard blocks
-      const rich = (block[type] && block[type].rich_text) || [];
-      const text = rich.map(function(t) { return t.plain_text || ''; }).join('');
-      if (text) lines.push(text);
-      // Extract table rows
-      if (type === 'table') {
-        try {
-          const tr = await fetch('https://api.notion.com/v1/blocks/' + block.id + '/children?page_size=100', {
-            headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
-          });
-          const tdata = await tr.json();
-          for (const row of (tdata.results || [])) {
-            if (row.type === 'table_row') {
-              const cells = (row.table_row && row.table_row.cells) || [];
-              const cellText = cells.map(function(cell) {
-                return cell.map(function(t) { return t.plain_text || ''; }).join('');
-              }).filter(Boolean).join(' | ');
-              if (cellText) lines.push(cellText);
-            }
-          }
-        } catch(e) { /* skip table fetch errors */ }
-      }
-      // Extract callout text
-      if (type === 'callout') {
-        const calloutRich = (block.callout && block.callout.rich_text) || [];
-        const calloutText = calloutRich.map(function(t) { return t.plain_text || ''; }).join('');
-        if (calloutText) lines.push(calloutText);
-      }
-      // Extract toggle block content (heading + children)
-      if (type === 'toggle') {
-        const toggleRich = (block.toggle && block.toggle.rich_text) || [];
-        const toggleTitle = toggleRich.map(function(t) { return t.plain_text || ''; }).join('');
-        if (toggleTitle) lines.push(toggleTitle);
-        try {
-          const tr = await fetch('https://api.notion.com/v1/blocks/' + block.id + '/children?page_size=100', {
-            headers: { 'Authorization': 'Bearer ' + NOTION_TOKEN, 'Notion-Version': '2022-06-28' }
-          });
-          const tdata = await tr.json();
-          for (const child of (tdata.results || [])) {
-            const ct = child.type;
-            const cRich = (child[ct] && child[ct].rich_text) || [];
-            const cText = cRich.map(function(t) { return t.plain_text || ''; }).join('');
-            if (cText) lines.push('  ' + cText);
-            // Nested numbered/bulleted lists inside toggles
-            if (ct === 'numbered_list_item' || ct === 'bulleted_list_item') {
-              const nRich = (child[ct] && child[ct].rich_text) || [];
-              const nText = nRich.map(function(t) { return t.plain_text || ''; }).join('');
-              if (nText) lines.push('  - ' + nText);
-            }
-          }
-        } catch(e) { /* skip toggle child fetch errors */ }
-      }
-    }
-    return lines.join('\n');
-  } catch(e) { return ''; }
-}
-async function loadKnowledgeBase() {
-  try {
-    // Load master reference + the most frequently needed content pages
-    const pages = [
-      { id: '33b76555273a81de9958f69e7f2ecd7c', label: 'Master Reference' },
-      { id: '1fa76555273a80debda0f220cfb72400', label: 'Prospective Tenant FAQs' },
-      { id: '25e76555273a8082ae8fef84ebd87a23', label: 'Application Terms' },
-      { id: '18776555273a81049822eca6abae6fbb', label: 'Lease Break Policy' },
-    ];
-    const sections = [];
-    for (const p of pages) {
-      const text = await fetchNotionPageText(p.id);
-      if (text) sections.push('=== ' + p.label + ' ===\n' + text);
-    }
-    KNOWLEDGE_BASE = sections.join('\n\n');
-    console.log('Knowledge base loaded: ' + KNOWLEDGE_BASE.length + ' chars from ' + sections.length + ' pages');
-  } catch(e) {
-    console.error('Knowledge base load error:', e.message);
-  }
-}
-// Load all caches on startup
-loadKnowledgeBase();
-loadNotionCache();
-setInterval(loadNotionCache, 60 * 60 * 1000); // refresh hourly
-
-async function loadVendorCache() {
-  try {
-    const text = await fetchNotionPageText('25076555273a80e9a6dfe4e551d42e70');
-    if (text) {
-      VENDOR_CACHE = text;
-      VENDOR_CACHE_LOADED_AT = Date.now();
-      console.log('Vendor cache loaded: ' + VENDOR_CACHE.length + ' chars');
-    }
-  } catch(e) {
-    console.error('Vendor cache load error:', e.message);
-  }
-}
-loadVendorCache();
-setInterval(loadVendorCache, 30 * 60 * 1000);
-
+// =============================================================================
+// SYSTEM PROMPT — KB-only knowledge source
+// =============================================================================
 const SYSTEM_PROMPT = `You are Aloe Assistant — the internal AI for Aloe Property Management, a full-service residential property management company serving the Phoenix metro area (Chandler, Scottsdale, Gilbert, Maricopa, San Tan Valley, and surrounding areas). You serve Randi (owner), Persia (assistant PM), Dhyana (leasing agent), and other staff.
 
 You have access to these live data sources via tools:
@@ -229,10 +128,12 @@ ZINSPECTOR — Inspection platform synced with Rentvine. Use zi_get_inspections 
 - Vendors and contractors
 - NOTE: Do NOT use Rentvine for availability/listings — use Aptly Units board instead
 
-NOTION — Company policies and SOPs:
-- Lease break policy, move-in/out procedures
-- Pet policy, screening criteria, fee schedules
-- HOA violation procedures, maintenance escalation, all SOPs
+ALOE KNOWLEDGE BASE — The single source of truth for ALL company policies, procedures, training materials, vendor information, cost benchmarks, troubleshooting guides, and SOPs:
+- Use the kb_search tool for any policy, procedure, training, or operational question
+- Filter by audience (tenant, owner, staff) when the question's audience is clear
+- Filter by department (maintenance, leasing, resident_relations, owner_relations, hoa, accounting) when relevant
+- The KB contains: lease break policy, fee schedules, screening criteria, late fee policy, notice to vacate, move-in/out procedures, maintenance SOPs (HVAC, plumbing, pest, roofing, appliances, etc.), vendor lists with phone numbers and coverage areas, Phoenix cost benchmarks, owner-facing materials (management fees, guarantees, rent-ready standards), and all training content
+- For ANY policy, procedure, or training question — use kb_search FIRST, not your training data
 
 Known Aptly board IDs:
 - "unit" — Units/Listings board. Has Stage (Vacant/Occupied), beds, baths, sq ft, rent, deposit, available date, Published For Rent field. For availability questions use "qfBzBxfooJtfTQncd" instead (it has Mirror Published For Rent field and is the master listing board). IMPORTANT: The "Created At" field on each unit = the date the property was onboarded into the portfolio — use this to answer questions about recently onboarded properties.
@@ -240,87 +141,11 @@ Known Aptly board IDs:
 - "location" — Properties/Locations board. Has owner, address, property details for every property.
 - "4EMDSYKirhQaNdQKz" — Renter Leads. Use aptly_get_leads for ANY question about leads, showings, tours, prospects, lead sources, conversion. Fields include: Primary Contact, Preferred Rental, Stage, Source, Requested Showing Information (contains date/time), Requested Showing Status, Tour Date/Time, Move Date, Household Income, Beds, Pets, Last Action, email counts, comments. Stages: Nurturing, Scheduled Tour, Tour Completed, Tour Canceled / No Show, Applied.
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
-- For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address. This fetches all cards in memory and searches by any field — name, partial address, street name all work.
-- When asked for comments on an applicant and aptly_get_applicant returns "No comments", ALSO search for the applicant by name using aptly_search_cards with boardId "MJxaStgENouWrNEKd" — this may return comments that the other method missed.
-- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions including comments. The tool now fetches comments via /api/board/workOrder/:cardId/comments for each WO. Use for: counts, which WOs have no comments, vendor analysis, days open, unassigned WOs, HVAC/plumbing/pest queries. Each WO in the response includes commentCount and comments[]. IMPORTANT: Never call aptly_get_work_orders AND rv_get_work_orders in the same loop. FORMAT: When listing work orders always use this exact format per line: "[address] — WO #[num] | [issue] | [status] | [daysOpen] days | [vendor]"
-- "YA3QWmPebvMwLwbB3" — Move-Outs. Shows move-out pipeline, repair status, inspection status.
-- "K9mMGGjKgQPqDykaa" — Move-Ins board. Key fields after schema mapping: "Mirror Move-In Date" (MM/DD/YYYY), "Mirror Rent Amount", "Stage", "Title" (contains date+tenants+address), "Buildings", "Unit", "Mirror Residents", "Mirror Portfolio" (owner). Stages: Approved, Lease Sent, Lease Signed, Utilities, Move-In Day, Moved In, Abandoned. Filter by "Mirror Move-In Date" for upcoming move-ins. Exclude Abandoned and Moved In stages for upcoming.
+- For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address.
+- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions. FORMAT: When listing work orders always use this exact format per line: "[address] — WO #[num] | [issue] | [status] | [daysOpen] days | [vendor]"
+- "YA3QWmPebvMwLwbB3" — Move-Outs.
+- "K9mMGGjKgQPqDykaa" — Move-Ins.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
-
-Known Notion page IDs (fetch these directly with notion_get_page — do NOT search for them):
-
-RESIDENT-FACING PAGES (use when question is from/about a tenant):
-- Lease Break Policy: 18776555273a81049822eca6abae6fbb → lease break fees, early termination
-- Lease Break FAQs (tenant): 33976555273a816783b2c4c8165d6078 → tenant lease break questions
-- Lease Break Information: 18776555273a811c89adf91da03cd1bf → tenant lease break overview
-- Application Terms / Approval Timeline: 25e76555273a8082ae8fef84ebd87a23 → how long approval takes, earnest deposit, application fees ($65), 1-2 days
-- What To Expect During Approval: 31c76555273a80e587c9e38b9a279a57 → earnest deposit process, taking unit off market
-- Prospective Tenant FAQs: 1fa76555273a80debda0f220cfb72400 → prospect/leasing FAQs
-- Section 8 FAQ: 18776555273a8119864afad059b6bfd5 → housing voucher, section 8 questions
-- Lease Signing FAQs: 18776555273a8146b014d0a7a196c060 → lease signing process
-- Move In FAQs: 18776555273a81bd8637cd433f6b6d06 → move-in questions
-- Late Fee Policy: 18776555273a81938c2bc7315d49093a → late fees
-- Notice to Vacate: 18776555273a8130bd16cd517b8e2487 → tenant giving notice
-- Move Out Instructions: 18776555273a81fe83e1c8ab38ad7bd6 → move-out process for tenants
-- Security Deposit Refund: 25c76555273a80cab590c74aaab85b20 → deposit return timeline
-- Maintenance Requests: 18776555273a81eea2f3e381fd641539 → how to submit work orders
-- After Hours Maintenance: 2a276555273a80c7b625ff3cdae60d6b → after hours emergencies
-- Resident Benefit Package: 18776555273a81548e1af2a1839d2de4 → RBP details
-- Partial Payment or Prepayments: 1fa76555273a80eab78ecea4d3e4d779 → payment arrangements
-- How to Schedule a Tour: 30a76555273a80bb9963eacd6631ecde → tour scheduling, lockbox access
-- Rental and Housing Assistance: 2a776555273a8011a1cad428d5d0f382 → rental assistance programs
-
-OWNER-FACING PAGES (use when question is from/about an owner):
-- Fees & Pricing Plans: 26376555273a80a9ba89d61d5159e8c2 → management fee options
-- Management Fee: 18776555273a81508b17fe8e936dc9c0 → fee structure
-- Disbursements: 18776555273a81bf86f3c84b8b81d9d1 → owner payout questions
-- Leasing (owner): 18776555273a8183b19afa3fc5fa5004 → leasing process for owners
-- Resident Screening: 26376555273a8040a745fe59e5d57f2a → screening standards
-- Rent Ready Standards: 2a776555273a80c49c12ef793e7e2172 → property prep requirements
-- Lease Renewals (owner): 18776555273a81fd9138cf5226f1c513 → renewal process
-- Resident Gave Notice FAQs: 18776555273a81d687faf22e50c82f24 → owner questions when tenant gives notice
-- Maintenance Process (owner): 26476555273a80dda789d29c98a33f54 → maintenance workflow
-- Responsibility Tenant or Owner: 18776555273a8148a1fff3316049ae02 → who pays for what
-- Why Aloe Retains Late Fees: 2b076555273a803fb7f4c3ce93eb26e6 → late fee policy explanation
-- Pet Protection Guarantee: 18776555273a8191b8c8c3461cf0ee84 → pet guarantee
-- Eviction Guarantee: 26776555273a80ea90ffff63ea5a22e2 → eviction guarantee
-- Leasing Guarantee: 26776555273a80fa882ae0f01665ce98 → leasing guarantee
-- Client Handbook: 18776555273a81e2a1f0d4c583778c2a → general owner reference
-
-INTERNAL PAGES:
-- Applicant Criteria (screening standards): 18776555273a81beb216db69887d8266 → income/credit requirements
-- FAQ Leasing Calls: 18776555273a8152b1a5d1309cfcee88 → what to say to prospects
-- Checking Property Availability SOP: 33976555273a81e093d9d062009a206c → availability check process
-- Aloe Assistant Master Reference: 33b76555273a81de9958f69e7f2ecd7c → full operational context
-
-MAINTENANCE / WORK ORDER PAGES (use for any staff question about work orders, maintenance process, vendors):
-- Creating & Updating Work Orders: 18776555273a81279c2ee27aaec9d25f → how to create a work order, work order stages, tenant request process
-- Work Order Process: 32576555273a802f84dac4c9f147fd10 → full WO processing SOP, issue types, stages, troubleshooting
-- Work Order Scheduling: 19f76555273a80908e1ac1c8fd53051a → scheduling vendors, contacting tenants, scheduling scripts
-- How to Edit a Work Order: 27176555273a80738e1ef7fd29810cf6 → editing existing work orders
-- Merge Work Order: 27176555273a80aea40ec90e56bfd2ff → merging duplicate work orders
-- Vendor Work Order Note Templates: 18776555273a81f3b0b3f603162904c9 → vendor communication templates
-- Work Order Execution Instructions: 18776555273a81efb21cec89379db55c → vendor execution, invoice submission
-- Appliance Work Orders Processes: 22376555273a80a5e257c3fccf57 → appliance-specific WO intake
-- Maintenance Department: 18776555273a812998cecceebcb6c74e → maintenance team overview
-- Owner-Handled Maintenance & Vendors: 26576555273a80bb8aaaed52cce15662 → owner vs Aloe maintenance responsibilities
-- Mailbox Issues: 28d76555273a80c9995fd3a6625725c4 → mailbox problems, lost mailbox key, mailbox repairs, USPS issues
-- Keys & Lockouts: 18776555273a81a08efbc3c9c3862301 → key issues, tenant lockout, rekeying, lockbox, lost keys
-- Water Leaks: 18776555273a8106b44ce926440e7ba3 → water leak troubleshooting by type: appliance leaks, exterior/irrigation, roof leaks, sink leaks, toilet leaks, isolation valve shutoff
-- Water Leak Tenant SMS Templates: 34276555273a8186932eeb6d06a77a40 → ready-to-send Quo SMS templates for all leak types
-- Pest Control SOP (internal staff): 18776555273a812fb90adca389d707fc → full pest control process, owner vs tenant rules, scorpions, bees, rodents, termites
-- Pest Control Resident Guidance: 26576555273a809089a7e3878807f139 → tenant-facing pest prevention tips, pest-specific notes
-- Pest Control Tenant SMS Templates: 34376555273a812fb84bc606eaa43df3 → ready-to-send Quo SMS templates for all pest scenarios
-- Toilet Issues and Leaks: 27076555273a80de8a09eb0e5c896176 → toilet troubleshooting, running toilet, toilet leaks, clog, flush issues
-- Washer & Dryer: 27e76555273a80efb8dffb9af4cb0aee → washer/dryer care, troubleshooting, maintenance tips
-- Kitchen Sink & Drain Care: 27e76555273a809a9a38de2158f1b611 → sink drain care, clog prevention, drain maintenance
-- Garbage Disposal Care & Use Guide: 27e76555273a80faac56fa6dcac5d533 → disposal use, jams, what not to put in, troubleshooting
-- Mold & Mildew Prevention Guide: 27e76555273a80c4992bd974b90c59d4 → mold/mildew prevention tips for residents, moisture control
-- Dishwasher: 27e76555273a80a686bcc8f485824772 → dishwasher troubleshooting, care, not draining, not cleaning
-- HVAC Troubleshooting: 26676555273a80fda5d5d7a149fd1b63 → AC/heat troubleshooting, filter info, when to call vendor
-- Using Your Water Softener: 26576555273a80b88904dcdf93dd2055 → water softener operation, salt refill, maintenance, issues
-- Prevent High Water Bills & Protect Your Home from Leaks: 26576555273a80cd9c72e95e09ee0ed3 → water conservation, leak prevention, tenant education
-- Cost Benchmarks: 34476555273a803482dcfbcd8c8b5421 → Phoenix-area pricing benchmarks for all common repairs: plumbing, HVAC, electrical, appliances, doors/windows, handyman. Includes typical range, high-but-acceptable, and too-high thresholds. Approval rules: under $125 approve, $125-$250 compare benchmarks, over $250 get 2-3 bids, over $500 owner approval required.
 
 Property availability workflow (follow this order):
 1. Check Aptly Applications board for approved applications on the property
@@ -340,30 +165,25 @@ Rules:
 - For tenant balances always show the full breakdown (what charges, amounts, dates)
 - Be concise. Lead with the answer, then details
 - Use numbered steps for procedures
-- Always cite your source (Rentvine, Aptly, Notion, or Slack)
+- Always cite your source (Rentvine, Aptly, Knowledge Base, or Slack)
 - Never speculate on legal or fair housing matters
 - ALWAYS include comments when showing card details from any Aptly board. Comments are in the comments array (standard boards) or formatted_comments field. Show them as: "Notes: [date] [person]: [comment]". If no comments, don't mention it.
 - Ask clarifying questions when the request is genuinely ambiguous — for example, if someone asks about "the property" without specifying which one, or asks a vague question like "what's going on?" — respond conversationally like "Sure! Are you looking for maintenance issues, lease activity, or something else?" Keep clarifying questions short and give 2-3 specific options when possible.
 - After answering a question, offer ONE relevant follow-up suggestion based on what was just shown. Keep it brief — e.g., "Would you also like to see which of these are past their scheduled date?" or "Want me to check if any of these have no comments yet?" Only suggest something genuinely useful in context, not generic offers.
 - If a question is unclear or uses vague terms, ask for clarification before running tools — don't guess wrong and waste a data fetch.
-- NEVER explain how a tool works or describe what it does. Always run the tool and report the actual results. If someone asks "where do I look for move-out inspections?" — run rv_get_inspections and report what's in there, don't describe the tool.
+- NEVER explain how a tool works or describe what it does. Always run the tool and report the actual results.
 - NEVER say "you can use X tool" or "the results will show" — just use the tool and show the results directly.
-- For known policy topics (lease break, early termination): use notion_get_page with the hardcoded page ID above — do NOT waste loops searching.
-- For ANY question about application approval time, how long it takes, timeline, earnest deposit, application fees: IMMEDIATELY use notion_get_page with ID 25e76555273a8082ae8fef84ebd87a23 — answer is "1-2 days after completed application received".
+- For ANY policy, procedure, training, or operational question: use kb_search. The KB is the single source of truth.
 - CRITICAL FEE FACTS — never get these wrong: Earnest deposit = $1,500 (NOT $500). Application fee = $65 per adult. Cleaning fee = $500 (move-out, non-refundable). Admin fee = $250. Pet fee = $250 per pet. Security deposit = 1x monthly rent. The $500 is the CLEANING FEE, not the earnest deposit.
-- For ANY question about applicant screening criteria, income requirements, credit score: IMMEDIATELY use notion_get_page with ID 18776555273a81beb216db69887d8266.
-- For work orders, mailbox, keys/lockouts, toilet, washer/dryer, kitchen sink, disposal, mold, dishwasher, HVAC, water softener, high water bill, water leaks, pest control: The relevant Notion content is PRE-LOADED into your context above as "RELEVANT NOTION PAGE". Use that content directly — do NOT call notion_get_page for these topics.
-- For ANY question about how to create/submit a work order: use the pre-loaded work order content in your context.
+- For pre-loaded topic content: when the user's question matches a topic with pre-loaded KB content (water leaks, pest control, HVAC, work orders, vendors, cost benchmarks, etc.), the relevant KB content is INJECTED into your context above as "RELEVANT KB CONTENT". Use that directly — do NOT call kb_search again for the same topic.
 - For pest control: scorpion rule = 5+ inside in 30 days = owner responsibility. Bees/rodents/termites/birds = always owner. Under 30 days moved in = one-time goodwill service.
-- For water leaks: ask where the leak is (appliance/sink/toilet/roof/exterior) and give shutoff instructions from context.
-- For vendor assignment: handled server-side — do NOT call notion_get_page for vendors.
-- For application approval time: IMMEDIATELY use notion_get_page with ID 25e76555273a8082ae8fef84ebd87a23.
-- For unknown policy topics: first try hardcoded Notion page IDs above, then try kb_search for knowledge base content (the source of truth for new policies), then try notion_search as backup. Only route to a team member if all three return nothing. 
-- NEVER offer to "connect" the user with someone or ask what type of answer they want — just search and answer.
+- For water leaks: ask where the leak is (appliance/sink/toilet/roof/exterior) and give shutoff instructions from KB content.
+- For unknown policy topics: use kb_search. If kb_search returns no results, only THEN route to a team member.
+- NEVER offer to "connect" the user with someone or ask what type of answer they want — just search the KB and answer.
 - Only route to a team member when you genuinely cannot answer the question from the data. If the question has been fully answered, do NOT add a 'reach out to X' closer — just stop after the answer.
-- When answering a question about a TENANT (what they owe, what they need to do, what their options are): only include information relevant to the tenant. Do NOT include owner fee splits, what the owner receives, re-leasing fees charged to owners, or any owner-facing financial details — that is irrelevant and confusing to a tenant conversation.
+- When answering a question about a TENANT (what they owe, what they need to do, what their options are): only include information relevant to the tenant. Do NOT include owner fee splits, what the owner receives, re-leasing fees charged to owners, or any owner-facing financial details.
 - When answering a question about an OWNER: only include owner-relevant information. Do not include tenant-facing language.
-- Use the context of the question to determine audience. "A tenant wants to know..." or "what should I tell a tenant" = tenant audience only.
+- Use the context of the question to determine audience and pass it to kb_search via the audience filter.
 - If you cannot find something in the data after multiple searches, say so clearly and direct to the right person based on the topic:
   - Leasing questions (applications, showings, availability, move-ins) → "Reach out to Dhyana directly."
   - Maintenance issues (repairs, vendors, work orders) → "Reach out to Roberto directly."
@@ -374,12 +194,12 @@ Rules:
   - Accounting questions → "Reach out to Randi directly."
 - NEVER say "check with Randi or Persia" as a blanket response — always route to the specific right person above.
 - If an address is not found, say "I couldn't find [X] in Rentvine — the address may be formatted differently. For leasing questions reach out to Dhyana, or try searching with the full street name spelled out."
-- NEVER say "I'm unable to access" or "I cannot access" any board or data source — you have Rentvine, Aptly, Notion, and Slack tools available. Always actually try them before concluding data isn't available.
-- NEVER route to a team member as a substitute for using your tools. Always use all relevant tools first (Rentvine AND Aptly), then only route if the tools genuinely return no data.
+- NEVER say "I'm unable to access" or "I cannot access" any board or data source — you have Rentvine, Aptly, Knowledge Base, and Slack tools available. Always actually try them before concluding data isn't available.
+- NEVER route to a team member as a substitute for using your tools. Always use all relevant tools first, then only route if the tools genuinely return no data.
 - NEVER invent reasons or possibilities for why something is not found. Only report what the data actually shows.
 - For ANY question about tours, showings, scheduling, or why a property isn't available, or what work is being done: check Rentvine for (1) active lease status, (2) latest inspections via rv_get_inspections — these are synced from zInspector and show the most recent move-in, move-out, or maintenance inspection with date and type. Then search Aptly for pipeline status. Report all three together.
-- When reporting inspection activity: state the inspection type (move-in, move-out, maintenance, periodic), the date it was completed, and any notes. This tells the team whether turnover work or make-ready is in progress.
-- When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions, do NOT tell the user what to do. Just report what the data shows.
+- When reporting inspection activity: state the inspection type (move-in, move-out, maintenance, periodic), the date it was completed, and any notes.
+- When reporting on a property: state the facts directly. Example: "17373 North Costa Brava is currently occupied — the lease runs through [date]. In Aptly it shows [status] with [showing info]." Do NOT suggest steps, do NOT give instructions.
 - NEVER say things like "next steps would be" or "you should" or "I recommend" — only report what the data actually says.
 - Tone: professional, helpful, like the most knowledgeable senior colleague on the team`;
 
@@ -398,43 +218,37 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_ledger',
-    description: 'Get the full accounting ledger for a lease — all charges, payments, credits with dates. Use after rv_get_leases to get the leaseId.',
+    description: 'Get the full accounting ledger for a lease — all charges, payments, credits with dates.',
     input_schema: {
       type: 'object',
-      properties: {
-        leaseId: { type: 'number', description: 'Rentvine lease ID' },
-      },
+      properties: { leaseId: { type: 'number', description: 'Rentvine lease ID' } },
       required: ['leaseId'],
     },
   },
   {
     name: 'rv_get_transactions',
-    description: 'Get full transaction history for a lease — all payments made, fees charged, credits applied with dates.',
+    description: 'Get full transaction history for a lease — all payments, fees, credits with dates.',
     input_schema: {
       type: 'object',
-      properties: {
-        leaseId: { type: 'number', description: 'Rentvine lease ID' },
-      },
+      properties: { leaseId: { type: 'number', description: 'Rentvine lease ID' } },
       required: ['leaseId'],
     },
   },
   {
     name: 'rv_get_properties',
-    description: 'Get properties in the portfolio. Search by address, name, or city. Use to look up a specific property address.',
+    description: 'Get properties in the portfolio. Search by address, name, or city.',
     input_schema: {
       type: 'object',
-      properties: {
-        search: { type: 'string', description: 'Address, property name, or city to search for (optional)' },
-      },
+      properties: { search: { type: 'string', description: 'Address, property name, or city' } },
     },
   },
   {
     name: 'rv_get_units',
-    description: 'Get units with rent, deposit, beds, baths, availability. Search by address. Use to find vacant or available rentals.',
+    description: 'Get units with rent, deposit, beds, baths, availability.',
     input_schema: {
       type: 'object',
       properties: {
-        search: { type: 'string', description: 'Address or unit name to search for (optional)' },
+        search: { type: 'string', description: 'Address or unit name (optional)' },
         propertyId: { type: 'number', description: 'Filter by property ID (optional)' },
       },
     },
@@ -444,9 +258,7 @@ const ALL_TOOLS = [
     description: 'Get owner/landlord contact info, portfolio, and associated properties',
     input_schema: {
       type: 'object',
-      properties: {
-        search: { type: 'string', description: 'Owner name or email (optional)' },
-      },
+      properties: { search: { type: 'string', description: 'Owner name or email (optional)' } },
     },
   },
   {
@@ -463,7 +275,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'rv_get_property_work_order_history',
-    description: 'Get ALL work orders (open AND closed/completed) for a specific property by address or property ID. Use for: "show history for X address", "repeat issues at X", "what work has been done at X", "past work orders for X". Returns open + closed work orders sorted newest first.',
+    description: 'Get ALL work orders (open AND closed) for a specific property by address or property ID.',
     input_schema: {
       type: 'object',
       properties: {
@@ -477,27 +289,25 @@ const ALL_TOOLS = [
     description: 'Get full details for a specific work order by ID',
     input_schema: {
       type: 'object',
-      properties: {
-        workOrderId: { type: 'number', description: 'Work order ID' },
-      },
+      properties: { workOrderId: { type: 'number', description: 'Work order ID' } },
       required: ['workOrderId'],
     },
   },
   {
     name: 'rv_get_recurring_issues',
-    description: 'Find properties with recurring work orders of the same category (HVAC, plumbing, electrical, appliance, etc.) within a time period. Use when asked: "which properties have had repeated HVAC issues?", "recurring plumbing problems", "same issue multiple times at a property", "has X address had AC problems before?". Searches ALL work orders including closed/completed ones in Rentvine.',
+    description: 'Find properties with recurring work orders of the same category within a time period.',
     input_schema: {
       type: 'object',
       properties: {
-        category: { type: 'string', description: 'Issue category to check: HVAC, Plumbing, Electrical, Appliance, Roofing, Landscaping, Pest Control, Pool, or leave blank for all categories' },
-        daysBack: { type: 'number', description: 'How far back to look in days. Default 365 (1 year). Use 730 for 2 years.' },
-        minCount: { type: 'number', description: 'Minimum number of same-category WOs to flag a property. Default 2.' },
+        category: { type: 'string', description: 'Issue category: HVAC, Plumbing, Electrical, Appliance, Roofing, Landscaping, Pest Control, Pool, or blank for all' },
+        daysBack: { type: 'number', description: 'Days to look back. Default 365.' },
+        minCount: { type: 'number', description: 'Minimum same-category WOs. Default 2.' },
       },
     },
   },
   {
     name: 'rv_get_inspections',
-    description: 'Get property inspections from Rentvine — move-in, move-out, and periodic inspections with dates and status. Only call this when the user SPECIFICALLY asks about inspections. Do NOT call this automatically when looking up property activity — it causes rate limit errors.',
+    description: 'Get property inspections from Rentvine. Only call when user specifically asks about inspections.',
     input_schema: {
       type: 'object',
       properties: {
@@ -511,9 +321,7 @@ const ALL_TOOLS = [
     description: 'Get full details of a specific inspection by ID',
     input_schema: {
       type: 'object',
-      properties: {
-        inspectionId: { type: 'number', description: 'Inspection ID' },
-      },
+      properties: { inspectionId: { type: 'number', description: 'Inspection ID' } },
       required: ['inspectionId'],
     },
   },
@@ -522,24 +330,20 @@ const ALL_TOOLS = [
     description: 'Search for tenant contacts in Rentvine by name or email',
     input_schema: {
       type: 'object',
-      properties: {
-        search: { type: 'string', description: 'Tenant name or email' },
-      },
+      properties: { search: { type: 'string', description: 'Tenant name or email' } },
     },
   },
   {
     name: 'rv_get_vendors',
-    description: 'Get vendor/contractor list from Rentvine, optionally filtered by name',
+    description: 'Get vendor/contractor list from Rentvine',
     input_schema: {
       type: 'object',
-      properties: {
-        search: { type: 'string', description: 'Vendor name (optional)' },
-      },
+      properties: { search: { type: 'string', description: 'Vendor name (optional)' } },
     },
   },
   {
     name: 'aptly_get_board_cards',
-    description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz. Use aptly_list_boards to find other board IDs.',
+    description: 'Get cards from an Aptly board. Renter Leads board ID: 4EMDSYKirhQaNdQKz.',
     input_schema: {
       type: 'object',
       properties: {
@@ -551,7 +355,7 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_list_boards',
-    description: 'List all available Aptly boards to find board IDs for Move-Ins, Move-Outs, HOA Violations, Renewals etc.',
+    description: 'List all available Aptly boards to find board IDs.',
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -568,86 +372,60 @@ const ALL_TOOLS = [
   },
   {
     name: 'aptly_get_applicant',
-    description: 'Get full details and comments for a specific applicant by name or address from the Applicants board. Use when asked about a specific applicant, their notes, comments, status, income, credit, or history.',
+    description: 'Get full details and comments for a specific applicant by name or address.',
     input_schema: {
       type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Applicant name or property address to look up' },
-      },
+      properties: { query: { type: 'string', description: 'Applicant name or property address' } },
       required: ['query'],
     },
   },
   {
     name: 'aptly_get_leads',
-    description: 'Get renter leads from the Renter Leads board. Use for ANY question about leads, showings, prospects, tours, lead activity, lead pipeline, conversion rates, tour feedback, who applied after showing, lead sources. Returns: contact, property, stage, source, showing info, tour date, move date, income, email activity, comments.',
+    description: 'Get renter leads from the Renter Leads board. Use for ANY question about leads, showings, prospects, tours.',
     input_schema: {
       type: 'object',
       properties: {
-        daysBack: { type: 'number', description: 'Filter to leads created in last N days. Use 7 for this week, 30 for this month. Omit for all leads.' },
+        daysBack: { type: 'number', description: 'Filter to leads created in last N days.' },
         property: { type: 'string', description: 'Filter by property address' },
-        stage: { type: 'string', description: 'Filter by stage, e.g. "Scheduled Tour", "Tour Completed", "Nurturing", "Applied"' },
+        stage: { type: 'string', description: 'Filter by stage' },
         includeArchived: { type: 'boolean', description: 'Include archived leads. Default false.' },
       },
     },
   },
   {
     name: 'aptly_get_work_orders',
-    description: 'PRIMARY source for ALL work order questions. Returns open work orders from Aptly. Use for: counts, vendor analysis, days open, unassigned WOs, HVAC/plumbing/pest queries. For comment questions ("which have no comments", "show comments"), set includeComments: true — this fetches comments via /api/board/workOrder/:cardId/comments for each WO. Fields: address, num, issue, vendor, opened, daysOpen, status, commentCount, comments[].',
+    description: 'PRIMARY source for ALL work order questions. Returns open work orders from Aptly with comments when requested.',
     input_schema: {
       type: 'object',
       properties: {
-        status: { type: 'string', description: 'Filter by status/stage, e.g. "open", "pending", "closed". Omit for all.' },
+        status: { type: 'string', description: 'Filter by status/stage' },
         property: { type: 'string', description: 'Filter by property address or name.' },
         includeArchived: { type: 'boolean', description: 'Include archived/closed work orders. Default false.' },
-        includeComments: { type: 'boolean', description: 'Fetch comments for each WO. Set true when asked about comments, no comments, follow-ups. Default false.' },
+        includeComments: { type: 'boolean', description: 'Fetch comments for each WO. Default false.' },
       },
     },
   },
   {
     name: 'rv_get_work_order_notes',
-    description: 'Get notes/comments for work orders from Rentvine — the ONLY way to check which work orders have comments. Use for: "which work orders have no comments", "which have no follow-up", "show comments on WO #X". When no workOrderId given, fetches notes for all open WOs and returns split: workOrdersWithNotes vs workOrdersWithNoNotes.',
+    description: 'Get notes/comments for work orders from Rentvine.',
     input_schema: {
       type: 'object',
-      properties: {
-        workOrderId: { type: 'string', description: 'Filter notes for a specific work order ID' },
-      },
+      properties: { workOrderId: { type: 'string', description: 'Specific work order ID (optional)' } },
     },
   },
   {
     name: 'compare_work_orders',
-    description: 'Compare work orders between Aptly and Rentvine to find mismatches. Use when asked to cross-reference, compare, or find work orders that are in one system but not the other. Fetches both systems, matches by workOrderNumber, and returns: matched pairs, work orders only in Aptly, work orders only in Rentvine, and status mismatches.',
+    description: 'Compare work orders between Aptly and Rentvine to find mismatches.',
     input_schema: { type: 'object', properties: {} },
   },
   {
-    name: 'notion_search',
-    description: 'Search Notion for company policies, SOPs, procedures, fee schedules, and guidelines',
-    input_schema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Policy or procedure to search for' },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'notion_get_page',
-    description: 'Get the full content of a Notion page by ID — use after notion_search to read a specific policy',
-    input_schema: {
-      type: 'object',
-      properties: {
-        pageId: { type: 'string', description: 'Notion page ID' },
-      },
-      required: ['pageId'],
-    },
-  },
-  {
     name: 'kb_search',
-    description: 'Search the Aloe Knowledge Base using semantic vector search. Use this AFTER checking hardcoded Notion pages and pre-loaded context but BEFORE concluding you cannot find an answer. Best for: policies or topics that may have been added recently, staff procedures, topics not covered by the hardcoded Notion page IDs. Returns the top matching documents with their content.',
+    description: 'Search the Aloe Knowledge Base — the SINGLE source of truth for all company policies, procedures, training, vendor info, cost benchmarks, troubleshooting guides, and SOPs. ALWAYS use this tool for ANY policy, procedure, training, or operational question. Returns the top matching documents with their content.',
     input_schema: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query — natural language question or topic' },
-        audience: { type: 'string', description: 'Filter by audience: tenant, owner, staff, or leave blank for all' },
+        audience: { type: 'string', description: 'Filter by audience: tenant, owner, staff' },
         department: { type: 'string', description: 'Filter by department: leasing, maintenance, resident_relations, owner_relations, hoa, accounting, general' },
       },
       required: ['query'],
@@ -658,9 +436,7 @@ const ALL_TOOLS = [
     description: 'Search Slack for team messages, announcements, and decisions across all channels',
     input_schema: {
       type: 'object',
-      properties: {
-        query: { type: 'string', description: 'What to search for in Slack' },
-      },
+      properties: { query: { type: 'string', description: 'What to search for in Slack' } },
       required: ['query'],
     },
   },
@@ -716,9 +492,7 @@ async function rvFetch(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
   });
-  const r = await fetch(url.toString(), {
-    headers: { Authorization: `Basic ${RENTVINE_AUTH}` },
-  });
+  const r = await fetch(url.toString(), { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
   if (!r.ok) {
     const txt = await r.text();
     console.error('Rentvine error', r.status, txt.slice(0, 200));
@@ -736,46 +510,16 @@ async function aptlyFetch(path, params = {}) {
   return r.json();
 }
 
-// Search using Aptly's Meteor/DDP token — works for screening boards
-async function aptlyMeteorSearch(boardId, query) {
-  const meteorToken = process.env.APTLY_METEOR_TOKEN || APTLY_TOKEN;
-  const url = new URL('https://app.getaptly.com/api/aptlet/' + boardId);
-  url.searchParams.set('x-token', meteorToken);
-  url.searchParams.set('query', query || '');
-  url.searchParams.set('page', '0');
-  const r = await fetch(url.toString());
-  if (!r.ok) return [];
-  const data = await r.json();
-  return (data && data.cards) || (Array.isArray(data) ? data : []);
-}
-
-// Dedicated search function using Aptly's search API — works for all board types including screening
-async function aptlySearch(boardId, query) {
-  const url = new URL('https://app.getaptly.com/api/aptlet/' + boardId + '/search');
-  url.searchParams.set('x-token', APTLY_TOKEN);
-  url.searchParams.set('query', query || '');
-  url.searchParams.set('page', '0');
-  url.searchParams.set('pageSize', '100');
-  const r = await fetch(url.toString());
-  if (!r.ok) {
-    // Fallback to regular aptlet endpoint
-    return aptlyFetch('/aptlet/' + boardId, { page: 0, query: query || 'a' });
-  }
-  const data = await r.json();
-  return data;
-}
-
 let _unitsSchema = null;
 async function unitsFetch(path, params = {}) {
   const url = new URL('https://core-api.getaptly.com' + path);
   Object.entries(params).forEach(([k, v]) => { if (v !== undefined) url.searchParams.set(k, v); });
   const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
-  const r = await fetch(url.toString(), {
-    headers: { 'x-token': unitsToken, 'Accept': 'application/json' }
-  });
+  const r = await fetch(url.toString(), { headers: { 'x-token': unitsToken, 'Accept': 'application/json' } });
   if (!r.ok) return { error: 'Units API ' + r.status, body: await r.text() };
   return r.json();
 }
+
 async function getUnitsSchema() {
   if (_unitsSchema) return _unitsSchema;
   const schema = await unitsFetch('/api/schema/unit');
@@ -785,9 +529,9 @@ async function getUnitsSchema() {
   }
   return _unitsSchema || {};
 }
+
 async function getUnitsCards() {
   const schema = await getUnitsSchema();
-  // Paginate to get all cards
   let allCards = [];
   let page = 0;
   while (true) {
@@ -802,14 +546,11 @@ async function getUnitsCards() {
     if (batch.length < 100) break;
     page++;
   }
-  const cards = allCards;
-  // Map field keys to human-readable labels using schema
-  return cards.map(function(card) {
+  return allCards.map(function(card) {
     const mapped = { _cardId: card.cardId };
     Object.keys(card).forEach(function(k) {
       const label = schema[k] || k;
       const val = card[k];
-      // Handle money fields { amount, currency }
       mapped[label] = (val && typeof val === 'object' && 'amount' in val) ? '$' + val.amount : val;
     });
     return mapped;
@@ -826,6 +567,7 @@ async function getApplicantsSchema() {
   }
   return _applicantsSchema || {};
 }
+
 async function getApplicantsCards() {
   const schema = await getApplicantsSchema();
   let allCards = [];
@@ -841,7 +583,6 @@ async function getApplicantsCards() {
     page++;
   }
   return allCards.map(function(card) {
-    // Extract array fields (like appPrimaryApplicant, appLocation) to their first name value
     const extractName = function(v) {
       if (!v) return '';
       if (typeof v === 'string') return v;
@@ -855,25 +596,21 @@ async function getApplicantsCards() {
     };
     const mapped = {
       _cardId: card.cardId,
-      // Raw built-in fields
       'Title': card.name || '',
       'Stage': card.stage || '',
       'Application Complete': card.appInputCompleted || card.readyToReview || '',
       'appApproved': card.appApproved || false,
       'Created At': card.createdAt || '',
-      // Key custom fields extracted directly from known raw keys
       'Primary Applicant': extractName(card.appPrimaryApplicant),
       'Application Location': extractName(card.appLocation),
       'Household': card.appHousehold || '',
       'Move-In Date': card.appMoveInDate || '',
       'Total Household Mo. Income': card.appIncome ? '$' + card.appIncome.amount : '',
       'Avg. Household Credit': card.appCreditRating || '',
-      // Comments — core-api may not return these; aptly_get_applicant re-fetches via aptlyFetch
       'comments': Array.isArray(card.comments) ? card.comments.map(function(c) {
         return { by: c.userName || c.name || 'Unknown', note: c.content || c.text || '', date: (c.createdAt || '').slice(0, 10) };
       }) : [],
     };
-    // Also map any remaining UUID schema fields
     Object.keys(card).forEach(function(k) {
       if (schema[k] && !mapped[schema[k]]) {
         mapped[schema[k]] = extractName(card[k]);
@@ -908,34 +645,6 @@ async function ziFetch(path, params = {}) {
   return { error: 'zInspector API unreachable from all base URLs' };
 }
 
-async function notionFetch(path, method, body) {
-  method = method || 'GET';
-  const opts = {
-    method,
-    headers: {
-      Authorization: 'Bearer ' + NOTION_TOKEN,
-      'Notion-Version': '2022-06-28',
-      'Content-Type': 'application/json',
-    },
-  };
-  if (body) opts.body = JSON.stringify(body);
-  // Retry up to 2 times on rate limit (429) or timeout
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const r = await fetch('https://api.notion.com/v1' + path, opts);
-      if (r.status === 429) {
-        const retryAfter = parseInt(r.headers.get('retry-after') || '2');
-        await new Promise(function(res) { setTimeout(res, (retryAfter + 1) * 1000); });
-        continue;
-      }
-      return r.json();
-    } catch(e) {
-      if (attempt === 2) throw e;
-      await new Promise(function(res) { setTimeout(res, 1500); });
-    }
-  }
-}
-
 async function slackFetch(path, params) {
   params = params || {};
   const url = new URL('https://slack.com/api' + path);
@@ -952,9 +661,30 @@ async function executeTool(name, input) {
   try {
     switch (name) {
 
+      case 'kb_search': {
+        const { results, error } = await kbSearch(input.query, {
+          limit: 5,
+          audience: input.audience,
+          department: input.department,
+        });
+        if (error) return JSON.stringify({ error, message: 'Knowledge base unreachable' });
+        if (!results || results.length === 0) {
+          return JSON.stringify({ message: 'No matching documents in the knowledge base for: ' + input.query });
+        }
+        const slim = results.map(function(r) {
+          return {
+            title: r.document_title,
+            audience: r.audience,
+            department: r.department,
+            content: (r.content || '').slice(0, 1500),
+          };
+        });
+        return JSON.stringify({ total: results.length, results: slim });
+      }
+
       case 'rv_get_leases': {
         if (!input.tenantName && !input.address && !input.leaseId && !input.unit && input.status !== 'all') {
-          return JSON.stringify({ error: 'A search term (address, tenantName, or leaseId) is required for rv_get_leases to prevent context overflow. For broad availability, use aptly_search_cards with boardId="location" instead.' });
+          return JSON.stringify({ error: 'A search term (address, tenantName, or leaseId) is required.' });
         }
         const params = { pageSize: 200, page: input.page || 1 };
         if (input.status === 'inactive') params['primaryLeaseStatusIDs[]'] = 2;
@@ -1000,7 +730,6 @@ async function executeTool(name, input) {
             const full = (p.address || '') + ' ' + (p.city || '') + ' ' + (p.name || '');
             return fuzzyMatch(input.search, full);
           });
-          // Return slim summary to avoid context overflow
           return JSON.stringify(matches.slice(0, 10).map(function(item) {
             const p = item.property || {};
             return {
@@ -1015,10 +744,9 @@ async function executeTool(name, input) {
             };
           }));
         }
-        // No search — return summary only to avoid context overflow
         return JSON.stringify({
           total: allData.length,
-          message: 'Pass a search term to find specific properties. Showing summary only to conserve context.',
+          message: 'Pass a search term to find specific properties.',
           sample: allData.slice(0, 5).map(function(item) {
             const p = item.property || {};
             return { id: p.propertyID, address: p.address, city: p.city };
@@ -1028,7 +756,7 @@ async function executeTool(name, input) {
 
       case 'rv_get_units': {
         if (!input.propertyId && !input.search) {
-          return JSON.stringify({ error: 'propertyId or search required — use rv_get_properties first to find the propertyId, then call rv_get_units with that propertyId' });
+          return JSON.stringify({ error: 'propertyId or search required' });
         }
         if (input.propertyId) {
           const units = await rvFetch('/properties/' + input.propertyId + '/units');
@@ -1043,7 +771,6 @@ async function executeTool(name, input) {
           }
           return JSON.stringify(units);
         }
-        // search-only fallback via lease export
         const leases = await rvFetch('/leases/export', { pageSize: 200 });
         if (Array.isArray(leases)) {
           return JSON.stringify(leases.filter(function(item) {
@@ -1066,12 +793,10 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        // Fetch work orders — page 1 only (100 records, most recent first)
         const p = { pageSize: 100, page: 1 };
         if (input.propertyId) p.propertyID = input.propertyId;
         const data = await rvFetch('/maintenance/work-orders', p);
         let rawWOs = Array.isArray(data) ? data : (data && data.data) || [];
-        // Response is nested: [{workOrder:{...}, contact:{...}, unit:{...}}, ...]
         let allWOs = rawWOs.map(function(rec) {
           if (rec.workOrder) {
             return Object.assign({}, rec.workOrder, {
@@ -1081,15 +806,6 @@ async function executeTool(name, input) {
           }
           return rec;
         }).filter(function(wo) { return wo.workOrderID; });
-        // Log status distribution
-        const statusDist = {};
-        allWOs.forEach(function(wo) {
-          const sid = String(wo.primaryWorkOrderStatusID);
-          statusDist[sid] = (statusDist[sid] || 0) + 1;
-        });
-        console.log('RV WO total raw:', allWOs.length, 'by primaryStatus:', JSON.stringify(statusDist));
-        // Filter purely by primaryWorkOrderStatusID — dateClosed is unreliable in Rentvine
-        // Status 4 = Completed, Status 5 = Cancelled. Everything else = open/active
         let filtered = allWOs;
         if (input.status === 'closed') {
           filtered = allWOs.filter(function(wo) {
@@ -1102,9 +818,7 @@ async function executeTool(name, input) {
             return sid !== 4 && sid !== 5;
           });
         }
-        // Check for unassigned: no vendorContactID
         const unassigned = filtered.filter(function(wo) { return !wo.vendorContactID; });
-        console.log('RV WO filtered:', filtered.length, 'unassigned:', unassigned.length);
         const now2 = Date.now();
         const slim2 = filtered.map(function(wo) {
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : null;
@@ -1124,7 +838,6 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_property_work_order_history': {
-        // Find property ID from address if not provided
         let propId = input.propertyId;
         if (!propId && input.address) {
           const props = await rvFetch('/properties/export', { pageSize: 200, page: 1 });
@@ -1137,7 +850,6 @@ async function executeTool(name, input) {
           if (match) propId = match.property && match.property.propertyID;
         }
         if (!propId) return JSON.stringify({ error: 'Property not found for: ' + input.address });
-        // Fetch ALL work orders for this property (no status filter)
         const allPages = [];
         for (let pg = 1; pg <= 5; pg++) {
           const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg, propertyID: propId });
@@ -1159,7 +871,6 @@ async function executeTool(name, input) {
         }).sort(function(a, b) { return (b.created || '').localeCompare(a.created || ''); });
         const open = wos.filter(function(w) { return w.status !== 'Completed' && w.status !== 'Cancelled'; });
         const closed = wos.filter(function(w) { return w.status === 'Completed' || w.status === 'Cancelled'; });
-        console.log('RV property WO history for propId', propId, ': total', wos.length, 'open', open.length, 'closed', closed.length);
         return JSON.stringify({ propertyId: propId, address: input.address, total: wos.length, open: open.length, closed: closed.length, workOrders: wos });
       }
 
@@ -1168,7 +879,6 @@ async function executeTool(name, input) {
         const minCount = input.minCount || 2;
         const targetCat = (input.category || '').toLowerCase();
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        // Categorize from description
         const categorizeRV = function(desc) {
           const d = (desc || '').toLowerCase();
           if (/ac|hvac|heat|cool|air.?condition|furnace|duct|compressor/i.test(d)) return 'HVAC';
@@ -1181,7 +891,6 @@ async function executeTool(name, input) {
           if (/pool|spa/i.test(d)) return 'Pool';
           return 'General';
         };
-        // Fetch multiple pages of ALL work orders (open + closed)
         let allWOs = [];
         for (let pg = 1; pg <= 10; pg++) {
           const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
@@ -1190,8 +899,6 @@ async function executeTool(name, input) {
           allWOs = allWOs.concat(batch);
           if (batch.length < 100) break;
         }
-        console.log('RV recurring: total WOs fetched:', allWOs.length);
-        // Group by address + category
         const byAddrCat = {};
         allWOs.forEach(function(rec) {
           const wo = rec.workOrder || rec;
@@ -1213,11 +920,9 @@ async function executeTool(name, input) {
             vendor: (rec.contact && rec.contact.name) || 'Unassigned',
           });
         });
-        // Filter to those with minCount+ WOs
         const flagged = Object.values(byAddrCat)
           .filter(function(e) { return e.wos.length >= minCount; })
           .sort(function(a, b) { return b.wos.length - a.wos.length; });
-        console.log('RV recurring: flagged properties:', flagged.length);
         if (flagged.length === 0) {
           return JSON.stringify({ message: 'No properties found with ' + minCount + '+ ' + (targetCat || '') + ' work orders in the last ' + daysBack + ' days.' });
         }
@@ -1225,21 +930,16 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_order_detail': {
-        // Returns full work order including notes/statuses
         const detail = await rvFetch('/maintenance/work-orders/' + input.workOrderId);
-        // Also fetch status updates (notes) for this work order
         const statuses = await rvFetch('/maintenance/work-order-statuses', { workOrderID: input.workOrderId, pageSize: 50, page: 1 });
         return JSON.stringify({ detail, statuses });
       }
 
       case 'rv_get_work_order_notes': {
-        // Get notes for a specific work order or all open work orders
         if (input.workOrderId) {
           const data = await rvFetch('/maintenance/work-orders/' + input.workOrderId + '/statuses');
-          console.log('RV WO notes for', input.workOrderId, ':', Array.isArray(data) ? data.length : JSON.stringify(data).slice(0, 100));
           return JSON.stringify(data);
         }
-        // For all open WOs: fetch WOs first, then fetch notes for each
         const woData = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: 1 });
         const rawWOs = Array.isArray(woData) ? woData : (woData && woData.data) || [];
         const openWOs = rawWOs.map(function(rec) {
@@ -1248,7 +948,6 @@ async function executeTool(name, input) {
           const sid = parseInt(wo.primaryWorkOrderStatusID);
           return wo.workOrderID && sid !== 4 && sid !== 5;
         });
-        // Fetch notes for each open WO in parallel (limit 30 to avoid rate limits)
         const notesResults = await Promise.all(openWOs.slice(0, 30).map(async function(wo) {
           try {
             const notes = await rvFetch('/maintenance/work-orders/' + wo.workOrderID + '/statuses');
@@ -1257,23 +956,7 @@ async function executeTool(name, input) {
         }));
         const withNotes = notesResults.filter(function(r) { return r.notes.length > 0; });
         const noNotes = notesResults.filter(function(r) { return r.notes.length === 0; });
-        console.log('RV WO notes: checked', notesResults.length, 'WOs, with notes:', withNotes.length, 'no notes:', noNotes.length);
         return JSON.stringify({ total: notesResults.length, withNotes: withNotes.length, noNotes: noNotes.length, workOrdersWithNoNotes: noNotes, workOrdersWithNotes: withNotes });
-      }
-
-      case 'zi_get_inspections': {
-        const q = input.propertyId || '';
-        // Try inspections endpoint with property filter
-        const result = await ziFetch('/inspections', q ? { property: q, limit: 10 } : { limit: 10 });
-        if (result.error) {
-          // Fallback to Rentvine inspections which are synced from zInspector
-          const rv = await rvFetch('/maintenance/inspections', { pageSize: 50 });
-          if (q && Array.isArray(rv)) {
-            return JSON.stringify(rv.filter(i => JSON.stringify(i).toLowerCase().includes(q.toLowerCase())).slice(0, 10));
-          }
-          return JSON.stringify({ zInspectorError: result.error, rentvineInspections: rv });
-        }
-        return JSON.stringify(result);
       }
 
       case 'rv_get_inspections': {
@@ -1281,7 +964,6 @@ async function executeTool(name, input) {
         if (input.propertyId) params.propertyID = input.propertyId;
         const inspData = await rvFetch('/maintenance/inspections', params);
         const inspList = Array.isArray(inspData) ? inspData : (inspData && inspData.data) || [];
-        // Slim output — only key fields to avoid rate limit
         return JSON.stringify(inspList.map(function(i) {
           return {
             inspectionID: i.inspectionID,
@@ -1325,14 +1007,11 @@ async function executeTool(name, input) {
 
       case 'aptly_get_board_cards': {
         const boardId = input.boardId;
-        // Renter Leads and other boards use core-api (same token as Units/Applicants)
         const coreApiBoards = ['4EMDSYKirhQaNdQKz', 'MJxaStgENouWrNEKd', 'K9mMGGjKgQPqDykaa', 'YA3QWmPebvMwLwbB3', '86YrLPbwdkxtdyZoj'];
         if (coreApiBoards.indexOf(boardId) !== -1) {
-          // Fetch schema for label mapping
           const schemaData = await unitsFetch('/api/schema/' + boardId);
           const schemaMap = {};
           if (Array.isArray(schemaData)) schemaData.forEach(function(f) { schemaMap[f.key] = f.label; });
-          // Paginate fully to get all cards
           let allCards = [];
           let pg = 0;
           while (true) {
@@ -1343,50 +1022,40 @@ async function executeTool(name, input) {
             allCards = allCards.concat(batch);
             if (batch.length < 50) break;
             pg++;
-            if (pg > 10) break; // safety cap
+            if (pg > 10) break;
           }
-          // Map UUID keys to labels
           const withComments = allCards.map(function(card) {
             const m = { _cardId: card.cardId, stage: card.stage, createdAt: card.createdAt };
-            Object.keys(card).forEach(function(k) {
-              m[schemaMap[k] || k] = card[k];
-            });
-            // Add formatted comments
+            Object.keys(card).forEach(function(k) { m[schemaMap[k] || k] = card[k]; });
             m.formatted_comments = Array.isArray(card.comments) && card.comments.length > 0
               ? card.comments.map(function(cm) { return (cm.userName || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || ''); })
               : [];
             return m;
           });
-          console.log('Board', boardId, 'total cards fetched:', allCards.length, 'schema fields:', Object.keys(schemaMap).length);
           return JSON.stringify({ cards: withComments, total: allCards.length });
         }
-        // Other boards use app.getaptly.com
         const data = await aptlyFetch('/aptlet/' + boardId, { page: input.page || 0, query: input.query || '' });
         return JSON.stringify(data);
       }
 
       case 'aptly_list_boards': {
-        // Return hardcoded known boards since /aptlets endpoint is unreliable
         return JSON.stringify([
-          { id: 'unit', name: 'Units / Listings', description: 'All units with Stage (Vacant/Occupied), beds, baths, rent, available date, lockbox, application link. Use this for availability questions.' },
-          { id: 'qfBzBxfooJtfTQncd', name: 'List Property / On Market', description: 'Properties actively listed for rent, showing start date, market status, occupancy notes.' },
+          { id: 'unit', name: 'Units / Listings', description: 'All units with Stage, beds, baths, rent, available date.' },
+          { id: 'qfBzBxfooJtfTQncd', name: 'List Property / On Market', description: 'Properties actively listed for rent.' },
           { id: 'location', name: 'Properties / Locations', description: 'All properties with owner, address, property details' },
-          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline, published for rent status' },
-          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline, repair status, inspection notes' },
+          { id: '4EMDSYKirhQaNdQKz', name: 'Renter Leads', description: 'Prospect leads, showing pipeline' },
+          { id: 'YA3QWmPebvMwLwbB3', name: 'Move-Outs', description: 'Move-out pipeline' },
           { id: 'K9mMGGjKgQPqDykaa', name: 'Move-Ins', description: 'Move-in pipeline' },
           { id: '86YrLPbwdkxtdyZoj', name: 'Tenant Renewals', description: 'Lease renewal pipeline' },
-          { id: 'workOrder', name: 'Work Orders', description: 'Maintenance work orders — stage, vendor, property, created date, days open, comments' },
+          { id: 'workOrder', name: 'Work Orders', description: 'Maintenance work orders' },
         ]);
       }
 
       case 'compare_work_orders': {
-        // Fetch all active work orders from both systems simultaneously
         const [rvData, aptlyData] = await Promise.all([
           rvFetch('/maintenance/work-orders', { pageSize: 100, page: 1 }),
           unitsFetch('/api/board/workOrder', { page: 0, pageSize: 100, includeArchived: false }),
         ]);
-
-        // Process Rentvine — unwrap nested response
         const rvRaw = Array.isArray(rvData) ? rvData : [];
         const rvWOs = rvRaw.map(function(rec) {
           return rec.workOrder ? Object.assign({}, rec.workOrder, {
@@ -1396,28 +1065,17 @@ async function executeTool(name, input) {
         }).filter(function(wo) {
           return wo.workOrderID && parseInt(wo.primaryWorkOrderStatusID) !== 4 && parseInt(wo.primaryWorkOrderStatusID) !== 5;
         });
-
-        // Process Aptly — filter to active only
         const aptlyRaw = Array.isArray(aptlyData) ? aptlyData : (aptlyData && aptlyData.data) || [];
         const aptlyWOs = aptlyRaw.filter(function(c) {
           return !c.archived && !/completed|cancelled|rejected/i.test(c.stage || '');
         });
-
-        // Build lookup maps by workOrderNumber
         const rvByNumber = {};
-        rvWOs.forEach(function(wo) {
-          if (wo.workOrderNumber) rvByNumber[String(wo.workOrderNumber)] = wo;
-        });
+        rvWOs.forEach(function(wo) { if (wo.workOrderNumber) rvByNumber[String(wo.workOrderNumber)] = wo; });
         const aptlyByNumber = {};
-        aptlyWOs.forEach(function(c) {
-          if (c.workOrderNumber) aptlyByNumber[String(c.workOrderNumber)] = c;
-        });
-
-        // Find matches and mismatches
+        aptlyWOs.forEach(function(c) { if (c.workOrderNumber) aptlyByNumber[String(c.workOrderNumber)] = c; });
         const matched = [];
         const aptlyOnly = [];
         const statusMismatch = [];
-
         aptlyWOs.forEach(function(c) {
           const num = String(c.workOrderNumber || '');
           if (!num) { aptlyOnly.push({ number: 'no number', title: c.description || c.name, aptlyStage: c.stage, property: (c.unit && c.unit.name) || '' }); return; }
@@ -1425,7 +1083,6 @@ async function executeTool(name, input) {
           if (!rv) {
             aptlyOnly.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, property: (c.unit && c.unit.name) || '' });
           } else {
-            // Check status alignment
             const rvStatusId = parseInt(rv.primaryWorkOrderStatusID);
             const aptlyStage = (c.stage || '').toLowerCase();
             const rvIsOpen = rvStatusId <= 2;
@@ -1437,40 +1094,25 @@ async function executeTool(name, input) {
             }
           }
         });
-
-        // Find work orders in Rentvine but not Aptly
         const rvOnly = rvWOs.filter(function(wo) {
           return wo.workOrderNumber && !aptlyByNumber[String(wo.workOrderNumber)];
         }).map(function(wo) {
           return { number: String(wo.workOrderNumber), title: wo.description || '?', rvStatusId: wo.primaryWorkOrderStatusID, property: wo.unitAddress || '' };
         });
-
         return JSON.stringify({
-          summary: {
-            rvTotal: rvWOs.length,
-            aptlyTotal: aptlyWOs.length,
-            matched: matched.length,
-            aptlyOnly: aptlyOnly.length,
-            rvOnly: rvOnly.length,
-            statusMismatch: statusMismatch.length,
-          },
-          aptlyOnly: aptlyOnly,
-          rvOnly: rvOnly,
-          statusMismatch: statusMismatch,
+          summary: { rvTotal: rvWOs.length, aptlyTotal: aptlyWOs.length, matched: matched.length, aptlyOnly: aptlyOnly.length, rvOnly: rvOnly.length, statusMismatch: statusMismatch.length },
+          aptlyOnly, rvOnly, statusMismatch,
         });
       }
 
       case 'aptly_get_leads': {
-        // Fetch all Renter Leads from core-api with schema mapping
         const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
         const schemaMap = {};
         if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
         const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', {
-          page: 0, pageSize: 100,
-          includeArchived: input.includeArchived ? true : false,
+          page: 0, pageSize: 100, includeArchived: input.includeArchived ? true : false,
         });
         const allCards = Array.isArray(data) ? data : (data && data.data) || [];
-        // Map UUID keys to labels
         const mapCard = function(c) {
           const m = {
             _id: c.cardId, stage: c.stage,
@@ -1483,24 +1125,20 @@ async function executeTool(name, input) {
           return m;
         };
         let leads = allCards.map(mapCard);
-        // Filter by daysBack if specified
         if (input.daysBack) {
           const cutoffMs = Date.now() - input.daysBack * 24 * 60 * 60 * 1000;
           leads = leads.filter(function(c) {
             try { return new Date(c.createdAt).getTime() > cutoffMs; } catch(e) { return false; }
           });
         }
-        // Filter by property if specified
         if (input.property) {
           const p = input.property.toLowerCase();
           leads = leads.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(p); });
         }
-        // Filter by stage if specified
         if (input.stage) {
           const s = input.stage.toLowerCase();
           leads = leads.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
         }
-        // Return rich data for each lead
         const slim = leads.map(function(c) {
           return {
             contact: c['Primary Contact'] || c['Name'] || '?',
@@ -1525,14 +1163,12 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_work_orders': {
-        // Fetch work orders from Aptly core-api (board ID: workOrder)
         let allWOs = [];
         let page = 0;
         while (true) {
           const params = { page, pageSize: 100, includeArchived: false };
           const data = await unitsFetch('/api/board/workOrder', params);
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          console.log('Aptly WO page', page, ':', batch.length, 'cards');
           if (batch.length === 0) break;
           const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
           allWOs = allWOs.concat(active);
@@ -1540,14 +1176,11 @@ async function executeTool(name, input) {
           if (page >= 1) break;
           page++;
         }
-        console.log('Aptly WO total fetched:', allWOs.length);
-
-        // Filter by input
         let filtered = allWOs;
         if (input.status) {
           const s = input.status.toLowerCase();
           if (s === 'open' || s === 'not closed') {
-            filtered = allWOs; // already filtered above
+            filtered = allWOs;
           } else {
             filtered = allWOs.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
           }
@@ -1556,21 +1189,16 @@ async function executeTool(name, input) {
           const p = input.property.toLowerCase();
           filtered = filtered.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(p); });
         }
-
-        // Calculate metrics using raw field names
         const now = Date.now();
         const withMetrics = filtered.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : null;
           return Object.assign({}, c, { daysOpen });
         });
-
-        const open = withMetrics; // already filtered to non-closed
+        const open = withMetrics;
         const unassigned = open.filter(function(c) { return !c.vendor; });
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
-
-        // Only fetch comments when explicitly requested (prevents rate limit on bulk queries)
         const commentsMap = {};
         if (input.includeComments) {
           const cardIdsForComments = withMetrics.map(function(c) { return c.cardId; }).filter(Boolean);
@@ -1582,10 +1210,7 @@ async function executeTool(name, input) {
             } catch(e) { return { id, comments: [] }; }
           }));
           commentResults.forEach(function(r) { commentsMap[r.id] = r.comments; });
-          console.log('Aptly WO comments fetched for:', cardIdsForComments.length, 'WOs');
         }
-
-        // Slim output — address first, issue type instead of full description
         const slim = withMetrics.map(function(c) {
           const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
           const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
@@ -1599,61 +1224,43 @@ async function executeTool(name, input) {
             return (cm.userName || cm.user || 'Unknown') + ' (' + (cm.createdAt || '').slice(0, 10) + '): ' + (cm.content || cm.text || '');
           });
           return {
-            address: address,
-            num: c.workOrderNumber || c.number || '',
+            address, num: c.workOrderNumber || c.number || '',
             issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
-            vendor: vendor,
-            opened: (c.createdAt || '').slice(0, 10),
-            daysOpen: c.daysOpen,
-            status: c.stage || '',
-            commentCount: comments.length,
-            comments: comments,
+            vendor, opened: (c.createdAt || '').slice(0, 10),
+            daysOpen: c.daysOpen, status: c.stage || '',
+            commentCount: comments.length, comments,
           };
         });
-        console.log('Aptly WO slim:', slim.length, 'unassigned:', unassigned.length);
-        if (slim.length > 0) {
-          const s = withMetrics[0];
-          console.log('WO[0] unit:', JSON.stringify(s.unit).slice(0,100), '| vendor:', JSON.stringify(s.vendor).slice(0,80), '| keys:', Object.keys(s).join(','));
-        }
-
         return JSON.stringify({
           total: withMetrics.length,
           open: open.length,
           unassigned: unassigned.length,
           avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
-          byStage: byStage,
-          workOrders: slim,
+          byStage, workOrders: slim,
         });
       }
 
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
-        // Step 1: Find matching cards via getApplicantsCards (supports address + name search)
         const allCards = await getApplicantsCards();
-        const matched = allCards.filter(function(c) {
-          return JSON.stringify(c).toLowerCase().includes(q);
-        });
+        const matched = allCards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q); });
         if (matched.length === 0) {
           return JSON.stringify({ message: 'No applicant found matching: ' + input.query });
         }
-        // Step 2: For each match, search by applicant name using APTLY_METEOR_TOKEN
-        // The Meteor token gives full access including comments on screening boards
         const results = await Promise.all(matched.map(async function(c) {
           const fullName = c['Primary Applicant'] || '';
           const cardId = c._cardId || '';
           let comments = ['No comments'];
           if (cardId) {
             try {
-              // Try core-api comments endpoint
               const commentsData = await unitsFetch('/api/board/MJxaStgENouWrNEKd/' + cardId + '/comments');
-              console.log('Comments for', fullName, ':', JSON.stringify(commentsData).slice(0, 200));
-              const commentList = Array.isArray(commentsData) ? commentsData : 
+              const commentList = Array.isArray(commentsData) ? commentsData :
                 (commentsData && commentsData.comments) ? commentsData.comments :
                 (commentsData && commentsData.data) ? commentsData.data : [];
               if (commentList.length > 0) {
                 comments = commentList.map(function(cm) {
-                  return (cm.userName || cm.name || cm.createdBy || 'Unknown') + 
-                    ' (' + (cm.createdAt || cm.date || '').slice(0, 10) + '): ' + 
+                  return (cm.userName || cm.name || cm.createdBy || 'Unknown') +
+                    ' (' + (cm.createdAt || cm.date || '').slice(0, 10) + '): ' +
                     (cm.content || cm.text || cm.message || '');
                 });
               }
@@ -1669,7 +1276,7 @@ async function executeTool(name, input) {
             moveIn: c['Move-In Date'] || '',
             income: c['Total Household Mo. Income'] || '',
             credit: c['Avg. Household Credit'] || '',
-            comments: comments,
+            comments,
           };
         }));
         return JSON.stringify(results.length === 1 ? results[0] : results);
@@ -1677,22 +1284,20 @@ async function executeTool(name, input) {
 
       case 'aptly_search_cards': {
         const q = input.query || '';
-        const boardsToSearch = input.boardId 
-          ? [input.boardId] 
+        const boardsToSearch = input.boardId
+          ? [input.boardId]
           : ['4EMDSYKirhQaNdQKz', 'MJxaStgENouWrNEKd', 'YA3QWmPebvMwLwbB3', 'K9mMGGjKgQPqDykaa', '86YrLPbwdkxtdyZoj', 'qfBzBxfooJtfTQncd', 'location'];
-        
         const results = [];
         for (const bid of boardsToSearch) {
           let cards = [];
           if (bid === 'MJxaStgENouWrNEKd') {
-            // Applicants board uses aptlyFetch with the search query directly
             const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q || 'Application' });
             cards = (data && data.cards) || (Array.isArray(data) ? data : []);
           } else {
             const data = await aptlyFetch('/aptlet/' + bid, { page: 0, query: q });
             cards = (data && data.cards) || (Array.isArray(data) ? data : []);
           }
-          const matched = q 
+          const matched = q
             ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(q.toLowerCase()); })
             : cards;
           if (matched.length > 0) {
@@ -1706,46 +1311,6 @@ async function executeTool(name, input) {
           }
         }
         return JSON.stringify(results.length > 0 ? results : { message: 'No results found for: ' + (q || '(all)') });
-      }
-
-      case 'notion_search': {
-        const data = await notionFetch('/search', 'POST', {
-          query: input.query,
-          filter: { value: 'page', property: 'object' },
-          page_size: 5,
-        });
-        if (data.results && data.results.length > 0) {
-          const pages = await Promise.all(data.results.slice(0, 3).map(async function(page) {
-            const blocks = await notionFetch('/blocks/' + page.id + '/children');
-            const text = (blocks.results || [])
-              .map(function(b) {
-                const t = b.type;
-                return b[t] && b[t].rich_text ? b[t].rich_text.map(function(rt) { return rt.plain_text; }).join('') : '';
-              })
-              .filter(function(t) { return t.length > 0; })
-              .slice(0, 30)
-              .join('\n');
-            const title = (page.properties && page.properties.title && page.properties.title.title && page.properties.title.title[0] && page.properties.title.title[0].plain_text) ||
-                          (page.properties && page.properties.Name && page.properties.Name.title && page.properties.Name.title[0] && page.properties.Name.title[0].plain_text) ||
-                          'Untitled';
-            return { title: title, id: page.id, url: page.url, content: text || 'No content' };
-          }));
-          return JSON.stringify(pages);
-        }
-        return JSON.stringify({ message: 'No Notion pages found', query: input.query });
-      }
-
-      case 'notion_get_page': {
-        const blocks = await notionFetch('/blocks/' + input.pageId + '/children?page_size=100');
-        const text = (blocks.results || [])
-          .map(function(b) {
-            const t = b.type;
-            if (!b[t] || !b[t].rich_text) return null;
-            return b[t].rich_text.map(function(rt) { return rt.plain_text; }).join('');
-          })
-          .filter(Boolean)
-          .join('\n');
-        return JSON.stringify({ content: text || 'No content found' });
       }
 
       case 'slack_search': {
@@ -1780,30 +1345,21 @@ async function executeTool(name, input) {
         }
         return JSON.stringify({ error: data.error });
       }
-case 'kb_search': {
-        try {
-          const params = new URLSearchParams({ q: input.query, limit: '5' });
-          if (input.audience) params.set('audience', input.audience);
-          if (input.department) params.set('department', input.department);
-          const r = await fetch('https://aloe-knowledge-sync.onrender.com/search?' + params.toString());
-          if (!r.ok) return JSON.stringify({ error: 'Knowledge base unreachable', status: r.status });
-          const data = await r.json();
-          if (!data.results || data.results.length === 0) {
-            return JSON.stringify({ message: 'No matching documents in the knowledge base for: ' + input.query });
+
+      // zi_get_inspections kept for back-compat with system prompt mention
+      case 'zi_get_inspections': {
+        const q = input.propertyId || '';
+        const result = await ziFetch('/inspections', q ? { property: q, limit: 10 } : { limit: 10 });
+        if (result.error) {
+          const rv = await rvFetch('/maintenance/inspections', { pageSize: 50 });
+          if (q && Array.isArray(rv)) {
+            return JSON.stringify(rv.filter(i => JSON.stringify(i).toLowerCase().includes(q.toLowerCase())).slice(0, 10));
           }
-          const slim = data.results.map(function(r) {
-            return {
-              title: r.document_title,
-              audience: r.audience,
-              department: r.department,
-              content: (r.content || '').slice(0, 1500),
-            };
-          });
-          return JSON.stringify({ total: data.results.length, results: slim });
-        } catch(e) {
-          return JSON.stringify({ error: 'kb_search failed: ' + e.message });
+          return JSON.stringify({ zInspectorError: result.error, rentvineInspections: rv });
         }
+        return JSON.stringify(result);
       }
+
       default:
         return JSON.stringify({ error: 'Unknown tool: ' + name });
     }
@@ -1822,8 +1378,6 @@ function getRelevantTools(msg) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
   if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
-    // For availability questions: Aptly is the source of truth, NOT Rentvine
-    // Only add Rentvine tools if a specific address number is in the message
     if (msg.match(/\d{3,6}/)) {
       ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
     }
@@ -1848,6 +1402,7 @@ function getRelevantTools(msg) {
   }
   if (msg.match(/vendor|contractor/)) {
     tools.add('rv_get_vendors');
+    tools.add('kb_search'); // vendor list lives in KB
   }
   if (msg.match(/owner|landlord|portfolio|performing|statement/)) {
     ['rv_get_owners', 'rv_get_properties'].forEach(function(t) { tools.add(t); });
@@ -1856,26 +1411,24 @@ function getRelevantTools(msg) {
     ['aptly_get_board_cards', 'aptly_list_boards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
     ['rv_get_inspections', 'rv_get_properties', 'zi_get_inspections'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/lead|prospect/) && msg.match(/new|this week|today|came|recent|incoming|how many|what|pipeline|count|source|zillow/)) {
-    tools.add('aptly_get_leads');
-  }
   if (msg.match(/applicant|application|applied|applying|screening|comment|note.*card|card.*note|what.*said|who.*said/)) {
     tools.add('aptly_get_applicant');
     tools.add('aptly_search_cards');
   }
-  // Also add aptly_get_applicant when asking about a specific address with comment/note context
   if (msg.match(/comment|note|said|pomf|update/) && msg.match(/\d+\s+\w/)) {
     tools.add('aptly_get_applicant');
   }
-  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule/)) {
-    ['notion_search', 'notion_get_page', 'kb_search'].forEach(function(t) { tools.add(t); });
+  // Policy / procedure / training / cost / SOP — all KB now
+  if (msg.match(/policy|procedure|sop|how do|what do|lease.?break|pet|fee|screen|criteria|step|process|rule|train|cost|price|quote|charge|expensive|too much|fair|benchmark|approve|guide|tip|troubleshoot/)) {
+    tools.add('kb_search');
   }
   if (msg.match(/slack|team|announce|update|channel|said|message/)) {
     ['slack_search', 'slack_get_channel_messages', 'slack_list_channels'].forEach(function(t) { tools.add(t); });
   }
 
+  // Default fallback — if no patterns matched, give Claude tenant lookup + KB search
   if (tools.size === 0) {
-    ['rv_get_leases', 'notion_search'].forEach(function(t) { tools.add(t); });
+    ['rv_get_leases', 'kb_search'].forEach(function(t) { tools.add(t); });
   }
 
   const selected = Array.from(tools).slice(0, 8);
@@ -1891,12 +1444,102 @@ app.post('/api/chat', async function(req, res) {
     const tools = getRelevantTools(lastMsg ? lastMsg.content : '');
     console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
-    // Server-side shortcut for broad availability questions — skip Claude loop entirely
     const lastContent = messages[messages.length - 1]?.content;
-    const lowerMsg = (typeof lastContent === 'string' ? lastContent : 
+    const lowerMsg = (typeof lastContent === 'string' ? lastContent :
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
     const userMsg = typeof lastContent === 'string' ? lastContent : (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '');
+
+    // ─── KB-powered shortcuts (formerly Notion shortcuts) ────────────────────
+
+    // VENDOR SHORTCUT — pulls vendor list from KB, sends to Claude with strict context
+    const isVendorQ = lowerMsg.match(/vendor|who.*assign|who.*call|who.*use|which.*vendor|assign.*work.?order|who.*do.*hvac|who.*do.*plumb|who.*do.*roof|who.*do.*pest|who.*do.*landscap|who.*do.*clean|who.*do.*floor|who.*do.*paint|who.*do.*appli|who.*do.*garage|who.*do.*glass|preferred.*vendor|vendor.*list/);
+    if (isVendorQ) {
+      try {
+        const vendorContext = await getKbTopic(
+          'vendor_list',
+          'preferred vendor list service type phone HVAC plumbing electrical landscaping pest',
+          { limit: 4, audience: 'staff' }
+        );
+        if (vendorContext) {
+          const vendorPrompt = 'VENDOR REFERENCE (from Aloe Knowledge Base):\n\n' + vendorContext;
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 1024,
+              system: 'You are Aloe Assistant, an internal AI for Aloe Property Management. Answer the vendor question using ONLY the vendor reference provided. Be specific about which vendor to use, their coverage area, and any notes. If the question mentions a city or area, match it to the right vendor.',
+              messages: [{ role: 'user', content: vendorPrompt + '\n\n---\nQuestion: ' + userMsg }]
+            })
+          });
+          const data = await resp.json();
+          const answer = (data.content && data.content[0] && data.content[0].text) || '';
+          if (answer) {
+            console.log('Vendor shortcut fired (KB) for:', userMsg.slice(0, 60));
+            return res.json({ content: [{ type: 'text', text: answer }] });
+          }
+        }
+      } catch(e) {
+        console.error('Vendor shortcut error:', e.message);
+      }
+    }
+
+    // COST BENCHMARK SHORTCUT — pulls cost benchmarks from KB
+    const isPriceQ = lowerMsg.match(/cost|price|quote|charge|too (much|high|expensive)|fair price|good price|benchmark|should i approve|approve.*quote|is.*\$|how much.*should|within range|get.*bid|another.*quote|second.*quote/);
+    if (isPriceQ) {
+      try {
+        const costContext = await getKbTopic(
+          'cost_benchmarks',
+          'maintenance cost benchmarks Phoenix repair pricing approve quote bid',
+          { limit: 3, audience: 'staff' }
+        );
+        if (costContext) {
+          const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 600,
+              system: `You are a maintenance cost advisor for Aloe Property Management in Phoenix, AZ.
+Use the benchmark data below to evaluate vendor quotes. Always give a clear verdict:
+✅ APPROVE — price is within typical range
+⚠️ HIGH BUT ACCEPTABLE — above typical but still reasonable, use judgment
+❌ GET ANOTHER QUOTE — price is too high, request additional bids
+🚨 NEEDS OWNER APPROVAL — over $250-$500, require owner sign-off
+
+Format your response as:
+**[Repair type]**
+Quoted: $[amount]
+Typical range: $[range]
+Verdict: [emoji + verdict]
+[1-2 sentence explanation + action if needed]
+
+General rules if specific item not listed:
+- Under $125 from trusted vendor: usually approve
+- $125–$250: compare to benchmarks, ask for photos if high
+- Over $250: get 2-3 bids unless emergency
+- Over $500: owner approval required
+
+BENCHMARK DATA:
+` + costContext.slice(0, 5000),
+              messages: [{ role: 'user', content: userMsg }]
+            })
+          });
+          const data = await resp.json();
+          const answer = data.content && data.content[0] && data.content[0].text;
+          if (answer) {
+            console.log('Price check shortcut fired (KB):', userMsg.slice(0, 80));
+            return res.json({ content: [{ type: 'text', text: answer }] });
+          }
+        }
+      } catch(e) {
+        console.error('Price check shortcut error:', e.message);
+      }
+    }
+
+    // ─── Live-data shortcuts (unchanged from original) ───────────────────────
+
     const isAvailabilityQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor|submitted|most.*order|order.*most/) &&
       lowerMsg.match(/availab|for rent|vacant|what unit|what prop|what home|what listing|what house|under \d|homes.*rent|rent.*home|\d\s*bed/) && !lowerMsg.match(/[0-9]{5,6}/);
     const isMarketDaysQ = !lowerMsg.match(/work.?order|maintenance|repair|vendor/) &&
@@ -1907,6 +1550,7 @@ app.post('/api/chat', async function(req, res) {
     const maxPrice = priceMatch ? parseInt(priceMatch[1]) : null;
     const bedMatch = lowerMsg.match(/(\d)\s*(?:bed|br|bedroom)/);
     const minBeds = bedMatch ? parseInt(bedMatch[1]) : null;
+
     if (isMarketDaysQ) {
       try {
         const cards = await getUnitsCards();
@@ -1917,7 +1561,6 @@ app.post('/api/chat', async function(req, res) {
         const now = Date.now();
         const threshold = marketDays * 24 * 60 * 60 * 1000;
         const longListed = published.filter(function(c) {
-          // Check Available Date or Stage Changed date
           const dateStr = c['Available Date'] || c['Stage Changed'] || c['Created At'] || '';
           if (!dateStr) return false;
           try {
@@ -1926,7 +1569,7 @@ app.post('/api/chat', async function(req, res) {
         }).sort(function(a, b) {
           const da = new Date(a['Available Date'] || a['Stage Changed'] || 0).getTime();
           const db = new Date(b['Available Date'] || b['Stage Changed'] || 0).getTime();
-          return da - db; // oldest first
+          return da - db;
         });
         const fmt = function(c) {
           const addr = (c.Street || c.Address || c['Marketing Name'] || c.Title || '?').replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
@@ -1944,31 +1587,26 @@ app.post('/api/chat', async function(req, res) {
         console.error('Market days shortcut error:', e.message);
       }
     }
+
     if (isAvailabilityQ || isNotTourableQ) {
       try {
         const cards = await getUnitsCards();
-        console.log('Units cards total:', cards.length, 'maxPrice:', maxPrice, 'minBeds:', minBeds);
-
-        // "Coming available" / "next N days" query — pull from List Property board (qfBzBxfooJtfTQncd)
         const comingAvailMatch = lowerMsg.match(/coming.*availab|availab.*soon|next\s+(\d+)\s+day|upcoming.*availab|availab.*next|availab.*in.*(\d+)/);
         if (comingAvailMatch || lowerMsg.match(/next \d+ days|next 30|next 60|next 90|upcoming vacant|coming up|list.*property|list.*market|on market/)) {
           const daysAhead = parseInt((lowerMsg.match(/next\s+(\d+)\s+day/)||[])[1] || '30');
           const nowMs = Date.now();
           const azOffset = -7 * 60 * 60 * 1000;
-          const todayStr = new Date(nowMs + azOffset).toISOString().slice(0,10);
           const futureMs = nowMs + daysAhead * 24 * 60 * 60 * 1000;
           const futureStr = new Date(futureMs + azOffset).toISOString().slice(0,10);
-          // Fetch from List Property board — the active marketing board
           const listData = await unitsFetch('/api/board/qfBzBxfooJtfTQncd', { page: 0, pageSize: 100, includeArchived: false });
           const listCards = Array.isArray(listData) ? listData : (listData && listData.data) || [];
-          // Filter to On Market stage and within available date window
           const coming = listCards.filter(function(c) {
             if (!/on market/i.test(c.Stage || '')) return false;
             const d = c['Mirror Available Date'];
-            if (!d) return true; // include if no date set (recently listed)
+            if (!d) return true;
             try {
               const ds = new Date(d).toISOString().slice(0,10);
-              return ds <= futureStr; // available within window or already available
+              return ds <= futureStr;
             } catch(e) { return false; }
           }).sort(function(a, b) {
             const da = a['Mirror Available Date'] ? new Date(a['Mirror Available Date']).getTime() : 0;
@@ -1995,7 +1633,6 @@ app.post('/api/chat', async function(req, res) {
           const text = coming.length > 0
             ? label + '\n\n' + coming.map(fmt2).join('\n')
             : 'No active listings with available dates in the next ' + daysAhead + ' days.';
-          console.log('Coming available (List Property board):', coming.length, 'listings');
           return res.json({ content: [{ type: 'text', text }] });
         }
         let published = cards.filter(function(c) {
@@ -2055,19 +1692,13 @@ app.post('/api/chat', async function(req, res) {
     if (isApplicationQ) {
       try {
         const searchTerm = applicationAddress ? applicationAddress[1] : '';
-        // getApplicantsCards fetches with schema mapping so field names are human-readable
         let cards = await getApplicantsCards();
-        console.log('Applications fetched:', cards.length, 'searchTerm:', searchTerm);
-        if (cards.length > 0) console.log('First card keys:', Object.keys(cards[0]).slice(0, 15).join(', '));
-        // Filter by address if provided
         const filtered = searchTerm
           ? cards.filter(function(c) { return JSON.stringify(c).toLowerCase().includes(searchTerm.toLowerCase().split(' ')[0]); })
           : cards;
-        // Filter out archived/closed — only show active applications
         const active = filtered.filter(function(c) {
           return !c.archived && c.Stage !== 'Application Closed' && c.Stage !== 'Archived';
         });
-        // Group active by completion status
         const complete = active.filter(function(c) { return c['Application Complete'] === 'All Applicants'; });
         const partial = active.filter(function(c) { return c['Application Complete'] === 'Some Applicants'; });
         const approved = active.filter(function(c) { return c.appApproved === true; });
@@ -2080,7 +1711,6 @@ app.post('/api/chat', async function(req, res) {
             (isApproved ? ' ✓ APPROVED' : '') +
             (appComplete === 'All Applicants' ? ' (complete)' : appComplete === 'Some Applicants' ? ' (partial)' : '');
         };
-        // Only show complete, partial, and approved — not bare incomplete unless asked
         const toShow = active.filter(function(c) {
           return c['Application Complete'] === 'All Applicants' ||
                  c['Application Complete'] === 'Some Applicants' ||
@@ -2121,7 +1751,6 @@ app.post('/api/chat', async function(req, res) {
           else daysBack = n;
         }
         const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        // Use location board — Date Contract Begins is when Aloe PM started managing the property
         const locSchema = await unitsFetch('/api/schema/location');
         const locMap = {};
         if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
@@ -2140,25 +1769,19 @@ app.post('/api/chat', async function(req, res) {
           Object.keys(card).forEach(function(k) { m[locMap[k] || k] = card[k]; });
           return m;
         });
-        // Parse date from ISO or MM/DD/YYYY
         const parseDate = function(raw) {
           if (!raw) return null;
           const mmdd = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
           if (mmdd) { try { return new Date(mmdd[3]+'-'+mmdd[1].padStart(2,'0')+'-'+mmdd[2].padStart(2,'0')).getTime(); } catch(e) {} }
           try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
         };
-        // Get the best "onboarded" date — prefer Date Contract Begins, fall back to Created At
         const getOnboardMs = function(c) {
           return parseDate(c['Date Contract Begins'] || '') || parseDate(c['Created At'] || '') || null;
         };
-        // Filter to properties onboarded within cutoff
         const newProps = mapped.filter(function(c) {
           const ms = getOnboardMs(c);
           return ms !== null && ms > cutoffMs;
         }).sort(function(a, b) { return (getOnboardMs(b) || 0) - (getOnboardMs(a) || 0); });
-        console.log('Onboard: total locations:', mapped.length, 'new in', daysBack, 'days:', newProps.length);
-        // Sample first card dates for debug
-        if (mapped.length > 0) { const s = mapped[0]; console.log('Sample Created At:', s['Created At'], '| Contract:', s['Date Contract Begins']); }
         const extractOwner = function(c) {
           const raw = c['Owner'] || c['Portfolio'] || '';
           if (Array.isArray(raw)) return raw.map(function(o) { return typeof o === 'object' ? (o.name || '') : String(o); }).filter(Boolean).join(', ');
@@ -2181,7 +1804,6 @@ app.post('/api/chat', async function(req, res) {
         if (newProps.length > 0) {
           return res.json({ content: [{ type: 'text', text: 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n\n') }] });
         } else {
-          // Show most recently contracted
           const withContract = mapped.filter(function(c) { return getOnboardMs(c) !== null; })
             .sort(function(a, b) { return (getOnboardMs(b) || 0) - (getOnboardMs(a) || 0); });
           const top = withContract.slice(0, 10);
@@ -2196,7 +1818,6 @@ app.post('/api/chat', async function(req, res) {
     const isMoveInQ = lowerMsg.match(/move.?in|moving in|move ins|movein/) && lowerMsg.match(/upcoming|next week|this week|today|scheduled|coming up|when|what|list|show/);
     if (isMoveInQ) {
       try {
-        // Fetch schema + all Move-Ins cards
         const schemaData = await unitsFetch('/api/schema/K9mMGGjKgQPqDykaa');
         const schemaMap = {};
         if (Array.isArray(schemaData)) schemaData.forEach(function(f) { schemaMap[f.key] = f.label; });
@@ -2206,7 +1827,6 @@ app.post('/api/chat', async function(req, res) {
           const data = await unitsFetch('/api/board/K9mMGGjKgQPqDykaa', { page: pg, pageSize: 50 });
           const batch = Array.isArray(data) ? data : (data && data.data) || [];
           if (batch.length === 0) break;
-          // Map UUID keys to labels
           const mapped = batch.map(function(card) {
             const m = { _stage: card.stage, _cardId: card.cardId };
             Object.keys(card).forEach(function(k) { m[schemaMap[k] || k] = card[k]; });
@@ -2217,11 +1837,8 @@ app.post('/api/chat', async function(req, res) {
           pg++;
           if (pg > 5) break;
         }
-        // AZ time
         const azNow = new Date(Date.now() - 7 * 60 * 60 * 1000);
         const azToday = new Date(azNow); azToday.setHours(0,0,0,0);
-        // Next week boundaries (Mon-Sun of next week, or just next 14 days)
-        // Helper to extract string value from field that may be object/array
         const strField = function(v) {
           if (!v) return '';
           if (typeof v === 'string') return v;
@@ -2237,12 +1854,11 @@ app.post('/api/chat', async function(req, res) {
           try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
         };
         const todayMs = azToday.getTime();
-        // Determine time window
         let windowStart = todayMs;
-        let windowEnd = todayMs + 14 * 24 * 60 * 60 * 1000; // default 14 days
+        let windowEnd = todayMs + 14 * 24 * 60 * 60 * 1000;
         let windowLabel = 'upcoming (next 14 days)';
         if (lowerMsg.includes('next week')) {
-          const dow = azToday.getDay(); // 0=Sun
+          const dow = azToday.getDay();
           const daysToNextMon = dow === 0 ? 1 : 8 - dow;
           windowStart = todayMs + daysToNextMon * 24 * 60 * 60 * 1000;
           windowEnd = windowStart + 7 * 24 * 60 * 60 * 1000;
@@ -2256,7 +1872,6 @@ app.post('/api/chat', async function(req, res) {
           windowEnd = todayMs + 24 * 60 * 60 * 1000;
           windowLabel = 'today';
         }
-        // Filter: active stages only, within window
         const excluded = /abandoned|moved in/i;
         const filtered = allCards.filter(function(c) {
           if (excluded.test(c._stage || '')) return false;
@@ -2264,9 +1879,7 @@ app.post('/api/chat', async function(req, res) {
           return ms !== null && ms >= windowStart && ms < windowEnd;
         }).sort(function(a, b) { return (parseMoveinDate(a) || 0) - (parseMoveinDate(b) || 0); });
         const fmt = function(c) {
-          // Title is always a plain string: "04/17/2026 Erik Gunderson; Emeleen Adler 2705 W Estrella Dr..."
           const title = strField(c['Title'] || c.name || '');
-          // Extract just the names from title (between date and address)
           const titleMatch = title.match(/^\d{2}\/\d{2}\/\d{4}\s+(.+?)\s+\d+\s+[A-Z]/);
           const residents = titleMatch ? titleMatch[1].replace(/;/g, ' &') : (strField(c['Mirror Residents']) || title);
           const addr = strField(c['Mirror Address']) || strField(c['Buildings']) || strField(c['Unit']) || '';
@@ -2288,11 +1901,10 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
-    // Server-side shortcut for recurring category issues across all work orders (open + closed)
+    // Server-side shortcut for recurring category issues across all work orders
     const isRecurringQ = lowerMsg.match(/recurring|came back|again|multiple.*time|more than once|history.*issue|issue.*history|closed.*work.*order|billed.*work.*order|past.*year|within.*year|how many times|repeat.*hvac|hvac.*repeat|same.*hvac|hvac.*same|hvac.*issue|plumb.*repeat|repeat.*plumb|repeat.*appliance|appliance.*repeat|repeat.*electric|same.*issue.*before|previous.*issue|pattern|trend/);
     if (isRecurringQ) {
       try {
-        // Determine category filter
         let catFilter = '';
         if (lowerMsg.match(/hvac|ac\b|air.?condition|heat/)) catFilter = 'HVAC';
         else if (lowerMsg.match(/plumb|toilet|drain|leak|pipe/)) catFilter = 'Plumbing';
@@ -2300,7 +1912,7 @@ app.post('/api/chat', async function(req, res) {
         else if (lowerMsg.match(/appliance|fridge|dishwasher|washer|dryer|microwave/)) catFilter = 'Appliance';
         else if (lowerMsg.match(/roof/)) catFilter = 'Roofing';
         const daysMatch = lowerMsg.match(/(\d+)\s*(?:day|month|year)/);
-        let daysBack = 730; // default 2 years
+        let daysBack = 730;
         if (daysMatch) {
           const n = parseInt(daysMatch[1]);
           if (lowerMsg.includes('month')) daysBack = n * 30;
@@ -2320,7 +1932,6 @@ app.post('/api/chat', async function(req, res) {
           if (/pool|spa/i.test(d)) return 'Pool';
           return 'General';
         };
-        // Pre-load property ID -> address map from Rentvine
         const propIdToAddr = {};
         try {
           let propPage = 1;
@@ -2334,10 +1945,7 @@ app.post('/api/chat', async function(req, res) {
             if (propBatch.length < 200) break;
             propPage++;
           }
-          console.log('Recurring: loaded', Object.keys(propIdToAddr).length, 'property addresses');
-        } catch(e) { console.log('Recurring: prop load error:', e.message); }
-
-        // Fetch all WOs from Rentvine (open + closed)
+        } catch(e) {}
         let allWOs = [];
         for (let pg = 1; pg <= 25; pg++) {
           const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
@@ -2345,25 +1953,11 @@ app.post('/api/chat', async function(req, res) {
           if (batch.length === 0) break;
           allWOs = allWOs.concat(batch);
           if (batch.length < 100) break;
-          // Stop if last WO in batch is older than our cutoff
           const lastRec = batch[batch.length - 1];
           const lastCreated = ((lastRec.workOrder || lastRec).dateTimeCreated || '');
           if (lastCreated && new Date(lastCreated).getTime() < cutoffMs) break;
         }
-        console.log('Recurring shortcut: fetched', allWOs.length, 'WOs, catFilter:', catFilter || 'all');
-        // Debug first few records to see address structure
-        const sample = allWOs.slice(0, 3);
-        sample.forEach(function(rec) {
-          const wo = rec.workOrder || rec;
-          console.log('RV WO sample - unit:', JSON.stringify(rec.unit || '').slice(0, 120), '| created:', (wo.dateTimeCreated || '').slice(0, 10));
-        });
-        // Count how many have addresses
-        const withAddr = allWOs.filter(function(rec) {
-          return !!(rec.unit && (rec.unit.address || rec.unit.name));
-        });
-        console.log('WOs with unit address:', withAddr.length, 'of', allWOs.length);
-        // Group by normalized address + category
-        const normalizeAddr = function(s) {
+        const normalizeAddr2 = function(s) {
           return (s || '').toLowerCase()
             .replace(/\s+/g, ' ')
             .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr').replace(/\bavenue\b/g, 'ave')
@@ -2374,7 +1968,6 @@ app.post('/api/chat', async function(req, res) {
         };
         const byAddrCat = {};
         allWOs.forEach(function(rec) {
-          // Try unit address first, then resolve from property ID map
           const rawAddr = (rec.unit && (rec.unit.address || rec.unit.name)) ||
                           (rec.property && (rec.property.address || rec.property.name)) || '';
           const wo = rec.workOrder || rec;
@@ -2383,7 +1976,7 @@ app.post('/api/chat', async function(req, res) {
           const groupKey = resolvedAddr || (propId ? 'propID:' + propId : '');
           if (!groupKey) return;
           const displayAddr = resolvedAddr || ('Property #' + propId);
-          const addrKey = rawAddr ? normalizeAddr(rawAddr) : groupKey;
+          const addrKey = rawAddr ? normalizeAddr2(rawAddr) : groupKey;
           const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
           if (created < cutoffMs) return;
           const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
@@ -2400,8 +1993,6 @@ app.post('/api/chat', async function(req, res) {
             vendor: (rec.contact && rec.contact.name) || 'Unassigned',
           });
         });
-        const addressCount = Object.keys(byAddrCat).length;
-        console.log('Recurring: unique addr+cat combos:', addressCount, '| with 2+:', Object.values(byAddrCat).filter(function(e){return e.wos.length>=2;}).length);
         const flagged = Object.values(byAddrCat)
           .filter(function(e) { return e.wos.length >= 2; })
           .sort(function(a, b) { return b.wos.length - a.wos.length; });
@@ -2420,11 +2011,10 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
-    // Server-side shortcut for repeat issues / property work order history
-    const isRepeatQ = lowerMsg.match(/repeat.*issue|issue.*repeat|recurring|same.*issue|same.*problem|multiple.*work.*order|same.*type|issue.*type|category|any.*propert.*same/);
+    // Server-side shortcut for repeat issues / cross-property patterns (open WOs only)
+    const isRepeatQ = lowerMsg.match(/repeat.*issue|issue.*repeat|same.*issue|same.*problem|multiple.*work.*order|same.*type|issue.*type|category|any.*propert.*same/);
     if (isRepeatQ) {
       try {
-        // Fetch all open Aptly WOs
         let allWOs = [];
         let page = 0;
         while (true) {
@@ -2436,7 +2026,6 @@ app.post('/api/chat', async function(req, res) {
           if (page >= 2) break;
           page++;
         }
-        // Categorize issue type from description + vendorTrade
         const categorize = function(c) {
           const trade = (c.vendorTrade || '').toLowerCase();
           const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').toLowerCase();
@@ -2454,7 +2043,6 @@ app.post('/api/chat', async function(req, res) {
           if (/inspect|walkthrough|walk.?through/i.test(desc)) return 'Inspection';
           return 'General';
         };
-        // Build per-property data
         const byAddress = {};
         allWOs.forEach(function(c) {
           const locArr = Array.isArray(c.location) ? c.location : [];
@@ -2467,7 +2055,6 @@ app.post('/api/chat', async function(req, res) {
         });
         const isSameTypeQ = lowerMsg.match(/same.*type|type.*same|category|same.*issue|issue.*type|any.*propert.*same/);
         if (isSameTypeQ) {
-          // Cross-property: find issue categories that appear at multiple properties
           const categoryAddresses = {};
           Object.entries(byAddress).forEach(function(e) {
             e[1].forEach(function(w) {
@@ -2489,7 +2076,6 @@ app.post('/api/chat', async function(req, res) {
           });
           return res.json({ content: [{ type: 'text', text: 'Issue categories affecting multiple properties:\n\n' + lines.join('\n\n') }] });
         }
-        // Default: properties with 2+ open WOs
         const repeats = Object.entries(byAddress)
           .filter(function(e) { return e[1].length >= 2; })
           .sort(function(a, b) { return b[1].length - a[1].length; });
@@ -2507,82 +2093,6 @@ app.post('/api/chat', async function(req, res) {
       }
     }
 
-    // Server-side shortcut for price/quote checks — uses cached benchmarks
-    const isPriceQ = lowerMsg.match(/cost|price|quote|charge|too (much|high|expensive)|fair price|good price|benchmark|should i approve|approve.*quote|is.*\$|how much.*should|within range|get.*bid|another.*quote|second.*quote/);
-    if (isPriceQ && NOTION_CACHE.cost_benchmarks && NOTION_CACHE.cost_benchmarks.text) {
-      try {
-        const resp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 600,
-            system: `You are a maintenance cost advisor for Aloe Property Management in Phoenix, AZ.
-Use the benchmark data below to evaluate vendor quotes. Always give a clear verdict:
-✅ APPROVE — price is within typical range
-⚠️ HIGH BUT ACCEPTABLE — above typical but still reasonable, use judgment
-❌ GET ANOTHER QUOTE — price is too high, request additional bids
-🚨 NEEDS OWNER APPROVAL — over $250-$500, require owner sign-off
-
-Format your response as:
-**[Repair type]**
-Quoted: $[amount]
-Typical range: $[range]
-Verdict: [emoji + verdict]
-[1-2 sentence explanation + action if needed]
-
-General rules if specific item not listed:
-- Under $125 from trusted vendor: usually approve
-- $125–$250: compare to benchmarks, ask for photos if high
-- Over $250: get 2-3 bids unless emergency
-- Over $500: owner approval required
-
-BENCHMARK DATA:
-` + NOTION_CACHE.cost_benchmarks.text.slice(0, 5000),
-            messages: [{ role: 'user', content: userMsg }]
-          })
-        });
-        const data = await resp.json();
-        const answer = data.content && data.content[0] && data.content[0].text;
-        if (answer) {
-          console.log('Price check shortcut fired:', userMsg.slice(0, 80));
-          return res.json({ content: [{ type: 'text', text: answer }] });
-        }
-      } catch(e) {
-        console.error('Price check shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for vendor questions — uses cached data, no token cost
-    const isVendorQ = lowerMsg.match(/vendor|who.*assign|who.*call|who.*use|which.*vendor|assign.*work.?order|who.*do.*hvac|who.*do.*plumb|who.*do.*roof|who.*do.*pest|who.*do.*landscap|who.*do.*clean|who.*do.*floor|who.*do.*paint|who.*do.*appli|who.*do.*garage|who.*do.*glass|preferred.*vendor|vendor.*list/);
-    if (isVendorQ && VENDOR_CACHE) {
-      // Route through Claude with cached vendor data injected as context — no tool call needed
-      const vendorPrompt = 'VENDOR REFERENCE (from Notion, last updated ' + new Date(VENDOR_CACHE_LOADED_AT).toLocaleTimeString('en-US', {timeZone:'America/Phoenix'}) + ' AZ time):\n\n' + VENDOR_CACHE;
-      try {
-        const resp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1024,
-            system: 'You are Aloe Assistant, an internal AI for Aloe Property Management. Answer the vendor question using ONLY the vendor reference provided. Be specific about which vendor to use, their coverage area, and any notes. If the question mentions a city or area, make sure to match it to the right vendor.',
-            messages: [
-              { role: 'user', content: vendorPrompt + '\n\n---\nQuestion: ' + userMsg }
-            ]
-          })
-        });
-        const data = await resp.json();
-        const answer = (data.content && data.content[0] && data.content[0].text) || '';
-        if (answer) {
-          console.log('Vendor shortcut fired for:', userMsg.slice(0, 60));
-          return res.json({ content: [{ type: 'text', text: answer }] });
-        }
-      } catch(e) {
-        console.error('Vendor shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for work order comment questions
     // Server-side shortcut for work order comment intelligence
     const isWOCommentQ = lowerMsg.match(/comment|no comment|no note|follow.?up|without comment|has comment|have comment|vendor.*said|vendor.*update|waiting|blocked|overdue.*comment|need.*follow/) &&
       (lowerMsg.match(/work.?order/) || lowerMsg.match(/[0-9]{3,5}\s+\w+.*(?:drive|street|ave|lane|road|way|court|place|blvd|trail|circle)/i));
@@ -2592,10 +2102,8 @@ BENCHMARK DATA:
         const wantFollowUp = lowerMsg.match(/follow.?up|overdue|need.*action|past.*date|need.*response/);
         const wantVendorUpdates = lowerMsg.match(/vendor.*said|vendor.*update|vendor.*note|what.*vendor|vendor.*comment/);
         const wantWaiting = lowerMsg.match(/waiting|blocked|on hold|waiting for|pending/);
-        // Check if asking about a specific property
         const addrMatch = lowerMsg.match(/(?:for|at|on)\s+([0-9]+\s+[a-z].{5,40}?)(?:\?|$)/i) ||
                           lowerMsg.match(/([0-9]{3,5}\s+(?:west|east|north|south|w\.|e\.|n\.|s\.)?.{5,35}?)(?:\?|$)/i);
-        // Fetch all open WOs
         let allWOs = [];
         let pg = 0;
         while (true) {
@@ -2608,7 +2116,6 @@ BENCHMARK DATA:
           if (pg >= 1) break;
           pg++;
         }
-        // Filter by address if mentioned
         if (addrMatch) {
           const q = addrMatch[1].toLowerCase().trim().split(' ').slice(0,3).join(' ');
           const filtered = allWOs.filter(function(c) {
@@ -2619,8 +2126,6 @@ BENCHMARK DATA:
           });
           if (filtered.length > 0) allWOs = filtered;
         }
-        // Fetch comments via /comments endpoint — bulk endpoint does NOT include comments
-        // Only fetch for filtered set if address-specific, otherwise fetch all
         const cardsToCheck = allWOs;
         const commentResults = await Promise.all(cardsToCheck.map(async function(c) {
           try {
@@ -2630,7 +2135,6 @@ BENCHMARK DATA:
         }));
         const commentsMap = {};
         commentResults.forEach(function(r) { commentsMap[r.cardId] = r.comments; });
-        console.log('WO comments fetched via /comments endpoint:', cardsToCheck.length, 'WOs, with comments:', commentResults.filter(function(r){return r.comments.length>0;}).length);
         const todayMs = Date.now();
         const todayStr = new Date(todayMs - 7*60*60*1000).toISOString().slice(0,10);
         const getAddr = function(c) {
@@ -2649,7 +2153,6 @@ BENCHMARK DATA:
           const raw = c[key] || '';
           return raw ? String(raw).slice(0,10) : '';
         };
-        // For address-specific questions, show all WOs with their comments
         const isAddressSpecific = !!(addrMatch && addrMatch[1].length > 5);
         if (isAddressSpecific) {
           const lines = allWOs.map(function(s) {
@@ -2665,7 +2168,6 @@ BENCHMARK DATA:
           });
           return res.json({ content: [{ type: 'text', text: 'Work order comments for ' + (addrMatch[1]||'property') + ':\n\n' + lines.join('\n\n') }] });
         }
-        // Score each WO for follow-up need
         const scored = allWOs.map(function(c) {
           const comments = commentsMap[c.cardId] || [];
           const commentCount = comments.length;
@@ -2678,7 +2180,6 @@ BENCHMARK DATA:
           const isPastSched = schedDate && schedDate < todayStr;
           const created = c.createdAt ? new Date(c.createdAt).getTime() : 0;
           const daysOpen = created ? Math.floor((todayMs - created) / 86400000) : 0;
-          // Detect flags from comment text
           const allCommentText = comments.map(function(cm) { return (cm.content||'').toLowerCase(); }).join(' ');
           const isWaiting = /waiting|wait for|on hold|parts.*order|parts.*coming|order.*part|approval|awaiting/.test(allCommentText);
           const vendorComments = comments.filter(function(cm) {
@@ -2697,7 +2198,6 @@ BENCHMARK DATA:
           results = scored.filter(function(s) { return s.commentCount === 0; });
           label = 'Work orders with NO comments (' + results.length + ' of ' + scored.length + ')';
         } else if (wantFollowUp) {
-          // Past scheduled date OR open 7+ days with no comment in 3+ days
           results = scored.filter(function(s) {
             return s.isPastSched || (s.daysOpen >= 7 && (s.daysSinceComment === null || s.daysSinceComment >= 3));
           }).sort(function(a,b) { return (b.daysOpen||0) - (a.daysOpen||0); });
@@ -2709,7 +2209,6 @@ BENCHMARK DATA:
           results = scored.filter(function(s) { return s.vendorComments.length > 0; });
           label = 'Work orders with vendor comments (' + results.length + ' of ' + scored.length + ')';
         } else {
-          // Default: show WOs with comments, showing the latest
           results = scored.filter(function(s) { return s.commentCount > 0; });
           label = 'Work orders with comments (' + results.length + ' of ' + scored.length + ')';
         }
@@ -2733,22 +2232,18 @@ BENCHMARK DATA:
       }
     }
 
-        // Server-side shortcut for work order questions — formats output directly
+    // Server-side shortcut for work order questions — formats output directly
     const isWOQ = !lowerMsg.match(/comment|note|follow.?up/) &&
       lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start|most|property|home|propert/);
     if (isWOQ) {
-      console.log('WO shortcut fired for:', lowerMsg.slice(0, 60));
       try {
-        // Fetch schema to find scheduled date UUID keys
         let schedKey = null;
         try {
           const woSchema = await unitsFetch('/api/schema/workOrder');
           const woMap = {};
           if (Array.isArray(woSchema)) woSchema.forEach(function(f) { if (f && f.label) woMap[f.label] = f.key; });
           schedKey = woMap['Appointment Window Start'] || woMap['Scheduled Start Date'] || woMap['Start Date'] || woMap['Scheduled Date'] || null;
-          console.log('WO schedKey:', schedKey);
-        } catch(schemaErr) { console.log('WO schema fetch failed:', schemaErr.message); }
-        // Fetch work orders
+        } catch(schemaErr) {}
         let allWOs = [];
         let page = 0;
         while (true) {
@@ -2762,7 +2257,7 @@ BENCHMARK DATA:
           page++;
         }
         const now = Date.now();
-        const todayStr = new Date(now - 7*60*60*1000).toISOString().slice(0, 10); // AZ time approx
+        const todayStr = new Date(now - 7*60*60*1000).toISOString().slice(0, 10);
         const wos = allWOs.map(function(c) {
           const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
           const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
@@ -2777,16 +2272,12 @@ BENCHMARK DATA:
           const schedDate = schedRaw ? String(schedRaw).slice(0, 10) : '';
           const isPastScheduled = schedDate ? schedDate < todayStr : false;
           return {
-            address: address,
-            num: c.workOrderNumber || '',
+            address, num: c.workOrderNumber || '',
             issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
-            fullDesc: cleanDesc, // full desc for categorization
-            status: c.stage || '',
-            daysOpen: daysOpen,
-            vendor: vendor,
+            fullDesc: cleanDesc,
+            status: c.stage || '', daysOpen, vendor,
             trade: (Array.isArray(c.vendorTrade) ? (c.vendorTrade[0]||'') : (c.vendorTrade||'')),
-            schedDate: schedDate,
-            isPastScheduled: isPastScheduled,
+            schedDate, isPastScheduled,
           };
         });
 
@@ -2797,7 +2288,6 @@ BENCHMARK DATA:
         const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/) && !unscheduledOnly;
         const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
         const propertySummary = lowerMsg.match(/most.*work.*order|work.*order.*most|most.*submit|submit.*most|most.*open|propert.*most|home.*most|which.*home|which.*propert|by.*property|per.*property|property.*count|address.*most/);
-        // Category filter — detect issue type from message
         const categorize = function(issue, vendor, trade) {
           const t = ((issue||'') + ' ' + (vendor||'') + ' ' + (trade||'')).toLowerCase();
           if (/pest|termite|rodent|insect|cockroach|t2 pest|bug.*infestation/.test(t)) return 'Pest Control';
@@ -2815,8 +2305,6 @@ BENCHMARK DATA:
           if (/inspect|walkthrough|walk.?through/.test(t)) return 'Inspection';
           return 'General';
         };
-        // Emergency filter — cross-category, keyword-based urgency detection
-        const emergencyKeywords = /emergency|urgent|flood|no heat|no hot water|no cool|no ac|lock.*out|can.t lock|can.t enter|burst.*pipe|pipe.*burst|gas.*leak|gas.*smell|no power|carbon monoxide|sewage.*back|sewage.*overflow|ceiling.*collapse|fire|smoke/;
         const isEmergencyQ = lowerMsg.match(/emergency|urgent|flood|critical|disaster|no heat|no hot water|lock.?out/);
         let catFilter = null;
         if (/pest|termite|rodent|insect/.test(lowerMsg)) catFilter = 'Pest Control';
@@ -2840,7 +2328,6 @@ BENCHMARK DATA:
             });
           }
         } else if (unscheduledOnly) {
-          // WOs with a vendor assigned but no scheduled date set yet
           filtered = wos.filter(function(w) { return !w.schedDate; });
         } else if (catFilter) {
           filtered = wos.filter(function(w) { return categorize(w.fullDesc, w.vendor, w.trade) === catFilter; });
@@ -2853,7 +2340,6 @@ BENCHMARK DATA:
           filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
         }
         filtered.sort(function(a, b) { return b.daysOpen - a.daysOpen; });
-        // Property summary mode
         if (propertySummary) {
           const propCounts = {};
           wos.forEach(function(w) { if (w.address && w.address !== '?') propCounts[w.address] = (propCounts[w.address] || 0) + 1; });
@@ -2861,7 +2347,6 @@ BENCHMARK DATA:
           const lines = sorted.map(function(e) { return e[0] + ': ' + e[1] + ' work order' + (e[1] !== 1 ? 's' : ''); });
           return res.json({ content: [{ type: 'text', text: 'Open work orders by property (' + wos.length + ' total):\n\n' + lines.join('\n') }] });
         }
-        // Vendor summary mode
         if (vendorSummary) {
           const vendorCounts = {};
           wos.forEach(function(w) { vendorCounts[w.vendor] = (vendorCounts[w.vendor] || 0) + 1; });
@@ -2890,7 +2375,6 @@ BENCHMARK DATA:
     const isLeasingReportQ = lowerMsg.match(/leasing report|leasing update|leasing activity|vacancy report|vacant.*report|report.*vacant|owner.*update.*leas|leas.*update.*owner|days on market|how long.*vacant|how long.*listed|listing.*activity|leas.*last.*week|leas.*last.*month|leas.*this.*week|leas.*this.*month|what.*happening.*leas|showings.*report|leads.*report|update.*owner.*property|property.*update.*owner/);
     if (isLeasingReportQ) {
       try {
-        // Detect time window
         const now = Date.now();
         const azNow = new Date(now - 7 * 60 * 60 * 1000);
         let daysBack = 30;
@@ -2898,26 +2382,17 @@ BENCHMARK DATA:
         else if (lowerMsg.match(/last month|this month|past month|30 day/)) daysBack = 30;
         else if (lowerMsg.match(/last 2 week|14 day/)) daysBack = 14;
         const cutoffMs = now - daysBack * 24 * 60 * 60 * 1000;
-        const cutoffStr = new Date(cutoffMs).toISOString().slice(0, 10);
-
-        // Detect specific property filter
         const propMatch = lowerMsg.match(/(?:for|at|on)\s+([0-9]+\s+\w.{5,40}?)(?:\?|$)/i) ||
                           lowerMsg.match(/([0-9]{3,5}\s+(?:west|east|north|south|w |e |n |s ).{5,35}?)(?:\?|$)/i);
         const propFilter = propMatch ? propMatch[1].toLowerCase().trim() : null;
-
-        // Fetch all units
         const unitsData = await unitsFetch('/api/board/unit', { page: 0, pageSize: 200, includeArchived: false });
         let units = Array.isArray(unitsData) ? unitsData : (unitsData && unitsData.data) || [];
-
-        // Filter by property if specified
         if (propFilter) {
           const q = propFilter.split(' ').slice(0, 3).join(' ');
           units = units.filter(function(u) {
             return ((u['Address'] || '') + ' ' + (u['Street'] || '') + ' ' + (u.Title || '')).toLowerCase().includes(q);
           });
         }
-
-        // Fetch renter leads for activity
         const schemaRaw = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
         const schemaMap = {};
         if (Array.isArray(schemaRaw)) schemaRaw.forEach(function(f) { schemaMap[f.key] = f.label; });
@@ -2931,7 +2406,6 @@ BENCHMARK DATA:
         const leads = allLeads.map(mapLead).filter(function(l) {
           return !l.createdAt || new Date(l.createdAt).getTime() > cutoffMs;
         });
-
         const strVal = function(v) {
           if (!v) return '';
           if (typeof v === 'string') return v;
@@ -2939,20 +2413,14 @@ BENCHMARK DATA:
           if (typeof v === 'object') return v.name || v.value || '';
           return String(v);
         };
-
         const todayStr = azNow.toISOString().slice(0, 10);
-
-        // Build report sections
         const vacantUnits = units.filter(function(u) { return /vacant|available/i.test(u.Stage || ''); });
         const occupiedUnits = units.filter(function(u) { return /occupied/i.test(u.Stage || ''); });
-
         const lines = [];
         const period = daysBack === 7 ? 'Last 7 days' : daysBack === 14 ? 'Last 14 days' : 'Last 30 days';
         lines.push('📊 LEASING REPORT — ' + period.toUpperCase() + (propFilter ? ' — ' + propFilter.toUpperCase() : ''));
         lines.push('Generated: ' + todayStr);
         lines.push('');
-
-        // VACANT / ACTIVE LISTINGS
         if (vacantUnits.length > 0) {
           lines.push('🏠 VACANT / ACTIVE LISTINGS (' + vacantUnits.length + ')');
           lines.push('─────────────────────────────────');
@@ -2964,8 +2432,6 @@ BENCHMARK DATA:
             const availDate = u['Available Date'] || '';
             const daysOnMarket = availDate ? Math.floor((now - new Date(availDate).getTime()) / 86400000) : null;
             const owner = u.Owners || u.Portfolio || '';
-
-            // Match leads for this property
             const propLeads = leads.filter(function(l) {
               const pref = strVal(l['Preferred Rental'] || l['Unit'] || '');
               return addr && pref && (pref.toLowerCase().includes((u.Street || '').toLowerCase().slice(0, 10)) ||
@@ -2974,7 +2440,6 @@ BENCHMARK DATA:
             const showings = propLeads.filter(function(l) { return /scheduled tour|tour completed/i.test(l.stage || ''); });
             const applications = propLeads.filter(function(l) { return /applied|applicant/i.test(l.stage || ''); });
             const newLeads = propLeads.filter(function(l) { return /nurturing/i.test(l.stage || ''); });
-
             lines.push('📍 ' + addr);
             lines.push('   Rent: ' + rent + ' | ' + beds + 'bd/' + baths + 'ba | Owner: ' + owner);
             if (availDate) lines.push('   Available: ' + availDate + (daysOnMarket !== null ? ' (' + daysOnMarket + ' days on market)' : ''));
@@ -2995,8 +2460,6 @@ BENCHMARK DATA:
             lines.push('');
           });
         }
-
-        // RECENTLY OCCUPIED (leased in window)
         const recentlyOccupied = occupiedUnits.filter(function(u) {
           const stageChanged = u['Stage Changed'] || '';
           return stageChanged && new Date(stageChanged).getTime() > cutoffMs;
@@ -3013,8 +2476,6 @@ BENCHMARK DATA:
           });
           lines.push('');
         }
-
-        // SUMMARY STATS
         lines.push('📈 SUMMARY');
         lines.push('─────────────────────────────────');
         lines.push('Total properties tracked: ' + units.length);
@@ -3026,26 +2487,22 @@ BENCHMARK DATA:
         const totalApps = leads.filter(function(l) { return /applied/i.test(l.stage || ''); }).length;
         lines.push('Showings this period: ' + totalShowings);
         lines.push('Applications this period: ' + totalApps);
-
-        console.log('Leasing report shortcut fired, units:', units.length, 'vacant:', vacantUnits.length, 'leads:', leads.length);
         return res.json({ content: [{ type: 'text', text: lines.join('\n') }] });
       } catch(e) {
         console.error('Leasing report shortcut error:', e.message);
       }
     }
 
-    // Server-side shortcut for new leads    // Server-side shortcut for new leads questions
+    // Server-side shortcut for new leads questions
     const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many|come in|what.*lead|lead.*what/);
     if (isLeadsQ) {
       try {
         const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
         const schemaMap = {};
         if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
-        // Fetch all leads with updatedAtMin from 7 days ago
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100, updatedAtMin: weekAgo });
         const raw = Array.isArray(data) ? data : (data && data.data) || [];
-        // Map UUID keys to labels
         const extractVal = function(v) {
           if (!v) return '';
           if (typeof v === 'string') return v;
@@ -3060,12 +2517,11 @@ BENCHMARK DATA:
           });
           return m;
         });
-        // Filter to only this week's new leads by createdAt
         const weekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
         const newLeads = cards.filter(function(c) {
           return c.createdAt && new Date(c.createdAt).getTime() > weekAgoMs;
         });
-        const toShow = newLeads.length > 0 ? newLeads : cards; // fallback to all if none this week
+        const toShow = newLeads.length > 0 ? newLeads : cards;
         const fmt = function(c) {
           const name = (c['Primary Contact'] || c.name || '?').replace(/^Application: /, '');
           const property = c['Preferred Rental'] || c['Unit'] || '';
@@ -3085,26 +2541,21 @@ BENCHMARK DATA:
     const isShowingQ = lowerMsg.match(/showing|scheduled tour|who.*tour|tour.*today|showing.*today|today.*showing|past.*tour|recent.*tour|tour.*week|week.*tour|showing.*week|week.*showing/);
     if (isShowingQ) {
       try {
-        // Fetch schema first so we can map UUID keys to labels
         const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
         const schemaMap = {};
         if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
-        // Fetch all Renter Leads cards
         const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100 });
         const allCards = Array.isArray(data) ? data : (data && data.data) || [];
-        // Map UUID keys to labels for each card
         const mapCard = function(c) {
           const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt, comments: c.comments };
           Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
           return m;
         };
         const mapped = allCards.map(mapCard);
-        // Get cards with any showing-related info
         const showingCards = mapped.filter(function(c) {
           return c['Requested Showing Information'] || c['Tour Date/Time'] ||
                  /scheduled tour|tour completed|tour canceled/i.test(c.stage || '');
         });
-        // Parse date from "Showing request for Name (MM/DD/YYYY HH:MM am-...)"
         const parseShowingDate = function(c) {
           const raw = c['Requested Showing Information'];
           const info = typeof raw === 'string' ? raw : (raw && (raw.value || raw.name || JSON.stringify(raw))) || '';
@@ -3113,7 +2564,6 @@ BENCHMARK DATA:
           const td = String(c['Tour Date/Time'] || '').slice(0, 10);
           return td;
         };
-        // AZ time boundaries (UTC-7, no DST)
         const nowUtc = Date.now();
         const azOffset = -7 * 60 * 60 * 1000;
         const nowAz = new Date(nowUtc + azOffset);
@@ -3150,7 +2600,6 @@ BENCHMARK DATA:
         if (lowerMsg.match(/today/)) {
           filtered = showingCards.filter(function(c) { return parseShowingDate(c) === todayStr; });
           label = 'Showings today (' + todayStr + ')';
-          // If none today, also show upcoming
           if (filtered.length === 0) {
             const upcoming = showingCards.filter(function(c) {
               const ms = parseDateMs(c); return ms !== null && ms > todayAz.getTime();
@@ -3175,7 +2624,6 @@ BENCHMARK DATA:
           }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
           label = 'Showings in the past 3 days';
         } else {
-          // Default: show ALL showing activity
           filtered = showingCards.sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
           label = 'All showing activity';
         }
@@ -3188,8 +2636,8 @@ BENCHMARK DATA:
       }
     }
 
+    // ─── Main Claude tool-loop ───────────────────────────────────────────────
     let current = messages.slice();
-
     for (let i = 0; i < 10; i++) {
       const r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -3201,15 +2649,13 @@ BENCHMARK DATA:
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1024,
-          system: (function() {
+          system: await (async function() {
             let sys = SYSTEM_PROMPT;
-            // Inject knowledge base on first loop
-            if (KNOWLEDGE_BASE && i === 0) sys += '\n\n---\nKEY OPERATIONAL KNOWLEDGE (from Notion):\n' + KNOWLEDGE_BASE.slice(0, 4000);
-            // Inject relevant cached Notion page content when topic matches
+            // On first loop, inject any topic-relevant KB content
             if (i === 0) {
-              const cached = getCachedContext(lowerMsg);
-              if (cached && cached.text) {
-                sys += '\n\n---\nRELEVANT NOTION PAGE (' + cached.label + '):\n' + cached.text.slice(0, 4000);
+              const ctx = await getKbContext(lowerMsg);
+              if (ctx && ctx.text) {
+                sys += '\n\n---\nRELEVANT KB CONTENT (' + ctx.label + '):\n' + ctx.text.slice(0, 4000);
               }
             }
             return sys;
@@ -3228,11 +2674,9 @@ BENCHMARK DATA:
       const tbs = data.content.filter(function(b) { return b.type === 'tool_use'; });
       const results = await Promise.all(tbs.map(async function(tb) {
         let result = await executeTool(tb.name, tb.input);
-        // Trim large results to prevent context overflow (30k TPM rate limit)
         if (typeof result === 'string' && result.length > 8000) {
           try {
             const parsed = JSON.parse(result);
-            // If it's an array, limit to 15 items and strip bulky fields
             if (Array.isArray(parsed)) {
               const trimmed = parsed.slice(0, 15).map(function(item) {
                 const clean = Object.assign({}, item);
@@ -3266,7 +2710,6 @@ BENCHMARK DATA:
             result = result.slice(0, 8000) + '...[truncated]';
           }
         }
-        // Absolute hard cap — never send more than 10k chars to Claude per tool result
         if (typeof result === 'string' && result.length > 10000) {
           result = result.slice(0, 10000) + '...[truncated for context limit]';
         }
@@ -3289,31 +2732,11 @@ BENCHMARK DATA:
     res.status(500).json({ error: err.message });
   }
 });
-// ── Rentvine Proxy (for bank reconciliation tool) ─────────────────────────────
-app.use('/api/rentvine', async function(req, res) {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-  const rvPath = req.path;
-  const query = new URLSearchParams(req.query).toString();
-  const url = `${RENTVINE_BASE}${rvPath}${query ? '?' + query : ''}`;
-
-  try {
-    const r = await fetch(url, {
-      headers: { Authorization: `Basic ${RENTVINE_AUTH}` },
-    });
-    const data = await r.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 // ── Rentvine Proxy (for bank reconciliation) ─────────────────────────────────
 app.use('/api/rentvine', async function(req, res) {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   const rvPath = req.path;
@@ -3326,17 +2749,17 @@ app.use('/api/rentvine', async function(req, res) {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Bank Recon Tool ───────────────────────────────────────────────────────────
 app.get('/recon', function(req, res) {
   res.sendFile(new URL('recon.html', import.meta.url).pathname);
 });
+
 app.get('/health', function(req, res) {
   res.json({
     status: 'ok',
     anthropic: !!ANTHROPIC_API_KEY,
     rentvine: !!(RENTVINE_API_KEY && RENTVINE_API_SECRET),
     aptly: !!APTLY_TOKEN,
-    notion: !!NOTION_TOKEN,
+    knowledgeBase: KB_URL,
     slack: !!SLACK_TOKEN,
   });
 });
@@ -3351,18 +2774,13 @@ app.get('/debug/units', async function(req, res) {
   res.json(data);
 });
 
-app.get('/reload-knowledge', async function(req, res) {
-  await loadKnowledgeBase();
-  res.json({ loaded: true, chars: KNOWLEDGE_BASE.length });
-});
-
 app.get('/debug/units-api', async function(req, res) {
   try {
     const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || 'NOT SET';
     const schema = await unitsFetch('/api/schema/unit');
     const rawCards = await unitsFetch('/api/board/unit', { page: 0, pageSize: 3 });
     const mappedCards = await getUnitsCards();
-    res.json({ 
+    res.json({
       tokenSet: token !== 'NOT SET',
       tokenPrefix: token.slice(0, 8) + '...',
       schemaIsArray: Array.isArray(schema),
@@ -3379,9 +2797,17 @@ app.get('/debug/units-api', async function(req, res) {
     res.json({ error: e.message });
   }
 });
+
+// Clear the KB topic cache (useful after KB content updates)
+app.get('/reload-kb-cache', function(req, res) {
+  Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
+  res.json({ cleared: true });
+});
+
 app.get('/sandbox', function(req, res) {
   res.sendFile(new URL('sandbox.html', import.meta.url).pathname);
 });
+
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -3524,11 +2950,10 @@ const FAQ_TABS = [
   },
 ];
 
-
 const SOURCES = [
   {label:"Rentvine",bg:"#e6f0fb",border:"#85B7EB"},
   {label:"Aptly",   bg:"#EAF3DE",border:"#97C459"},
-  {label:"Notion",  bg:"#f5f5f5",border:"#d0d0d0"},
+  {label:"Knowledge Base",  bg:"#FAEEDA",border:"#EF9F27"},
   {label:"Slack",   bg:"#f0e6f6",border:"#c17edb"},
 ];
 
@@ -3696,7 +3121,7 @@ function Assistant() {
             <textarea ref={taRef} value={input} onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder="Ask anything — or pick a shortcut from the sidebar..." rows={1} style={{flex:1,padding:"9px 12px",background:"#f9f9f7",border:"1px solid #e5e5e5",borderRadius:8,color:"#1a1a1a",fontSize:14,fontFamily:"inherit",resize:"none",lineHeight:1.5,minHeight:38,maxHeight:120}}/>
             <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:38,height:38,borderRadius:8,background:input.trim()&&!loading?"#3B6D11":"#f0f0f0",border:"none",cursor:input.trim()&&!loading?"pointer":"default",color:input.trim()&&!loading?"white":"#aaa",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
           </div>
-          <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>Rentvine · Aptly · Notion · Slack · All data is live</div>
+          <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>Rentvine · Aptly · Knowledge Base · Slack · All data is live</div>
         </div>
       </div>
     </div>
