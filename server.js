@@ -2797,7 +2797,10 @@ app.get('/sandbox', function(req, res) {
 });
 
 app.get('/recon', function(req, res) {
-  res.sendFile(new URL('recon.html', import.meta.url).pathname);
+  const filePath = new URL('recon.html', import.meta.url).pathname;
+  res.sendFile(filePath, function(err) {
+    if (err) console.error('recon.html sendFile error:', err.message, 'path:', filePath);
+  });
 });
 
 app.get('*', function(req, res) {
