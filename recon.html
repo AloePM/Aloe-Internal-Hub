@@ -110,6 +110,17 @@
   .badge-miss{background:var(--rbg);color:var(--red);border:1px solid var(--rborder)}
   .type-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.04em;margin-left:4px;vertical-align:middle;background:var(--s2);color:var(--muted);border:1px solid var(--border2);font-family:'IBM Plex Mono',monospace}
   .match-how{font-size:10px;color:var(--muted);margin-top:1px}
+  .suggest{margin-top:4px;padding:5px 8px;border-radius:5px;font-size:11px;line-height:1.45;display:flex;gap:6px;align-items:flex-start}
+  .suggest.split{background:#EAF8FC;border:1px solid #3CC3E180;color:#1A5F70}
+  .suggest.reversal{background:#FEF7E8;border:1px solid #F0C36D80;color:#7A4800}
+  .suggest.near{background:#FDF0EF;border:1px solid #E8A09A80;color:#7A1F1F}
+  .suggest.timing{background:#F8FAFC;border:1px solid var(--border2);color:var(--text2)}
+  .suggest.journal{background:#FEF7E8;border:1px solid #F0C36D80;color:#7A4800}
+  .suggest.dup{background:#FDF0EF;border:1px solid #E8A09A80;color:#7A1F1F}
+  .suggest-icon{font-size:13px;flex-shrink:0;margin-top:1px}
+  .suggest-txt strong{font-weight:600}
+  .recon-row.has-suggest .cell-l,.recon-row.has-suggest .cell-r{border-bottom:none}
+  .suggest-row{grid-column:1/-1;border-bottom:1px solid var(--border);padding:0 14px 9px}
   .empty{padding:42px;text-align:center;color:var(--muted);font-size:13px}
   .legend{display:flex;gap:16px;padding:8px 14px;border-top:1px solid var(--border);background:var(--s2)}
   .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
@@ -288,7 +299,137 @@ function doMatch(bank, rv){
     if(rv){bk.matched=true;bk.rvMatch=rv;bk.matchType='Amount (±dir)';rv.matched=true;}
   });
 
-  return {matched:b.filter(x=>x.matched), bankOnly:b.filter(x=>!x.matched), rvOnly:pool.filter(r=>!r.matched)};
+  const bankOnly=b.filter(x=>!x.matched);
+  const rvOnly=pool.filter(r=>!r.matched);
+
+  // ── Suggestion engine ────────────────────────────────────────────────────
+  // Each suggestion attaches to a bank-only or rv-only item and explains why
+  // it might not have a direct match.
+
+  // S1: Split deposit — multiple bank txns sum to one RV amount
+  // e.g. bank has $550 + $2,150 = RV has $2,700
+  rvOnly.forEach(rv=>{
+    if(rv.suggest) return;
+    const candidates=bankOnly.filter(bk=>!bk.suggest&&bk.direction===rv.direction&&bk.amount<rv.amount);
+    // Try all combos of 2–4 bank items
+    const combos=(arr,n)=>{
+      if(n===1) return arr.map(x=>[x]);
+      const res=[];
+      for(let i=0;i<arr.length-n+1;i++){
+        const rest=combos(arr.slice(i+1),n-1);
+        rest.forEach(c=>res.push([arr[i],...c]));
+      }
+      return res;
+    };
+    for(let n=2;n<=Math.min(4,candidates.length);n++){
+      const found=combos(candidates,n).find(combo=>{
+        const sum=combo.reduce((s,x)=>s+x.amount,0);
+        return Math.abs(sum-rv.amount)<0.02;
+      });
+      if(found){
+        rv.suggest={type:'split',dir:'rv',items:found,
+          msg:`<strong>Split deposit</strong> — ${found.length} bank entries sum to ${fmt(rv.amount)}: `+found.map(x=>fmt(x.amount)).join(' + ')};
+        found.forEach(bk=>{bk.suggest={type:'split',dir:'bank',groupWith:rv,
+          msg:`<strong>Split deposit</strong> — part of ${fmt(rv.amount)} RV entry (${found.map(x=>fmt(x.amount)).join(' + ')})`};});
+        break;
+      }
+    }
+  });
+
+  // S2: Split bank — multiple RV entries sum to one bank amount
+  bankOnly.forEach(bk=>{
+    if(bk.suggest) return;
+    const candidates=rvOnly.filter(rv=>!rv.suggest&&rv.direction===bk.direction&&rv.amount<bk.amount);
+    const combos=(arr,n)=>{
+      if(n===1) return arr.map(x=>[x]);
+      const res=[];
+      for(let i=0;i<arr.length-n+1;i++){
+        const rest=combos(arr.slice(i+1),n-1);
+        rest.forEach(c=>res.push([arr[i],...c]));
+      }
+      return res;
+    };
+    for(let n=2;n<=Math.min(4,candidates.length);n++){
+      const found=combos(candidates,n).find(combo=>{
+        const sum=combo.reduce((s,x)=>s+x.amount,0);
+        return Math.abs(sum-bk.amount)<0.02;
+      });
+      if(found){
+        bk.suggest={type:'split',dir:'bank',items:found,
+          msg:`<strong>Split transfer</strong> — ${found.length} RV entries sum to ${fmt(bk.amount)}: `+found.map(x=>fmt(x.amount)).join(' + ')};
+        found.forEach(rv=>{rv.suggest={type:'split',dir:'rv',groupWith:bk,
+          msg:`<strong>Split transfer</strong> — part of ${fmt(bk.amount)} bank entry`};});
+        break;
+      }
+    }
+  });
+
+  // S3: Reversal pair — bank has a credit AND matching debit of same amount
+  // Net = zero, meaning it reversed. Suggest journal entry in RV.
+  const bankUnsug=bankOnly.filter(bk=>!bk.suggest);
+  bankUnsug.forEach(bk=>{
+    if(bk.suggest) return;
+    const reverse=bankUnsug.find(other=>
+      other!==bk&&!other.suggest&&
+      other.direction!==bk.direction&&
+      Math.abs(other.amount-bk.amount)<0.02
+    );
+    if(reverse){
+      const msg=`<strong>Reversal pair</strong> — ${fmt(bk.amount)} ${bk.direction==='in'?'credit':'debit'} and matching ${bk.direction==='in'?'debit':'credit'} found in bank (net $0). `+
+        `Likely a reversed transaction — <strong>post a journal entry in Rentvine</strong> to record then reverse.`;
+      bk.suggest={type:'reversal',msg};
+      reverse.suggest={type:'reversal',msg:`<strong>Reversal pair</strong> — see matching ${fmt(bk.amount)} ${bk.direction} on ${fmtDate(bk.date)}.`};
+    }
+  });
+
+  // S4: Near match — within $10, likely a fee or rounding difference
+  bankOnly.forEach(bk=>{
+    if(bk.suggest) return;
+    const near=rvOnly.find(rv=>!rv.suggest&&Math.abs(rv.amount-bk.amount)<=10&&Math.abs(rv.amount-bk.amount)>0.02);
+    if(near){
+      const diff=Math.abs(near.amount-bk.amount).toFixed(2);
+      bk.suggest={type:'near',msg:`<strong>Near match</strong> — RV has ${fmt(near.amount)} on ${fmtDate(near.date)} (${fmt(diff)} difference). Could be a bank fee or rounding — verify and adjust if needed.`};
+    }
+  });
+
+  // S5: Duplicate amount — same amount appears twice on same side
+  const bankAmts={};
+  bankOnly.forEach(bk=>{
+    if(bk.suggest) return;
+    const key=bk.amount.toFixed(2)+'|'+bk.direction;
+    if(bankAmts[key]){
+      if(!bk.suggest) bk.suggest={type:'dup',msg:`<strong>Duplicate amount</strong> — ${fmt(bk.amount)} appears more than once in bank with no RV match. Check for duplicate bank entry.`};
+      if(!bankAmts[key].suggest) bankAmts[key].suggest={type:'dup',msg:`<strong>Duplicate amount</strong> — ${fmt(bk.amount)} appears more than once in bank with no RV match. Check for duplicate bank entry.`};
+    } else { bankAmts[key]=bk; }
+  });
+  const rvAmts={};
+  rvOnly.forEach(rv=>{
+    if(rv.suggest) return;
+    const key=rv.amount.toFixed(2)+'|'+rv.direction;
+    if(rvAmts[key]){
+      if(!rv.suggest) rv.suggest={type:'dup',msg:`<strong>Duplicate amount</strong> — ${fmt(rv.amount)} appears more than once in Rentvine with no bank match. Check for duplicate RV entry.`};
+      if(!rvAmts[key].suggest) rvAmts[key].suggest={type:'dup',msg:`<strong>Duplicate amount</strong> — ${fmt(rv.amount)} appears more than once in Rentvine with no bank match.`};
+    } else { rvAmts[key]=rv; }
+  });
+
+  // S6: Fallback suggestions for anything still untagged
+  bankOnly.forEach(bk=>{
+    if(bk.suggest) return;
+    const desc=(bk.description||'').toLowerCase();
+    if(/wire|wired/.test(desc)) bk.suggest={type:'timing',msg:`<strong>Wire transfer</strong> — may need to be recorded manually in Rentvine as a bank transfer or adjustment.`};
+    else if(/fee|charge|service/.test(desc)) bk.suggest={type:'timing',msg:`<strong>Bank fee or charge</strong> — record in Rentvine as an expense or adjustment entry.`};
+    else if(/interest/.test(desc)) bk.suggest={type:'timing',msg:`<strong>Bank interest</strong> — record in Rentvine as interest income.`};
+    else if(/returned|return|nsf|insufficient/.test(desc)) bk.suggest={type:'reversal',msg:`<strong>Returned/NSF item</strong> — record the return in Rentvine and notify the tenant or owner.`};
+    else bk.suggest={type:'timing',msg:`<strong>No RV match found</strong> — verify if this was posted in Rentvine under a different date or description, or if it needs to be recorded.`};
+  });
+  rvOnly.forEach(rv=>{
+    if(rv.suggest) return;
+    if(rv.type==='Transfer') rv.suggest={type:'timing',msg:`<strong>RV transfer not in bank</strong> — may be a future-dated or pending transfer, or the bank CSV date range doesn't cover it.`};
+    else if(rv.type==='Deposit') rv.suggest={type:'timing',msg:`<strong>RV deposit not in bank</strong> — may be undeposited (check/cash deposit still pending), or posted to wrong date.`};
+    else rv.suggest={type:'timing',msg:`<strong>No bank match found</strong> — verify the settlement posted to the bank, or check if it falls outside the statement period.`};
+  });
+
+  return {matched:b.filter(x=>x.matched), bankOnly, rvOnly};
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
@@ -299,9 +440,9 @@ function buildRows(results){
   if(!results) return [];
   const {matched,bankOnly,rvOnly}=results;
   const rows=[];
-  matched.forEach(b=>rows.push({type:'matched',bank:b,rv:b.rvMatch,matchType:b.matchType}));
-  bankOnly.forEach(b=>rows.push({type:'bank_only',bank:b,rv:null}));
-  rvOnly.forEach(r=>rows.push({type:'rv_only',bank:null,rv:r}));
+  matched.forEach(b=>rows.push({type:'matched',bank:b,rv:b.rvMatch,matchType:b.matchType,suggest:null}));
+  bankOnly.forEach(b=>rows.push({type:'bank_only',bank:b,rv:null,suggest:b.suggest||null}));
+  rvOnly.forEach(r=>rows.push({type:'rv_only',bank:null,rv:r,suggest:r.suggest||null}));
   rows.sort((a,b)=>(a.bank?.date||a.rv?.date||'').localeCompare(b.bank?.date||b.rv?.date||''));
   return rows;
 }
@@ -490,7 +631,15 @@ function rResults(){
           rightHtml=`<div class="cell-empty">—</div>`;
         }
 
-        return `<div class="recon-row ${cls}"><div class="cell-l">${leftHtml}</div><div class="cell-r">${rightHtml}</div></div>`;
+        // Suggestion banner
+        let suggestHtml='';
+        if(row.suggest&&row.suggest.msg){
+          const s=row.suggest;
+          const icon=s.type==='split'?'✂️':s.type==='reversal'?'↩️':s.type==='near'?'≈':s.type==='dup'?'⚠':s.type==='journal'?'📓':'💡';
+          suggestHtml=`<div class="suggest-row"><div class="suggest ${s.type}"><span class="suggest-icon">${icon}</span><span class="suggest-txt">${s.msg}</span></div></div>`;
+        }
+        const hasSuggest=suggestHtml?'has-suggest':'';
+        return `<div class="recon-row ${cls} ${hasSuggest}" style="display:block"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="cell-l">${leftHtml}</div><div class="cell-r">${rightHtml}</div></div>${suggestHtml}</div>`;
       }).join('');
 
   return `<div class="hdr">
