@@ -2805,7 +2805,9 @@ app.get('/recon', function(req, res) {
 app.get('/recon-bills', (req, res) => 
   res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
 );
-
+app.get('/logo.png', function(req, res) {
+  res.sendFile(new URL('AloePM-Logo_FullColor__2_.png', import.meta.url).pathname);
+});
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
