@@ -78,6 +78,13 @@
   .row-ct{margin-left:auto;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
   .sort-dir-btn{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;white-space:nowrap;transition:all .12s}
   .sort-dir-btn:hover{border-color:var(--teal);color:var(--teal)}
+  .acct-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .acct-item{border:1.5px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer;transition:all .15s;background:var(--bg)}
+  .acct-item:hover,.acct-item.sel{border-color:var(--teal);background:var(--gbg)}
+  .acct-num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:3px}
+  .acct-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
+  .acct-item.sel .acct-name{color:var(--teal-dk)}
+  .acct-sub{font-size:11px;color:var(--muted);line-height:1.4}
   .recon-table{overflow:auto;max-height:520px}
 
   .recon-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
@@ -117,10 +124,11 @@
 <body>
 <div id="app"></div>
 <script>
-const PROXY='/api/rentvine', BANK_ID='129';
+const PROXY='/api/rentvine';
 
 let S={
   screen:'config',
+  bankId:'129',
   startDate:'', endDate:'',
   bankFile:null, bankText:'',
   error:'',
@@ -196,9 +204,9 @@ async function fetchRVTransactions(start, end){
 
   // Run all three in parallel
   const [deps, transfers, settlements] = await Promise.all([
-    fetchAllPages('/accounting/deposits',{bankAccountID:BANK_ID}).catch(e=>{step('Deposits','error');return [];}),
-    fetchAllPages('/accounting/bank-transfers/search',{bankAccountID:BANK_ID,isVoided:0}).catch(e=>{step('Transfers','error');return [];}),
-    fetchAllPages('/accounting/settlements',{bankAccountID:BANK_ID}).catch(e=>{step('Settlements','error');return [];}),
+    fetchAllPages('/accounting/deposits',{bankAccountID:S.bankId}).catch(e=>{step('Deposits','error');return [];}),
+    fetchAllPages('/accounting/bank-transfers/search',{bankAccountID:S.bankId,isVoided:0}).catch(e=>{step('Transfers','error');return [];}),
+    fetchAllPages('/accounting/settlements',{bankAccountID:S.bankId}).catch(e=>{step('Settlements','error');return [];}),
   ]);
 
   const inRange=d=>d&&d>=start&&d<=end;
@@ -222,8 +230,8 @@ async function fetchRVTransactions(start, end){
     if(!d) return;
     const date=(d.datePosted||'').slice(0,10);
     if(!inRange(date)) return;
-    const isSrc=String(d.sourceBankAccountID)===BANK_ID;
-    const isDst=String(d.destinationBankAccountID)===BANK_ID;
+    const isSrc=String(d.sourceBankAccountID)===S.bankId;
+    const isDst=String(d.destinationBankAccountID)===S.bankId;
     if(!isSrc&&!isDst) return;
     const desc=d.description||d.reference||'Bank Transfer';
     txns.push({
@@ -250,7 +258,7 @@ async function fetchRVTransactions(start, end){
     });
   });
 
-  return {txns, counts:{deposits:deps.filter(r=>inRange(r.deposit?.dateDeposited)).length, transfers:transfers.filter(r=>{const d=r.bankTransfer;const date=(d?.datePosted||'').slice(0,10);return inRange(date)&&(String(d?.sourceBankAccountID)===BANK_ID||String(d?.destinationBankAccountID)===BANK_ID);}).length, settlements:settlements.filter(r=>inRange(r.settlement?.settlementDate)).length}};
+  return {txns, counts:{deposits:deps.filter(r=>inRange(r.deposit?.dateDeposited)).length, transfers:transfers.filter(r=>{const d=r.bankTransfer;const date=(d?.datePosted||'').slice(0,10);return inRange(date)&&(String(d?.sourceBankAccountID)===S.bankId||String(d?.destinationBankAccountID)===S.bankId);}).length, settlements:settlements.filter(r=>inRange(r.settlement?.settlementDate)).length}};
 }
 
 // ── MATCH ──────────────────────────────────────────────────────────────────
@@ -375,7 +383,7 @@ function rLoad(){
 }
 
 function rConfig(){
-  const {startDate,endDate,bankFile,error}=S;
+  const {startDate,endDate,bankFile,error,bankId}=S;
   // Default to current month
   const now=new Date();
   const defStart=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
@@ -391,7 +399,28 @@ function rConfig(){
     <div class="info">✓ Connected — pulls deposits, transfers &amp; settlements from Rentvine via your Render server</div>
 
     <div class="card">
-      <div class="card-title">1 — Date range</div>
+      <div class="card-title">1 — Bank account</div>
+      <div class="acct-grid">
+        <div class="acct-item ${bankId==='129'?'sel':''}" data-acct="129">
+          <div class="acct-num">1000</div>
+          <div class="acct-name">Rental Trust Account</div>
+          <div class="acct-sub">Primary operating account · #3221</div>
+        </div>
+        <div class="acct-item ${bankId==='130'?'sel':''}" data-acct="130">
+          <div class="acct-num">1100</div>
+          <div class="acct-name">Security Deposit Account</div>
+          <div class="acct-sub">Tenant security deposits</div>
+        </div>
+        <div class="acct-item ${bankId==='149'?'sel':''}" data-acct="149">
+          <div class="acct-num">3100</div>
+          <div class="acct-name">Employee Trust</div>
+          <div class="acct-sub">Employee trust account</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">2 — Date range</div>
       <div class="grid2">
         <div class="field"><label>From</label><input type="date" id="sd" value="${startDate||defStart}"/></div>
         <div class="field"><label>To</label><input type="date" id="ed" value="${endDate||defEnd}"/></div>
@@ -399,7 +428,7 @@ function rConfig(){
     </div>
 
     <div class="card">
-      <div class="card-title">2 — Bank CSV</div>
+      <div class="card-title">3 — Bank CSV</div>
       <div class="drop ${bankFile?'filled':''}" id="drop">
         <input type="file" id="fi" accept=".csv" style="display:none"/>
         ${bankFile
@@ -468,7 +497,7 @@ function rResults(){
     <div class="logo">A</div>
     <div>
       <div class="hdr-title">ALOE RECON — ${startDate} → ${endDate}</div>
-      <div class="hdr-sub" style="margin-top:1px">${bankTxns.length} bank · ${rvTxns.length} RV · ${bankFile?.name||''}</div>
+      <div class="hdr-sub" style="margin-top:1px">${{'129':'Rental Trust','130':'Security Deposit','149':'Employee Trust'}[S.bankId]||'Account '+S.bankId} · ${bankTxns.length} bank · ${rvTxns.length} RV · ${bankFile?.name||''}</div>
     </div>
     <div class="hdr-right"><button class="btn-sm" id="backBtn">← New run</button></div>
   </div>
@@ -541,6 +570,7 @@ function rResults(){
 // ── EVENTS ─────────────────────────────────────────────────────────────────
 function bind(){
   if(S.screen==='config'){
+    document.querySelectorAll('[data-acct]').forEach(el=>el.addEventListener('click',()=>set({bankId:el.dataset.acct})));
     document.getElementById('sd')?.addEventListener('change',e=>set({startDate:e.target.value}));
     document.getElementById('ed')?.addEventListener('change',e=>set({endDate:e.target.value}));
     const drop=document.getElementById('drop'),fi=document.getElementById('fi');
