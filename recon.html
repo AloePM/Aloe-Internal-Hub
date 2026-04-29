@@ -3,22 +3,23 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Aloe Recon</title>
+<title>Aloe PM · Recon</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
   :root{
-    --bg:#f7f7f5;--surface:#fff;--s2:#f2f2f0;--border:#e5e5e2;--border2:#d0d0cc;
-    --green:#3B6D11;--gbg:#EAF3DE;--gborder:#97C459;
-    --red:#A32D2D;--rbg:#FCEBEB;--rborder:#F09595;
-    --amber:#854F0B;--abg:#FAEEDA;--aborder:#EF9F27;
-    --blue:#185FA5;--muted:#888;--text:#1a1a1a;--text2:#555
+    --bg:#F8FAFC;--surface:#fff;--s2:#EFF8FC;--border:#D6EEF5;--border2:#B4C3C3;
+    --green:#3CC3E1;--gbg:#EAF8FC;--gborder:#3CC3E1;
+    --red:#C0392B;--rbg:#FDF0EF;--rborder:#E8A09A;
+    --amber:#B7770D;--abg:#FEF7E8;--aborder:#F0C36D;
+    --blue:#4BB4D2;--muted:#8AA5AD;--text:#1A2E35;--text2:#4A6570;
+    --teal:#3CC3E1;--teal-dk:#4BB4D2;--silver:#B4C3C3;
   }
   body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;font-size:14px}
   ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
-  .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-  .logo{width:26px;height:26px;background:var(--green);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
+  .hdr{background:#fff;border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;border-top:3px solid var(--teal)}
+  .logo{width:26px;height:26px;background:var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
   .hdr-title{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.06em}
   .hdr-sub{font-size:11px;color:var(--muted)}
   .hdr-right{margin-left:auto}
@@ -28,28 +29,28 @@
   .body{padding:20px 24px;max-width:1100px;margin:0 auto}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:18px;margin-bottom:14px}
   .card-title{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:13px}
-  .info{background:var(--gbg);border:1px solid var(--gborder);border-radius:7px;padding:9px 14px;font-size:12px;color:#27500A;margin-bottom:14px}
+  .info{background:var(--gbg);border:1px solid var(--teal);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--teal-dk);margin-bottom:14px}
   .err{background:var(--rbg);border:1px solid var(--rborder);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--red);margin-bottom:14px}
 
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .field label{display:block;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
   input[type=date]{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:8px 11px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;width:100%}
-  input[type=date]:focus{outline:2px solid var(--gborder);outline-offset:1px}
+  input[type=date]:focus{outline:2px solid var(--teal);outline-offset:1px}
 
   .drop{border:1.5px dashed var(--border2);border-radius:8px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80px}
-  .drop:hover,.drop.over,.drop.filled{border-color:var(--gborder);background:var(--gbg)}
+  .drop:hover,.drop.over,.drop.filled{border-color:var(--teal);background:var(--gbg)}
   .drop-icon{font-size:20px;margin-bottom:5px}
   .drop-title{font-size:12px;font-weight:500;margin-bottom:2px}
   .drop-sub{font-size:10px;color:var(--muted);line-height:1.4}
 
-  .btn-run{background:var(--green);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;width:100%;transition:opacity .12s;margin-top:14px}
-  .btn-run:hover{opacity:.88}
+  .btn-run{background:var(--teal);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;width:100%;transition:all .15s;margin-top:14px}
+  .btn-run:hover{background:var(--teal-dk);opacity:1}
   .btn-run:disabled{background:var(--s2);color:var(--muted);cursor:not-allowed;border:1px solid var(--border)}
 
   .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;gap:14px}
-  .spinner{width:34px;height:34px;border:2.5px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
+  .spinner{width:34px;height:34px;border:2.5px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .load-msg{font-family:'IBM Plex Mono',monospace;color:var(--green);font-size:12px;font-weight:500}
+  .load-msg{font-family:'IBM Plex Mono',monospace;color:var(--teal);font-size:12px;font-weight:500}
   .load-steps{display:flex;flex-direction:column;gap:4px;align-items:center}
   .load-step{font-size:11px;color:var(--muted)}
   .load-step.done{color:var(--green)}
@@ -68,13 +69,15 @@
 
   .recon-wrap{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden}
   .col-hdrs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
-  .col-hdr{padding:9px 14px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--s2)}
+  .col-hdr{padding:9px 14px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-dk);background:var(--s2)}
   .col-hdr.left{border-right:1px solid var(--border)}
   .filters{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
   .srch{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;width:200px}
-  .srch:focus{outline:2px solid var(--gborder);outline-offset:1px}
+  .srch:focus{outline:2px solid var(--teal);outline-offset:1px}
   .fsel{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace}
   .row-ct{margin-left:auto;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+  .sort-dir-btn{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;cursor:pointer;white-space:nowrap;transition:all .12s}
+  .sort-dir-btn:hover{border-color:var(--teal);color:var(--teal)}
   .recon-table{overflow:auto;max-height:520px}
 
   .recon-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
@@ -91,11 +94,11 @@
   .cell-desc{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-bottom:2px}
   .cell-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:2px}
   .cell-amt{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500}
-  .cell-amt.in{color:var(--green)}
+  .cell-amt.in{color:var(--teal-dk)}
   .cell-amt.out{color:var(--red)}
   .cell-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--border2);font-size:20px}
   .badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px;vertical-align:middle;font-family:'IBM Plex Mono',monospace}
-  .badge-ok{background:var(--gbg);color:var(--green);border:1px solid var(--gborder)}
+  .badge-ok{background:var(--gbg);color:var(--teal-dk);border:1px solid var(--teal)}
   .badge-warn{background:var(--abg);color:var(--amber);border:1px solid var(--aborder)}
   .badge-miss{background:var(--rbg);color:var(--red);border:1px solid var(--rborder)}
   .type-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.04em;margin-left:4px;vertical-align:middle;background:var(--s2);color:var(--muted);border:1px solid var(--border2);font-family:'IBM Plex Mono',monospace}
@@ -124,6 +127,7 @@ let S={
   loadSteps:[],
   results:null,
   search:'', dir:'all', typeFilter:'all',
+  sortBy:'status', sortDir:'asc',
 };
 function set(p){Object.assign(S,p);render();}
 
@@ -300,6 +304,30 @@ function filteredRows(){
   if(S.dir!=='all') rows=rows.filter(r=>(r.bank?.direction||r.rv?.direction)===S.dir);
   if(S.typeFilter!=='all') rows=rows.filter(r=>r.rv?.type===S.typeFilter||r.bank?.type===S.typeFilter);
   if(q) rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
+
+  // Sort
+  const asc=S.sortDir==='asc';
+  rows.sort((a,b)=>{
+    if(S.sortBy==='status'){
+      // Unmatched (bank-only, rv-only) first, then matched
+      const rankA=a.type==='matched'?2:1;
+      const rankB=b.type==='matched'?2:1;
+      if(rankA!==rankB) return asc?rankA-rankB:rankB-rankA;
+      // Secondary: date asc within group
+      return (a.bank?.date||a.rv?.date||'').localeCompare(b.bank?.date||b.rv?.date||'');
+    }
+    if(S.sortBy==='date'){
+      const da=a.bank?.date||a.rv?.date||'';
+      const db=b.bank?.date||b.rv?.date||'';
+      return asc?da.localeCompare(db):db.localeCompare(da);
+    }
+    if(S.sortBy==='amount'){
+      const amtA=a.bank?.amount||a.rv?.amount||0;
+      const amtB=b.bank?.amount||b.rv?.amount||0;
+      return asc?amtA-amtB:amtB-amtA;
+    }
+    return 0;
+  });
   return rows;
 }
 
@@ -338,7 +366,7 @@ function render(){
 
 function rLoad(){
   const steps=S.loadSteps.map(s=>`<div class="load-step ${s.status}">${s.status==='done'?'✓ ':s.status==='error'?'✗ ':s.status==='active'?'⟳ ':''} ${s.label}</div>`).join('');
-  return `<div class="hdr"><div class="logo">$</div><span class="hdr-title">ALOE RECON</span></div>
+  return `<div class="hdr"><div class="logo">A</div><span class="hdr-title">ALOE RECON</span></div>
   <div class="loading-wrap">
     <div class="spinner"></div>
     <div class="load-msg">Fetching from Rentvine…</div>
@@ -354,7 +382,7 @@ function rConfig(){
   const defEnd=new Date(now.getFullYear(),now.getMonth()+1,0).toISOString().slice(0,10);
 
   return `<div class="hdr">
-    <div class="logo">$</div>
+    <div class="logo">A</div>
     <span class="hdr-title">ALOE RECON</span>
     <span class="hdr-sub" style="margin-left:6px">Trust Account · Bank ↔ Rentvine</span>
   </div>
@@ -388,6 +416,7 @@ function rConfig(){
 
 function rResults(){
   const {results,search,dir,typeFilter,bankFile,startDate,endDate}=S;
+  const {sortBy,sortDir}=S;
   const {bankTxns,rvTxns,matched,bankOnly,rvOnly,counts}=results;
   const rate=bankTxns.length?Math.round((matched.length/bankTxns.length)*100):0;
   const boOut=bankOnly.filter(r=>r.direction==='out').reduce((s,r)=>s+r.amount,0);
@@ -421,7 +450,7 @@ function rResults(){
           const badge=row.type==='matched'
             ?`<span class="badge badge-ok">matched</span>`
             :`<span class="badge badge-miss">RV only</span>`;
-          const typeColors={'Deposit':'#185FA5','Transfer':'#854F0B','Settlement':'#3B6D11'};
+          const typeColors={'Deposit':'#4BB4D2','Transfer':'#B4C3C3','Settlement':'#3CC3E1'};
           const typeTag=`<span class="type-tag" style="border-color:${typeColors[rv.type]||'var(--border2)'};color:${typeColors[rv.type]||'var(--muted)'}">${rv.type}</span>`;
           rightHtml=`
             <div class="cell-date">${fmtDate(rv.date)}</div>
@@ -436,7 +465,7 @@ function rResults(){
       }).join('');
 
   return `<div class="hdr">
-    <div class="logo">$</div>
+    <div class="logo">A</div>
     <div>
       <div class="hdr-title">ALOE RECON — ${startDate} → ${endDate}</div>
       <div class="hdr-sub" style="margin-top:1px">${bankTxns.length} bank · ${rvTxns.length} RV · ${bankFile?.name||''}</div>
@@ -445,8 +474,8 @@ function rResults(){
   </div>
   <div class="body">
     <div class="stats">
-      <div class="stat"><div class="stat-n" style="color:var(--green)">${rate}%</div><div class="stat-l">Match rate</div></div>
-      <div class="stat"><div class="stat-n" style="color:var(--blue)">${matched.length}</div><div class="stat-l">Matched</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--teal)">${rate}%</div><div class="stat-l">Match rate</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--teal-dk)">${matched.length}</div><div class="stat-l">Matched</div></div>
       <div class="stat"><div class="stat-n" style="color:var(--amber)">${bankOnly.length}</div><div class="stat-l">Bank only</div></div>
       <div class="stat"><div class="stat-n" style="color:var(--red)">${rvOnly.length}</div><div class="stat-l">Rentvine only</div></div>
     </div>
@@ -488,11 +517,20 @@ function rResults(){
           <option value="Transfer" ${typeFilter==='Transfer'?'selected':''}>Transfers</option>
           <option value="Settlement" ${typeFilter==='Settlement'?'selected':''}>Settlements</option>
         </select>
+        <div style="width:1px;height:20px;background:var(--border2);margin:0 2px"></div>
+        <select class="fsel" id="sb">
+          <option value="status" ${S.sortBy==='status'?'selected':''}>Unmatched first</option>
+          <option value="date" ${S.sortBy==='date'?'selected':''}>Sort by date</option>
+          <option value="amount" ${S.sortBy==='amount'?'selected':''}>Sort by amount</option>
+        </select>
+        <button class="sort-dir-btn" id="sdir" title="Toggle sort direction">
+          ${S.sortDir==='asc'?'↑ Asc':'↓ Desc'}
+        </button>
         <span class="row-ct">${rows.length} rows</span>
       </div>
       <div class="recon-table">${tableRows}</div>
       <div class="legend">
-        <div class="leg-item"><div class="leg-dot" style="background:var(--surface);border:1px solid var(--border2)"></div>Matched</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--gbg);border:1px solid var(--teal)"></div>Matched</div>
         <div class="leg-item"><div class="leg-dot" style="background:#FAEEDA80;border:1px solid var(--aborder)"></div>In bank only</div>
         <div class="leg-item"><div class="leg-dot" style="background:#FCEBEB80;border:1px solid var(--rborder)"></div>In Rentvine only</div>
       </div>
@@ -514,10 +552,12 @@ function bind(){
     document.getElementById('runBtn')?.addEventListener('click',runRecon);
   }
   if(S.screen==='results'){
-    document.getElementById('backBtn')?.addEventListener('click',()=>set({screen:'config',results:null,search:'',dir:'all',typeFilter:'all'}));
+    document.getElementById('backBtn')?.addEventListener('click',()=>set({screen:'config',results:null,search:'',dir:'all',typeFilter:'all',sortBy:'status',sortDir:'asc'}));
     document.getElementById('si')?.addEventListener('input',e=>set({search:e.target.value}));
     document.getElementById('ds')?.addEventListener('change',e=>set({dir:e.target.value}));
     document.getElementById('ts')?.addEventListener('change',e=>set({typeFilter:e.target.value}));
+    document.getElementById('sb')?.addEventListener('change',e=>set({sortBy:e.target.value}));
+    document.getElementById('sdir')?.addEventListener('click',()=>set({sortDir:S.sortDir==='asc'?'desc':'asc'}));
   }
 }
 async function hf(file){if(!file)return;const text=await file.text();set({bankFile:file,bankText:text});}
