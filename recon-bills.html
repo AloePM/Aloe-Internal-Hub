@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aloe PM · Bills Recon</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#F8FAFC;--surface:#fff;--s2:#EFF8FC;--border:#D6EEF5;--border2:#B4C3C3;
+    --teal:#3CC3E1;--teal-dk:#4BB4D2;--silver:#B4C3C3;
+    --red:#C0392B;--rbg:#FDF0EF;--rborder:#E8A09A;
+    --amber:#B7770D;--abg:#FEF7E8;--aborder:#F0C36D;
+    --green:#27AE60;--gbg:#EAF7EE;--gborder:#82D8A0;
+    --muted:#8AA5AD;--text:#1A2E35;--text2:#4A6570
+  }
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;font-size:14px}
+  ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+  /* HEADER */
+  .hdr{background:#fff;border-bottom:1px solid var(--border);border-top:3px solid var(--teal);padding:0 24px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+  .logo{width:26px;height:26px;background:var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
+  .hdr-title{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.06em}
+  .hdr-sub{font-size:11px;color:var(--muted);margin-left:4px}
+  .hdr-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .btn-sm{background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 11px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .12s}
+  .btn-sm:hover{border-color:var(--teal);color:var(--teal)}
+
+  /* BODY */
+  .body{padding:20px 24px;max-width:1100px;margin:0 auto}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:18px;margin-bottom:14px}
+  .card-title{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:13px}
+  .info{background:var(--s2);border:1px solid var(--teal);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--teal-dk);margin-bottom:14px;line-height:1.6}
+  .err{background:var(--rbg);border:1px solid var(--rborder);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--red);margin-bottom:14px}
+  .warn{background:var(--abg);border:1px solid var(--aborder);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--amber);margin-bottom:14px}
+
+  /* DROP ZONE */
+  .drop{border:1.5px dashed var(--border2);border-radius:8px;padding:20px 14px;text-align:center;cursor:pointer;transition:all .18s;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80px}
+  .drop:hover,.drop.over,.drop.filled{border-color:var(--teal);background:var(--s2)}
+  .drop-icon{font-size:20px;margin-bottom:5px}
+  .drop-title{font-size:12px;font-weight:500;margin-bottom:2px}
+  .drop-sub{font-size:10px;color:var(--muted);line-height:1.5}
+
+  .btn-run{background:var(--teal);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;width:100%;transition:all .15s;margin-top:14px}
+  .btn-run:hover{background:var(--teal-dk)}
+  .btn-run:disabled{background:var(--s2);color:var(--muted);cursor:not-allowed;border:1px solid var(--border2)}
+
+  /* LOADING */
+  .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;gap:14px}
+  .spinner{width:34px;height:34px;border:2.5px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .load-msg{font-family:'IBM Plex Mono',monospace;color:var(--teal);font-size:12px;font-weight:500}
+  .load-sub{font-size:11px;color:var(--muted);margin-top:4px;text-align:center}
+
+  /* STATS */
+  .stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px 14px}
+  .stat-n{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:500;line-height:1}
+  .stat-l{font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-top:4px}
+
+  /* ALERT BANNER */
+  .alert-banner{border-radius:7px;padding:12px 16px;margin-bottom:14px;border:1px solid var(--rborder);background:var(--rbg)}
+  .alert-banner .al{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--red);margin-bottom:3px}
+  .alert-banner .aa{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:500;color:var(--red)}
+  .alert-banner .as{font-size:11px;color:#7A1F1F;margin-top:3px}
+
+  /* TABLE */
+  .recon-wrap{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:14px}
+  .tbl-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--s2)}
+  .tbl-tab{padding:8px 16px;font-size:11px;font-weight:600;letter-spacing:.04em;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .12s}
+  .tbl-tab.active{color:var(--teal-dk);border-bottom-color:var(--teal)}
+  .filters{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
+  .srch{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;width:220px}
+  .srch:focus{outline:2px solid var(--teal);outline-offset:1px}
+  .row-ct{margin-left:auto;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
+  .tbl-body{overflow:auto;max-height:480px}
+
+  /* SIDE-BY-SIDE ROWS */
+  .col-hdrs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
+  .col-hdr{padding:9px 14px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--teal-dk);background:var(--s2)}
+  .col-hdr.left{border-right:1px solid var(--border)}
+
+  .recon-row{display:block;border-bottom:1px solid var(--border)}
+  .recon-row:last-child{border-bottom:none}
+  .recon-row:hover .cell-l,.recon-row:hover .cell-r{filter:brightness(.97)}
+  .row-inner{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .recon-row.matched .cell-l,.recon-row.matched .cell-r{background:var(--surface)}
+  .recon-row.csv-only .cell-l{background:#FEF7E828}.recon-row.csv-only .cell-r{background:var(--surface)}
+  .recon-row.rv-only .cell-r{background:#FDF0EF28}.recon-row.rv-only .cell-l{background:var(--surface)}
+  .cell-l{padding:9px 14px;border-right:1px solid var(--border);min-height:52px}
+  .cell-r{padding:9px 14px;min-height:52px}
+  .cell-date{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:2px}
+  .cell-desc{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-bottom:2px}
+  .cell-sub{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:2px}
+  .cell-prop{font-size:11px;color:var(--teal-dk);margin-bottom:2px}
+  .cell-amt{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500;color:var(--red)}
+  .cell-empty{display:flex;align-items:center;justify-content:center;height:100%;min-height:52px;color:var(--border2);font-size:18px}
+  .badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px;vertical-align:middle;font-family:'IBM Plex Mono',monospace}
+  .badge-ok{background:var(--gbg);color:var(--green);border:1px solid var(--gborder)}
+  .badge-warn{background:var(--abg);color:var(--amber);border:1px solid var(--aborder)}
+  .badge-miss{background:var(--rbg);color:var(--red);border:1px solid var(--rborder)}
+  .match-how{font-size:10px;color:var(--muted);margin-top:1px}
+
+  /* SUGGESTION */
+  .suggest-row{padding:4px 14px 8px;background:inherit}
+  .suggest{border-radius:5px;padding:5px 9px;font-size:11px;line-height:1.45;display:flex;gap:7px;align-items:flex-start}
+  .suggest.near{background:var(--abg);border:1px solid var(--aborder);color:#7A4800}
+  .suggest.miss{background:var(--rbg);border:1px solid var(--rborder);color:#7A1F1F}
+  .suggest.info{background:var(--s2);border:1px solid var(--border2);color:var(--text2)}
+  .suggest-icon{font-size:13px;flex-shrink:0}
+
+  /* EXPORT */
+  .export-bar{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);background:var(--s2);justify-content:flex-end}
+  .empty{padding:42px;text-align:center;color:var(--muted);font-size:13px}
+
+  /* NOT-FOUND list */
+  .nf-list{background:var(--rbg);border:1px solid var(--rborder);border-radius:9px;overflow:hidden;margin-bottom:14px}
+  .nf-hdr{background:#FAD7D7;padding:10px 16px;font-size:11px;font-weight:600;color:var(--red);letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--rborder);display:flex;align-items:center;justify-content:space-between}
+  .nf-row{display:grid;grid-template-columns:120px 1fr 1fr 100px;padding:8px 16px;border-bottom:1px solid var(--rborder);font-size:12px;align-items:center;gap:8px}
+  .nf-row:last-child{border-bottom:none}
+  .nf-row:hover{background:#FCEEEE}
+  .nf-date{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted)}
+  .nf-desc{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nf-prop{font-size:11px;color:var(--teal-dk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nf-amt{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--red);text-align:right}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let S = {
+  screen: 'config',
+  csvFile: null, csvText: '',
+  loadMsg: '', loadSub: '',
+  error: '', warn: '',
+  results: null,
+  tab: 'not_entered',   // 'not_entered' | 'matched' | 'csv_unmatched'
+  search: '',
+};
+function set(p) { Object.assign(S, p); render(); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSV PARSING — Chase format
+// Card, Transaction Date, Post Date, Description, Category, Type, Amount, Memo
+// ─────────────────────────────────────────────────────────────────────────────
+function pl(line) {
+  const f = []; let c = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') q = !q;
+    else if (line[i] === ',' && !q) { f.push(c.trim()); c = ''; }
+    else c += line[i];
+  }
+  f.push(c.trim()); return f;
+}
+function pd(d) {
+  if (!d) return '';
+  const s = String(d).trim().replace(/^"|"$/g, '');
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`; }
+  return s;
+}
+function parseChaseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = pl(lines[0]);
+  const hi = k => headers.findIndex(h => h.toLowerCase().includes(k.toLowerCase()));
+  const iDate = hi('Transaction Date'), iPost = hi('Post Date'), iDesc = hi('Description');
+  const iAmt = hi('Amount'), iType = hi('Type'), iCard = hi('Card'), iCat = hi('Category');
+
+  return lines.slice(1).map(l => {
+    const v = pl(l);
+    const type = (v[iType] || '').trim();
+    const rawAmt = parseFloat((v[iAmt] || '').replace(/[$,]/g, '')) || 0;
+    if (!rawAmt) return null;
+    const isSale = type === 'Sale' || rawAmt < 0;
+    if (!isSale) return null; // skip payments, returns
+
+    const date = pd(v[iDate]);
+    const desc = (v[iDesc] || '').replace(/&amp;/g, '&').trim();
+    const amount = Math.abs(rawAmt);
+    const card = (v[iCard] || '').trim();
+    return { date, description: desc, amount, card, category: v[iCat] || '' };
+  }).filter(Boolean);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FETCH RV BILLS — from Rentvine session
+// ─────────────────────────────────────────────────────────────────────────────
+async function fetchRVBills() {
+  const r = await fetch('/api/manager/reports/payables', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({
+      displayColumns: ['dateTimeCreated','dateDue','contactName','propertyAddress','chargeAccountName','amount','reference','paymentMemo','billID'],
+      filters: [] // filter client-side for "Aloe Property Management - REIMBURSEMENTS"
+    }),
+  });
+  if (!r.ok) throw new Error(`Rentvine payables report returned ${r.status} — make sure you're logged into Rentvine`);
+  const d = await r.json();
+
+  return (d.rows || [])
+    .map(row => row.data)
+    .filter(b => b && /aloe property management.*reimburs/i.test(b.contactName || ''))
+    .map(b => ({
+      billID:    b.billID,
+      date:      (b.dateTimeCreated || '').slice(0, 10),
+      dueDate:   (b.dateDue || '').slice(0, 10),
+      amount:    Math.abs(parseFloat(b.amount || 0)),
+      reference: (b.reference || '').trim(),
+      memo:      (b.paymentMemo || '').trim(),
+      property:  b.propertyAddress || '',
+      account:   b.chargeAccountName || '',
+      vendor:    b.contactName || '',
+      matched:   false,
+    }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MATCHING
+// ─────────────────────────────────────────────────────────────────────────────
+function matchBills(csvRows, rvBills) {
+  const pool  = rvBills.map(b => ({ ...b, matched: false }));
+  const chase = csvRows.map(c => ({ ...c, matched: false, rvMatch: null, matchType: null }));
+
+  // Pass 1: exact amount + reference# appears in CSV description
+  chase.forEach(c => {
+    if (c.matched) return;
+    const rv = pool.find(b => {
+      if (b.matched) return false;
+      if (Math.abs(b.amount - c.amount) >= 0.02) return false;
+      if (!b.reference) return false;
+      // Chase desc often contains the vendor's invoice/ref number
+      return c.description.toLowerCase().includes(b.reference.toLowerCase()) ||
+             b.reference.toLowerCase().includes(c.description.toLowerCase().slice(0, 6));
+    });
+    if (rv) { c.matched = true; c.rvMatch = rv; c.matchType = 'Ref + Amt'; rv.matched = true; }
+  });
+
+  // Pass 2: exact amount match
+  chase.forEach(c => {
+    if (c.matched) return;
+    const rv = pool.find(b => !b.matched && Math.abs(b.amount - c.amount) < 0.02);
+    if (rv) { c.matched = true; c.rvMatch = rv; c.matchType = 'Amount'; rv.matched = true; }
+  });
+
+  const notMatched = pool.filter(b => !b.matched);  // in RV but NOT in CSV → need to check if entered
+  const csvMatched = chase.filter(c => c.matched);
+  const csvUnmatched = chase.filter(c => !c.matched); // in CSV but not in RV
+
+  // Suggestions for unmatched RV bills
+  notMatched.forEach(b => {
+    const near = csvUnmatched.find(c => Math.abs(c.amount - b.amount) <= 15 && Math.abs(c.amount - b.amount) > 0.02);
+    if (near) {
+      b.suggest = { type: 'near', msg: `<strong>Near match</strong> — CSV has ${fmt(near.amount)} on ${fmtDate(near.date)} (${fmt(Math.abs(near.amount - b.amount))} diff). Could be rounding or extra fee.` };
+    } else {
+      b.suggest = { type: 'miss', msg: `<strong>Not found in CSV</strong> — this bill is in Rentvine but has no matching charge in the uploaded statement. Check if it was paid on a different card or date range.` };
+    }
+  });
+
+  // Suggestions for unmatched CSV rows
+  csvUnmatched.forEach(c => {
+    c.suggest = { type: 'info', msg: `<strong>Not entered in Rentvine</strong> — this charge appears on the card but has no matching Reimbursement bill in Rentvine. <strong>Add a bill to Rentvine</strong> for ${fmt(c.amount)} so Aloe PM gets reimbursed.` };
+  });
+
+  return { csvMatched, csvUnmatched, notMatched };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+const fmt = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+function fmtDate(d) {
+  if (!d) return '';
+  try { const dt = new Date(d + 'T12:00:00'); return (dt.getMonth() + 1) + '/' + dt.getDate() + '/' + dt.getFullYear(); }
+  catch (e) { return d; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RUN
+// ─────────────────────────────────────────────────────────────────────────────
+async function run() {
+  if (!S.csvText) { set({ error: 'Upload your Chase card CSV first.' }); return; }
+  set({ error: '', warn: '', screen: 'loading', loadMsg: 'Parsing Chase CSV…', loadSub: '' });
+  try {
+    const csvRows = parseChaseCSV(S.csvText);
+    if (!csvRows.length) throw new Error('No charge rows found — check CSV format (needs: Transaction Date, Description, Amount, Type)');
+    set({ loadMsg: 'Fetching bills from Rentvine…', loadSub: `Pulling all "Aloe Property Management - REIMBURSEMENTS" bills (all time)` });
+    const rvBills = await fetchRVBills();
+    if (!rvBills.length) {
+      throw new Error('No Reimbursement bills found in Rentvine. Make sure you are logged into Rentvine in this browser, and that bills exist with vendor "Aloe Property Management - REIMBURSEMENTS".');
+    }
+    set({ loadMsg: 'Matching…', loadSub: `${csvRows.length} card charges · ${rvBills.length} RV bills` });
+    const { csvMatched, csvUnmatched, notMatched } = matchBills(csvRows, rvBills);
+    set({
+      results: { csvRows, rvBills, csvMatched, csvUnmatched, notMatched },
+      screen: 'results',
+      tab: 'not_entered',
+      search: '',
+    });
+  } catch (e) {
+    set({ error: e.message, screen: 'config' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById('app').innerHTML =
+    S.screen === 'loading' ? rLoad() :
+    S.screen === 'results' ? rResults() :
+    rConfig();
+  bind();
+}
+
+function rLoad() {
+  return `<div class="hdr"><div class="logo">A</div><span class="hdr-title">ALOE RECON · BILLS</span></div>
+  <div class="loading-wrap">
+    <div class="spinner"></div>
+    <div class="load-msg">${S.loadMsg}</div>
+    ${S.loadSub ? `<div class="load-sub">${S.loadSub}</div>` : ''}
+  </div>`;
+}
+
+function rConfig() {
+  const { csvFile, error, warn } = S;
+  return `<div class="hdr">
+    <div class="logo">A</div>
+    <span class="hdr-title">ALOE RECON · BILLS</span>
+    <span class="hdr-sub">Chase card charges ↔ Rentvine Reimbursement bills</span>
+  </div>
+  <div class="body">
+    ${error ? `<div class="err">⚠ ${error}</div>` : ''}
+    ${warn ? `<div class="warn">⚠ ${warn}</div>` : ''}
+    <div class="info">
+      <strong>How this works:</strong> Upload your Chase card CSV. This tool pulls all <em>Aloe Property Management - REIMBURSEMENTS</em> bills from Rentvine (all time, no date filter) and matches them against your card charges by amount.<br><br>
+      🔴 <strong>Not entered in Rentvine</strong> — card charge with no matching RV bill → you need to add it so Aloe PM gets reimbursed<br>
+      🟡 <strong>In Rentvine, not in CSV</strong> — RV bill with no matching card charge → may be on a different card or outside this statement period
+    </div>
+
+    <div class="card">
+      <div class="card-title">Upload Chase card CSV</div>
+      <div class="drop ${csvFile ? 'filled' : ''}" id="drop">
+        <input type="file" id="fi" accept=".csv" style="display:none"/>
+        ${csvFile
+          ? `<div class="drop-title" style="color:var(--teal)">✓ ${csvFile.name}</div><div class="drop-sub">Click to replace</div>`
+          : `<div class="drop-icon">💳</div>
+             <div class="drop-title">Drop Chase CSV or click to browse</div>
+             <div class="drop-sub">Chase → Account Activity → Download → CSV<br>Columns needed: Transaction Date, Description, Amount, Type</div>`}
+      </div>
+      <button class="btn-run" id="runBtn" ${!csvFile ? 'disabled' : ''}>Check bills →</button>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:-4px">
+      ⚠ This page must be open in the same browser where you're logged into Rentvine
+    </div>
+  </div>`;
+}
+
+function rResults() {
+  const { results, tab, search, csvFile } = S;
+  const { csvRows, rvBills, csvMatched, csvUnmatched, notMatched } = results;
+
+  const missingFromRV = csvUnmatched; // card charges not in Rentvine → need to enter
+  const missingFromCSV = notMatched;  // RV bills not in CSV statement
+
+  const missingAmt = missingFromRV.reduce((s, r) => s + r.amount, 0);
+  const notInCsvAmt = missingFromCSV.reduce((s, b) => s + b.amount, 0);
+
+  const q = search.toLowerCase();
+  let activeRows = [];
+  if (tab === 'not_entered') activeRows = missingFromRV.filter(r => !q || JSON.stringify(r).toLowerCase().includes(q));
+  if (tab === 'matched')     activeRows = csvMatched.filter(r => !q || JSON.stringify(r).toLowerCase().includes(q));
+  if (tab === 'not_in_csv')  activeRows = missingFromCSV.filter(r => !q || JSON.stringify(r).toLowerCase().includes(q));
+
+  // Render rows
+  let tableHtml = '';
+  if (tab === 'not_entered') {
+    // CSV charges with no RV bill — most important list
+    tableHtml = activeRows.length === 0
+      ? `<div class="empty">🎉 All card charges have matching Rentvine bills!</div>`
+      : activeRows.map(c => {
+          const s = c.suggest;
+          const suggestHtml = s ? `<div class="suggest-row"><div class="suggest ${s.type}"><span class="suggest-icon">⚠</span><span>${s.msg}</span></div></div>` : '';
+          return `<div class="recon-row rv-only">
+            <div class="row-inner">
+              <div class="cell-l">
+                <div class="cell-date">${fmtDate(c.date)}</div>
+                <div class="cell-desc" title="${c.description}">${c.description}</div>
+                <div class="cell-sub">Card ···${c.card} · ${c.category}</div>
+                <div><span class="cell-amt">−${fmt(c.amount)}</span><span class="badge badge-miss">not in Rentvine</span></div>
+              </div>
+              <div class="cell-r">
+                <div class="cell-empty" style="flex-direction:column;gap:6px">
+                  <span>—</span>
+                  <span style="font-size:11px;color:var(--red);font-weight:500">Add bill in Rentvine</span>
+                </div>
+              </div>
+            </div>${suggestHtml}
+          </div>`;
+        }).join('');
+  }
+
+  if (tab === 'matched') {
+    tableHtml = activeRows.length === 0
+      ? `<div class="empty">No matched transactions.</div>`
+      : activeRows.map(c => {
+          const rv = c.rvMatch;
+          return `<div class="recon-row matched">
+            <div class="row-inner">
+              <div class="cell-l">
+                <div class="cell-date">${fmtDate(c.date)}</div>
+                <div class="cell-desc" title="${c.description}">${c.description}</div>
+                <div class="cell-sub">Card ···${c.card}</div>
+                <div><span class="cell-amt">−${fmt(c.amount)}</span><span class="badge badge-ok">matched</span></div>
+                <div class="match-how">via ${c.matchType}</div>
+              </div>
+              <div class="cell-r">
+                <div class="cell-date">${fmtDate(rv.date)}</div>
+                <div class="cell-desc">${rv.account}</div>
+                ${rv.reference ? `<div class="cell-sub">Ref: ${rv.reference}</div>` : ''}
+                <div class="cell-prop">${rv.property}</div>
+                <div><span class="cell-amt">−${fmt(rv.amount)}</span><span class="badge badge-ok">in Rentvine</span></div>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+  }
+
+  if (tab === 'not_in_csv') {
+    tableHtml = activeRows.length === 0
+      ? `<div class="empty">All Rentvine bills have matching card charges.</div>`
+      : activeRows.map(b => {
+          const s = b.suggest;
+          const suggestHtml = s ? `<div class="suggest-row"><div class="suggest ${s.type}"><span class="suggest-icon">${s.type==='near'?'≈':'💡'}</span><span>${s.msg}</span></div></div>` : '';
+          return `<div class="recon-row csv-only">
+            <div class="row-inner">
+              <div class="cell-l">
+                <div class="cell-empty" style="flex-direction:column;gap:6px">
+                  <span>—</span>
+                  <span style="font-size:11px;color:var(--muted)">Not in this statement</span>
+                </div>
+              </div>
+              <div class="cell-r">
+                <div class="cell-date">${fmtDate(b.date)}</div>
+                <div class="cell-desc">${b.account}</div>
+                ${b.reference ? `<div class="cell-sub">Ref: ${b.reference}</div>` : ''}
+                <div class="cell-prop">${b.property}</div>
+                <div><span class="cell-amt">−${fmt(b.amount)}</span><span class="badge badge-warn">not in CSV</span></div>
+              </div>
+            </div>${suggestHtml}
+          </div>`;
+        }).join('');
+  }
+
+  return `<div class="hdr">
+    <div class="logo">A</div>
+    <div>
+      <div class="hdr-title">ALOE RECON · BILLS</div>
+      <div class="hdr-sub" style="margin-top:1px">${csvRows.length} card charges · ${rvBills.length} RV bills · ${csvFile?.name || ''}</div>
+    </div>
+    <div class="hdr-right"><button class="btn-sm" id="backBtn">← New run</button></div>
+  </div>
+  <div class="body">
+    <div class="stats">
+      <div class="stat"><div class="stat-n" style="color:var(--red)">${missingFromRV.length}</div><div class="stat-l">Not in Rentvine</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--red)">${fmt(missingAmt)}</div><div class="stat-l">$ Not entered</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--teal-dk)">${csvMatched.length}</div><div class="stat-l">Matched</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--amber)">${missingFromCSV.length}</div><div class="stat-l">RV only</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--muted)">${rvBills.length}</div><div class="stat-l">Total RV bills</div></div>
+    </div>
+
+    ${missingFromRV.length > 0 ? `
+    <div class="alert-banner">
+      <div class="al">⚠ Card charges not entered in Rentvine</div>
+      <div class="aa">${fmt(missingAmt)}</div>
+      <div class="as">${missingFromRV.length} charge${missingFromRV.length > 1 ? 's' : ''} on the card with no matching Reimbursement bill — Aloe PM will not get reimbursed until these are added</div>
+    </div>` : `<div class="info" style="margin-bottom:14px">✅ All card charges have matching Rentvine bills — nothing missing!</div>`}
+
+    <div class="recon-wrap">
+      <div class="tbl-tabs">
+        <div class="tbl-tab ${tab === 'not_entered' ? 'active' : ''}" id="tab-ne">🔴 Not entered in RV (${missingFromRV.length})</div>
+        <div class="tbl-tab ${tab === 'matched' ? 'active' : ''}" id="tab-m">✅ Matched (${csvMatched.length})</div>
+        <div class="tbl-tab ${tab === 'not_in_csv' ? 'active' : ''}" id="tab-nc">🟡 RV bills not in CSV (${missingFromCSV.length})</div>
+      </div>
+      <div class="col-hdrs">
+        <div class="col-hdr left">💳 Chase card charge</div>
+        <div class="col-hdr">📋 Rentvine Reimbursement bill</div>
+      </div>
+      <div class="filters">
+        <input class="srch" id="si" placeholder="Search description, property, amount…" value="${search}"/>
+        <span class="row-ct">${activeRows.length} rows</span>
+      </div>
+      <div class="tbl-body">${tableHtml}</div>
+      <div class="export-bar">
+        <button class="btn-sm" id="exportBtn">⬇ Export missing list as CSV</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────────────────────────────────────
+function exportMissing() {
+  const { csvUnmatched } = S.results;
+  const rows = [['Transaction Date','Description','Card','Amount','Category','Action Needed']];
+  csvUnmatched.forEach(r => rows.push([
+    r.date, '"'+r.description.replace(/"/g,'""')+'"', '···'+r.card, r.amount.toFixed(2), r.category, 'Add Reimbursement bill in Rentvine'
+  ]));
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv,' + encodeURIComponent(csv);
+  a.download = 'aloe_reimbursements_not_entered_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BIND
+// ─────────────────────────────────────────────────────────────────────────────
+function bind() {
+  if (S.screen === 'config') {
+    const drop = document.getElementById('drop'), fi = document.getElementById('fi');
+    drop?.addEventListener('click', () => fi?.click());
+    drop?.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+    drop?.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop?.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); hf(e.dataTransfer.files[0]); });
+    fi?.addEventListener('change', e => hf(e.target.files[0]));
+    document.getElementById('runBtn')?.addEventListener('click', run);
+  }
+  if (S.screen === 'results') {
+    document.getElementById('backBtn')?.addEventListener('click', () => set({ screen: 'config', results: null, search: '' }));
+    document.getElementById('si')?.addEventListener('input', e => set({ search: e.target.value }));
+    document.getElementById('tab-ne')?.addEventListener('click', () => set({ tab: 'not_entered', search: '' }));
+    document.getElementById('tab-m')?.addEventListener('click', () => set({ tab: 'matched', search: '' }));
+    document.getElementById('tab-nc')?.addEventListener('click', () => set({ tab: 'not_in_csv', search: '' }));
+    document.getElementById('exportBtn')?.addEventListener('click', exportMissing);
+  }
+}
+async function hf(file) { if (!file) return; const text = await file.text(); set({ csvFile: file, csvText: text }); }
+
+render();
+</script>
+</body>
+</html>
