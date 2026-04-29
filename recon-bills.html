@@ -186,7 +186,11 @@ function parseChase(text){
 // ─────────────────────────────────────────────────────────────────────────────
 // FETCH RV BILLS — via Render proxy (Basic Auth)
 // ─────────────────────────────────────────────────────────────────────────────
-async function fetchRVBills(){
+async function fetchRVBills(csvStart, csvEnd){
+  // 90 days back from the CSV's latest date, forward to CSV end
+  // This drops outlier dates (e.g. a stray 2024 row in a 2025-2026 file)
+  const windowStart = shiftDate(csvEnd, -90);
+  const windowEnd   = shiftDate(csvEnd, +30);
   const VENDOR=/aloe property management.*reimburs/i;
   let all=[], page=1;
   while(true){
@@ -198,9 +202,12 @@ async function fetchRVBills(){
     rows.forEach(row=>{
       const b=row.bill, name=row.contact?.name||'';
       if(!b||!VENDOR.test(name)) return;
+      const date=(b.billDate||b.dateDue||'').slice(0,10);
+      // Only include bills within the expanded window
+      if(date && (date < windowStart || date > windowEnd)) return;
       all.push({
         billID:    b.billID,
-        date:      (b.billDate||b.dateDue||'').slice(0,10),
+        date,
         reference: (b.reference||'').trim(),
         memo:      (b.paymentMemo||b.description||'').trim(),
         vendor:    name,
@@ -317,6 +324,13 @@ function matchBills(csvRows, rvBills){
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+function shiftDate(dateStr, days){
+  try{
+    const d=new Date(dateStr+'T12:00:00');
+    d.setDate(d.getDate()+days);
+    return d.toISOString().slice(0,10);
+  }catch(e){return dateStr;}
+}
 const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0);
 function fmtDate(d){
   if(!d) return '';
@@ -335,11 +349,22 @@ async function run(){
     const csvRows=parseChase(S.csvText);
     if(!csvRows.length) throw new Error('No charge rows found — check CSV format');
     set({loadMsg:'Fetching Aloe PM Reimbursement bills from Rentvine…'});
-    const rvBills=await fetchRVBills();
-    if(!rvBills.length) throw new Error('No Aloe PM Reimbursement bills found in Rentvine. Make sure bills exist with vendor "Aloe Property Management - REIMBURSEMENTS".');
+    // Derive date range from CSV
+    const allCsvDates=csvRows.map(r=>r.date).filter(Boolean).sort();
+    const csvEnd=allCsvDates[allCsvDates.length-1]||new Date().toISOString().slice(0,10);
+    // Ignore Chase rows older than 90 days before the latest date (drops stray old transactions)
+    const cutoff=shiftDate(csvEnd,-90);
+    const filteredCsvRows=csvRows.filter(r=>r.date>=cutoff);
+    const csvDates=filteredCsvRows.map(r=>r.date).sort();
+    const csvStart=csvDates[0]||cutoff;
+    // Replace csvRows with filtered version
+    csvRows.length=0; filteredCsvRows.forEach(r=>csvRows.push(r));
+    set({loadMsg:`CSV: ${fmtDate(csvStart)} → ${fmtDate(csvEnd)} (90-day window) · fetching RV bills…`});
+    const rvBills=await fetchRVBills(csvStart, csvEnd);
+    if(!rvBills.length) throw new Error('No Aloe PM Reimbursement bills found in Rentvine for this date range. Try a different statement period.');
     set({loadMsg:`Matching ${csvRows.length} charges against ${rvBills.length} RV bills…`});
     const {rows,rvOnly}=matchBills(csvRows,rvBills);
-    set({results:{csvRows,rvBills,rows,rvOnly},screen:'results',search:'',filter:'all',sortCol:'chase_date',sortDir:'asc'});
+    set({results:{csvRows,rvBills,rows,rvOnly,csvStart,csvEnd},screen:'results',search:'',filter:'all',sortCol:'chase_date',sortDir:'asc'});
   }catch(e){set({error:e.message,screen:'config'});}
 }
 
@@ -503,7 +528,7 @@ function rResults(){
 
   return `<div class="hdr">
     <span class="hdr-title">ALOE RECON · BILLS</span>
-    <span class="hdr-sub" style="margin-top:1px">${csvRows.length} charges · ${rvBills.length} RV bills · ${csvFile?.name||''}</span>
+    <span class="hdr-sub" style="margin-top:1px">${fmtDate(results.csvStart)} → ${fmtDate(results.csvEnd)} · ${csvRows.length} charges · ${rvBills.length} RV bills (90d window)</span>
     <div class="hdr-right"><button class="btn-sm" id="backBtn">← New run</button></div>
   </div>
   <div class="body">
