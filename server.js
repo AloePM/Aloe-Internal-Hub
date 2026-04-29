@@ -1,9 +1,3 @@
-// REPLACE EVERYTHING FROM:
-//   app.get('*', function(req, res) {
-//     res.send(`<!DOCTYPE html>
-// ... all the way to the closing backtick and });
-// WITH THIS:
-
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
