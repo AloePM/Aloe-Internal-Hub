@@ -151,7 +151,7 @@
 <script>
 const PROXY='/api/rentvine', BANK_ID='129';
 let S={
-  screen:'config', mode:'settlements',
+  screen:'config', mode:'register',
   reconciliations:[], selRecon:null,
   settlStart:'', settlEnd:'',
   bankFile:null, bankText:'',
@@ -301,13 +301,40 @@ async function loadInit(){
 async function runRecon(){
   if(!S.bankText){set({error:'Upload your bank CSV first.'});return;}
   if(S.mode==='reconciliation'&&!S.selRecon){set({error:'Select a reconciliation period.'});return;}
-  if(S.mode==='settlements'&&(!S.settlStart||!S.settlEnd)){set({error:'Set a date range.'});return;}
+  if((S.mode==='settlements'||S.mode==='register')&&(!S.settlStart||!S.settlEnd)){set({error:'Set a date range.'});return;}
   set({error:'',screen:'loading',loadMsg:'Parsing bank file…'});
   try{
     const bankTxns=parseBankFile(S.bankText);
     if(!bankTxns.length) throw new Error('Could not parse CSV — needs columns: Post Date, Description, Debit, Credit');
     let rvTxns=[];
-    if(S.mode==='settlements'){
+    if(S.mode==='register'){
+      set({loadMsg:'Fetching Rentvine bank register…'});
+      const resp=await apiFetch('/reports/bank-register',{body:{
+        displayColumns:['datePosted','type','reference','description','increase','decrease','paidTo','paidBy'],
+        filters:[
+          {name:'datePosted',isRequired:1,comparator:'customDateRange',value1:S.settlStart,value2:S.settlEnd},
+          {name:'bankAccount',isRequired:1,comparator:'equals',value:BANK_ID,values:[BANK_ID]}
+        ]
+      }});
+      // Filter to actual transaction rows (have a date and at least one amount)
+      const txnRows=(resp.rows||[]).filter(r=>r.data&&r.data.datePosted&&(r.data.increase||r.data.decrease));
+      // De-duplicate: bank register returns one row per line item — group by objectID+date+amount for top-level txn
+      const seen=new Set();
+      rvTxns=txnRows.filter(r=>{
+        const d=r.data;
+        const key=d.objectID+'|'+(d.increase||d.decrease);
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).map(r=>{
+        const d=r.data;
+        const direction=d.direction==='1'?'in':'out';
+        const amount=parseFloat((direction==='in'?d.increase:d.decrease)||0);
+        const ref=d.reference||'';
+        const desc=d.type+(d.paidBy?' — '+d.paidBy:d.paidTo?' — '+d.paidTo:'')+(ref?' ('+ref+')':'');
+        return {id:d.objectID,achId:ref,direction,amount,date:(d.datePosted||'').slice(0,10),description:desc,reference:ref,type:d.type,matched:false};
+      });
+    }else if(S.mode==='settlements'){
       set({loadMsg:'Fetching Rentvine settlements…'});
       const resp=await apiFetch('/reports/settlements',{body:{isReconciled:'booleanAny',startDate:S.settlStart,endDate:S.settlEnd,bankAccountID:BANK_ID}});
       const rows=(resp.rows||[]).filter(r=>r.data&&r.data.bankAccountID===BANK_ID);
@@ -363,10 +390,11 @@ function rConfig(){
     <div class="card">
       <div class="card-title">1 — Data source</div>
       <div class="mode-row">
-        <button class="mode-btn ${mode==='settlements'?'active':''}" data-m="settlements">Settlements report</button>
+        <button class="mode-btn ${mode==='register'?'active':''}" data-m="register">Bank register</button>
+        <button class="mode-btn ${mode==='settlements'?'active':''}" data-m="settlements">Settlements</button>
         <button class="mode-btn ${mode==='reconciliation'?'active':''}" data-m="reconciliation">Reconciliation period</button>
       </div>
-      ${mode==='settlements'?`
+      ${mode==='register'||mode==='settlements'?`
         <div class="grid2">
           <div class="field"><label>From</label><input type="date" id="ss" value="${settlStart}"/></div>
           <div class="field"><label>To</label><input type="date" id="se" value="${settlEnd}"/></div>
@@ -390,7 +418,7 @@ function rResults(){
   const {results,search,dir,bankFile,reconciliations,selRecon,settlStart,settlEnd}=S;
   const {bankTxns,rvTxns,matched,bankOnly,rvOnly,mode}=results;
   const recon=reconciliations.find(r=>r.reconciliationID===selRecon);
-  const periodLabel=mode==='settlements'?`${settlStart} → ${settlEnd}`:(recon?`${recon.statementStartDate} → ${recon.statementEndDate}`:'');
+  const periodLabel=(mode==='register'||mode==='settlements')?`${settlStart} → ${settlEnd}`:(recon?`${recon.statementStartDate} → ${recon.statementEndDate}`:'');
   const rate=bankTxns.length?Math.round((matched.length/bankTxns.length)*100):0;
   const boOut=bankOnly.filter(r=>r.direction==='out').reduce((s,r)=>s+r.amount,0);
   const boIn=bankOnly.filter(r=>r.direction==='in').reduce((s,r)=>s+r.amount,0);
@@ -453,7 +481,7 @@ function rResults(){
     <div class="logo">$</div>
     <div>
       <div class="hdr-title">ALOE RECON — ${periodLabel}</div>
-      <div class="hdr-sub" style="margin-top:1px">${bankTxns.length} bank · ${rvTxns.length} Rentvine · ${mode==='settlements'?'Settlements':'Reconciliation'} · ${bankFile?.name||''}</div>
+      <div class="hdr-sub" style="margin-top:1px">${bankTxns.length} bank · ${rvTxns.length} Rentvine · ${mode==='register'?'Bank Register':mode==='settlements'?'Settlements':'Reconciliation'} · ${bankFile?.name||''}</div>
     </div>
     <div class="hdr-right"><button class="btn-sm" id="backBtn">← New run</button></div>
   </div>
