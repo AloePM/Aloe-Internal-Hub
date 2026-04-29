@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aloe PM · Bank Setup</title>
+<script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#F8FAFC;--surface:#fff;--s2:#EFF8FC;--border:#D6EEF5;--border2:#B4C3C3;--teal:#3CC3E1;--teal-dk:#4BB4D2;--silver:#B4C3C3;--red:#C0392B;--rbg:#FDF0EF;--muted:#8AA5AD;--text:#1A2E35;--text2:#4A6570}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh}
+  .hdr{background:#fff;border-bottom:1px solid var(--border);border-top:3px solid var(--teal);padding:0 24px;height:52px;display:flex;align-items:center;gap:12px}
+  .logo{width:26px;height:26px;background:var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'IBM Plex Mono',monospace}
+  .hdr-title{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.06em}
+  .hdr-sub{font-size:11px;color:var(--muted)}
+  .body{padding:28px 24px;max-width:680px;margin:0 auto}
+  .info{background:var(--s2);border:1px solid var(--teal);border-radius:7px;padding:10px 14px;font-size:12px;color:var(--teal-dk);margin-bottom:20px;line-height:1.6}
+  .acct-card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:18px 20px;margin-bottom:12px;display:flex;align-items:center;gap:16px}
+  .acct-info{flex:1}
+  .acct-num{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:3px}
+  .acct-name{font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px}
+  .acct-status{font-size:11px;display:flex;align-items:center;gap:5px;margin-top:4px}
+  .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .dot.connected{background:#3CC3E1}
+  .dot.pending{background:#B4C3C3}
+  .dot.error{background:#C0392B}
+  .btn-connect{background:var(--teal);border:none;border-radius:7px;padding:9px 18px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+  .btn-connect:hover{background:var(--teal-dk)}
+  .btn-connect.reconnect{background:none;border:1px solid var(--teal);color:var(--teal)}
+  .btn-connect:disabled{background:var(--s2);color:var(--muted);cursor:not-allowed;border:1px solid var(--border2)}
+  .success{background:#EAF8FC;border:1px solid var(--teal);border-radius:7px;padding:10px 14px;font-size:12px;color:var(--teal-dk);margin-top:16px;display:none}
+  .err-box{background:var(--rbg);border:1px solid #E8A09A;border-radius:7px;padding:10px 14px;font-size:12px;color:var(--red);margin-top:16px;display:none}
+  .divider{border:none;border-top:1px solid var(--border);margin:20px 0}
+  .instructions{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:18px 20px;margin-top:20px}
+  .instructions h3{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+  .step{display:flex;gap:12px;margin-bottom:10px;font-size:13px;line-height:1.5}
+  .step-num{width:22px;height:22px;border-radius:50%;background:var(--s2);border:1px solid var(--teal);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--teal-dk);flex-shrink:0;margin-top:1px}
+  code{background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--teal-dk)}
+  .balance-row{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--teal-dk);margin-top:4px;font-weight:500}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="logo">A</div>
+  <span class="hdr-title">ALOE PM · BANK SETUP</span>
+  <span class="hdr-sub" style="margin-left:6px">Connect bank accounts via Plaid</span>
+</div>
+<div class="body">
+  <div class="info">
+    Connect each bank account once. After connecting, the Recon tool will pull live transactions automatically — no CSV uploads needed. Your credentials are never stored; only a secure Plaid access token is saved.
+  </div>
+
+  <div id="acct-list"></div>
+  <div class="success" id="success-msg"></div>
+  <div class="err-box" id="err-msg"></div>
+
+  <div class="instructions">
+    <h3>After connecting</h3>
+    <div class="step"><div class="step-num">1</div><div>Copy the access tokens shown in the Render logs after each connection</div></div>
+    <div class="step"><div class="step-num">2</div><div>Add them as env vars in Render: <code>PLAID_TOKEN_TRUST</code>, <code>PLAID_TOKEN_SECURITY</code>, <code>PLAID_TOKEN_EMPLOYEE</code></div></div>
+    <div class="step"><div class="step-num">3</div><div>Redeploy — the Recon tool will now pull live bank transactions automatically</div></div>
+  </div>
+</div>
+
+<script>
+const ACCOUNTS = [
+  {key:'trust',    number:'1000', name:'Rental Trust Account',     sub:'xxxx-3221 · Primary operating account'},
+  {key:'security', number:'1100', name:'Security Deposit Account', sub:'Tenant security deposits'},
+  {key:'employee', number:'3100', name:'Employee Trust',           sub:'Employee trust account'},
+];
+
+let status = {};
+
+async function loadStatus() {
+  try {
+    const r = await fetch('/api/plaid/status');
+    const d = await r.json();
+    status = d.accounts || {};
+    // Also load balances for connected accounts
+    const br = await fetch('/api/plaid/balances');
+    const balances = await br.json();
+    renderAccounts(balances);
+  } catch(e) {
+    renderAccounts({});
+  }
+}
+
+function renderAccounts(balances) {
+  const list = document.getElementById('acct-list');
+  list.innerHTML = ACCOUNTS.map(acct => {
+    const s = status[acct.key] || {};
+    const b = balances[acct.key] || {};
+    const connected = s.connected;
+    const bal = b.accounts?.[0];
+    const balStr = bal ? `$${Number(bal.available ?? bal.current).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})} available` : '';
+    return `<div class="acct-card">
+      <div class="acct-info">
+        <div class="acct-num">${acct.number}</div>
+        <div class="acct-name">${acct.name}</div>
+        <div class="acct-status">
+          <div class="dot ${connected?'connected':'pending'}"></div>
+          <span style="color:var(--muted);font-size:11px">${connected?'Connected':'Not connected'}</span>
+        </div>
+        ${balStr?`<div class="balance-row">${balStr}</div>`:''}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${acct.sub}</div>
+      </div>
+      <button class="btn-connect ${connected?'reconnect':''}" onclick="connectAccount('${acct.key}','${acct.name}')">
+        ${connected?'Reconnect':'Connect →'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function connectAccount(accountKey, accountName) {
+  const btn = document.querySelector(`button[onclick*="${accountKey}"]`);
+  btn.disabled = true;
+  btn.textContent = 'Opening…';
+  hideMessages();
+
+  try {
+    // Get link token from our server
+    const r = await fetch('/api/plaid/create-link-token', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({}),
+    });
+    const {link_token, error} = await r.json();
+    if (error) throw new Error(error);
+
+    // Open Plaid Link
+    const handler = Plaid.create({
+      token: link_token,
+      onSuccess: async (public_token, metadata) => {
+        try {
+          const er = await fetch('/api/plaid/exchange-token', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({public_token, account_key: accountKey}),
+          });
+          const ed = await er.json();
+          if (ed.error) throw new Error(ed.error);
+          showSuccess(`✓ ${accountName} connected successfully! Check Render logs for the access token to save as an env var.`);
+          await loadStatus();
+        } catch(e) {
+          showError('Token exchange failed: ' + e.message);
+        }
+        btn.disabled = false;
+        btn.textContent = 'Reconnect';
+      },
+      onExit: (err) => {
+        if (err) showError('Plaid Link error: ' + (err.display_message || err.error_message || 'Unknown error'));
+        btn.disabled = false;
+        btn.textContent = status[accountKey]?.connected ? 'Reconnect' : 'Connect →';
+      },
+    });
+    handler.open();
+  } catch(e) {
+    showError('Setup failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = status[accountKey]?.connected ? 'Reconnect' : 'Connect →';
+  }
+}
+
+function showSuccess(msg) {
+  const el = document.getElementById('success-msg');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('err-msg').style.display = 'none';
+}
+function showError(msg) {
+  const el = document.getElementById('err-msg');
+  el.textContent = msg; el.style.display = 'block';
+  document.getElementById('success-msg').style.display = 'none';
+}
+function hideMessages() {
+  document.getElementById('success-msg').style.display = 'none';
+  document.getElementById('err-msg').style.display = 'none';
+}
+
+loadStatus();
+</script>
+</body>
+</html>

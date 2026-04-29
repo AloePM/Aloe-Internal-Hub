@@ -85,6 +85,12 @@
   .acct-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
   .acct-item.sel .acct-name{color:var(--teal-dk)}
   .acct-sub{font-size:11px;color:var(--muted);line-height:1.4}
+  .plaid-banner{background:var(--s2);border:1px solid var(--teal);border-radius:8px;padding:11px 14px;display:flex;align-items:center;gap:12px}
+  .plaid-banner .pi{font-size:20px;flex-shrink:0}
+  .plaid-banner .pn{font-size:13px;font-weight:600;color:var(--text)}
+  .plaid-banner .ps{font-size:11px;color:var(--muted);margin-top:1px}
+  .plaid-banner .pb{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:var(--teal-dk);margin-top:2px}
+  .plaid-banner a{font-size:11px;color:var(--teal);margin-left:auto;border:1px solid var(--teal);border-radius:6px;padding:4px 10px;text-decoration:none;white-space:nowrap}
   .recon-table{overflow:auto;max-height:520px}
 
   .recon-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
@@ -140,6 +146,7 @@ const PROXY='/api/rentvine';
 let S={
   screen:'config',
   bankId:'129',
+  plaidStatus:null,
   startDate:'', endDate:'',
   bankFile:null, bankText:'',
   error:'',
@@ -482,7 +489,7 @@ function filteredRows(){
 
 // ── RUN ────────────────────────────────────────────────────────────────────
 async function runRecon(){
-  if(!S.bankText){set({error:'Upload your bank CSV first.'});return;}
+  if(!S.plaidStatus&&!S.bankText){set({error:'Connect via Plaid or upload a bank CSV.'});return;}
   if(!S.startDate||!S.endDate){set({error:'Set a date range.'});return;}
 
   set({
@@ -495,8 +502,19 @@ async function runRecon(){
   });
 
   try{
-    const bankTxns=parseBankCSV(S.bankText);
-    if(!bankTxns.length) throw new Error('Could not parse bank CSV — needs: Post Date, Description, Debit, Credit');
+    let bankTxns=[];
+    if(S.plaidStatus){
+      set({loadSteps:[{label:'Plaid bank txns',status:'active'},{label:'RV Deposits',status:'active'},{label:'RV Transfers',status:'active'},{label:'RV Settlements',status:'active'}]});
+      const key={'129':'trust','130':'security','149':'employee'}[S.bankId]||'trust';
+      const pr=await fetch(`/api/plaid/transactions?account_key=${key}&start_date=${S.startDate}&end_date=${S.endDate}`);
+      const pd_=await pr.json();
+      if(pd_.error) throw new Error('Plaid: '+pd_.error);
+      bankTxns=pd_.transactions||[];
+      if(!bankTxns.length) throw new Error('No bank transactions found in Plaid for this date range');
+    }else{
+      bankTxns=parseBankCSV(S.bankText);
+      if(!bankTxns.length) throw new Error('Could not parse bank CSV — needs: Post Date, Description, Debit, Credit');
+    }
 
     const {txns:rvTxns, counts}=await fetchRVTransactions(S.startDate, S.endDate);
     const result=doMatch(bankTxns, rvTxns);
@@ -524,7 +542,7 @@ function rLoad(){
 }
 
 function rConfig(){
-  const {startDate,endDate,bankFile,error,bankId}=S;
+  const {startDate,endDate,bankFile,error,bankId,plaidStatus}=S;
   // Default to current month
   const now=new Date();
   const defStart=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
@@ -569,18 +587,26 @@ function rConfig(){
     </div>
 
     <div class="card">
-      <div class="card-title">3 — Bank CSV</div>
-      <div class="drop ${bankFile?'filled':''}" id="drop">
-        <input type="file" id="fi" accept=".csv" style="display:none"/>
-        ${bankFile
-          ?`<div class="drop-title" style="color:var(--green)">✓ ${bankFile.name}</div><div class="drop-sub">Click to replace</div>`
-          :`<div class="drop-icon">📄</div>
-           <div class="drop-title">Drop bank CSV or click to browse</div>
-           <div class="drop-sub">Enterprise Bank → Account History → Download → CSV<br>Needs: Post Date, Description, Debit, Credit</div>`}
-      </div>
+      <div class="card-title">3 — Bank transactions</div>
+      ${plaidStatus
+        ?`<div class="plaid-banner">
+            <div class="pi">🏦</div>
+            <div>
+              <div class="pn">${plaidStatus.name}</div>
+              <div class="ps">Connected via Plaid · transactions pulled automatically</div>
+              ${plaidStatus.balance?'<div class="pb">'+plaidStatus.balance+'</div>':''}
+            </div>
+            <a href="/bank-setup" target="_blank">Manage →</a>
+          </div>`
+        :`<div class="drop ${bankFile?'filled':''}" id="drop">
+            <input type="file" id="fi" accept=".csv" style="display:none"/>
+            ${bankFile
+              ?'<div class="drop-title" style="color:var(--teal)">✓ '+bankFile.name+'</div><div class="drop-sub">Click to replace</div>'
+              :'<div class="drop-icon">📄</div><div class="drop-title">Drop bank CSV or click to browse</div><div class="drop-sub">Enterprise Bank → Account History → CSV · Or <a href="/bank-setup" style="color:var(--teal);text-decoration:none" target="_blank">connect via Plaid</a> to skip this forever</div>'}
+          </div>`}
     </div>
 
-    <button class="btn-run" id="runBtn" ${!bankFile?'disabled':''}>Run reconciliation →</button>
+    <button class="btn-run" id="runBtn" ${!bankFile&&!plaidStatus?'disabled':''}>Run reconciliation →</button>
   </div>`;
 }
 
@@ -719,7 +745,7 @@ function rResults(){
 // ── EVENTS ─────────────────────────────────────────────────────────────────
 function bind(){
   if(S.screen==='config'){
-    document.querySelectorAll('[data-acct]').forEach(el=>el.addEventListener('click',()=>set({bankId:el.dataset.acct})));
+    document.querySelectorAll('[data-acct]').forEach(el=>el.addEventListener('click',()=>{set({bankId:el.dataset.acct});checkPlaid();}));
     document.getElementById('sd')?.addEventListener('change',e=>set({startDate:e.target.value}));
     document.getElementById('ed')?.addEventListener('change',e=>set({endDate:e.target.value}));
     const drop=document.getElementById('drop'),fi=document.getElementById('fi');
@@ -741,11 +767,32 @@ function bind(){
 }
 async function hf(file){if(!file)return;const text=await file.text();set({bankFile:file,bankText:text});}
 
+// ── Plaid status check ──────────────────────────────────────────────────────
+async function checkPlaid(){
+  const key={'129':'trust','130':'security','149':'employee'}[S.bankId]||'trust';
+  try{
+    const r=await fetch('/api/plaid/status');
+    if(!r.ok) return;
+    const d=await r.json();
+    const acct=d.accounts?.[key];
+    if(!acct?.connected){set({plaidStatus:null});return;}
+    // Fetch live balance
+    try{
+      const br=await fetch('/api/plaid/balances');
+      const bd=await br.json();
+      const bal=bd[key]?.accounts?.[0];
+      const balStr=bal?fmt(bal.available!=null?bal.available:bal.current)+' available':'';
+      set({plaidStatus:{name:acct.name,balance:balStr,connected:true}});
+    }catch(e){set({plaidStatus:{name:acct.name,balance:'',connected:true}});}
+  }catch(e){set({plaidStatus:null});}
+}
+
 // Set default dates on load
 const now=new Date();
 S.startDate=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
 S.endDate=new Date(now.getFullYear(),now.getMonth()+1,0).toISOString().slice(0,10);
 render();
+checkPlaid();
 </script>
 </body>
 </html>
