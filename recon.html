@@ -314,7 +314,7 @@ async function runRecon(){
       rvTxns=rows.map(r=>{
         const d=r.data;
         const achId=d.bankAccountGatewaySettlementID||'';
-        return {id:d.settlementID,achId,direction:'in',amount:parseFloat(d.amount||0),date:(d.settlementDate||'').slice(0,10),description:achId||'ACH Settlement',reference:achId,isReconciled:d.isReconciled==='1',matched:false};
+        const raw=parseFloat(d.amount||0);const direction=raw>=0?'in':'out';const amount=Math.abs(raw);return {id:d.settlementID,achId,direction,amount,date:(d.settlementDate||'').slice(0,10),description:achId||'ACH Settlement',reference:achId,isReconciled:d.isReconciled==='1',matched:false};
       });
     }else{
       set({loadMsg:'Fetching Rentvine reconciliation…'});
