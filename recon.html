@@ -213,10 +213,10 @@ function parseBankFile(text){
 
 // ── MATCH ──────────────────────────────────────────────────────────────────
 function extractAch(str){const m=(str||'').match(/ACH-([A-Z0-9]{4}-[A-Z0-9]{5})/i);return m?m[1].toUpperCase():null;}
-function dd(a,b){if(!a||!b) return 999;return Math.abs((new Date(a)-new Date(b))/86400000);}
 function doMatch(bankTxns,rvTxns){
   const pool=rvTxns.map(r=>({...r,matched:false}));
   const bank=bankTxns.map(b=>({...b,matched:false,rvMatch:null,matchType:null}));
+  // Pass 1: ACH ID exact match (most reliable — reference number is identical)
   bank.forEach(b=>{
     if(b.matched) return;
     const achB=extractAch(b.description);
@@ -224,15 +224,18 @@ function doMatch(bankTxns,rvTxns){
     const rv=pool.find(r=>!r.matched&&extractAch(r.achId||r.reference||'')===achB);
     if(rv){b.matched=true;b.rvMatch=rv;b.matchType='ACH ID';rv.matched=true;}
   });
+  // Pass 2: Exact amount match only — no date required
+  // Same direction first (more precise)
   bank.forEach(b=>{
     if(b.matched) return;
-    const rv=pool.find(r=>!r.matched&&r.direction===b.direction&&Math.abs(r.amount-b.amount)<0.02&&dd(r.date,b.date)<=2);
-    if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amt+Date';rv.matched=true;}
+    const rv=pool.find(r=>!r.matched&&r.direction===b.direction&&Math.abs(r.amount-b.amount)<0.02);
+    if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amount';rv.matched=true;}
   });
+  // Pass 3: Exact amount, any direction (catches cases where direction encoding differs)
   bank.forEach(b=>{
     if(b.matched) return;
-    const rv=pool.find(r=>!r.matched&&Math.abs(r.amount-b.amount)<0.02&&dd(r.date,b.date)<=5);
-    if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amt±5d';rv.matched=true;}
+    const rv=pool.find(r=>!r.matched&&Math.abs(r.amount-b.amount)<0.02);
+    if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amount (any dir)';rv.matched=true;}
   });
   return {
     matched:bank.filter(b=>b.matched),
