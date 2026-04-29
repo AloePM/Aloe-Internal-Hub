@@ -85,12 +85,22 @@
   .acct-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px}
   .acct-item.sel .acct-name{color:var(--teal-dk)}
   .acct-sub{font-size:11px;color:var(--muted);line-height:1.4}
+  .mode-tabs{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .mode-tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:600;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;background:var(--bg);color:var(--muted);transition:all .15s;border:none}
+  .mode-tab.active{background:var(--teal);color:#fff}
+  .mode-tab:not(.active):hover{background:var(--s2);color:var(--text)}
   .plaid-banner{background:var(--s2);border:1px solid var(--teal);border-radius:8px;padding:11px 14px;display:flex;align-items:center;gap:12px}
   .plaid-banner .pi{font-size:20px;flex-shrink:0}
   .plaid-banner .pn{font-size:13px;font-weight:600;color:var(--text)}
   .plaid-banner .ps{font-size:11px;color:var(--muted);margin-top:1px}
   .plaid-banner .pb{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:var(--teal-dk);margin-top:2px}
   .plaid-banner a{font-size:11px;color:var(--teal);margin-left:auto;border:1px solid var(--teal);border-radius:6px;padding:4px 10px;text-decoration:none;white-space:nowrap}
+  .bill-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
+  .bill-row:last-child{border-bottom:none}
+  .bill-row.matched .cell-l,.bill-row.matched .cell-r{background:var(--surface)}
+  .bill-row.csv-only .cell-l{background:#FAEEDA28}.bill-row.csv-only .cell-r{background:#FAEEDA10}
+  .bill-row.rv-only .cell-l{background:#FCEBEB10}.bill-row.rv-only .cell-r{background:#FCEBEB28}
+  .bill-row:hover .cell-l,.bill-row:hover .cell-r{filter:brightness(.97)}
   .recon-table{overflow:auto;max-height:520px}
 
   .recon-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
@@ -145,8 +155,11 @@ const PROXY='/api/rentvine';
 
 let S={
   screen:'config',
+  mode:'bank',
   bankId:'129',
   plaidStatus:null,
+  billsFile:null, billsText:'',
+  billsResults:null,
   startDate:'', endDate:'',
   bankFile:null, bankText:'',
   error:'',
@@ -488,6 +501,23 @@ function filteredRows(){
 }
 
 // ── RUN ────────────────────────────────────────────────────────────────────
+async function runBills(){
+  if(!S.billsText){set({error:'Upload your bank CSV first.'});return;}
+  if(!S.startDate||!S.endDate){set({error:'Set a date range.'});return;}
+  set({error:'',screen:'loading',loadSteps:[
+    {label:'Parsing CSV',status:'active'},
+    {label:'Fetching Aloe PM bills from Rentvine',status:'active'},
+  ]});
+  try{
+    const csvTxns = parseBillsCSV(S.billsText);
+    if(!csvTxns.length) throw new Error('Could not parse CSV — check column headers');
+    set({loadSteps:[{label:'CSV parsed',status:'done'},{label:'Fetching Aloe PM bills from Rentvine',status:'active'}]});
+    const rvBills = await fetchRVBills(S.startDate, S.endDate);
+    const result = matchBills(csvTxns, rvBills);
+    set({billsResults:{csvTxns,rvBills,startDate:S.startDate,endDate:S.endDate,...result},screen:'bills',error:''});
+  }catch(e){set({error:e.message,screen:'config'});}
+}
+
 async function runRecon(){
   if(!S.plaidStatus&&!S.bankText){set({error:'Connect via Plaid or upload a bank CSV.'});return;}
   if(!S.startDate||!S.endDate){set({error:'Set a date range.'});return;}
@@ -527,6 +557,7 @@ function render(){
   document.getElementById('app').innerHTML=
     S.screen==='loading'?rLoad():
     S.screen==='results'?rResults():
+    S.screen==='bills'?rBills():
     rConfig();
   bind();
 }
@@ -542,7 +573,7 @@ function rLoad(){
 }
 
 function rConfig(){
-  const {startDate,endDate,bankFile,error,bankId,plaidStatus}=S;
+  const {startDate,endDate,bankFile,billsFile,error,bankId,plaidStatus}=S;
   // Default to current month
   const now=new Date();
   const defStart=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
@@ -551,11 +582,16 @@ function rConfig(){
   return `<div class="hdr">
     <div class="logo">A</div>
     <span class="hdr-title">ALOE RECON</span>
-    <span class="hdr-sub" style="margin-left:6px">Trust Account · Bank ↔ Rentvine</span>
+    <span class="hdr-sub" style="margin-left:6px">${S.mode==='bills'?'Bills · Aloe PM Reimbursements':'Trust Account · Bank ↔ Rentvine'}</span>
   </div>
   <div class="body">
     ${error?`<div class="err">⚠ ${error}</div>`:''}
-    <div class="info">✓ Connected — pulls deposits, transfers &amp; settlements from Rentvine via your Render server</div>
+    <div class="mode-tabs">
+      <button class="mode-tab ${S.mode==='bank'?'active':''}" id="tab-bank">🏦 Bank Reconciliation</button>
+      <button class="mode-tab ${S.mode==='bills'?'active':''}" id="tab-bills">📄 Bills Verification</button>
+    </div>
+    ${S.mode==='bank'?`<div class="info">✓ Connected — pulls deposits, transfers &amp; settlements from Rentvine via your Render server</div>`
+    :`<div class="info">Matches your bank CSV against Aloe Property Management Reimbursement bills entered in Rentvine</div>`}
 
     <div class="card">
       <div class="card-title">1 — Bank account</div>
@@ -606,7 +642,99 @@ function rConfig(){
           </div>`}
     </div>
 
-    <button class="btn-run" id="runBtn" ${!bankFile&&!plaidStatus?'disabled':''}>Run reconciliation →</button>
+    ${S.mode==='bills'?`
+    <div class="card">
+      <div class="card-title">2 — Bank CSV</div>
+      <div class="drop ${billsFile?'filled':''}" id="drop-bills">
+        <input type="file" id="fi-bills" accept=".csv" style="display:none"/>
+        ${billsFile
+          ?'<div class="drop-title" style="color:var(--teal)">✓ '+billsFile.name+'</div><div class="drop-sub">Click to replace</div>'
+          :'<div class="drop-icon">📄</div><div class="drop-title">Drop bank CSV or click to browse</div><div class="drop-sub">All transactions — the tool finds Aloe PM Reimbursement rows automatically</div>'}
+      </div>
+    </div>
+    <button class="btn-run" id="billsBtn" ${!billsFile?'disabled':''}>Check bills →</button>`
+    :`<button class="btn-run" id="runBtn" ${!bankFile&&!plaidStatus?'disabled':''}>Run reconciliation →</button>`}
+  </div>`;
+}
+
+function rBills(){
+  const r=S.billsResults;
+  if(!r) return rConfig();
+  const {csvTxns,rvBills,matched,csvOnly,rvOnly,startDate,endDate}=r;
+  const rate=rvBills.length?Math.round((matched.length/rvBills.length)*100):0;
+  const unmatchedAmt=rvOnly.reduce((s,b)=>s+b.amount,0);
+
+  // Build side-by-side rows
+  const rows=[];
+  matched.forEach(c=>rows.push({type:'matched',csv:c,rv:c.rvMatch,matchType:c.matchType}));
+  rvOnly.forEach(b=>rows.push({type:'rv_only',csv:null,rv:b}));
+  rows.sort((a,b)=>(a.rv?.date||a.csv?.date||'').localeCompare(b.rv?.date||b.csv?.date||''));
+
+  const tableRows=rows.map(row=>{
+    const cls=row.type==='matched'?'matched':'rv-only';
+    const c=row.csv, rv=row.rv;
+
+    const leftHtml=c?`
+      <div class="cell-date">${fmtDate(c.date)}</div>
+      <div class="cell-desc" title="${c.description}">${c.description||'—'}</div>
+      ${c.reference?`<div class="cell-sub">${c.reference}</div>`:''}
+      <div><span class="cell-amt out">−${fmt(c.amount)}</span>
+      <span class="badge badge-ok">matched</span></div>
+      <div class="match-how">via ${row.matchType}</div>`
+    :`<div class="cell-empty">—</div>`;
+
+    let rightHtml=rv?`
+      <div class="cell-date">${fmtDate(rv.date)}</div>
+      <div class="cell-desc">${rv.description}</div>
+      ${rv.reference?`<div class="cell-sub">Bill #${rv.reference}</div>`:''}
+      ${rv.propertyName?`<div class="cell-sub" style="color:var(--teal-dk)">${rv.propertyName}</div>`:''}
+      <div><span class="cell-amt out">−${fmt(rv.amount)}</span>
+      <span class="badge ${row.type==='matched'?'badge-ok':'badge-miss'}">${row.type==='matched'?'in Rentvine':'RV bill only'}</span>
+      ${rv.isPaid?'<span class="badge" style="background:var(--s2);color:var(--muted);border:1px solid var(--border2);margin-left:4px">paid</span>':''}</div>`
+    :`<div class="cell-empty">—</div>`;
+
+    // Suggestion
+    let suggestHtml='';
+    if(rv?.suggest){
+      const s=rv.suggest;
+      const icon=s.type==='near'?'≈':'💡';
+      suggestHtml=`<div class="suggest-row"><div class="suggest ${s.type}"><span class="suggest-icon">${icon}</span><span class="suggest-txt">${s.msg}</span></div></div>`;
+    }
+    const hasSuggest=suggestHtml?'has-suggest':'';
+    return `<div class="bill-row ${cls} ${hasSuggest}" style="display:block"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="cell-l">${leftHtml}</div><div class="cell-r">${rightHtml}</div></div>${suggestHtml}</div>`;
+  }).join('');
+
+  return `<div class="hdr">
+    <div class="logo">A</div>
+    <div>
+      <div class="hdr-title">BILLS VERIFICATION — ${startDate} → ${endDate}</div>
+      <div class="hdr-sub" style="margin-top:1px">Aloe PM Reimbursements · ${rvBills.length} RV bills · ${S.billsFile?.name||''}</div>
+    </div>
+    <div class="hdr-right"><button class="btn-sm" id="billsBackBtn">← Back</button></div>
+  </div>
+  <div class="body">
+    <div class="stats">
+      <div class="stat"><div class="stat-n" style="color:var(--teal)">${rate}%</div><div class="stat-l">Match rate</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--teal-dk)">${matched.length}</div><div class="stat-l">Matched</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--red)">${rvOnly.length}</div><div class="stat-l">Not in bank</div></div>
+      <div class="stat"><div class="stat-n" style="color:var(--red)">${fmt(unmatchedAmt)}</div><div class="stat-l">Missing $</div></div>
+    </div>
+    ${rvOnly.length>0?`<div class="alert-row"><div class="alert" style="background:var(--rbg);border:1px solid var(--rborder)">
+      <div class="alert-lbl" style="color:var(--red)">⚠ Rentvine bills not found in bank CSV</div>
+      <div class="alert-amt" style="color:var(--red)">${fmt(unmatchedAmt)}</div>
+      <div class="alert-sub" style="color:#791F1F">${rvOnly.length} bill${rvOnly.length>1?'s':''} entered in Rentvine with no matching bank payment — verify if entered or paid</div>
+    </div></div>`:''}
+    <div class="recon-wrap">
+      <div class="col-hdrs">
+        <div class="col-hdr left">🏦 Bank statement</div>
+        <div class="col-hdr">📋 Rentvine — Aloe PM Reimbursement bills</div>
+      </div>
+      <div class="recon-table">${tableRows||'<div class="empty">No Aloe PM Reimbursement bills found in Rentvine for this date range.</div>'}</div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--gbg);border:1px solid var(--teal)"></div>Matched</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#FCEBEB80;border:1px solid var(--rborder)"></div>In Rentvine — no bank match</div>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -745,7 +873,17 @@ function rResults(){
 // ── EVENTS ─────────────────────────────────────────────────────────────────
 function bind(){
   if(S.screen==='config'){
+    document.getElementById('tab-bank')?.addEventListener('click',()=>set({mode:'bank',error:''}));
+    document.getElementById('tab-bills')?.addEventListener('click',()=>set({mode:'bills',error:''}));
     document.querySelectorAll('[data-acct]').forEach(el=>el.addEventListener('click',()=>{set({bankId:el.dataset.acct});checkPlaid();}));
+    // Bills CSV drop
+    const dropB=document.getElementById('drop-bills'),fiB=document.getElementById('fi-bills');
+    dropB?.addEventListener('click',()=>fiB?.click());
+    dropB?.addEventListener('dragover',e=>{e.preventDefault();dropB.classList.add('over');});
+    dropB?.addEventListener('dragleave',()=>dropB.classList.remove('over'));
+    dropB?.addEventListener('drop',e=>{e.preventDefault();dropB.classList.remove('over');hfBills(e.dataTransfer.files[0]);});
+    fiB?.addEventListener('change',e=>hfBills(e.target.files[0]));
+    document.getElementById('billsBtn')?.addEventListener('click',runBills);
     document.getElementById('sd')?.addEventListener('change',e=>set({startDate:e.target.value}));
     document.getElementById('ed')?.addEventListener('change',e=>set({endDate:e.target.value}));
     const drop=document.getElementById('drop'),fi=document.getElementById('fi');
@@ -758,6 +896,7 @@ function bind(){
   }
   if(S.screen==='results'){
     document.getElementById('backBtn')?.addEventListener('click',()=>set({screen:'config',results:null,search:'',dir:'all',typeFilter:'all',sortBy:'status',sortDir:'asc'}));
+    document.getElementById('billsBackBtn')?.addEventListener('click',()=>set({screen:'config',billsResults:null}));
     document.getElementById('si')?.addEventListener('input',e=>set({search:e.target.value}));
     document.getElementById('ds')?.addEventListener('change',e=>set({dir:e.target.value}));
     document.getElementById('ts')?.addEventListener('change',e=>set({typeFilter:e.target.value}));
@@ -766,6 +905,7 @@ function bind(){
   }
 }
 async function hf(file){if(!file)return;const text=await file.text();set({bankFile:file,bankText:text});}
+async function hfBills(file){if(!file)return;const text=await file.text();set({billsFile:file,billsText:text});}
 
 // ── Plaid status check ──────────────────────────────────────────────────────
 async function checkPlaid(){
