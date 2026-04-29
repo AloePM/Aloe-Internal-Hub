@@ -2733,37 +2733,25 @@ BENCHMARK DATA:
   }
 });
 
-// ── Rentvine Proxy (for bank reconciliation) ─────────────────────────────────
+// ── Rentvine Proxy ─────────────────────────────────────────────────────────
 app.use('/api/rentvine', async function(req, res) {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
+
   const rvPath = req.path;
   const query = new URLSearchParams(req.query).toString();
   const url = `${RENTVINE_BASE}${rvPath}${query ? '?' + query : ''}`;
+
   try {
-    const r = await fetch(url, { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
+    const opts = { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json' } };
+    if (req.method === 'POST') { opts.method = 'POST'; opts.body = JSON.stringify(req.body); }
+    const r = await fetch(url, opts);
     const data = await r.json();
     res.json(data);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-
-app.get('/recon', function(req, res) {
-  res.sendFile(new URL('recon.html', import.meta.url).pathname);
-});
-
-app.get('/health', function(req, res) {
-  res.json({
-    status: 'ok',
-    anthropic: !!ANTHROPIC_API_KEY,
-    rentvine: !!(RENTVINE_API_KEY && RENTVINE_API_SECRET),
-    aptly: !!APTLY_TOKEN,
-    knowledgeBase: KB_URL,
-    slack: !!SLACK_TOKEN,
-  });
-});
-
 app.get('/debug/properties', async function(req, res) {
   const data = await rvFetch('/properties/export', { pageSize: 200 });
   res.json(data);
