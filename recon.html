@@ -193,7 +193,7 @@ async function fetchRVTransactions(start, end){
   // Run all three in parallel
   const [deps, transfers, settlements] = await Promise.all([
     fetchAllPages('/accounting/deposits',{bankAccountID:BANK_ID}).catch(e=>{step('Deposits','error');return [];}),
-    fetchAllPages('/accounting/bank-transfers',{bankAccountID:BANK_ID}).catch(e=>{step('Transfers','error');return [];}),
+    fetchAllPages('/accounting/bank-transfers/search',{bankAccountID:BANK_ID,isVoided:0}).catch(e=>{step('Transfers','error');return [];}),
     fetchAllPages('/accounting/settlements',{bankAccountID:BANK_ID}).catch(e=>{step('Settlements','error');return [];}),
   ]);
 
@@ -212,20 +212,21 @@ async function fetchRVTransactions(start, end){
     });
   });
 
-  // Bank transfers: can be in or out depending on direction relative to account 129
+  // Bank transfers: datePosted is the correct date field
   transfers.forEach(row=>{
     const d=row.bankTransfer;
     if(!d) return;
-    const date=d.dateTransferred||d.dateTimeCreated?.slice(0,10)||'';
+    const date=(d.datePosted||'').slice(0,10);
     if(!inRange(date)) return;
     const isSrc=String(d.sourceBankAccountID)===BANK_ID;
     const isDst=String(d.destinationBankAccountID)===BANK_ID;
     if(!isSrc&&!isDst) return;
+    const desc=d.description||d.reference||'Bank Transfer';
     txns.push({
       id:'xfr-'+d.bankTransferID, type:'Transfer',
       direction:isSrc?'out':'in',
       amount:parseFloat(d.amount||0),
-      date, description:d.description||d.reference||'Bank Transfer',
+      date, description:desc,
       reference:d.reference||'',
     });
   });
@@ -245,7 +246,7 @@ async function fetchRVTransactions(start, end){
     });
   });
 
-  return {txns, counts:{deposits:deps.filter(r=>inRange(r.deposit?.dateDeposited)).length, transfers:transfers.filter(r=>{const d=r.bankTransfer;const date=d?.dateTransferred||d?.dateTimeCreated?.slice(0,10)||'';return inRange(date)&&(String(d?.sourceBankAccountID)===BANK_ID||String(d?.destinationBankAccountID)===BANK_ID);}).length, settlements:settlements.filter(r=>inRange(r.settlement?.settlementDate)).length}};
+  return {txns, counts:{deposits:deps.filter(r=>inRange(r.deposit?.dateDeposited)).length, transfers:transfers.filter(r=>{const d=r.bankTransfer;const date=(d?.datePosted||'').slice(0,10);return inRange(date)&&(String(d?.sourceBankAccountID)===BANK_ID||String(d?.destinationBankAccountID)===BANK_ID);}).length, settlements:settlements.filter(r=>inRange(r.settlement?.settlementDate)).length}};
 }
 
 // ── MATCH ──────────────────────────────────────────────────────────────────
