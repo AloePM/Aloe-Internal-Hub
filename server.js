@@ -2793,6 +2793,7 @@ app.get('/reload-kb-cache', function(req, res) {
 });
 
 app.get('/sandbox', function(req, res) {
+  app.get('/recon', function(req, res) {
   res.sendFile(new URL('sandbox.html', import.meta.url).pathname);
 });
 
