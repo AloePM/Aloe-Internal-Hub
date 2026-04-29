@@ -2997,7 +2997,7 @@ function PasscodeGate({onUnlock}) {
     <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f9f9f7"}}>
       <div style={{animation:"fadeUp 0.4s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:24,width:"100%",maxWidth:340,padding:"0 24px"}}>
         <div style={{textAlign:"center"}}>
-          <div style={{width:56,height:56,borderRadius:16,background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 10px"}}>🌿</div>
+          <img src="/logo.png" alt="Aloe PM" style={{width:180,height:"auto",display:"block",margin:"0 auto 10px"}}/>
           <div style={{fontSize:18,fontWeight:600,color:"#1a1a1a"}}>Aloe Assistant</div>
           <div style={{fontSize:12,color:"#888",marginTop:2}}>Aloe Property Management · Internal</div>
         </div>
@@ -3019,7 +3019,7 @@ function Sidebar({activeTab, setActiveTab, send}) {
   return (
     <div style={{width:260,minWidth:260,background:"white",borderRight:"1px solid #f0f0f0",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
       <div style={{padding:"14px 16px",borderBottom:"1px solid #f0f0f0",display:"flex",alignItems:"center",gap:8}}>
-        <div style={{width:30,height:30,borderRadius:8,background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🌿</div>
+        <img src="/logo.png" alt="Aloe PM" style={{width:110,height:"auto",display:"block"}}/>
         <div>
           <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>Aloe Assistant</div>
           <div style={{fontSize:10,color:"#888"}}>Internal · All live</div>
@@ -3096,7 +3096,7 @@ function Assistant() {
         <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
           {messages.length===0 ? (
             <div style={{maxWidth:560,margin:"0 auto",paddingTop:40,textAlign:"center"}}>
-              <div style={{fontSize:30,marginBottom:10}}>🌿</div>
+              <img src="/logo.png" alt="Aloe PM" style={{width:140,height:"auto",display:"block",margin:"0 auto 10px"}}/>
               <div style={{fontSize:18,fontWeight:600,color:"#1a1a1a",marginBottom:6}}>Hi, I'm Aloe</div>
               <div style={{fontSize:13,color:"#666",lineHeight:1.7,maxWidth:400,margin:"0 auto"}}>Your AI assistant for Aloe Property Management. Pick a shortcut from the left sidebar, or type any question below.</div>
               <div style={{fontSize:12,color:"#aaa",marginTop:20}}>← Browse categories in the sidebar</div>
@@ -3105,7 +3105,7 @@ function Assistant() {
             <div style={{maxWidth:680,width:"100%",margin:"0 auto"}}>
               {messages.map((m,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:12}}>
-                  {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}>🌿</div>}
+                  {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}style={{width:16,height:"auto",objectFit:"contain"}}/></div>
                   <div style={{maxWidth:"78%",padding:"10px 14px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?"#EAF3DE":"white",border:\`1px solid \${m.role==="user"?"#97C459":"#f0f0f0"}\`,color:m.role==="user"?"#173404":"#1a1a1a",fontSize:14,lineHeight:1.6}}>
                     {m.role==="assistant"?renderMd(m.content):m.content}
                   </div>
