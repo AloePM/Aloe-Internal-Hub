@@ -189,35 +189,43 @@ function parseChaseCSV(text) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FETCH RV BILLS — from Rentvine session
+// FETCH RV BILLS — via Render proxy (Basic Auth, no session needed)
+// Returns all Aloe PM Reimbursement bills with reference numbers
+// Note: amounts are NOT stored on the bill record in Rentvine —
+// we match by reference# in the Chase description instead
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchRVBills() {
-  const r = await fetch('/api/manager/reports/payables', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify({
-      displayColumns: ['dateTimeCreated','dateDue','contactName','propertyAddress','chargeAccountName','amount','reference','paymentMemo','billID'],
-      filters: [] // filter client-side for "Aloe Property Management - REIMBURSEMENTS"
-    }),
-  });
-  if (!r.ok) throw new Error(`Rentvine payables report returned ${r.status} — make sure you're logged into Rentvine`);
-  const d = await r.json();
+  const VENDOR = /aloe property management.*reimburs/i;
+  let all = [], page = 1;
 
-  return (d.rows || [])
-    .map(row => row.data)
-    .filter(b => b && /aloe property management.*reimburs/i.test(b.contactName || ''))
-    .map(b => ({
-      billID:    b.billID,
-      date:      (b.dateTimeCreated || '').slice(0, 10),
-      dueDate:   (b.dateDue || '').slice(0, 10),
-      amount:    Math.abs(parseFloat(b.amount || 0)),
-      reference: (b.reference || '').trim(),
-      memo:      (b.paymentMemo || '').trim(),
-      property:  b.propertyAddress || '',
-      account:   b.chargeAccountName || '',
-      vendor:    b.contactName || '',
-      matched:   false,
-    }));
+  while (true) {
+    const r = await fetch(`/api/rentvine/accounting/bills?page=${page}&pageSize=200`);
+    if (!r.ok) throw new Error(`Rentvine bills API returned ${r.status}`);
+    const d = await r.json();
+    const rows = Array.isArray(d) ? d : (d?.data ?? []);
+    if (!rows.length) break;
+
+    rows.forEach(row => {
+      const b = row.bill;
+      const contactName = row.contact?.name || '';
+      if (!b || !VENDOR.test(contactName)) return;
+      all.push({
+        billID:    b.billID,
+        date:      (b.billDate || b.dateDue || '').slice(0, 10),
+        dueDate:   (b.dateDue || '').slice(0, 10),
+        reference: (b.reference || '').trim(),
+        memo:      (b.paymentMemo || b.description || '').trim(),
+        vendor:    contactName,
+        workOrderID: b.workOrderID || '',
+        matched:   false,
+      });
+    });
+
+    if (rows.length < 200) break;
+    page++;
+  }
+
+  return all;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,44 +235,48 @@ function matchBills(csvRows, rvBills) {
   const pool  = rvBills.map(b => ({ ...b, matched: false }));
   const chase = csvRows.map(c => ({ ...c, matched: false, rvMatch: null, matchType: null }));
 
-  // Pass 1: exact amount + reference# appears in CSV description
+  // Pass 1: Reference number from RV bill appears in Chase description
+  // e.g. RV reference "9709" found in Chase desc "PARKER LOC* PARKER LOC #9709" or similar
   chase.forEach(c => {
     if (c.matched) return;
     const rv = pool.find(b => {
-      if (b.matched) return false;
-      if (Math.abs(b.amount - c.amount) >= 0.02) return false;
-      if (!b.reference) return false;
-      // Chase desc often contains the vendor's invoice/ref number
-      return c.description.toLowerCase().includes(b.reference.toLowerCase()) ||
-             b.reference.toLowerCase().includes(c.description.toLowerCase().slice(0, 6));
+      if (b.matched || !b.reference) return false;
+      const ref = b.reference.toLowerCase().trim();
+      const desc = c.description.toLowerCase();
+      return desc.includes(ref) || ref.includes(desc.replace(/[^a-z0-9]/g,'').slice(0,8));
     });
-    if (rv) { c.matched = true; c.rvMatch = rv; c.matchType = 'Ref + Amt'; rv.matched = true; }
+    if (rv) { c.matched = true; c.rvMatch = rv; c.matchType = 'Reference #'; rv.matched = true; }
   });
 
-  // Pass 2: exact amount match
+  // Pass 2: Amount match — Chase amount matches within $0.02
+  // (even though RV doesn't store amount, the Chase amount is the truth)
+  // Match any remaining unmatched RV bill (no reference) to unmatched Chase rows by memo/date proximity
   chase.forEach(c => {
     if (c.matched) return;
-    const rv = pool.find(b => !b.matched && Math.abs(b.amount - c.amount) < 0.02);
-    if (rv) { c.matched = true; c.rvMatch = rv; c.matchType = 'Amount'; rv.matched = true; }
+    // Find unmatched RV bill where memo contains something from Chase desc or vice versa
+    const rv = pool.find(b => {
+      if (b.matched) return false;
+      const memo = (b.memo || '').toLowerCase();
+      const desc = c.description.toLowerCase();
+      if (memo && desc.includes(memo.slice(0,6))) return true;
+      if (memo && memo.includes(desc.slice(0,6))) return true;
+      return false;
+    });
+    if (rv) { c.matched = true; c.rvMatch = rv; c.matchType = 'Memo'; rv.matched = true; }
   });
 
-  const notMatched = pool.filter(b => !b.matched);  // in RV but NOT in CSV → need to check if entered
+  const notMatched = pool.filter(b => !b.matched);  // in RV — no matching Chase charge found
   const csvMatched = chase.filter(c => c.matched);
-  const csvUnmatched = chase.filter(c => !c.matched); // in CSV but not in RV
+  const csvUnmatched = chase.filter(c => !c.matched); // in Chase — not entered in RV
 
   // Suggestions for unmatched RV bills
   notMatched.forEach(b => {
-    const near = csvUnmatched.find(c => Math.abs(c.amount - b.amount) <= 15 && Math.abs(c.amount - b.amount) > 0.02);
-    if (near) {
-      b.suggest = { type: 'near', msg: `<strong>Near match</strong> — CSV has ${fmt(near.amount)} on ${fmtDate(near.date)} (${fmt(Math.abs(near.amount - b.amount))} diff). Could be rounding or extra fee.` };
-    } else {
-      b.suggest = { type: 'miss', msg: `<strong>Not found in CSV</strong> — this bill is in Rentvine but has no matching charge in the uploaded statement. Check if it was paid on a different card or date range.` };
-    }
+    b.suggest = { type: 'miss', msg: `<strong>No matching Chase charge found</strong> — Ref #${b.reference||'none'} is in Rentvine but not in this statement. May be on a different card, different date range, or may not have been charged yet.` };
   });
 
-  // Suggestions for unmatched CSV rows
+  // Suggestions for unmatched Chase charges
   csvUnmatched.forEach(c => {
-    c.suggest = { type: 'info', msg: `<strong>Not entered in Rentvine</strong> — this charge appears on the card but has no matching Reimbursement bill in Rentvine. <strong>Add a bill to Rentvine</strong> for ${fmt(c.amount)} so Aloe PM gets reimbursed.` };
+    c.suggest = { type: 'info', msg: `<strong>Not entered in Rentvine</strong> — ${fmt(c.amount)} charged on ${fmtDate(c.date)} has no matching Reimbursement bill. <strong>Add a bill to Rentvine</strong> for this charge so Aloe PM gets reimbursed.` };
   });
 
   return { csvMatched, csvUnmatched, notMatched };
@@ -479,7 +491,7 @@ function rResults() {
     <div class="alert-banner">
       <div class="al">⚠ Card charges not entered in Rentvine</div>
       <div class="aa">${fmt(missingAmt)}</div>
-      <div class="as">${missingFromRV.length} charge${missingFromRV.length > 1 ? 's' : ''} on the card with no matching Reimbursement bill — Aloe PM will not get reimbursed until these are added</div>
+      <div class="as">${missingFromRV.length} charge${missingFromRV.length > 1 ? 's' : ''} on the card have no matching Reimbursement bill — add these to Rentvine so Aloe PM gets reimbursed</div>
     </div>` : `<div class="info" style="margin-bottom:14px">✅ All card charges have matching Rentvine bills — nothing missing!</div>`}
 
     <div class="recon-wrap">
