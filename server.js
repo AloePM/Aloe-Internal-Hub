@@ -2802,6 +2802,9 @@ app.get('/recon', function(req, res) {
     if (err) console.error('recon.html sendFile error:', err.message, 'path:', filePath);
   });
 });
+app.get('/recon-bills', (req, res) => 
+  res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
+);
 
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
