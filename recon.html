@@ -7,141 +7,104 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
-  :root{--bg:#f7f7f5;--surface:#ffffff;--surface2:#f2f2f0;--border:#e5e5e2;--border2:#d0d0cc;--green:#3B6D11;--green-bg:#EAF3DE;--green-border:#97C459;--red:#A32D2D;--red-bg:#FCEBEB;--red-border:#F09595;--amber:#854F0B;--amber-bg:#FAEEDA;--amber-border:#EF9F27;--blue:#185FA5;--muted:#888;--text:#1a1a1a;--text2:#555}
+  :root{
+    --bg:#f7f7f5;--surface:#fff;--s2:#f2f2f0;--border:#e5e5e2;--border2:#d0d0cc;
+    --green:#3B6D11;--gbg:#EAF3DE;--gborder:#97C459;
+    --red:#A32D2D;--rbg:#FCEBEB;--rborder:#F09595;
+    --amber:#854F0B;--abg:#FAEEDA;--aborder:#EF9F27;
+    --blue:#185FA5;--muted:#888;--text:#1a1a1a;--text2:#555
+  }
   body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;font-size:14px}
   .mono{font-family:'IBM Plex Mono',monospace}
   ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
-  /* HEADER */
   .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
   .logo{width:26px;height:26px;background:var(--green);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
-  .hdr-title{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.06em;color:var(--text)}
+  .hdr-title{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.06em}
   .hdr-sub{font-size:11px;color:var(--muted)}
   .hdr-right{margin-left:auto;display:flex;gap:8px;align-items:center}
   .btn-sm{background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 11px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .12s}
   .btn-sm:hover{border-color:var(--text2);color:var(--text)}
 
-  /* BODY */
   .body{padding:20px 24px;max-width:1100px;margin:0 auto}
-
-  /* INFO / ERR */
-  .info{background:var(--green-bg);border:1px solid var(--green-border);border-radius:7px;padding:9px 14px;font-size:12px;color:#27500A;margin-bottom:14px}
-  .err{background:var(--red-bg);border:1px solid var(--red-border);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--red);margin-bottom:14px}
-
-  /* CARD */
   .card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:18px;margin-bottom:14px}
   .card-title{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:13px}
+  .info{background:var(--gbg);border:1px solid var(--gborder);border-radius:7px;padding:9px 14px;font-size:12px;color:#27500A;margin-bottom:14px}
+  .err{background:var(--rbg);border:1px solid var(--rborder);border-radius:7px;padding:9px 14px;font-size:12px;color:var(--red);margin-bottom:14px}
 
-  /* PERIOD SELECTOR */
-  .period-grid{display:grid;gap:6px}
-  .period-item{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all .12s}
-  .period-item:hover,.period-item.sel{border-color:var(--green-border);background:var(--green-bg)}
-  .period-item.sel .period-label{color:var(--green)}
-  .period-label{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500}
-  .period-meta{font-size:11px;color:var(--muted);margin-top:1px}
-  .period-bal{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green)}
-  .period-warn{font-size:10px;font-weight:600;color:var(--amber)}
-  .period-ok{font-size:10px;font-weight:600;color:var(--green)}
-
-  /* DROP ZONE */
+  /* DROP */
   .drop{border:1.5px dashed var(--border2);border-radius:8px;padding:22px 20px;text-align:center;cursor:pointer;transition:all .18s}
-  .drop:hover,.drop.over,.drop.filled{border-color:var(--green-border);background:var(--green-bg)}
+  .drop:hover,.drop.over,.drop.filled{border-color:var(--gborder);background:var(--gbg)}
   .drop-icon{font-size:22px;margin-bottom:6px}
   .drop-title{font-size:13px;font-weight:500;margin-bottom:3px}
   .drop-sub{font-size:11px;color:var(--muted)}
 
-  /* MODE SWITCH */
-  .mode-row{display:flex;gap:6px;margin-bottom:13px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:3px}
-  .mode-btn{flex:1;padding:7px;border:none;border-radius:5px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;cursor:pointer;letter-spacing:.03em;transition:all .12s;background:none;color:var(--muted)}
-  .mode-btn.active{background:var(--green);color:#fff}
+  /* DATE RANGE PILL */
+  .range-info{display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:10px 14px;font-size:12px;margin-bottom:4px}
+  .range-label{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--green)}
+  .range-sub{color:var(--muted);font-size:11px}
 
-  /* RUN BUTTON */
-  .btn-run{background:var(--green);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;width:100%;transition:opacity .12s;letter-spacing:.02em}
+  .btn-run{background:var(--green);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;width:100%;transition:opacity .12s}
   .btn-run:hover{opacity:.88}
-  .btn-run:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed;border:1px solid var(--border)}
+  .btn-run:disabled{background:var(--s2);color:var(--muted);cursor:not-allowed;border:1px solid var(--border)}
 
   /* LOADING */
-  .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:16px}
+  .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;gap:16px}
   .spinner{width:34px;height:34px;border:2.5px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .load-msg{font-family:'IBM Plex Mono',monospace;color:var(--green);font-size:12px;font-weight:500}
+  .load-sub{font-size:11px;color:var(--muted);margin-top:4px;text-align:center;max-width:320px;line-height:1.5}
 
-  /* STATS BAR */
+  /* STATS */
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
   .stat{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:12px 14px}
   .stat-n{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:500;line-height:1}
   .stat-l{font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-top:4px}
 
-  /* ALERT ROW */
+  /* ALERTS */
   .alert-row{display:flex;gap:8px;margin-bottom:14px}
   .alert{flex:1;border-radius:7px;padding:11px 14px}
   .alert-lbl{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
   .alert-amt{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:500}
   .alert-sub{font-size:11px;margin-top:2px}
 
-  /* FILTERS BAR */
-  .filters{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);align-items:center;background:var(--surface);flex-wrap:wrap}
-  .srch{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;width:210px}
-  .srch:focus{outline:2px solid var(--green-border);outline-offset:1px}
-  .fsel{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace}
-  .row-ct{margin-left:auto;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
-
-  /* ── MAIN RECON TABLE ─────────────────────────────────── */
+  /* SIDE-BY-SIDE TABLE */
   .recon-wrap{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden}
-
-  /* column headers */
   .col-hdrs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
-  .col-hdr{padding:9px 14px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--surface2)}
+  .col-hdr{padding:9px 14px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--s2)}
   .col-hdr.left{border-right:1px solid var(--border)}
-
-  /* each row = two cells side by side */
+  .filters{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
+  .srch{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;width:210px}
+  .srch:focus{outline:2px solid var(--gborder);outline-offset:1px}
+  .fsel{background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace}
+  .row-ct{margin-left:auto;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
   .recon-table{overflow:auto;max-height:520px}
+
+  /* ROWS */
   .recon-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)}
   .recon-row:last-child{border-bottom:none}
-  .recon-row:hover .cell-l,.recon-row:hover .cell-r{background:#00000005}
-
-  /* matched row */
   .recon-row.matched .cell-l,.recon-row.matched .cell-r{background:var(--surface)}
-
-  /* bank-only row — amber tint on left, blank on right */
-  .recon-row.bank-only .cell-l{background:#FAEEDA30}
-  .recon-row.bank-only .cell-r{background:#FAEEDA18}
-
-  /* rv-only row — blank on left, red tint on right */
-  .recon-row.rv-only .cell-l{background:#FCEBEB18}
-  .recon-row.rv-only .cell-r{background:#FCEBEB30}
-
-  /* cells */
-  .cell-l{padding:9px 14px;border-right:1px solid var(--border);min-height:52px}
-  .cell-r{padding:9px 14px;min-height:52px}
-
+  .recon-row.bank-only .cell-l{background:#FAEEDA28}
+  .recon-row.bank-only .cell-r{background:#FAEEDA10}
+  .recon-row.rv-only .cell-l{background:#FCEBEB10}
+  .recon-row.rv-only .cell-r{background:#FCEBEB28}
+  .recon-row:hover .cell-l,.recon-row:hover .cell-r{filter:brightness(.97)}
+  .cell-l{padding:9px 14px;border-right:1px solid var(--border);min-height:54px}
+  .cell-r{padding:9px 14px;min-height:54px}
   .cell-date{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:3px}
   .cell-desc{font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin-bottom:3px}
   .cell-amt{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:500}
   .cell-amt.in{color:var(--green)}
   .cell-amt.out{color:var(--red)}
-  .cell-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--border2);font-size:18px;font-weight:300}
-
-  /* badge */
+  .cell-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--border2);font-size:20px}
   .badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;margin-left:6px;vertical-align:middle;font-family:'IBM Plex Mono',monospace}
-  .badge-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
-  .badge-warn{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
-  .badge-miss{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
-
-  /* HOW matched */
-  .match-how{font-size:10px;color:var(--muted);margin-top:2px}
-
-  /* empty state */
+  .badge-ok{background:var(--gbg);color:var(--green);border:1px solid var(--gborder)}
+  .badge-warn{background:var(--abg);color:var(--amber);border:1px solid var(--aborder)}
+  .badge-miss{background:var(--rbg);color:var(--red);border:1px solid var(--rborder)}
+  .match-how{font-size:10px;color:var(--muted);margin-top:1px}
+  .cell-type{font-size:10px;color:var(--muted);margin-top:1px}
   .empty{padding:42px;text-align:center;color:var(--muted);font-size:13px}
-
-  /* date inputs */
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .field label{display:block;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-  input[type=date]{background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:8px 11px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;width:100%}
-  input[type=date]:focus{outline:2px solid var(--green-border);outline-offset:1px}
-
-  /* LEGEND */
-  .legend{display:flex;gap:16px;padding:8px 14px;border-top:1px solid var(--border);background:var(--surface2)}
+  .legend{display:flex;gap:16px;padding:8px 14px;border-top:1px solid var(--border);background:var(--s2)}
   .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
   .leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
 </style>
@@ -151,11 +114,10 @@
 <script>
 const PROXY='/api/rentvine', BANK_ID='129';
 let S={
-  screen:'config', mode:'reconciliation',
-  reconciliations:[], selRecon:null,
-  settlStart:'', settlEnd:'',
+  screen:'config',
   bankFile:null, bankText:'',
-  loadMsg:'', error:'',
+  loadMsg:'', loadSub:'',
+  error:'',
   results:null,
   search:'', dir:'all',
 };
@@ -192,12 +154,24 @@ function pd(d){
   if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
   return s;
 }
-function pl(line){const f=[];let c='',q=false;for(let i=0;i<line.length;i++){if(line[i]==='"')q=!q;else if(line[i]===','&&!q){f.push(c.trim());c='';}else c+=line[i];}f.push(c.trim());return f;}
+function pl(line){
+  const f=[];let c='',q=false;
+  for(let i=0;i<line.length;i++){
+    if(line[i]==='"')q=!q;
+    else if(line[i]===','&&!q){f.push(c.trim());c='';}
+    else c+=line[i];
+  }
+  f.push(c.trim());return f;
+}
 function parseCSV(text){
   const lines=text.trim().split(/\r?\n/);
   if(lines.length<2) return [];
   const headers=pl(lines[0]);
-  return lines.slice(1).map(l=>{const v=pl(l),r={};headers.forEach((h,i)=>{r[h.trim()]=(v[i]||'').replace(/^"|"$/g,'').trim();});return r;}).filter(r=>Object.values(r).some(v=>v));
+  return lines.slice(1).map(l=>{
+    const v=pl(l),r={};
+    headers.forEach((h,i)=>{r[h.trim()]=(v[i]||'').replace(/^"|"$/g,'').trim();});
+    return r;
+  }).filter(r=>Object.values(r).some(v=>v));
 }
 function parseBankFile(text){
   return parseCSV(text).map(r=>{
@@ -212,31 +186,37 @@ function parseBankFile(text){
 }
 
 // ── MATCH ──────────────────────────────────────────────────────────────────
-function extractAch(str){const m=(str||'').match(/ACH-([A-Z0-9]{4}-[A-Z0-9]{5})/i);return m?m[1].toUpperCase():null;}
+function extractAch(str){
+  const m=(str||'').match(/ACH-([A-Z0-9]{4}-[A-Z0-9]{5})/i);
+  return m?m[1].toUpperCase():null;
+}
 function doMatch(bankTxns,rvTxns){
   const pool=rvTxns.map(r=>({...r,matched:false}));
   const bank=bankTxns.map(b=>({...b,matched:false,rvMatch:null,matchType:null}));
-  // Pass 1: ACH ID exact match (most reliable — reference number is identical)
+
+  // Pass 1: ACH ID exact match
   bank.forEach(b=>{
     if(b.matched) return;
     const achB=extractAch(b.description);
     if(!achB) return;
-    const rv=pool.find(r=>!r.matched&&extractAch(r.achId||r.reference||'')===achB);
+    const rv=pool.find(r=>!r.matched&&extractAch(r.reference||'')===achB);
     if(rv){b.matched=true;b.rvMatch=rv;b.matchType='ACH ID';rv.matched=true;}
   });
-  // Pass 2: Exact amount match only — no date required
-  // Same direction first (more precise)
+
+  // Pass 2: Exact amount, same direction
   bank.forEach(b=>{
     if(b.matched) return;
     const rv=pool.find(r=>!r.matched&&r.direction===b.direction&&Math.abs(r.amount-b.amount)<0.02);
     if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amount';rv.matched=true;}
   });
-  // Pass 3: Exact amount, any direction (catches cases where direction encoding differs)
+
+  // Pass 3: Exact amount, any direction
   bank.forEach(b=>{
     if(b.matched) return;
     const rv=pool.find(r=>!r.matched&&Math.abs(r.amount-b.amount)<0.02);
-    if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amount (any dir)';rv.matched=true;}
+    if(rv){b.matched=true;b.rvMatch=rv;b.matchType='Amount (±dir)';rv.matched=true;}
   });
+
   return {
     matched:bank.filter(b=>b.matched),
     bankOnly:bank.filter(b=>!b.matched),
@@ -246,13 +226,18 @@ function doMatch(bankTxns,rvTxns){
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
 const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0);
-function fmtDate(d){if(!d) return '';try{const dt=new Date(d+'T12:00:00');return (dt.getMonth()+1)+'/'+dt.getDate()+'/'+dt.getFullYear();}catch(e){return d;}}
+function fmtDate(d){
+  if(!d) return '';
+  try{const dt=new Date(d+'T12:00:00');return (dt.getMonth()+1)+'/'+dt.getDate()+'/'+dt.getFullYear();}
+  catch(e){return d;}
+}
 
-// Build the merged rows for the side-by-side view
-// Each row is one of:
-//   {type:'matched', bank, rv}
-//   {type:'bank_only', bank}
-//   {type:'rv_only', rv}
+// Type label mapping for Rentvine objectTypeID
+function typeLabel(tx){
+  const map={'2':'Deposit','3':'Transfer','4':'Check Deposit','5':'Payout','8':'ACH Settlement','10':'Bank Transfer'};
+  return map[String(tx.objectTypeID||'')] || tx.description || 'Transaction';
+}
+
 function buildRows(results){
   if(!results) return [];
   const {matched,bankOnly,rvOnly}=results;
@@ -260,10 +245,9 @@ function buildRows(results){
   matched.forEach(b=>rows.push({type:'matched',bank:b,rv:b.rvMatch}));
   bankOnly.forEach(b=>rows.push({type:'bank_only',bank:b,rv:null}));
   rvOnly.forEach(r=>rows.push({type:'rv_only',bank:null,rv:r}));
-  // sort by date (bank date first, then rv date)
   rows.sort((a,b)=>{
-    const da=(a.bank?.date||a.rv?.date||'');
-    const db=(b.bank?.date||b.rv?.date||'');
+    const da=a.bank?.date||a.rv?.date||'';
+    const db=b.bank?.date||b.rv?.date||'';
     return da.localeCompare(db);
   });
   return rows;
@@ -279,138 +263,161 @@ function filteredRows(){
       return d===S.dir;
     });
   }
-  if(q){
-    rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
-  }
+  if(q) rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
   return rows;
 }
 
-// ── ACTIONS ────────────────────────────────────────────────────────────────
-async function loadInit(){
-  set({loadMsg:'Loading reconciliation history…',screen:'loading',error:''});
-  try{
-    const data=await fetchAll('/accounting/reconciliations',{bankAccountID:BANK_ID});
-    const recons=data.map(d=>d.reconciliation).filter(Boolean).sort((a,b)=>b.statementEndDate.localeCompare(a.statementEndDate));
-    const now=new Date();
-    const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0');
-    const last=new Date(y,now.getMonth()+1,0).getDate();
-    set({reconciliations:recons,selRecon:recons[0]?.reconciliationID||null,settlStart:`${y}-${m}-01`,settlEnd:`${y}-${m}-${last}`,screen:'config'});
-  }catch(e){set({error:e.message,screen:'config'});}
-}
-
+// ── MAIN ACTION ────────────────────────────────────────────────────────────
 async function runRecon(){
   if(!S.bankText){set({error:'Upload your bank CSV first.'});return;}
-  if(S.mode==='reconciliation'&&!S.selRecon){set({error:'Select a reconciliation period.'});return;}
-  if(S.mode==='settlements'&&(!S.settlStart||!S.settlEnd)){set({error:'Set a date range.'});return;}
-  set({error:'',screen:'loading',loadMsg:'Parsing bank file…'});
+  set({error:'',screen:'loading',loadMsg:'Parsing bank CSV…',loadSub:''});
+
   try{
     const bankTxns=parseBankFile(S.bankText);
     if(!bankTxns.length) throw new Error('Could not parse CSV — needs columns: Post Date, Description, Debit, Credit');
+
+    // Date range: past 90 days
+    const cutoff=new Date(Date.now()-90*24*60*60*1000).toISOString().slice(0,10);
+    const today=new Date().toISOString().slice(0,10);
+
+    // Step 1: load all reconciliation periods
+    set({loadMsg:'Loading reconciliation periods…',loadSub:'Checking last 90 days of periods'});
+    const reconData=await fetchAll('/accounting/reconciliations',{bankAccountID:BANK_ID});
+    const recons=reconData.map(d=>d.reconciliation).filter(Boolean)
+      .filter(r=>r.statementEndDate>=cutoff)
+      .sort((a,b)=>b.statementEndDate.localeCompare(a.statementEndDate));
+
+    if(!recons.length) throw new Error('No reconciliation periods found in the last 90 days');
+
+    // Step 2: for each period, fetch transactions and keep only unreconciled
     let rvTxns=[];
-    if(S.mode==='settlements'){
-      set({loadMsg:'Fetching Rentvine settlements…'});
-      const resp=await apiFetch('/reports/settlements',{body:{isReconciled:'booleanAny',startDate:S.settlStart,endDate:S.settlEnd,bankAccountID:BANK_ID}});
-      const rows=(resp.rows||[]).filter(r=>r.data&&r.data.bankAccountID===BANK_ID);
-      rvTxns=rows.map(r=>{
-        const d=r.data;
-        const achId=d.bankAccountGatewaySettlementID||'';
-        const raw=parseFloat(d.amount||0);const direction=raw>=0?'in':'out';const amount=Math.abs(raw);return {id:d.settlementID,achId,direction,amount,date:(d.settlementDate||'').slice(0,10),description:achId||'ACH Settlement',reference:achId,isReconciled:d.isReconciled==='1',matched:false};
+    for(let i=0;i<recons.length;i++){
+      const r=recons[i];
+      set({
+        loadMsg:`Fetching period ${i+1} of ${recons.length}…`,
+        loadSub:`${r.statementStartDate} → ${r.statementEndDate}`
       });
-    }else{
-      set({loadMsg:'Fetching Rentvine reconciliation…'});
-      const raw=await fetchAll(`/accounting/reconciliations/${S.selRecon}/transactions`);
-      rvTxns=raw.map(r=>{
-        const tx=r.reconciliationTransaction;
-        const ref=tx.reference||'';
-        return {id:tx.reconciliationTransactionID,achId:ref,direction:tx.reconciliationTransactionTypeID==='1'?'in':'out',amount:parseFloat(tx.amount||0),date:(tx.datePosted||'').slice(0,10),description:tx.description||'',reference:ref,isReconciled:tx.isReconciled==='1',matched:false};
-      });
+      const raw=await fetchAll(`/accounting/reconciliations/${r.reconciliationID}/transactions`);
+      const unreconciled=raw
+        .map(row=>{
+          const tx=row.reconciliationTransaction;
+          const ref=tx.reference||'';
+          const raw=parseFloat(tx.amount||0);
+          return {
+            id:tx.reconciliationTransactionID,
+            objectTypeID:tx.reconciliationObjectTypeID,
+            reference:ref,
+            direction:tx.reconciliationTransactionTypeID==='1'?'in':'out',
+            amount:Math.abs(raw),
+            date:(tx.datePosted||'').slice(0,10),
+            description:tx.description||'',
+            isReconciled:tx.isReconciled==='1',
+            period:`${r.statementStartDate} → ${r.statementEndDate}`,
+            matched:false,
+          };
+        })
+        .filter(tx=>!tx.isReconciled && tx.date>=cutoff);
+      rvTxns=rvTxns.concat(unreconciled);
     }
-    set({loadMsg:`Matching ${bankTxns.length} bank vs ${rvTxns.length} Rentvine…`});
-    const r=doMatch(bankTxns,rvTxns);
-    set({results:{bankTxns,rvTxns,mode:S.mode,...r},screen:'results',search:'',dir:'all'});
+
+    // De-duplicate by transaction ID (same txn can appear in multiple periods)
+    const seen=new Set();
+    rvTxns=rvTxns.filter(tx=>{
+      if(seen.has(tx.id)) return false;
+      seen.add(tx.id);
+      return true;
+    });
+
+    set({loadMsg:`Matching ${bankTxns.length} bank vs ${rvTxns.length} unreconciled Rentvine…`,loadSub:''});
+    const result=doMatch(bankTxns,rvTxns);
+
+    set({
+      results:{bankTxns,rvTxns,cutoff,today,...result},
+      screen:'results',search:'',dir:'all'
+    });
   }catch(e){set({error:e.message,screen:'config'});}
 }
 
 // ── RENDER ─────────────────────────────────────────────────────────────────
 function render(){
   document.getElementById('app').innerHTML=
-    S.screen==='loading'?rLoad():S.screen==='results'?rResults():rConfig();
+    S.screen==='loading'?rLoad():
+    S.screen==='results'?rResults():
+    rConfig();
   bind();
 }
 
 function rLoad(){
   return `<div class="hdr"><div class="logo">$</div><span class="hdr-title">ALOE RECON</span></div>
-  <div class="loading-wrap"><div class="spinner"></div><div class="load-msg">${S.loadMsg}</div></div>`;
+  <div class="loading-wrap">
+    <div class="spinner"></div>
+    <div class="load-msg">${S.loadMsg}</div>
+    ${S.loadSub?`<div class="load-sub">${S.loadSub}</div>`:''}
+  </div>`;
 }
 
 function rConfig(){
-  const {reconciliations,selRecon,bankFile,error,mode,settlStart,settlEnd}=S;
-  const reconItems=reconciliations.slice(0,8).map(r=>{
-    const unr=parseFloat(r.unreconciledMoneyInTotal||0)+parseFloat(r.unreconciledMoneyOutTotal||0);
-    return `<div class="period-item ${r.reconciliationID===selRecon?'sel':''}" data-r="${r.reconciliationID}">
-      <div>
-        <div class="period-label">${r.statementStartDate} → ${r.statementEndDate}</div>
-        <div class="period-meta">Ending: <span class="period-bal">${fmt(r.statementEndingBalance)}</span></div>
-      </div>
-      <span class="${unr>0?'period-warn':'period-ok'}">${unr>0?'⚠ '+fmt(unr)+' unreconciled':'✓ Balanced'}</span>
-    </div>`;
-  }).join('');
+  const {bankFile,error}=S;
+  const now=new Date();
+  const cutoff=new Date(Date.now()-90*24*60*60*1000);
+  const fmt2=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
-  return `<div class="hdr"><div class="logo">$</div><span class="hdr-title">ALOE RECON</span><span class="hdr-sub" style="margin-left:6px">Trust Account · Bank ↔ Rentvine</span></div>
+  return `<div class="hdr">
+    <div class="logo">$</div>
+    <span class="hdr-title">ALOE RECON</span>
+    <span class="hdr-sub" style="margin-left:6px">Trust Account · Bank ↔ Rentvine</span>
+  </div>
   <div class="body">
     ${error?`<div class="err">⚠ ${error}</div>`:''}
-    <div class="info">✓ Connected — pulls live from Rentvine via your Render server</div>
+    <div class="info">✓ Connected — pulls unreconciled transactions from Rentvine via your Render server</div>
+
     <div class="card">
-      <div class="card-title">1 — Data source</div>
-      <div class="mode-row">
-        <button class="mode-btn ${mode==='reconciliation'?'active':''}" data-m="reconciliation">Reconciliation period</button>
-        <button class="mode-btn ${mode==='settlements'?'active':''}" data-m="settlements">Settlements only</button>
-      </div>
-      ${mode==='settlements'?`
-        <div class="grid2">
-          <div class="field"><label>From</label><input type="date" id="ss" value="${settlStart}"/></div>
-          <div class="field"><label>To</label><input type="date" id="se" value="${settlEnd}"/></div>
+      <div class="card-title">Rentvine data source</div>
+      <div class="range-info">
+        <div>
+          <div class="range-label">Unreconciled · Last 90 days</div>
+          <div class="range-sub">${fmt2(cutoff)} → ${fmt2(now)} · All reconciliation periods · isReconciled = false only</div>
         </div>
-      `:`<div class="period-grid">${reconItems}</div>`}
+      </div>
     </div>
+
     <div class="card">
-      <div class="card-title">2 — Bank CSV</div>
+      <div class="card-title">Upload bank CSV</div>
       <div class="drop ${bankFile?'filled':''}" id="drop">
         <input type="file" id="fi" accept=".csv" style="display:none"/>
         ${bankFile
           ?`<div class="drop-title" style="color:var(--green)">✓ ${bankFile.name}</div><div class="drop-sub">Click to replace</div>`
-          :`<div class="drop-icon">📄</div><div class="drop-title">Drop CSV or click to browse</div><div class="drop-sub">Enterprise Bank → Account History → Download → CSV</div><div style="font-size:10px;color:var(--muted);margin-top:5px">Needs: Post Date, Description, Debit, Credit</div>`}
+          :`<div class="drop-icon">📄</div>
+           <div class="drop-title">Drop CSV or click to browse</div>
+           <div class="drop-sub">Enterprise Bank → Account History → Download → CSV</div>
+           <div style="font-size:10px;color:var(--muted);margin-top:5px">Columns needed: Post Date, Description, Debit, Credit</div>`}
       </div>
     </div>
+
     <button class="btn-run" id="runBtn" ${!bankFile?'disabled':''}>Run reconciliation →</button>
   </div>`;
 }
 
 function rResults(){
-  const {results,search,dir,bankFile,reconciliations,selRecon,settlStart,settlEnd}=S;
-  const {bankTxns,rvTxns,matched,bankOnly,rvOnly,mode}=results;
-  const recon=reconciliations.find(r=>r.reconciliationID===selRecon);
-  const periodLabel=mode==='settlements'?`${settlStart} → ${settlEnd}`:(recon?`${recon.statementStartDate} → ${recon.statementEndDate}`:'');
+  const {results,search,dir,bankFile}=S;
+  const {bankTxns,rvTxns,matched,bankOnly,rvOnly,cutoff,today}=results;
   const rate=bankTxns.length?Math.round((matched.length/bankTxns.length)*100):0;
   const boOut=bankOnly.filter(r=>r.direction==='out').reduce((s,r)=>s+r.amount,0);
   const boIn=bankOnly.filter(r=>r.direction==='in').reduce((s,r)=>s+r.amount,0);
-
   const rows=filteredRows();
 
   const tableRows=rows.length===0
     ?`<div class="empty">No transactions match the current filter.</div>`
     :rows.map(row=>{
         const cls=row.type==='matched'?'matched':row.type==='bank_only'?'bank-only':'rv-only';
-        const b=row.bank, rv=row.rv;
+        const b=row.bank,rv=row.rv;
 
-        // LEFT CELL — bank side
+        // LEFT — bank
         let leftHtml;
         if(b){
           const badge=row.type==='matched'
             ?`<span class="badge badge-ok">matched</span>`
-            :b.direction==='in'
-              ?`<span class="badge badge-warn">bank only</span>`
-              :`<span class="badge badge-warn">bank only</span>`;
+            :`<span class="badge badge-warn">bank only</span>`;
           leftHtml=`
             <div class="cell-date">${fmtDate(b.date)}</div>
             <div class="cell-desc" title="${b.description}">${b.description||'—'}</div>
@@ -418,27 +425,26 @@ function rResults(){
               <span class="cell-amt ${b.direction}">${b.direction==='in'?'+':'−'}${fmt(b.amount)}</span>
               ${badge}
             </div>
-            ${row.type==='matched'&&row.bank.matchType?`<div class="match-how">via ${row.bank.matchType}</div>`:''}`;
+            ${row.matchType?`<div class="match-how">via ${row.bank.matchType}</div>`:''}`;
         }else{
           leftHtml=`<div class="cell-empty">—</div>`;
         }
 
-        // RIGHT CELL — Rentvine side
+        // RIGHT — Rentvine
         let rightHtml;
         if(rv){
           const badge=row.type==='matched'
             ?`<span class="badge badge-ok">matched</span>`
             :`<span class="badge badge-miss">RV only</span>`;
-          const desc=rv.description||rv.reference||'—';
-          const ref=rv.reference&&rv.description?`<div class="cell-date" style="margin-top:1px">${rv.reference}</div>`:'';
+          const desc=rv.reference||rv.description||typeLabel(rv);
           rightHtml=`
             <div class="cell-date">${fmtDate(rv.date)}</div>
             <div class="cell-desc" title="${desc}">${desc}</div>
-            ${ref}
             <div>
               <span class="cell-amt ${rv.direction}">${rv.direction==='in'?'+':'−'}${fmt(rv.amount)}</span>
               ${badge}
-            </div>`;
+            </div>
+            <div class="cell-type">${typeLabel(rv)}${rv.period?' · '+rv.period:''}</div>`;
         }else{
           rightHtml=`<div class="cell-empty">—</div>`;
         }
@@ -452,8 +458,8 @@ function rResults(){
   return `<div class="hdr">
     <div class="logo">$</div>
     <div>
-      <div class="hdr-title">ALOE RECON — ${periodLabel}</div>
-      <div class="hdr-sub" style="margin-top:1px">${bankTxns.length} bank · ${rvTxns.length} Rentvine · ${mode==='settlements'?'Settlements':'Reconciliation'} · ${bankFile?.name||''}</div>
+      <div class="hdr-title">ALOE RECON — Last 90 days · Unreconciled only</div>
+      <div class="hdr-sub" style="margin-top:1px">${bankTxns.length} bank · ${rvTxns.length} unreconciled RV · ${bankFile?.name||''}</div>
     </div>
     <div class="hdr-right"><button class="btn-sm" id="backBtn">← New run</button></div>
   </div>
@@ -466,22 +472,22 @@ function rResults(){
     </div>
 
     ${boOut>0||boIn>0?`<div class="alert-row">
-      ${boOut>0?`<div class="alert" style="background:var(--amber-bg);border:1px solid var(--amber-border)">
-        <div class="alert-lbl" style="color:var(--amber)">⚠ Debits in bank not in Rentvine</div>
+      ${boOut>0?`<div class="alert" style="background:var(--abg);border:1px solid var(--aborder)">
+        <div class="alert-lbl" style="color:var(--amber)">⚠ Debits in bank — not in Rentvine</div>
         <div class="alert-amt" style="color:var(--amber)">${fmt(boOut)}</div>
-        <div class="alert-sub" style="color:#633806">Payments out with no Rentvine record</div>
+        <div class="alert-sub" style="color:#633806">Payments out with no unreconciled RV record</div>
       </div>`:''}
-      ${boIn>0?`<div class="alert" style="background:var(--red-bg);border:1px solid var(--red-border)">
-        <div class="alert-lbl" style="color:var(--red)">⚠ Credits in bank not in Rentvine</div>
+      ${boIn>0?`<div class="alert" style="background:var(--rbg);border:1px solid var(--rborder)">
+        <div class="alert-lbl" style="color:var(--red)">⚠ Credits in bank — not in Rentvine</div>
         <div class="alert-amt" style="color:var(--red)">${fmt(boIn)}</div>
-        <div class="alert-sub" style="color:#791F1F">Deposits with no Rentvine settlement</div>
+        <div class="alert-sub" style="color:#791F1F">Deposits with no unreconciled RV record</div>
       </div>`:''}
     </div>`:''}
 
     <div class="recon-wrap">
       <div class="col-hdrs">
         <div class="col-hdr left">🏦 Bank statement</div>
-        <div class="col-hdr">📋 Rentvine</div>
+        <div class="col-hdr">📋 Rentvine — unreconciled</div>
       </div>
       <div class="filters">
         <input class="srch" id="si" placeholder="Search date, amount, description…" value="${search}"/>
@@ -495,8 +501,8 @@ function rResults(){
       <div class="recon-table">${tableRows}</div>
       <div class="legend">
         <div class="leg-item"><div class="leg-dot" style="background:var(--surface);border:1px solid var(--border2)"></div>Matched</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#FAEEDA80;border:1px solid var(--amber-border)"></div>Bank only — no Rentvine record</div>
-        <div class="leg-item"><div class="leg-dot" style="background:#FCEBEB80;border:1px solid var(--red-border)"></div>Rentvine only — not in bank</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#FAEEDA80;border:1px solid var(--aborder)"></div>In bank — no Rentvine record</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#FCEBEB80;border:1px solid var(--rborder)"></div>In Rentvine — not in bank</div>
       </div>
     </div>
   </div>`;
@@ -505,10 +511,6 @@ function rResults(){
 // ── EVENTS ─────────────────────────────────────────────────────────────────
 function bind(){
   if(S.screen==='config'){
-    document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>set({mode:b.dataset.m})));
-    document.querySelectorAll('[data-r]').forEach(el=>el.addEventListener('click',()=>set({selRecon:el.dataset.r})));
-    document.getElementById('ss')?.addEventListener('change',e=>set({settlStart:e.target.value}));
-    document.getElementById('se')?.addEventListener('change',e=>set({settlEnd:e.target.value}));
     const drop=document.getElementById('drop'),fi=document.getElementById('fi');
     drop?.addEventListener('click',()=>fi?.click());
     drop?.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
@@ -526,7 +528,6 @@ function bind(){
 async function hf(file){if(!file)return;const text=await file.text();set({bankFile:file,bankText:text});}
 
 render();
-loadInit();
 </script>
 </body>
 </html>
