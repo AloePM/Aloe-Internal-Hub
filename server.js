@@ -2899,7 +2899,7 @@ app.get('*', function(req, res) {
     .tool-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all 0.18s;text-decoration:none;color:inherit;display:block;position:relative;overflow:hidden}
     .tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;opacity:0;transition:opacity 0.18s}
     .tool-card:hover{border-color:var(--teal);transform:translateY(-2px);box-shadow:0 6px 20px rgba(60,195,225,0.1)}
-    .tool-card:hover::before{opacity:1}
+.stats-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:32px}   .tool-card:hover::before{opacity:1}
     .tool-card.primary::before{background:var(--teal)}
     .tool-card.silver-top::before{background:var(--silver)}
     .tool-card.amber-top::before{background:#f5a623}
@@ -2986,7 +2986,7 @@ app.get('*', function(req, res) {
     <div class="stat-card" style="padding:10px 14px">
       <div class="stat-label">AI Agents</div>
       <div class="stat-value">6</div>
- class="stat-card" style="padding:10px 14px" style="padding:10px 14px"     <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
+ class="stat-card" style="padding:10px 14px":10px 14px"     <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
     </div>
     <div class="stat-card" style="padding:10px 14px">
       <div class="stat-label">Markets</div>
