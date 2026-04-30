@@ -3067,38 +3067,38 @@ app.get('*', function(req, res) {
     <a href="/leasing" class="tool-card primary" data-name="leasing leads showings applications dhyana">
       <div class="tool-icon icon-teal">🏠</div>
       <div class="tool-name">Leasing</div>
-      <div class="tool-desc">Leads, showings, applications — Dhyana's domain</div>
+      <div class="tool-desc">Leads, showings, applications </div>
     </a>
 
     <a href="/maintenance" class="tool-card silver-top" data-name="maintenance work orders vendors roberto">
       <div class="tool-icon icon-silver">🔧</div>
       <div class="tool-name">Maintenance</div>
 
-      <div class="tool-desc">Work orders, vendors, and scheduling — Roberto's domain</div>
+      <div class="tool-desc">Work orders, vendors, and scheduling </div>
     </a>
 
     <a href="/residents" class="tool-card primary" data-name="residents tenants lease renewals persia">
       <div class="tool-icon icon-teal">👥</div>
       <div class="tool-name">Residents</div>
-      <div class="tool-desc">Tenant comms, lease renewals, move-outs — Persia's domain</div>
+      <div class="tool-desc">Tenant comms, lease renewals, move-outs </div>
     </a>
 
     <a href="/owners" class="tool-card purple-top" data-name="owners landlords portfolio reporting alexes">
       <div class="tool-icon icon-purple">🏢</div>
       <div class="tool-name">Owner Relations</div>
-      <div class="tool-desc">Owner reporting and portfolio updates — Alexes's domain</div>
+      <div class="tool-desc">Owner reporting and portfolio updates </div>
     </a>
 
     <a href="/hoa" class="tool-card silver-top" data-name="hoa compliance violations juan">
       <div class="tool-icon icon-silver">📋</div>
       <div class="tool-name">HOA Compliance</div>
-      <div class="tool-desc">Violations, registrations, compliance — Juan's domain</div>
+      <div class="tool-desc">Violations, registrations, compliance </div>
     </a>
 
     <a href="/accounting" class="tool-card amber-top" data-name="accounting payments ledger randi">
       <div class="tool-icon icon-amber">💰</div>
       <div class="tool-name">Accounting</div>
-      <div class="tool-desc">Payments, ledger, reconciliation — Randi's domain</div>
+      <div class="tool-desc">Payments, ledger, reconciliation </div>
     </a>
 
   </div>
