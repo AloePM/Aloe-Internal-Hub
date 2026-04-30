@@ -3056,14 +3056,14 @@ app.get('*', function(req, res) {
 </div>
 
 
-          <a href="/vacancy" class="tool-card teal-top" data-name="vacancy risk market intelligence rentometer">
+          <a href="/vacancy" class="tool-card " data-name="vacancy risk market intelligence rentometer">
                       <span class="tool-badge badge-live">LIVE</span>
                                   <div class="tool-icon icon-teal">🏠</div>
                                               <div class="tool-name">Vacancy Risk</div>
                                                           <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
                                                                     </a>
 
-                                                                              <a href="/metrics" class="tool-card blue-top" data-name="metrics kpi dashboard portfolio occupancy leases">
+                                                                              <a href="/metrics" class="tool-card " data-name="metrics kpi dashboard portfolio occupancy leases">
                                                                                           <span class="tool-badge badge-live">LIVE</span>
                                                                                                       <div class="tool-icon icon-blue">📊</div>
                                                                                                                   <div class="tool-name">KPI Metrics</div>
