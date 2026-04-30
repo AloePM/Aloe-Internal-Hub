@@ -2791,7 +2791,9 @@ app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
   res.json({ cleared: true });
 });
-
+app.get('/chat', function(req, res) {
+  res.sendFile(new URL('chat.html', import.meta.url).pathname);
+});
 app.get('/sandbox', function(req, res) {
   res.sendFile(new URL('sandbox.html', import.meta.url).pathname);
 });
@@ -2810,333 +2812,334 @@ app.get('/logo.png', function(req, res) {
 });
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Aloe Assistant</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <title>Aloe PM — Internal Hub</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9f9f7}
-    @keyframes ab{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
-    .chip:hover{background:#f0f0ee!important}
-    textarea:focus,input:focus{outline:none}
-    ::-webkit-scrollbar{width:4px}
-    ::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+    :root{
+      --teal:#3CC3E1;
+      --teal-dark:#4BB4D2;
+      --teal-dim:rgba(60,195,225,0.12);
+      --teal-dim2:rgba(60,195,225,0.06);
+      --silver:#B4C3C3;
+      --silver-dim:rgba(180,195,195,0.15);
+      --bg:#F8FAFC;
+      --bg2:#ffffff;
+      --bg3:#f1f5f5;
+      --border:rgba(180,195,195,0.3);
+      --border2:rgba(60,195,225,0.25);
+      --text:#1a2b2b;
+      --text2:#4a6060;
+      --text3:#8aa0a0;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* TOP BAR */
+    .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .logo-wrap{display:flex;align-items:center;gap:12px}
+    .logo-icon{width:36px;height:36px;border-radius:10px;background:var(--teal-dim);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center}
+    .logo-icon svg{width:20px;height:20px}
+    .logo-text{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-0.3px}
+    .logo-sub{font-size:11px;color:var(--text3);margin-top:1px}
+    .topbar-right{display:flex;align-items:center;gap:8px}
+    .pill{font-size:11px;padding:3px 10px;border-radius:20px;background:var(--teal-dim);color:var(--teal-dark);border:1px solid var(--border2);font-weight:500}
+    .pill.silver{background:var(--silver-dim);color:var(--text2);border-color:var(--border)}
+
+    /* HERO */
+    .hero{padding:48px 32px 32px;max-width:900px;margin:0 auto}
+    .hero-greeting{font-size:13px;font-weight:500;color:var(--teal-dark);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px}
+    .hero-title{font-size:30px;font-weight:700;color:var(--text);letter-spacing:-0.5px;line-height:1.2;margin-bottom:8px}
+    .hero-title span{color:var(--teal)}
+    .hero-sub{font-size:14px;color:var(--text2);line-height:1.6;max-width:480px}
+
+    /* SEARCH BAR */
+    .search-wrap{max-width:900px;margin:0 auto;padding:0 32px 32px}
+    .search-box{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;transition:border-color 0.15s}
+    .search-box:focus-within{border-color:var(--teal)}
+    .search-box svg{width:16px;height:16px;flex-shrink:0;opacity:0.4}
+    .search-box input{flex:1;border:none;outline:none;font-size:14px;color:var(--text);background:transparent;font-family:inherit}
+    .search-box input::placeholder{color:var(--text3)}
+
+    /* SECTION */
+    .section{max-width:900px;margin:0 auto;padding:0 32px 40px}
+    .section-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+    /* TOOL GRID */
+    .tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .tool-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all 0.18s;text-decoration:none;color:inherit;display:block;position:relative;overflow:hidden}
+    .tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;opacity:0;transition:opacity 0.18s}
+    .tool-card:hover{border-color:var(--teal);transform:translateY(-2px);box-shadow:0 6px 20px rgba(60,195,225,0.1)}
+    .tool-card:hover::before{opacity:1}
+    .tool-card.primary::before{background:var(--teal)}
+    .tool-card.silver-top::before{background:var(--silver)}
+    .tool-card.amber-top::before{background:#f5a623}
+    .tool-card.green-top::before{background:#4ade80}
+    .tool-card.purple-top::before{background:#a78bfa}
+    .tool-card.red-top::before{background:#f87171}
+    .tool-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:18px}
+    .icon-teal{background:var(--teal-dim);border:1px solid var(--border2)}
+    .icon-silver{background:var(--silver-dim);border:1px solid var(--border)}
+    .icon-amber{background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.25)}
+    .icon-green{background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25)}
+    .icon-purple{background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25)}
+    .icon-red{background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.25)}
+    .tool-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
+    .tool-desc{font-size:11px;color:var(--text3);line-height:1.5}
+    .tool-badge{position:absolute;top:14px;right:14px;font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px}
+    .badge-live{background:rgba(74,222,128,0.12);color:#16a34a;border:1px solid rgba(74,222,128,0.25)}
+    .badge-new{background:var(--teal-dim);color:var(--teal-dark);border:1px solid var(--border2)}
+    .badge-soon{background:var(--silver-dim);color:var(--text3);border:1px solid var(--border)}
+
+    /* QUICK STATS */
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:32px}
+    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px}
+    .stat-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+    .stat-value{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.5px}
+    .stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
+    .stat-sub .up{color:#16a34a}
+    .stat-sub .teal{color:var(--teal-dark)}
+
+    /* FOOTER */
+    .footer{max-width:900px;margin:0 auto;padding:0 32px 40px}
+    .footer-inner{border-top:1px solid var(--border);padding-top:20px;display:flex;align-items:center;justify-content:space-between}
+    .footer-left{font-size:11px;color:var(--text3)}
+    .footer-sources{display:flex;gap:6px}
+    .source-pill{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--bg3);color:var(--text3);border:1px solid var(--border)}
+
+    @media(max-width:640px){
+      .tool-grid{grid-template-columns:1fr 1fr}
+      .stats-row{grid-template-columns:1fr 1fr}
+      .hero{padding:32px 20px 20px}
+      .section{padding:0 20px 32px}
+      .search-wrap{padding:0 20px 24px}
+    }
   </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const { useState, useRef, useEffect } = React;
-const PASSCODE = "aloe2024";
 
-const FAQ_TABS = [
-  {
-    id: "maintenance", label: "🔧 Maintenance", color: "#fff7ed", border: "#f97316", accent: "#ea580c",
-    questions: [
-      {icon:"🚨", text:"What emergency work orders do we have right now?"},
-      {icon:"📅", text:"What work orders have been open over 30 days?"},
-      {icon:"⏰", text:"What work orders have been open over 7 days?"},
-      {icon:"🗓️", text:"What work orders have been open over 14 days?"},
-      {icon:"🚨", text:"What work orders are still open past their scheduled start date?"},
-      {icon:"🏢", text:"Which vendor has the most open work orders?"},
-      {icon:"📊", text:"Show me the amount of work orders opened per vendor"},
-      {icon:"🔁", text:"Are there repeat issues at any property?"},
-      {icon:"📈", text:"Are there any recurring issues at any properties?"},
-      {icon:"👤", text:"What work orders are not scheduled yet with a vendor?"},
-      {icon:"💬", text:"Which work orders have no comments?"},
-      {icon:"🔢", text:"How many open work orders do we have?"},
-      {icon:"🏠", text:"What homes have the most submitted work orders?"},
-      {icon:"⚡", text:"What is the average time for a work order to get assigned to a vendor?"},
-      {icon:"❄️", text:"Show me all HVAC work orders"},
-      {icon:"💧", text:"Any water leak or plumbing emergencies open?"},
-      {icon:"🐛", text:"Show me pest control related work orders"},
-    ]
-  },
-  {
-    id: "leasing", label: "🏠 Leasing", color: "#f0fdf4", border: "#22c55e", accent: "#16a34a",
-    questions: [
-      {icon:"🏠", text:"What units are available right now?"},
-      {icon:"👥", text:"What new leads came in this week?"},
-      {icon:"📊", text:"Show me the leasing report for this week"},
-      {icon:"📊", text:"Show me the leasing report for last month"},
-      {icon:"📅", text:"What showings are scheduled today?"},
-      {icon:"📅", text:"What showings happened this week?"},
-      {icon:"📝", text:"Show me all active applications"},
-      {icon:"🔍", text:"What is the status of applications at [address]?"},
-      {icon:"📋", text:"What are our applicant screening criteria?"},
-      {icon:"💰", text:"What is our application fee and deposit structure?"},
-      {icon:"📊", text:"How many leads came in this month and what sources?"},
-      {icon:"🔎", text:"How many applications are pending approval?"},
-      {icon:"📆", text:"What units are coming available in the next 30 days?"},
-      {icon:"🏷️", text:"What is the current rent for [address]?"},
-      {icon:"⏱️", text:"Which homes have been on the market over 30 days?"},
-      {icon:"📉", text:"Which homes have been on the market over 14 days?"},
-    ]
-  },
-  {
-    id: "tenants", label: "👤 Tenants", color: "#eff6ff", border: "#3b82f6", accent: "#2563eb",
-    questions: [
-      {icon:"💰", text:"What does [tenant name] owe and what is it from?"},
-      {icon:"📋", text:"What's our lease break policy?"},
-      {icon:"📅", text:"When does [tenant name]'s lease expire?"},
-      {icon:"🔑", text:"What are the move-in requirements and fees?"},
-      {icon:"🏚️", text:"What is the move-out process and timeline?"},
-      {icon:"💳", text:"What is the late fee policy?"},
-      {icon:"🐾", text:"What is the pet policy and fees?"},
-      {icon:"🔧", text:"How do tenants submit a maintenance request?"},
-      {icon:"🏦", text:"What is the RBP program and what does it cost?"},
-      {icon:"📬", text:"How does a tenant give notice to vacate?"},
-      {icon:"🔒", text:"What happens if a tenant is locked out?"},
-      {icon:"💸", text:"Can a tenant set up a payment plan?"},
-    ]
-  },
-  {
-    id: "owners", label: "🏢 Owners", color: "#fdf4ff", border: "#a855f7", accent: "#9333ea",
-    questions: [
-      {icon:"🏢", text:"How is [owner name]'s property performing?"},
-      {icon:"💸", text:"When are owner disbursements processed?"},
-      {icon:"📊", text:"What are our management fees?"},
-      {icon:"🔑", text:"What is our leasing process for new owners?"},
-      {icon:"🏚️", text:"Show me all move-outs in progress"},
-      {icon:"🔄", text:"Show me all leases up for renewal"},
-      {icon:"📋", text:"What does the rent-ready process look like?"},
-      {icon:"🛡️", text:"What guarantees do we offer owners?"},
-      {icon:"📈", text:"What is the current occupancy rate?"},
-      {icon:"🔔", text:"What does an owner do when a tenant gives notice?"},
-      {icon:"🏗️", text:"What maintenance work requires owner approval?"},
-      {icon:"📄", text:"How do we handle owner statements?"},
-    ]
-  },
-  {
-    id: "accounting", label: "💰 Accounting", color: "#fefce8", border: "#eab308", accent: "#ca8a04",
-    questions: [
-      {icon:"💰", text:"What does [tenant name] owe?"},
-      {icon:"📊", text:"Show me recent transactions for [property address]"},
-      {icon:"💳", text:"What are the outstanding balances across all tenants?"},
-      {icon:"🧾", text:"What charges are past due this month?"},
-      {icon:"💸", text:"What is the late fee policy and when is it applied?"},
-      {icon:"📑", text:"How are security deposits handled?"},
-      {icon:"🏦", text:"What is the earnest deposit amount?"},
-      {icon:"📋", text:"What fees are charged at move-out?"},
-      {icon:"🔄", text:"How are owner disbursements calculated?"},
-      {icon:"💡", text:"What utility bills are owner responsibility?"},
-      {icon:"📆", text:"When is rent due and what is the grace period?"},
-      {icon:"🏷️", text:"What admin fees do we charge?"},
-    ]
-  },
-  {
-    id: "operations", label: "⚡ Operations", color: "#f0f9ff", border: "#0ea5e9", accent: "#0284c7",
-    questions: [
-      {icon:"🔍", text:"Any inspections scheduled this week?"},
-      {icon:"💬", text:"Any recent announcements in Slack?"},
-      {icon:"📅", text:"What move-ins are happening this week?"},
-      {icon:"📋", text:"What move-outs are in progress?"},
-      {icon:"🔄", text:"What leases are expiring in the next 60 days?"},
-      {icon:"🏠", text:"How many units do we currently manage?"},
-      {icon:"📊", text:"What is our current occupancy rate?"},
-      {icon:"🗓️", text:"What HOA violations are open?"},
-      {icon:"🔑", text:"What properties are vacant right now?"},
-      {icon:"📬", text:"Any pending move-out inspections?"},
-      {icon:"🔗", text:"What are all the active leases expiring this month?"},
-      {icon:"📈", text:"What new properties did we onboard recently?"},
-    ]
-  },
-];
+<div class="topbar">
+  <div class="logo-wrap">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3C8 3 5 7 5 11c0 5 7 10 7 10s7-5 7-10c0-4-3-8-7-8z" fill="#3CC3E1" opacity="0.3"/>
+        <path d="M12 3C8 3 5 7 5 11c0 5 7 10 7 10s7-5 7-10c0-4-3-8-7-8z" stroke="#3CC3E1" stroke-width="1.5" fill="none"/>
+        <path d="M12 8v6M9 11h6" stroke="#3CC3E1" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Aloe PM Internal Hub</div>
+      <div class="logo-sub">Phoenix Metro · All systems live</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="pill">AI-Powered</span>
+    <span class="pill silver">Internal Only</span>
+  </div>
+</div>
 
-const SOURCES = [
-  {label:"Rentvine",bg:"#e6f0fb",border:"#85B7EB"},
-  {label:"Aptly",   bg:"#EAF3DE",border:"#97C459"},
-  {label:"Knowledge Base",  bg:"#FAEEDA",border:"#EF9F27"},
-  {label:"Slack",   bg:"#f0e6f6",border:"#c17edb"},
-];
+<div class="hero">
+  <div class="hero-greeting">Good to see you</div>
+  <div class="hero-title">Welcome back to <span>Aloe PM</span></div>
+  <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
+</div>
 
-function renderMd(text) {
-  if (!text) return null;
-  const bold = s => s.split(/\\*\\*(.*?)\\*\\*/).map((p,i) =>
-    i%2===1 ? React.createElement('strong',{key:i,style:{fontWeight:500}},p) : p
-  );
-  return text.split("\\n").map((line,key) => {
-    if (!line.trim()) return React.createElement('div',{key,style:{height:6}});
-    if (line.match(/^#{1,3}\\s/)) return React.createElement('p',{key,style:{fontWeight:500,marginBottom:4,marginTop:8}},bold(line.replace(/^#+\\s/,"")));
-    if (line.match(/^[-•]\\s/)) return React.createElement('div',{key,style:{display:"flex",gap:8,marginBottom:3}},
-      React.createElement('span',{style:{color:"#888",flexShrink:0}},"•"),
-      React.createElement('span',null,bold(line.replace(/^[-•]\\s/,"")))
-    );
-    if (line.match(/^\\d+\\.\\s/)) return React.createElement('div',{key,style:{display:"flex",gap:8,marginBottom:3}},
-      React.createElement('span',{style:{color:"#888",flexShrink:0,minWidth:18}},line.match(/^(\\d+)/)[1]+"."),
-      React.createElement('span',null,bold(line.replace(/^\\d+\\.\\s/,"")))
-    );
-    return React.createElement('p',{key,style:{marginBottom:3,lineHeight:1.6}},bold(line));
+<div class="search-wrap">
+  <div class="search-box">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" placeholder="Search tools, docs, or ask a question…" id="search-input" oninput="filterTools(this.value)"/>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Quick stats</div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">AI Agents</div>
+      <div class="stat-value">6</div>
+      <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Markets</div>
+      <div class="stat-value">6</div>
+      <div class="stat-sub"><span class="teal">Phoenix Metro</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Integrations</div>
+      <div class="stat-value">7</div>
+      <div class="stat-sub">Rentvine · Aptly · Quo</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Team</div>
+      <div class="stat-value">6</div>
+      <div class="stat-sub">Randi · Persia · Dhyana +3</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">AI & Automation</div>
+  <div class="tool-grid" id="tool-grid">
+
+    <a href="/api/chat" class="tool-card primary" data-name="aloe assistant ai chat" onclick="event.preventDefault();window.location.href='/'">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🤖</div>
+      <div class="tool-name">Aloe Assistant</div>
+      <div class="tool-desc">AI chat — Rentvine, Aptly, Notion, Slack all connected</div>
+    </a>
+
+    <a href="/sandbox" class="tool-card primary" data-name="sandbox agent training coaching test">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🧪</div>
+      <div class="tool-name">Agent Sandbox</div>
+      <div class="tool-desc">Train and coach AI agents before going live</div>
+    </a>
+
+    <a href="/recon" class="tool-card silver-top" data-name="recon reconciliation maintenance work orders">
+      <span class="tool-badge badge-soon">SOON</span>
+      <div class="tool-icon icon-silver">🔍</div>
+      <div class="tool-name">Recon</div>
+      <div class="tool-desc">Cross-reference work orders between Aptly and Rentvine</div>
+    </a>
+
+    <a href="/recon-bills" class="tool-card amber-top" data-name="recon bills invoices accounting reconcile">
+      <span class="tool-badge badge-soon">SOON</span>
+      <div class="tool-icon icon-amber">🧾</div>
+      <div class="tool-name">Recon — Bills</div>
+      <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
+    </a>
+
+    <a href="/owner-report" class="tool-card purple-top" data-name="owner report dashboard leads marketing">
+      <span class="tool-badge badge-soon">SOON</span>
+      <div class="tool-icon icon-purple">📊</div>
+      <div class="tool-name">Owner Dashboard</div>
+      <div class="tool-desc">Live leasing activity and marketing report per owner</div>
+    </a>
+
+    <a href="/sms-queue" class="tool-card green-top" data-name="sms queue drafts tenant messages quo">
+      <span class="tool-badge badge-new">NEW</span>
+      <div class="tool-icon icon-green">💬</div>
+      <div class="tool-name">SMS Draft Queue</div>
+      <div class="tool-desc">Review and approve AI-drafted responses before sending</div>
+    </a>
+
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Operations</div>
+  <div class="tool-grid">
+
+    <a href="/leasing" class="tool-card primary" data-name="leasing leads showings applications dhyana">
+      <div class="tool-icon icon-teal">🏠</div>
+      <div class="tool-name">Leasing</div>
+      <div class="tool-desc">Leads, showings, applications — Dhyana's domain</div>
+    </a>
+
+    <a href="/maintenance" class="tool-card silver-top" data-name="maintenance work orders vendors roberto">
+      <div class="tool-icon icon-silver">🔧</div>
+      <div class="tool-name">Maintenance</div>
+      <div class="tool-desc">Work orders, vendors, scheduling — Roberto's domain</div>
+    </a>
+
+    <a href="/residents" class="tool-card primary" data-name="residents tenants lease renewals persia">
+      <div class="tool-icon icon-teal">👥</div>
+      <div class="tool-name">Residents</div>
+      <div class="tool-desc">Tenant comms, lease renewals, move-outs — Persia's domain</div>
+    </a>
+
+    <a href="/owners" class="tool-card purple-top" data-name="owners landlords portfolio reporting alexes">
+      <div class="tool-icon icon-purple">🏢</div>
+      <div class="tool-name">Owner Relations</div>
+      <div class="tool-desc">Owner reporting and portfolio updates — Alexes's domain</div>
+    </a>
+
+    <a href="/hoa" class="tool-card silver-top" data-name="hoa compliance violations juan">
+      <div class="tool-icon icon-silver">📋</div>
+      <div class="tool-name">HOA Compliance</div>
+      <div class="tool-desc">Violations, registrations, compliance — Juan's domain</div>
+    </a>
+
+    <a href="/accounting" class="tool-card amber-top" data-name="accounting payments ledger randi">
+      <div class="tool-icon icon-amber">💰</div>
+      <div class="tool-name">Accounting</div>
+      <div class="tool-desc">Payments, ledger, reconciliation — Randi's domain</div>
+    </a>
+
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Integrations & Tools</div>
+  <div class="tool-grid">
+
+    <a href="https://rentvine.com" target="_blank" class="tool-card silver-top" data-name="rentvine property management">
+      <div class="tool-icon icon-silver">🏘️</div>
+      <div class="tool-name">Rentvine</div>
+      <div class="tool-desc">Tenant data, leases, work orders, accounting</div>
+    </a>
+
+    <a href="https://app.getaptly.com" target="_blank" class="tool-card green-top" data-name="aptly crm workflow boards">
+      <div class="tool-icon icon-green">📌</div>
+      <div class="tool-name">Aptly</div>
+      <div class="tool-desc">CRM, workflow boards, leads, move-ins, HOA</div>
+    </a>
+
+    <a href="https://app.quo.com" target="_blank" class="tool-card primary" data-name="quo sms openphone messaging">
+      <div class="tool-icon icon-teal">📱</div>
+      <div class="tool-name">Quo / OpenPhone</div>
+      <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
+    </a>
+
+    <a href="https://notion.so" target="_blank" class="tool-card silver-top" data-name="notion knowledge base sops policies">
+      <div class="tool-icon icon-silver">📚</div>
+      <div class="tool-name">Notion</div>
+      <div class="tool-desc">SOPs, policies, knowledge base, templates</div>
+    </a>
+
+    <a href="https://drive.google.com" target="_blank" class="tool-card amber-top" data-name="google drive files documents">
+      <div class="tool-icon icon-amber">📁</div>
+      <div class="tool-name">Google Drive</div>
+      <div class="tool-desc">Signed leases, inspection reports, owner docs</div>
+    </a>
+
+    <a href="https://slack.com" target="_blank" class="tool-card purple-top" data-name="slack team communications channels">
+      <div class="tool-icon icon-purple">💼</div>
+      <div class="tool-name">Slack</div>
+      <div class="tool-desc">Team communications and escalation alerts</div>
+    </a>
+
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-inner">
+    <div class="footer-left">Aloe Property Management · Phoenix Metro · Internal use only</div>
+    <div class="footer-sources">
+      <span class="source-pill">Rentvine</span>
+      <span class="source-pill">Aptly</span>
+      <span class="source-pill">Quo</span>
+      <span class="source-pill">Notion</span>
+      <span class="source-pill">Slack</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function filterTools(q) {
+  q = q.toLowerCase().trim();
+  document.querySelectorAll('.tool-card').forEach(function(card) {
+    const name = (card.dataset.name || '') + ' ' + card.querySelector('.tool-name').textContent + ' ' + card.querySelector('.tool-desc').textContent;
+    card.style.display = (!q || name.toLowerCase().includes(q)) ? 'block' : 'none';
   });
 }
-
-function Dots() {
-  return React.createElement('div',{style:{display:"flex",gap:4,padding:"2px 0"}},
-    [0,1,2].map(i => React.createElement('div',{key:i,style:{width:6,height:6,borderRadius:"50%",background:"#3B6D11",animation:\`ab 1.2s ease-in-out \${i*0.18}s infinite\`}}))
-  );
-}
-
-function PasscodeGate({onUnlock}) {
-  const [val,setVal] = useState("");
-  const [error,setError] = useState(false);
-  const [shake,setShake] = useState(false);
-  const ref = useRef(null);
-  useEffect(()=>{ ref.current?.focus(); },[]);
-  const attempt = () => {
-    if (val===PASSCODE) { onUnlock(); }
-    else { setError(true); setShake(true); setVal(""); setTimeout(()=>setShake(false),500); }
-  };
-  return (
-    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f9f9f7"}}>
-      <div style={{animation:"fadeUp 0.4s ease",display:"flex",flexDirection:"column",alignItems:"center",gap:24,width:"100%",maxWidth:340,padding:"0 24px"}}>
-        <div style={{textAlign:"center"}}>
-          <img src="/logo.png" alt="Aloe PM" style={{width:180,height:"auto",display:"block",margin:"0 auto 10px"}}/>
-          <div style={{fontSize:18,fontWeight:600,color:"#1a1a1a"}}>Aloe Assistant</div>
-          <div style={{fontSize:12,color:"#888",marginTop:2}}>Aloe Property Management · Internal</div>
-        </div>
-        <div style={{width:"100%",background:"white",border:"1px solid #e5e5e5",borderRadius:12,padding:"24px 20px",animation:shake?"shake 0.4s ease":"none"}}>
-          <p style={{fontSize:13,color:"#666",marginBottom:12,textAlign:"center"}}>Enter your team passcode</p>
-          <input ref={ref} type="password" value={val} onChange={e=>{setVal(e.target.value);setError(false);}} onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="Passcode" style={{width:"100%",fontSize:15,padding:"10px 14px",textAlign:"center",letterSpacing:"0.15em",border:\`1px solid \${error?"#e53e3e":"#e5e5e5"}\`,borderRadius:8,background:"#f9f9f9",color:"#1a1a1a",fontFamily:"inherit",marginBottom:error?8:12}}/>
-          {error && <p style={{fontSize:12,color:"#e53e3e",textAlign:"center",marginBottom:10}}>Incorrect passcode — try again</p>}
-          <button onClick={attempt} style={{width:"100%",padding:"10px",background:"#3B6D11",border:"none",borderRadius:8,color:"white",fontSize:14,fontWeight:600,cursor:"pointer"}}>Sign in</button>
-        </div>
-        <p style={{fontSize:11,color:"#aaa",textAlign:"center"}}>For access, contact Randi</p>
-      </div>
-    </div>
-  );
-}
-
-function Sidebar({activeTab, setActiveTab, send}) {
-  const [expandedTab, setExpandedTab] = useState("maintenance");
-  const toggleTab = (id) => setExpandedTab(expandedTab === id ? null : id);
-  return (
-    <div style={{width:260,minWidth:260,background:"white",borderRight:"1px solid #f0f0f0",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto"}}>
-      <div style={{padding:"14px 16px",borderBottom:"1px solid #f0f0f0",display:"flex",alignItems:"center",gap:8}}>
-        <img src="/logo.png" alt="Aloe PM" style={{width:110,height:"auto",display:"block"}}/>
-        <div>
-          <div style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>Aloe Assistant</div>
-          <div style={{fontSize:10,color:"#888"}}>Internal · All live</div>
-        </div>
-      </div>
-      <div style={{padding:"8px 10px",flex:1}}>
-        {FAQ_TABS.map(tab => (
-          <div key={tab.id} style={{marginBottom:2}}>
-            <button onClick={()=>toggleTab(tab.id)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 8px",borderRadius:7,border:"none",background:expandedTab===tab.id?tab.color:"transparent",cursor:"pointer",textAlign:"left",transition:"background 0.1s"}}>
-              <span style={{fontSize:12,fontWeight:600,color:expandedTab===tab.id?tab.accent:"#444"}}>{tab.label}</span>
-              <span style={{fontSize:10,color:"#aaa",transform:expandedTab===tab.id?"rotate(180deg)":"none",transition:"transform 0.2s"}}>▼</span>
-            </button>
-            {expandedTab===tab.id && (
-              <div style={{paddingLeft:4,paddingBottom:4}}>
-                {tab.questions.map((q,i)=>(
-                  <button key={i} onClick={()=>send(q.text)} style={{width:"100%",display:"flex",alignItems:"flex-start",gap:6,padding:"5px 8px",borderRadius:6,border:"none",background:"transparent",cursor:"pointer",textAlign:"left",transition:"background 0.1s",marginBottom:1}}>
-                    <span style={{fontSize:11,flexShrink:0,marginTop:1}}>{q.icon}</span>
-                    <span style={{fontSize:11,color:"#555",lineHeight:1.4}}>{q.text}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      <div style={{padding:"10px 14px",borderTop:"1px solid #f0f0f0"}}>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-          {SOURCES.map(s=>React.createElement('div',{key:s.label,style:{padding:"2px 7px",borderRadius:10,background:s.bg,border:\`1px solid \${s.border}\`,fontSize:10,color:"#333"}},s.label))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Assistant() {
-  const [messages,setMessages] = useState([]);
-  const [input,setInput] = useState("");
-  const [loading,setLoading] = useState(false);
-  const [lastError,setLastError] = useState("");
-  const [sidebarOpen,setSidebarOpen] = useState(true);
-  const endRef = useRef(null);
-  const taRef = useRef(null);
-  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,loading]);
-
-  const send = async (text) => {
-    const msg = (text||input).trim();
-    if (!msg||loading) return;
-    setInput(""); setLastError("");
-    if (taRef.current) taRef.current.style.height="auto";
-    const next = [...messages,{role:"user",content:msg}];
-    setMessages(next); setLoading(true);
-    try {
-      const res = await fetch('/api/chat',{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:next.map(m=>({role:m.role,content:m.content}))})});
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      const txt = (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\\n")||"Sorry, try again.";
-      setMessages([...next,{role:"assistant",content:txt}]);
-    } catch(e) { setLastError(e.message); setMessages([...next,{role:"assistant",content:"Something went wrong — see error above."}]); }
-    setLoading(false);
-  };
-
-  const clearChat = () => { setMessages([]); setLastError(""); };
-
-  return (
-    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
-      {sidebarOpen && <Sidebar send={(txt)=>{ send(txt); }} />}
-      <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
-        {lastError && <div style={{padding:"8px 16px",background:"#fff5f5",borderBottom:"1px solid #fed7d7",display:"flex",justifyContent:"space-between",flexShrink:0}}><span style={{fontSize:12,color:"#c53030"}}>⚠ {lastError}</span><button onClick={()=>setLastError("")} style={{background:"none",border:"none",cursor:"pointer",color:"#c53030",fontSize:16}}>×</button></div>}
-        <div style={{display:"flex",alignItems:"center",padding:"10px 16px",background:"white",borderBottom:"1px solid #f0f0f0",flexShrink:0,gap:10}}>
-          <button onClick={()=>setSidebarOpen(!sidebarOpen)} style={{width:30,height:30,borderRadius:6,border:"1px solid #e5e5e5",background:"white",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}} title={sidebarOpen?"Hide sidebar":"Show sidebar"}>☰</button>
-          <div style={{fontSize:14,fontWeight:600,color:"#1a1a1a",flex:1}}>Chat</div>
-          {messages.length>0 && <button onClick={clearChat} style={{fontSize:11,color:"#888",background:"none",border:"1px solid #e5e5e5",borderRadius:6,padding:"4px 8px",cursor:"pointer"}}>New chat</button>}
-        </div>
-        <div style={{flex:1,overflowY:"auto",padding:"20px 16px"}}>
-          {messages.length===0 ? (
-            <div style={{maxWidth:560,margin:"0 auto",paddingTop:40,textAlign:"center"}}>
-              <img src="/logo.png" alt="Aloe PM" style={{width:140,height:"auto",display:"block",margin:"0 auto 10px"}}/>
-              <div style={{fontSize:18,fontWeight:600,color:"#1a1a1a",marginBottom:6}}>Hi, I'm Aloe</div>
-              <div style={{fontSize:13,color:"#666",lineHeight:1.7,maxWidth:400,margin:"0 auto"}}>Your AI assistant for Aloe Property Management. Pick a shortcut from the left sidebar, or type any question below.</div>
-              <div style={{fontSize:12,color:"#aaa",marginTop:20}}>← Browse categories in the sidebar</div>
-            </div>
-          ) : (
-            <div style={{maxWidth:680,width:"100%",margin:"0 auto"}}>
-              {messages.map((m,i)=>(
-                <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start",marginBottom:12}}>
-                  {m.role==="assistant"&&<div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0,marginRight:8,marginTop:2}}style={{width:16,height:"auto",objectFit:"contain"}}/></div>
-                  <div style={{maxWidth:"78%",padding:"10px 14px",borderRadius:m.role==="user"?"12px 12px 4px 12px":"12px 12px 12px 4px",background:m.role==="user"?"#EAF3DE":"white",border:\`1px solid \${m.role==="user"?"#97C459":"#f0f0f0"}\`,color:m.role==="user"?"#173404":"#1a1a1a",fontSize:14,lineHeight:1.6}}>
-                    {m.role==="assistant"?renderMd(m.content):m.content}
-                  </div>
-                </div>
-              ))}
-              {loading&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><div style={{width:28,height:28,borderRadius:"50%",background:"#EAF3DE",border:"1px solid #97C459",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>🌿</div><div style={{padding:"10px 14px",background:"white",border:"1px solid #f0f0f0",borderRadius:"12px 12px 12px 4px"}}><Dots/></div></div>}
-              <div ref={endRef}/>
-            </div>
-          )}
-        </div>
-        <div style={{padding:"12px 16px",background:"white",borderTop:"1px solid #f0f0f0",flexShrink:0}}>
-          <div style={{maxWidth:680,margin:"0 auto",display:"flex",gap:8,alignItems:"flex-end"}}>
-            <textarea ref={taRef} value={input} onChange={e=>{setInput(e.target.value);e.target.style.height="auto";e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";}} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}} placeholder="Ask anything — or pick a shortcut from the sidebar..." rows={1} style={{flex:1,padding:"9px 12px",background:"#f9f9f7",border:"1px solid #e5e5e5",borderRadius:8,color:"#1a1a1a",fontSize:14,fontFamily:"inherit",resize:"none",lineHeight:1.5,minHeight:38,maxHeight:120}}/>
-            <button onClick={()=>send()} disabled={!input.trim()||loading} style={{width:38,height:38,borderRadius:8,background:input.trim()&&!loading?"#3B6D11":"#f0f0f0",border:"none",cursor:input.trim()&&!loading?"pointer":"default",color:input.trim()&&!loading?"white":"#aaa",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>↑</button>
-          </div>
-          <div style={{textAlign:"center",fontSize:11,color:"#aaa",marginTop:6}}>Rentvine · Aptly · Knowledge Base · Slack · All data is live</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function App() {
-  const [unlocked,setUnlocked] = useState(false);
-  return unlocked ? <Assistant/> : <PasscodeGate onUnlock={()=>setUnlocked(true)}/>;
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
-</html>`);
+</html>
 });
 
 const PORT = process.env.PORT || 3000;
