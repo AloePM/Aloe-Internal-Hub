@@ -3141,5 +3141,9 @@ function filterTools(q) {
 </html>`);
 });
 
+app.get('/metrics', (req, res) => {
+    res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
