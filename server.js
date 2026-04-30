@@ -3095,11 +3095,6 @@ app.get('*', function(req, res) {
       <div class="tool-desc">Violations, registrations, compliance </div>
     </a>
 
-    <a href="/accounting" class="tool-card amber-top" data-name="accounting payments ledger randi">
-      <div class="tool-icon icon-amber">💰</div>
-      <div class="tool-name">Accounting</div>
-      <div class="tool-desc">Payments, ledger, reconciliation </div>
-    </a>
 
   </div>
 </div>
