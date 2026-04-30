@@ -3147,7 +3147,8 @@ app.get('*', function(req, res) {
       <div class="tool-name">Rentvine</div>
       <div class="tool-desc">Tenant data, leases, work orders, accounting</div>
     </a>
-
+</div>
+      </div>
     <a href="https://app.getaptly.com" target="_blank" class="tool-card green-top" data-name="aptly crm workflow boards">
       <div class="tool-icon icon-green">📌</div>
       <div class="tool-name">Aptly</div>
