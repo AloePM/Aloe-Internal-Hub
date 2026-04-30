@@ -8,63 +8,69 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0e0e0d;color:#c2c0b6;font-family:'Inter',sans-serif;min-height:100vh}
-.topbar{border-bottom:1px solid #1e1e1c;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;background:#0e0e0d;z-index:10}
+:root{
+  --teal:#3CC3E1;--teal-dark:#2aa8c4;--teal-light:#e8f8fc;
+  --green:#16a34a;--green-light:#dcfce7;
+  --red:#dc2626;--red-light:#fee2e2;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --blue:#2563eb;--blue-light:#dbeafe;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --gray:#6b7280;--gray-light:#f3f4f6;
+  --bg:#F8FAFC;--bg2:#ffffff;--bg3:#f1f5f9;
+  --border:rgba(180,195,195,0.3);--border2:#e2e8f0;
+  --text:#1a2b2b;--text2:#4a6060;--text3:#94a3b8;
+}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;font-size:14px}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border2);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:10;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-icon{width:26px;height:26px;background:#3CC3E1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0e0e0d}
-.logo-text{font-size:14px;font-weight:600;color:#e8e6de}
-.logo-sub{font-size:11px;color:#5F5E5A;margin-left:4px}
-.status-pill{font-size:11px;padding:3px 10px;border-radius:20px;background:#3CC3E122;color:#3CC3E1;border:1px solid #3CC3E150}
-.back-btn{font-size:12px;color:#5F5E5A;text-decoration:none;display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid #2a2a28;background:none;cursor:pointer}
-.back-btn:hover{color:#c2c0b6;border-color:#3a3a38}
-.nav{border-bottom:1px solid #1e1e1c;padding:0 28px;display:flex;gap:0}
-.nav-btn{padding:11px 15px;font-size:12px;font-weight:500;color:#5F5E5A;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;font-family:'Inter',sans-serif}
-.nav-btn.active{color:#3CC3E1;border-bottom-color:#3CC3E1}
-.nav-btn:hover{color:#c2c0b6}
-.main{padding:24px 28px;max-width:1300px}
-.page-title{font-size:20px;font-weight:600;color:#e8e6de;margin-bottom:4px;letter-spacing:-0.01em}
-.page-sub{font-size:12px;color:#5F5E5A;margin-bottom:20px}
-.kpi-row{display:grid;gap:10px;margin-bottom:20px}
+.logo-icon{width:32px;height:32px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff}
+.logo-text{font-size:15px;font-weight:700;color:var(--text)}
+.logo-sub{font-size:12px;color:var(--text3);margin-left:2px}
+.live-pill{font-size:11px;padding:3px 10px;border-radius:20px;background:var(--teal-light);color:var(--teal-dark);border:1px solid #b2e8f5;font-weight:500;display:flex;align-items:center;gap:5px}
+.live-dot{width:6px;height:6px;background:var(--teal);border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.back-btn{font-size:12px;color:var(--text2);text-decoration:none;display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:all 0.15s}
+.back-btn:hover{background:var(--bg3);color:var(--text)}
+.nav{background:var(--bg2);border-bottom:1px solid var(--border2);padding:0 24px;display:flex;gap:0}
+.nav-btn{padding:12px 16px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;font-family:'Inter',sans-serif}
+.nav-btn.active{color:var(--teal-dark);border-bottom-color:var(--teal)}
+.nav-btn:hover{color:var(--text)}
+.main{padding:24px;max-width:1400px}
+.page-title{font-size:22px;font-weight:700;color:var(--text);margin-bottom:3px;letter-spacing:-0.02em}
+.page-sub{font-size:13px;color:var(--text3);margin-bottom:20px}
+.kpi-row{display:grid;gap:12px;margin-bottom:20px}
 .kpi-row.cols-5{grid-template-columns:repeat(5,1fr)}
 .kpi-row.cols-4{grid-template-columns:repeat(4,1fr)}
 .kpi-row.cols-6{grid-template-columns:repeat(6,1fr)}
-.kpi{background:#131312;border:1px solid #1e1e1c;border-radius:10px;padding:14px 16px}
-.kpi-label{font-size:10px;color:#5F5E5A;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
-.kpi-value{font-size:24px;font-weight:700;font-family:'DM Mono',monospace;line-height:1}
-.kpi-sub{font-size:11px;color:#5F5E5A;margin-top:5px}
-.kpi-trend-up{font-size:11px;color:#e05a5a;margin-top:5px}
-.kpi-trend-down{font-size:11px;color:#3CC3E1;margin-top:5px}
+.kpi{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:16px 18px;transition:box-shadow 0.15s}
+.kpi:hover{box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+.kpi-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;font-weight:600}
+.kpi-value{font-size:28px;font-weight:700;line-height:1;letter-spacing:-0.02em}
+.kpi-sub{font-size:12px;color:var(--text3);margin-top:5px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
-.grid-13{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px}
-.card{background:#131312;border:1px solid #1e1e1c;border-radius:12px;padding:18px 20px}
-.card-title{font-size:11px;font-weight:600;color:#888780;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.card-title .bar{width:3px;height:14px;border-radius:2px;display:inline-block}
+.grid-13{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:20px 22px;transition:box-shadow 0.15s}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.card-title .bar{width:3px;height:14px;border-radius:2px;display:inline-block;flex-shrink:0}
 .chart-wrap{position:relative}
 .legend{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
-.legend-item{font-size:11px;color:#5F5E5A;display:flex;align-items:center;gap:5px}
-.legend-dot{width:8px;height:8px;border-radius:2px;display:inline-block}
-.loading{display:flex;align-items:center;justify-content:center;height:200px;color:#5F5E5A;font-size:13px;gap:10px}
-.spinner{width:16px;height:16px;border:2px solid #2a2a28;border-top-color:#3CC3E1;border-radius:50%;animation:spin .8s linear infinite}
+.legend-item{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px;font-weight:500}
+.legend-dot{width:8px;height:8px;border-radius:2px;display:inline-block;flex-shrink:0}
+.loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text3);font-size:13px;gap:10px}
+.spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
-.err{color:#e05a5a;font-size:12px;padding:10px;background:#e05a5a11;border-radius:6px;margin-bottom:12px}
-.cat-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-.cat-label{font-size:12px;color:#888780;display:flex;align-items:center;gap:7px}
-.cat-count{font-size:12px;font-weight:600;color:#c2c0b6;font-family:'DM Mono',monospace}
-.bar-bg{height:3px;background:#1e1e1c;border-radius:2px;margin-top:3px;margin-bottom:10px}
-.bar-fill{height:3px;border-radius:2px;transition:width 0.6s ease}
-.table{width:100%;border-collapse:collapse;font-size:12px}
-.table th{text-align:left;padding:6px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#5F5E5A;border-bottom:1px solid #1e1e1c;font-weight:500}
-.table td{padding:8px 10px;border-bottom:1px solid #131312;color:#888780}
-.table td:first-child{color:#c2c0b6}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
-.badge-green{background:#3CC3E122;color:#3CC3E1}
-.badge-red{background:#e05a5a22;color:#e05a5a}
-.badge-yellow{background:#EF9F2722;color:#EF9F27}
-.badge-blue{background:#378ADD22;color:#378ADD}
+.err{color:var(--red);font-size:12px;padding:10px 14px;background:var(--red-light);border-radius:8px;margin-bottom:16px;border:1px solid #fca5a5}
+.cat-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.cat-label{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:7px;font-weight:500}
+.cat-count{font-size:12px;font-weight:700;color:var(--text)}
+.bar-bg{height:4px;background:var(--bg3);border-radius:2px;margin-top:3px;margin-bottom:12px}
+.bar-fill{height:4px;border-radius:2px;transition:width 0.8s ease}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.section-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin:0 0 10px}
 </style>
 </head>
 <body>
@@ -73,12 +79,13 @@ body{background:#0e0e0d;color:#c2c0b6;font-family:'Inter',sans-serif;min-height:
 const { useState, useEffect, useRef } = React;
 
 const TEAL = '#3CC3E1';
-const GREEN = '#1D9E75';
-const AMBER = '#EF9F27';
-const RED = '#e05a5a';
-const BLUE = '#378ADD';
-const PURPLE = '#9F77DD';
-const GRAY = '#888780';
+const TEAL_D = '#2aa8c4';
+const GREEN = '#16a34a';
+const RED = '#dc2626';
+const AMBER = '#d97706';
+const BLUE = '#2563eb';
+const PURPLE = '#7c3aed';
+const GRAY = '#94a3b8';
 
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -88,16 +95,39 @@ function ago(months) {
   return d;
 }
 
-function monthLabel(d) {
-  return MONTHS_SHORT[d.getMonth()];
-}
-
 function buildMonthBuckets(n = 9) {
   return Array.from({length: n}, (_, i) => {
     const d = ago(n - 1 - i);
-    return { month: monthLabel(d), year: d.getFullYear(), m: d.getMonth(), count: 0 };
+    return { month: MONTHS_SHORT[d.getMonth()], year: d.getFullYear(), m: d.getMonth() };
   });
 }
+
+function diffDays(a, b) {
+  if (!a || !b) return 0;
+  return Math.abs((new Date(b) - new Date(a)) / 86400000);
+}
+
+function isThisMonth(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const n = new Date();
+  return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+}
+
+function inNext90(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const now = new Date();
+  const future = new Date(); future.setDate(future.getDate() + 90);
+  return d >= now && d <= future;
+}
+
+// ─── Chart Components ──────────────────────────────────────────────────────
+
+const CHART_DEFAULTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#fff', titleColor: '#1a2b2b', bodyColor: '#4a6060', borderColor: '#e2e8f0', borderWidth: 1, padding: 10, cornerRadius: 8 } },
+};
 
 function LineChart({ data, xKey, yKeys, colors, height = 160 }) {
   const ref = useRef(null);
@@ -109,30 +139,22 @@ function LineChart({ data, xKey, yKeys, colors, height = 160 }) {
       data: {
         labels: data.map(d => d[xKey]),
         datasets: yKeys.map((k, i) => ({
-          data: data.map(d => d[k]),
-          borderColor: colors[i],
-          backgroundColor: colors[i] + '15',
-          borderWidth: 2,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          tension: 0.4,
+          data: data.map(d => d[k] ?? 0),
+          borderColor: colors[i], backgroundColor: colors[i] + '18',
+          borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, tension: 0.4,
           fill: yKeys.length === 1,
         }))
       },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1a1a18', titleColor: '#c2c0b6', bodyColor: '#888780', borderColor: '#2a2a28', borderWidth: 1 } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { display: false }, border: { display: false } },
-          y: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { color: '#1e1e1c' }, border: { display: false } }
-        }
-      }
+      options: { ...CHART_DEFAULTS, scales: {
+        x: { ticks: { font:{size:11}, color:'#94a3b8' }, grid:{display:false}, border:{display:false} },
+        y: { ticks: { font:{size:11}, color:'#94a3b8' }, grid:{ color:'#f1f5f9' }, border:{display:false} }
+      }}
     });
   }, [data]);
   return <div className="chart-wrap" style={{height}}><canvas ref={ref}/></div>;
 }
 
-function BarChart({ data, xKey, yKeys, colors, height = 160 }) {
+function BarChart({ data, xKey, yKeys, colors, height = 160, stacked }) {
   const ref = useRef(null);
   useEffect(() => {
     if (!ref.current || !window.Chart) return;
@@ -142,36 +164,26 @@ function BarChart({ data, xKey, yKeys, colors, height = 160 }) {
       data: {
         labels: data.map(d => d[xKey]),
         datasets: yKeys.map((k, i) => ({
-          data: data.map(d => d[k]),
-          backgroundColor: colors[i] + 'cc',
-          borderRadius: 3,
-          borderSkipped: false,
+          data: data.map(d => d[k] ?? 0),
+          backgroundColor: colors[i] + 'cc', borderRadius: 4, borderSkipped: false,
+          stack: stacked ? 'stack' : undefined,
         }))
       },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1a1a18', titleColor: '#c2c0b6', bodyColor: '#888780', borderColor: '#2a2a28', borderWidth: 1 } },
-        scales: {
-          x: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { display: false }, border: { display: false } },
-          y: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { color: '#1e1e1c' }, border: { display: false } }
-        }
-      }
+      options: { ...CHART_DEFAULTS, scales: {
+        x: { stacked: !!stacked, ticks:{font:{size:11},color:'#94a3b8'}, grid:{display:false}, border:{display:false} },
+        y: { stacked: !!stacked, ticks:{font:{size:11},color:'#94a3b8'}, grid:{color:'#f1f5f9'}, border:{display:false} }
+      }}
     });
   }, [data]);
   return <div className="chart-wrap" style={{height}}><canvas ref={ref}/></div>;
 }
 
-function Kpi({ label, value, sub, color = TEAL, trend }) {
+function Kpi({ label, value, sub, color = TEAL, bgColor }) {
   return (
-    <div className="kpi">
+    <div className="kpi" style={bgColor ? {background: bgColor, borderColor: 'transparent'} : {}}>
       <div className="kpi-label">{label}</div>
-      <div className="kpi-value" style={{color}}>{value}</div>
+      <div className="kpi-value" style={{color}}>{value ?? '—'}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
-      {trend !== undefined && (
-        <div className={trend <= 0 ? 'kpi-trend-down' : 'kpi-trend-up'}>
-          {trend <= 0 ? '▼' : '▲'} {Math.abs(trend)}% vs last month
-        </div>
-      )}
     </div>
   );
 }
@@ -198,188 +210,124 @@ function Legend({ items }) {
   );
 }
 
-function Loading() {
-  return <div className="loading"><div className="spinner"/><span>Loading live data…</span></div>;
+function Loading({ msg = 'Loading live data…' }) {
+  return <div className="loading"><div className="spinner"/><span>{msg}</span></div>;
 }
 
-// ─── Data helpers ──────────────────────────────────────────────────────────
-
-function diffDays(a, b) {
-  return Math.abs((new Date(b) - new Date(a)) / 86400000);
-}
-
-function processWorkOrders(raw) {
-  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.workOrders || []);
-  const now = new Date();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
-
-  let totalAssignTime = 0, assignCount = 0;
-  let totalCloseTime = 0, closeCount = 0;
-  let open = 0, overdue = 0;
-
-  const buckets = buildMonthBuckets(9);
-  const assignBuckets = buildMonthBuckets(9);
-  const closeBuckets = buildMonthBuckets(9);
-  const catMap = {};
-
-  all.forEach(wo => {
-    const created = wo.createdAt || wo.created_at || wo.dateCreated;
-    const assigned = wo.assignedAt || wo.assigned_at || wo.dateAssigned;
-    const closed = wo.closedAt || wo.closed_at || wo.dateClosed || wo.completedAt;
-    const status = (wo.status || '').toLowerCase();
-    const cat = wo.category || wo.type || wo.workType || 'General';
-
-    catMap[cat] = (catMap[cat] || 0) + 1;
-
-    if (assigned && created) {
-      const d = diffDays(created, assigned);
-      totalAssignTime += d; assignCount++;
-      const dt = new Date(created);
-      const b = assignBuckets.find(x => x.m === dt.getMonth() && x.year === dt.getFullYear());
-      if (b) { b.assign = (b.assign || 0) + d; b.assignN = (b.assignN || 0) + 1; }
-    }
-    if (closed && created) {
-      const d = diffDays(created, closed);
-      totalCloseTime += d; closeCount++;
-      const dt = new Date(created);
-      const b = closeBuckets.find(x => x.m === dt.getMonth() && x.year === dt.getFullYear());
-      if (b) { b.close = (b.close || 0) + d; b.closeN = (b.closeN || 0) + 1; }
-    }
-    if (!closed && (status === 'open' || status === 'in_progress' || status === 'pending' || !status)) {
-      open++;
-      if (created) {
-        const age = diffDays(created, now);
-        if (age > 30) overdue++;
-      }
-    }
-  });
-
-  const trend = buckets.map((b, i) => ({
-    month: b.month,
-    assign: assignBuckets[i].assignN ? +(assignBuckets[i].assign / assignBuckets[i].assignN).toFixed(1) : null,
-    close: closeBuckets[i].closeN ? +(closeBuckets[i].close / closeBuckets[i].closeN).toFixed(1) : null,
-  })).filter(b => b.assign !== null || b.close !== null);
-
-  const cats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 6).map(([label, count]) => ({label, count}));
-  const catColors = [TEAL, BLUE, AMBER, GREEN, PURPLE, RED];
-
-  return {
-    avgAssign: assignCount ? +(totalAssignTime / assignCount).toFixed(1) : 0,
-    avgClose: closeCount ? +(totalCloseTime / closeCount).toFixed(1) : 0,
-    open, overdue,
-    closed: closeCount,
-    trend: trend.length ? trend : buckets.map(b => ({month: b.month, assign: 0, close: 0})),
-    cats: cats.map((c, i) => ({...c, color: catColors[i]})),
-    total: all.length,
-  };
-}
-
-function processUnits(raw) {
-  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.units || []);
-  const total = all.length;
-  let vacant = 0, occupied = 0, listed = 0;
-  const buckets = buildMonthBuckets(9);
-
-  all.forEach(u => {
-    const status = (u.status || u.unitStatus || '').toLowerCase();
-    if (status.includes('vacant') || status === 'available') vacant++;
-    else if (status.includes('occupied') || status === 'leased') occupied++;
-    if (status.includes('listed') || u.isListed) listed++;
-  });
-
-  const occupancyRate = total ? +((occupied / total) * 100).toFixed(1) : 0;
-  const trend = buckets.map(b => ({month: b.month, vacancies: vacant}));
-
-  return { total, vacant, occupied, listed, occupancyRate, trend };
-}
-
-function processLeases(raw) {
-  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.leases || []);
-  const now = new Date();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
-  const in90 = new Date(); in90.setDate(in90.getDate() + 90);
-
-  let moveIns = 0, moveOuts = 0, renewals = 0, expirations = 0, upcoming = 0;
-  const buckets = buildMonthBuckets(9);
-  const leaseMap = buckets.map(b => ({...b, ins: 0, outs: 0, renewals: 0, expirations: 0}));
-
-  all.forEach(l => {
-    const start = l.startDate || l.leaseStart || l.moveInDate;
-    const end = l.endDate || l.leaseEnd || l.moveOutDate || l.expirationDate;
-    const renewed = l.renewalDate || l.renewedAt;
-
-    if (start) {
-      const d = new Date(start);
-      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) moveIns++;
-      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
-      if (b) b.ins++;
-    }
-    if (end) {
-      const d = new Date(end);
-      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) { moveOuts++; expirations++; }
-      if (d <= in90 && d >= now) upcoming++;
-      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
-      if (b) { b.outs++; b.expirations++; }
-    }
-    if (renewed) {
-      const d = new Date(renewed);
-      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) renewals++;
-      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
-      if (b) b.renewals++;
-    }
-  });
-
-  const renewalRate = expirations ? Math.round((renewals / expirations) * 100) : 0;
-
-  return {
-    moveIns, moveOuts, renewals, expirations, upcoming, renewalRate,
-    moveTrend: leaseMap.map(b => ({month: b.month, ins: b.ins, outs: b.outs})),
-    leaseTrend: leaseMap.map(b => ({month: b.month, renewals: b.renewals, expirations: b.expirations})),
-    total: all.length,
-  };
-}
+// ─── Data Processing ───────────────────────────────────────────────────────
 
 function processProperties(raw) {
-  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.properties || []);
+  const all = Array.isArray(raw) ? raw : [];
   const now = new Date();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
   const buckets = buildMonthBuckets(9);
   const map = buckets.map(b => ({...b, gained: 0, lost: 0}));
 
-  all.forEach(p => {
-    const created = p.createdAt || p.created_at || p.dateAdded;
-    const terminated = p.terminatedAt || p.terminated_at || p.dateRemoved || p.endDate;
+  let gainedMTD = 0, lostMTD = 0;
+
+  all.forEach(item => {
+    const p = item.property || item;
+    const created = p.dateTimeCreated || p.dateContractBegins;
+    const deactivated = p.dateTimeDeactivated;
+    const isActive = p.isActive === '1' || p.isActive === 1;
+
     if (created) {
       const d = new Date(created);
       const b = map.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
       if (b) b.gained++;
+      if (isThisMonth(created)) gainedMTD++;
     }
-    if (terminated) {
-      const d = new Date(terminated);
+    if (deactivated) {
+      const d = new Date(deactivated);
       const b = map.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
       if (b) b.lost++;
+      if (isThisMonth(deactivated)) lostMTD++;
     }
   });
 
-  const thisMonthData = map.find(b => b.m === thisMonth && b.year === thisYear) || {gained: 0, lost: 0};
+  const active = all.filter(item => {
+    const p = item.property || item;
+    return p.isActive === '1' || p.isActive === 1;
+  }).length;
 
   return {
-    total: all.length,
-    gained: thisMonthData.gained,
-    lost: thisMonthData.lost,
-    net: thisMonthData.gained - thisMonthData.lost,
+    total: active,
+    allTime: all.length,
+    gained: gainedMTD,
+    lost: lostMTD,
+    net: gainedMTD - lostMTD,
     trend: map.map(b => ({month: b.month, gained: b.gained, lost: b.lost})),
   };
 }
 
-// ─── Main App ──────────────────────────────────────────────────────────────
+function processLeases(raw) {
+  const all = Array.isArray(raw) ? raw : [];
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const buckets = buildMonthBuckets(9);
+  const leaseMap = buckets.map(b => ({...b, ins: 0, outs: 0, renewals: 0, expirations: 0}));
+
+  let moveIns = 0, moveOuts = 0, expirations = 0, upcoming = 0;
+  let vacantUnits = 0, occupiedUnits = 0, totalUnits = 0;
+  const unitsSeen = new Set();
+
+  all.forEach(item => {
+    const l = item.lease || item;
+    const u = item.unit;
+
+    // Track unique units for occupancy
+    if (u && u.unitID && !unitsSeen.has(u.unitID)) {
+      unitsSeen.add(u.unitID);
+      totalUnits++;
+      if (u.isActive === '1' || u.isActive === 1) {
+        // Occupied if unit has an active leaseID
+        const leaseStatus = parseInt(l.leaseStatusID);
+        if (leaseStatus === 2) occupiedUnits++; // active
+        else vacantUnits++;
+      }
+    }
+
+    // Move-ins: leases that started this month
+    const moveIn = l.moveInDate || l.startDate;
+    if (moveIn) {
+      const d = new Date(moveIn);
+      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) moveIns++;
+      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) b.ins++;
+    }
+
+    // Move-outs / expirations
+    const moveOut = l.moveOutDate || l.endDate;
+    if (moveOut) {
+      const d = new Date(moveOut);
+      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) { moveOuts++; expirations++; }
+      if (inNext90(moveOut)) upcoming++;
+      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) { b.outs++; b.expirations++; }
+    }
+  });
+
+  // Active leases = leaseStatusID 2
+  const active = all.filter(item => {
+    const l = item.lease || item;
+    return parseInt(l.leaseStatusID) === 2;
+  }).length;
+
+  const occupancyRate = totalUnits > 0 ? +((occupiedUnits / totalUnits) * 100).toFixed(1) : 0;
+
+  return {
+    active, moveIns, moveOuts, expirations, upcoming,
+    totalUnits, vacantUnits: totalUnits - occupiedUnits, occupiedUnits, occupancyRate,
+    moveTrend: leaseMap.map(b => ({month: b.month, ins: b.ins, outs: b.outs})),
+    leaseTrend: leaseMap.map(b => ({month: b.month, expirations: b.expirations})),
+    vacancyTrend: buckets.map(b => ({month: b.month, vacancies: totalUnits - occupiedUnits})),
+  };
+}
+
+// ─── Tabs & Nav ────────────────────────────────────────────────────────────
 
 const TABS = [
   {id: 'overview', label: 'Overview'},
-  {id: 'workorders', label: 'Work Orders'},
   {id: 'portfolio', label: 'Portfolio'},
   {id: 'occupancy', label: 'Occupancy'},
   {id: 'leases', label: 'Leases'},
@@ -390,54 +338,76 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const [woRes, unitsRes, leasesRes, propsRes] = await Promise.allSettled([
-          fetch('/api/rentvine/maintenance/workorders?page=1&pageSize=500').then(r => r.json()),
-          fetch('/api/rentvine/units?page=1&pageSize=500').then(r => r.json()),
-          fetch('/api/rentvine/leases?page=1&pageSize=500').then(r => r.json()),
-          fetch('/api/rentvine/properties?page=1&pageSize=500').then(r => r.json()),
-        ]);
-
-        const wo = woRes.status === 'fulfilled' ? processWorkOrders(woRes.value) : null;
-        const units = unitsRes.status === 'fulfilled' ? processUnits(unitsRes.value) : null;
-        const leases = leasesRes.status === 'fulfilled' ? processLeases(leasesRes.value) : null;
-        const props = propsRes.status === 'fulfilled' ? processProperties(propsRes.value) : null;
-
-        setData({ wo, units, leases, props });
-        setError(null);
-      } catch(e) {
-        setError(e.message);
-      } finally {
-        setLoading(false);
+  async function fetchAll() {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch all pages for properties
+      let allProps = [], page = 1, hasMore = true;
+      while (hasMore && page <= 10) {
+        const r = await fetch(`/api/rentvine/properties?page=${page}&pageSize=200`).then(r => r.json());
+        const batch = Array.isArray(r) ? r : [];
+        allProps = allProps.concat(batch);
+        hasMore = batch.length === 200;
+        page++;
       }
-    }
-    load();
-  }, []);
 
-  const wo = data?.wo;
-  const units = data?.units;
-  const leases = data?.leases;
-  const props = data?.props;
+      // Fetch all pages for leases
+      let allLeases = []; page = 1; hasMore = true;
+      while (hasMore && page <= 20) {
+        const r = await fetch(`/api/rentvine/leases?page=${page}&pageSize=200`).then(r => r.json());
+        const batch = Array.isArray(r) ? r : [];
+        allLeases = allLeases.concat(batch);
+        hasMore = batch.length === 200;
+        page++;
+      }
+
+      setData({
+        props: processProperties(allProps),
+        leases: processLeases(allLeases),
+        rawPropCount: allProps.length,
+        rawLeaseCount: allLeases.length,
+      });
+      setLastUpdated(new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}));
+    } catch(e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchAll(); }, []);
+
+  const p = data?.props;
+  const l = data?.leases;
 
   return (
     <div>
+      {/* Top bar */}
       <div className="topbar">
         <div className="logo">
           <div className="logo-icon">A</div>
           <span className="logo-text">Aloe PM</span>
-          <span className="logo-sub">· Metrics Dashboard</span>
+          <span className="logo-sub">· Metrics</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          {!loading && !error && <span className="status-pill">● Live · Rentvine</span>}
-          {loading && <span style={{fontSize:11,color:'#5F5E5A'}}>Loading…</span>}
-          <a href="/" className="back-btn">← Hub</a>
+          {!loading && !error && lastUpdated && (
+            <span className="live-pill">
+              <span className="live-dot"/>
+              Live · Rentvine · {lastUpdated}
+            </span>
+          )}
+          {loading && <span style={{fontSize:12,color:'#94a3b8'}}>Fetching data…</span>}
+          <button className="back-btn" onClick={() => { window.location.href = '/'; }}>← Hub</button>
+          {!loading && (
+            <button className="back-btn" onClick={fetchAll} style={{gap:4}}>↻ Refresh</button>
+          )}
         </div>
       </div>
 
+      {/* Nav */}
       <div className="nav">
         {TABS.map(t => (
           <button key={t.id} className={'nav-btn' + (tab === t.id ? ' active' : '')} onClick={() => setTab(t.id)}>
@@ -447,101 +417,78 @@ function App() {
       </div>
 
       <div className="main">
-        {error && <div className="err">API error: {error}. Check that Rentvine API routes are active on this server.</div>}
+        {error && <div className="err">⚠ Error loading data: {error}</div>}
 
         {/* ── OVERVIEW ── */}
         {tab === 'overview' && (
           <div>
             <div className="page-title">Operations Overview</div>
-            <div className="page-sub">Live data from Rentvine · {new Date().toLocaleDateString('en-US', {month:'long', year:'numeric'})}</div>
-
+            <div className="page-sub">Live from Rentvine · {new Date().toLocaleDateString('en-US', {month:'long', year:'numeric'})}</div>
             {loading ? <Loading/> : (
               <>
-                <div className="kpi-row cols-6">
-                  <Kpi label="Properties" value={props?.total ?? '—'} color={AMBER} sub="total managed"/>
-                  <Kpi label="Total Units" value={units?.total ?? '—'} color={TEAL} sub="all portfolios"/>
-                  <Kpi label="Vacancies" value={units?.vacant ?? '—'} color={RED} sub={units ? `${units.occupancyRate}% occupied` : ''}/>
-                  <Kpi label="Open W/Os" value={wo?.open ?? '—'} color={AMBER} sub={wo ? `${wo.overdue} overdue` : ''}/>
-                  <Kpi label="Avg Close" value={wo ? `${wo.avgClose}d` : '—'} color={GREEN} sub="work orders"/>
-                  <Kpi label="Renewal Rate" value={leases ? `${leases.renewalRate}%` : '—'} color={PURPLE} sub="this month"/>
+                <div className="kpi-row cols-5" style={{marginBottom:20}}>
+                  <Kpi label="Active Properties" value={p?.total} color={TEAL_D} sub={`${data?.rawPropCount} total records`}/>
+                  <Kpi label="Active Leases" value={l?.active} color={GREEN} sub="leaseStatus = active"/>
+                  <Kpi label="Vacancies" value={l?.vacantUnits} color={RED} sub={`${l?.occupancyRate}% occupancy`}/>
+                  <Kpi label="Move-Ins (MTD)" value={l?.moveIns} color={BLUE} sub="started this month"/>
+                  <Kpi label="Expiring (90d)" value={l?.upcoming} color={AMBER} sub="upcoming lease ends"/>
                 </div>
                 <div className="grid-3">
                   <div className="card">
-                    <CardTitle title="Work Order Times" color={AMBER}/>
-                    {wo?.trend?.length ? <>
-                      <BarChart data={wo.trend} xKey="month" yKeys={['assign','close']} colors={[GREEN, AMBER]} height={140}/>
-                      <Legend items={[{label:'Assign (days)',color:GREEN},{label:'Close (days)',color:AMBER}]}/>
-                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No work order trend data</div>}
+                    <CardTitle title="Portfolio Trend" color={TEAL_D}/>
+                    <BarChart data={p?.trend || []} xKey="month" yKeys={['gained','lost']} colors={[GREEN, RED]} height={150}/>
+                    <Legend items={[{label:'Properties gained',color:GREEN},{label:'Properties lost',color:RED}]}/>
                   </div>
                   <div className="card">
-                    <CardTitle title="Portfolio Changes" color={GREEN}/>
-                    {props?.trend?.length ? <>
-                      <BarChart data={props.trend} xKey="month" yKeys={['gained','lost']} colors={[GREEN, RED]} height={140}/>
-                      <Legend items={[{label:'Gained',color:GREEN},{label:'Lost',color:RED}]}/>
-                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No portfolio data</div>}
+                    <CardTitle title="Move Activity" color={BLUE}/>
+                    <BarChart data={l?.moveTrend || []} xKey="month" yKeys={['ins','outs']} colors={[TEAL_D, GRAY]} height={150}/>
+                    <Legend items={[{label:'Move-ins',color:TEAL_D},{label:'Move-outs',color:GRAY}]}/>
                   </div>
                   <div className="card">
-                    <CardTitle title="Move Activity" color={TEAL}/>
-                    {leases?.moveTrend?.length ? <>
-                      <BarChart data={leases.moveTrend} xKey="month" yKeys={['ins','outs']} colors={[TEAL, GRAY]} height={140}/>
-                      <Legend items={[{label:'Move-ins',color:TEAL},{label:'Move-outs',color:GRAY}]}/>
-                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No lease data</div>}
+                    <CardTitle title="Lease Expirations" color={AMBER}/>
+                    <BarChart data={l?.leaseTrend || []} xKey="month" yKeys={['expirations']} colors={[AMBER]} height={150}/>
+                    <Legend items={[{label:'Expirations per month',color:AMBER}]}/>
                   </div>
                 </div>
                 <div className="grid-2">
                   <div className="card">
-                    <CardTitle title="Vacancy Trend" color={RED}/>
-                    {units?.trend?.length ? <LineChart data={units.trend} xKey="month" yKeys={['vacancies']} colors={[RED]} height={120}/> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No unit data</div>}
+                    <CardTitle title="Occupancy Overview" color={GREEN}/>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:16}}>
+                      <div style={{textAlign:'center',padding:'12px 8px',background:'#f0fdf4',borderRadius:8,border:'1px solid #bbf7d0'}}>
+                        <div style={{fontSize:24,fontWeight:700,color:GREEN}}>{l?.occupiedUnits ?? '—'}</div>
+                        <div style={{fontSize:11,color:'#166534',marginTop:3,fontWeight:600}}>Occupied</div>
+                      </div>
+                      <div style={{textAlign:'center',padding:'12px 8px',background:'#fef2f2',borderRadius:8,border:'1px solid #fecaca'}}>
+                        <div style={{fontSize:24,fontWeight:700,color:RED}}>{l?.vacantUnits ?? '—'}</div>
+                        <div style={{fontSize:11,color:'#991b1b',marginTop:3,fontWeight:600}}>Vacant</div>
+                      </div>
+                      <div style={{textAlign:'center',padding:'12px 8px',background:'#eff6ff',borderRadius:8,border:'1px solid #bfdbfe'}}>
+                        <div style={{fontSize:24,fontWeight:700,color:BLUE}}>{l?.occupancyRate ?? '—'}%</div>
+                        <div style={{fontSize:11,color:'#1e40af',marginTop:3,fontWeight:600}}>Rate</div>
+                      </div>
+                    </div>
+                    <LineChart data={l?.vacancyTrend || []} xKey="month" yKeys={['vacancies']} colors={[RED]} height={100}/>
                   </div>
                   <div className="card">
-                    <CardTitle title="Lease Renewals vs Expirations" color={PURPLE}/>
-                    {leases?.leaseTrend?.length ? <>
-                      <BarChart data={leases.leaseTrend} xKey="month" yKeys={['renewals','expirations']} colors={[PURPLE, RED]} height={120}/>
-                      <Legend items={[{label:'Renewals',color:PURPLE},{label:'Expirations',color:RED}]}/>
-                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No lease data</div>}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── WORK ORDERS ── */}
-        {tab === 'workorders' && (
-          <div>
-            <div className="page-title">Work Orders</div>
-            <div className="page-sub">Sourced from Rentvine maintenance records</div>
-            {loading ? <Loading/> : (
-              <>
-                <div className="kpi-row cols-5">
-                  <Kpi label="Avg Assign Time" value={wo ? `${wo.avgAssign}d` : '—'} color={GREEN} sub="days to assign"/>
-                  <Kpi label="Avg Close Time" value={wo ? `${wo.avgClose}d` : '—'} color={AMBER} sub="days to close"/>
-                  <Kpi label="Open" value={wo?.open ?? '—'} color={TEAL} sub="currently active"/>
-                  <Kpi label="Overdue" value={wo?.overdue ?? '—'} color={RED} sub="30+ days open"/>
-                  <Kpi label="Total (all time)" value={wo?.total ?? '—'} color={GRAY}/>
-                </div>
-                <div className="grid-13">
-                  <div className="card">
-                    <CardTitle title="Assign & Close Time Trend" color={AMBER}/>
-                    {wo?.trend?.length ? <>
-                      <LineChart data={wo.trend} xKey="month" yKeys={['assign','close']} colors={[GREEN, AMBER]} height={200}/>
-                      <Legend items={[{label:'Avg assign (days)',color:GREEN},{label:'Avg close (days)',color:AMBER}]}/>
-                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'40px 0',textAlign:'center'}}>No trend data available</div>}
-                  </div>
-                  <div className="card">
-                    <CardTitle title="By Category" color={TEAL}/>
-                    {wo?.cats?.length ? wo.cats.map((c, i) => {
-                      const max = wo.cats[0].count;
-                      return (
-                        <div key={i}>
-                          <div className="cat-row">
-                            <span className="cat-label"><span style={{width:8,height:8,borderRadius:2,background:c.color,display:'inline-block'}}/>{c.label}</span>
-                            <span className="cat-count">{c.count}</span>
-                          </div>
-                          <div className="bar-bg"><div className="bar-fill" style={{width:`${(c.count/max)*100}%`,background:c.color}}/></div>
-                        </div>
-                      );
-                    }) : <div style={{color:'#5F5E5A',fontSize:12,padding:'40px 0',textAlign:'center'}}>No category data</div>}
+                    <CardTitle title="Portfolio Snapshot" color={TEAL_D}/>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
+                      <div style={{padding:'14px',background:'#e8f8fc',borderRadius:8,border:'1px solid #b2e8f5'}}>
+                        <div style={{fontSize:28,fontWeight:700,color:TEAL_D}}>{p?.total ?? '—'}</div>
+                        <div style={{fontSize:11,color:'#0e7490',fontWeight:600,marginTop:3}}>Active Properties</div>
+                      </div>
+                      <div style={{padding:'14px',background:'#f0fdf4',borderRadius:8,border:'1px solid #bbf7d0'}}>
+                        <div style={{fontSize:28,fontWeight:700,color:GREEN}}>{p?.gained ?? '—'}</div>
+                        <div style={{fontSize:11,color:'#166534',fontWeight:600,marginTop:3}}>Gained This Month</div>
+                      </div>
+                      <div style={{padding:'14px',background:'#fef2f2',borderRadius:8,border:'1px solid #fecaca'}}>
+                        <div style={{fontSize:28,fontWeight:700,color:RED}}>{p?.lost ?? '—'}</div>
+                        <div style={{fontSize:11,color:'#991b1b',fontWeight:600,marginTop:3}}>Lost This Month</div>
+                      </div>
+                      <div style={{padding:'14px',background: p?.net >= 0 ? '#f0fdf4':'#fef2f2',borderRadius:8,border:`1px solid ${p?.net >= 0 ? '#bbf7d0':'#fecaca'}`}}>
+                        <div style={{fontSize:28,fontWeight:700,color: p?.net >= 0 ? GREEN : RED}}>{p?.net >= 0 ? '+' : ''}{p?.net ?? '—'}</div>
+                        <div style={{fontSize:11,color: p?.net >= 0 ? '#166534':'#991b1b',fontWeight:600,marginTop:3}}>Net Change</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </>
@@ -553,21 +500,19 @@ function App() {
         {tab === 'portfolio' && (
           <div>
             <div className="page-title">Portfolio Changes</div>
-            <div className="page-sub">Properties gained and lost each month</div>
+            <div className="page-sub">Properties added and removed from management</div>
             {loading ? <Loading/> : (
               <>
                 <div className="kpi-row cols-4">
-                  <Kpi label="Total Properties" value={props?.total ?? '—'} color={AMBER}/>
-                  <Kpi label="Gained (MTD)" value={props?.gained ?? '—'} color={GREEN} sub="new this month"/>
-                  <Kpi label="Lost (MTD)" value={props?.lost ?? '—'} color={RED} sub="lost this month"/>
-                  <Kpi label="Net (MTD)" value={props ? (props.net >= 0 ? `+${props.net}` : props.net) : '—'} color={props?.net >= 0 ? GREEN : RED}/>
+                  <Kpi label="Active Properties" value={p?.total} color={TEAL_D}/>
+                  <Kpi label="Gained (MTD)" value={p?.gained} color={GREEN} sub="added this month"/>
+                  <Kpi label="Lost (MTD)" value={p?.lost} color={RED} sub="removed this month"/>
+                  <Kpi label="Net (MTD)" value={p?.net >= 0 ? `+${p?.net}` : p?.net} color={p?.net >= 0 ? GREEN : RED}/>
                 </div>
                 <div className="card">
-                  <CardTitle title="Properties Gained vs Lost" color={GREEN}/>
-                  {props?.trend?.length ? <>
-                    <BarChart data={props.trend} xKey="month" yKeys={['gained','lost']} colors={[GREEN, RED]} height={240}/>
-                    <Legend items={[{label:'Properties gained',color:GREEN},{label:'Properties lost',color:RED}]}/>
-                  </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No property data available</div>}
+                  <CardTitle title="Properties Gained vs Lost (Monthly)" color={GREEN}/>
+                  <BarChart data={p?.trend || []} xKey="month" yKeys={['gained','lost']} colors={[GREEN, RED]} height={260}/>
+                  <Legend items={[{label:'Properties gained',color:GREEN},{label:'Properties lost',color:RED}]}/>
                 </div>
               </>
             )}
@@ -578,27 +523,51 @@ function App() {
         {tab === 'occupancy' && (
           <div>
             <div className="page-title">Occupancy & Move Activity</div>
-            <div className="page-sub">Unit status and tenant movement</div>
+            <div className="page-sub">Unit status and tenant movement based on lease records</div>
             {loading ? <Loading/> : (
               <>
                 <div className="kpi-row cols-5">
-                  <Kpi label="Total Units" value={units?.total ?? '—'} color={GRAY}/>
-                  <Kpi label="Occupied" value={units?.occupied ?? '—'} color={GREEN}/>
-                  <Kpi label="Vacant" value={units?.vacant ?? '—'} color={RED}/>
-                  <Kpi label="Occupancy Rate" value={units ? `${units.occupancyRate}%` : '—'} color={TEAL}/>
-                  <Kpi label="Move-Ins (MTD)" value={leases?.moveIns ?? '—'} color={BLUE}/>
+                  <Kpi label="Tracked Units" value={l?.totalUnits} color={GRAY}/>
+                  <Kpi label="Occupied" value={l?.occupiedUnits} color={GREEN}/>
+                  <Kpi label="Vacant" value={l?.vacantUnits} color={RED}/>
+                  <Kpi label="Occupancy Rate" value={`${l?.occupancyRate}%`} color={TEAL_D}/>
+                  <Kpi label="Move-Ins (MTD)" value={l?.moveIns} color={BLUE}/>
                 </div>
                 <div className="grid-2">
                   <div className="card">
-                    <CardTitle title="Vacancy Trend" color={RED}/>
-                    {units?.trend?.length ? <LineChart data={units.trend} xKey="month" yKeys={['vacancies']} colors={[RED]} height={200}/> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No unit data</div>}
+                    <CardTitle title="Move-Ins vs Move-Outs" color={BLUE}/>
+                    <BarChart data={l?.moveTrend || []} xKey="month" yKeys={['ins','outs']} colors={[TEAL_D, GRAY]} height={220}/>
+                    <Legend items={[{label:'Move-ins',color:TEAL_D},{label:'Move-outs',color:GRAY}]}/>
                   </div>
                   <div className="card">
-                    <CardTitle title="Move-Ins vs Move-Outs" color={BLUE}/>
-                    {leases?.moveTrend?.length ? <>
-                      <BarChart data={leases.moveTrend} xKey="month" yKeys={['ins','outs']} colors={[BLUE, GRAY]} height={200}/>
-                      <Legend items={[{label:'Move-ins',color:BLUE},{label:'Move-outs',color:GRAY}]}/>
-                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No lease data</div>}
+                    <CardTitle title="Vacancy Snapshot" color={RED}/>
+                    <div style={{display:'flex',alignItems:'center',gap:24,marginBottom:20}}>
+                      <div>
+                        <div style={{fontSize:48,fontWeight:700,color:RED,lineHeight:1}}>{l?.vacantUnits}</div>
+                        <div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>vacant units</div>
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{marginBottom:8}}>
+                          <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+                            <span style={{color:'#166534',fontWeight:600}}>Occupied</span>
+                            <span style={{fontWeight:700}}>{l?.occupiedUnits} ({l?.occupancyRate}%)</span>
+                          </div>
+                          <div style={{height:8,background:'#f1f5f9',borderRadius:4}}>
+                            <div style={{height:8,borderRadius:4,background:GREEN,width:`${l?.occupancyRate}%`,transition:'width 1s ease'}}/>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+                            <span style={{color:'#991b1b',fontWeight:600}}>Vacant</span>
+                            <span style={{fontWeight:700}}>{l?.vacantUnits} ({l?.totalUnits > 0 ? (100 - l.occupancyRate).toFixed(1) : 0}%)</span>
+                          </div>
+                          <div style={{height:8,background:'#f1f5f9',borderRadius:4}}>
+                            <div style={{height:8,borderRadius:4,background:RED,width:`${l?.totalUnits > 0 ? 100 - l.occupancyRate : 0}%`,transition:'width 1s ease'}}/>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <LineChart data={l?.vacancyTrend || []} xKey="month" yKeys={['vacancies']} colors={[RED]} height={120}/>
                   </div>
                 </div>
               </>
@@ -610,24 +579,38 @@ function App() {
         {tab === 'leases' && (
           <div>
             <div className="page-title">Lease Activity</div>
-            <div className="page-sub">Renewals, expirations, and upcoming deadlines</div>
+            <div className="page-sub">Move-ins, move-outs, and upcoming expirations</div>
             {loading ? <Loading/> : (
               <>
                 <div className="kpi-row cols-4">
-                  <Kpi label="Renewals (MTD)" value={leases?.renewals ?? '—'} color={PURPLE}/>
-                  <Kpi label="Expirations (MTD)" value={leases?.expirations ?? '—'} color={RED}/>
-                  <Kpi label="Renewal Rate" value={leases ? `${leases.renewalRate}%` : '—'} color={GREEN} sub="of expiring leases"/>
-                  <Kpi label="Expiring (90d)" value={leases?.upcoming ?? '—'} color={AMBER} sub="upcoming deadlines"/>
+                  <Kpi label="Active Leases" value={l?.active} color={GREEN} sub="leaseStatus = active"/>
+                  <Kpi label="Move-Ins (MTD)" value={l?.moveIns} color={TEAL_D} sub="started this month"/>
+                  <Kpi label="Move-Outs (MTD)" value={l?.moveOuts} color={RED} sub="ended this month"/>
+                  <Kpi label="Expiring (90 days)" value={l?.upcoming} color={AMBER} sub="upcoming deadlines"/>
                 </div>
-                <div className="card">
-                  <CardTitle title="Renewals vs Expirations" color={PURPLE}/>
-                  {leases?.leaseTrend?.length ? <>
-                    <BarChart data={leases.leaseTrend} xKey="month" yKeys={['renewals','expirations']} colors={[PURPLE, RED]} height={240}/>
-                    <Legend items={[{label:'Renewals',color:PURPLE},{label:'Expirations',color:RED}]}/>
-                  </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No lease data available</div>}
+                <div className="grid-2">
+                  <div className="card">
+                    <CardTitle title="Move Activity (Monthly)" color={TEAL_D}/>
+                    <BarChart data={l?.moveTrend || []} xKey="month" yKeys={['ins','outs']} colors={[TEAL_D, GRAY]} height={240}/>
+                    <Legend items={[{label:'Move-ins',color:TEAL_D},{label:'Move-outs',color:GRAY}]}/>
+                  </div>
+                  <div className="card">
+                    <CardTitle title="Lease Expirations (Monthly)" color={AMBER}/>
+                    <BarChart data={l?.leaseTrend || []} xKey="month" yKeys={['expirations']} colors={[AMBER]} height={240}/>
+                    <Legend items={[{label:'Expirations',color:AMBER}]}/>
+                  </div>
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Data note */}
+        {!loading && data && (
+          <div style={{marginTop:24,padding:'12px 16px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,fontSize:11,color:'#94a3b8',display:'flex',gap:16}}>
+            <span>📊 {data.rawPropCount} property records</span>
+            <span>📋 {data.rawLeaseCount} lease records</span>
+            <span>🕐 Updated {lastUpdated}</span>
           </div>
         )}
       </div>
