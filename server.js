@@ -2984,8 +2984,8 @@ app.get('*', function(req, res) {
   <div class="section-label">AI & Automation</div>
   <div class="tool-grid" id="tool-grid">
 
-    <a href="/api/chat" class="tool-card primary" data-name="aloe assistant ai chat" onclick="event.preventDefault();window.location.href='/'">
-      <span class="tool-badge badge-live">LIVE</span>
+<a href="/chat" class="tool-card primary" data-name="aloe assistant ai chat">
+<span class="tool-badge badge-live">LIVE</span>
       <div class="tool-icon icon-teal">🤖</div>
       <div class="tool-name">Aloe Assistant</div>
       <div class="tool-desc">AI chat — Rentvine, Aptly, Notion, Slack all connected</div>
