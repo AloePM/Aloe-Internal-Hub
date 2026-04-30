@@ -18,6 +18,23 @@ app.get('/metrics', (req, res) => {
     res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
 });
 
+app.get('/vacancy', (req, res) => {
+    res.sendFile(new URL('./vacancy.html', import.meta.url).pathname);
+});
+
+app.get('/api/aptly/leads', async (req, res) => {
+    try {
+          const r = await fetch('https://api.getaptly.com/v1/boards?page=0&size=200', {
+                  headers: { 'x-token': process.env.APTLY_TOKEN }
+          });
+          const data = await r.json();
+          const cards = data.content || data.cards || data || [];
+          res.json({ leads: cards, count: cards.length });
+    } catch(e) {
+          res.status(500).json({ error: e.message });
+    }
+});
+
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
 const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
