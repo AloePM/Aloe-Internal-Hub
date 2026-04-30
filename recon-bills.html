@@ -5,597 +5,686 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Aloe PM · Bills Recon</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg:#F8FAFC;--surface:#fff;--s2:#EFF8FC;--border:#D6EEF5;--border2:#B4C3C3;
-    --teal:#3CC3E1;--teal-dk:#4BB4D2;--silver:#B4C3C3;
-    --red:#C0392B;--rbg:#FDF0EF;--rborder:#E8A09A;
-    --amber:#B7770D;--abg:#FEF7E8;--aborder:#F0C36D;
-    --green:#27AE60;--gbg:#EAF7EE;--gborder:#82D8A0;
-    --muted:#8AA5AD;--text:#1A2E35;--text2:#4A6570;
-    --match-bg:#EAF7EE;--near-bg:#FFFBEB;
-  }
-  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;font-size:13px}
-  ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F0F4F8;
+  --panel:#FFFFFF;
+  --border:#CBD5E1;
+  --border-light:#E2E8F0;
+  --teal:#0891B2;
+  --teal-light:#E0F2FE;
+  --teal-border:#7DD3FC;
+  --green:#059669;
+  --green-light:#D1FAE5;
+  --green-border:#6EE7B7;
+  --amber:#D97706;
+  --amber-light:#FEF3C7;
+  --amber-border:#FCD34D;
+  --red:#DC2626;
+  --red-light:#FEE2E2;
+  --red-border:#FCA5A5;
+  --purple:#7C3AED;
+  --purple-light:#EDE9FE;
+  --purple-border:#C4B5FD;
+  --text:#0F172A;
+  --text2:#475569;
+  --muted:#94A3B8;
+  --header-h:48px;
+  --toolbar-h:44px;
+}
 
-  .hdr{background:#fff;border-bottom:1px solid var(--border);border-top:3px solid var(--teal);padding:0 20px;height:48px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-  .hdr-title{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.06em}
-  .hdr-sub{font-size:11px;color:var(--muted);margin-left:4px}
-  .hdr-right{margin-left:auto;display:flex;gap:8px;align-items:center}
-  .btn-sm{background:none;border:1px solid var(--border2);border-radius:6px;padding:4px 10px;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;transition:all .12s}
-  .btn-sm:hover{border-color:var(--teal);color:var(--teal)}
-  .btn-sm.active-f{border-color:var(--teal);color:var(--teal);background:var(--s2)}
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  font-size:13px;
+}
 
-  .body{padding:16px 20px;max-width:1200px;margin:0 auto}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:16px;margin-bottom:12px}
-  .card-title{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
-  .info{background:var(--s2);border:1px solid var(--teal);border-radius:7px;padding:8px 13px;font-size:11px;color:var(--teal-dk);margin-bottom:12px;line-height:1.7}
-  .err{background:var(--rbg);border:1px solid var(--rborder);border-radius:7px;padding:8px 13px;font-size:11px;color:var(--red);margin-bottom:12px}
+/* ── TOP BAR ─────────────────────────────────────────────────────────── */
+.topbar{
+  height:var(--header-h);
+  background:#0C1929;
+  display:flex;
+  align-items:center;
+  padding:0 16px;
+  gap:12px;
+  flex-shrink:0;
+  border-bottom:2px solid var(--teal);
+}
+.topbar-logo{
+  font-family:'DM Mono',monospace;
+  font-size:11px;
+  font-weight:500;
+  color:#94A3B8;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.topbar-logo span{color:var(--teal)}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.top-btn{
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:5px;
+  padding:4px 10px;
+  color:#CBD5E1;
+  font-size:11px;
+  cursor:pointer;
+  font-family:'DM Sans',sans-serif;
+  transition:all .12s;
+}
+.top-btn:hover{background:rgba(255,255,255,.15);color:#fff}
+.top-btn.accent{background:var(--teal);border-color:var(--teal);color:#fff}
+.top-btn.accent:hover{background:#0e7490}
 
-  /* DROP ZONES */
-  .drop-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0}
-  .drop-wrap label{display:block;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-  .drop{border:1.5px dashed var(--border2);border-radius:8px;padding:16px 12px;text-align:center;cursor:pointer;transition:all .18s;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .drop:hover,.drop.over,.drop.filled{border-color:var(--teal);background:var(--s2)}
-  .drop-icon{font-size:18px;margin-bottom:4px}
-  .drop-title{font-size:11px;font-weight:500;margin-bottom:2px}
-  .drop-sub{font-size:10px;color:var(--muted);line-height:1.4}
+/* ── TOOLBAR ─────────────────────────────────────────────────────────── */
+.toolbar{
+  height:var(--toolbar-h);
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  padding:0 12px;
+  gap:8px;
+  flex-shrink:0;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+}
+.toolbar-sep{width:1px;height:22px;background:var(--border);flex-shrink:0;margin:0 2px}
+.tb-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.tb-btn{
+  background:none;border:1px solid var(--border);border-radius:5px;
+  padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer;
+  font-family:'DM Sans',sans-serif;white-space:nowrap;transition:all .12s;
+}
+.tb-btn:hover{border-color:var(--teal);color:var(--teal)}
+.tb-btn.active{background:var(--teal-light);border-color:var(--teal-border);color:var(--teal);font-weight:600}
+.tb-btn.green{background:var(--green-light);border-color:var(--green-border);color:var(--green)}
+.tb-btn.amber{background:var(--amber-light);border-color:var(--amber-border);color:var(--amber)}
+.tb-btn.red-btn{background:var(--red-light);border-color:var(--red-border);color:var(--red)}
+.srch{
+  background:#F8FAFC;border:1px solid var(--border);border-radius:5px;
+  padding:4px 9px;font-size:11px;font-family:'DM Mono',monospace;
+  color:var(--text);width:160px;
+}
+.srch:focus{outline:1.5px solid var(--teal);border-color:var(--teal)}
+.sort-sel{
+  background:#F8FAFC;border:1px solid var(--border);border-radius:5px;
+  padding:4px 8px;font-size:11px;color:var(--text);font-family:'DM Sans',sans-serif;
+}
 
-  .btn-run{background:var(--teal);border:none;border-radius:7px;padding:11px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;width:100%;transition:background .15s;margin-top:12px}
-  .btn-run:hover{background:var(--teal-dk)}
-  .btn-run:disabled{background:var(--s2);color:var(--muted);cursor:not-allowed;border:1px solid var(--border2)}
+/* ── MAIN LAYOUT: two panels side by side ────────────────────────────── */
+.workspace{
+  flex:1;
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  overflow:hidden;
+  min-height:0;
+}
+.panel{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+.panel-left{border-right:1px solid var(--border)}
+.panel-divider{
+  width:36px;
+  background:#F8FAFC;
+  border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding-top:8px;
+  gap:6px;
+  flex-shrink:0;
+}
+.div-icon{
+  font-size:10px;
+  color:var(--muted);
+  writing-mode:vertical-rl;
+  text-orientation:mixed;
+  transform:rotate(180deg);
+  letter-spacing:.06em;
+  font-weight:600;
+}
 
-  .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:50vh;gap:12px}
-  .spinner{width:30px;height:30px;border:2.5px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .load-msg{font-family:'IBM Plex Mono',monospace;color:var(--teal);font-size:11px;font-weight:500}
+/* ── PANEL HEADERS ───────────────────────────────────────────────────── */
+.panel-header{
+  height:36px;
+  display:flex;
+  align-items:center;
+  padding:0 10px;
+  border-bottom:1px solid var(--border);
+  background:#F8FAFC;
+  flex-shrink:0;
+  gap:8px;
+}
+.panel-title{
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+  font-weight:500;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--text2);
+}
+.panel-count{
+  margin-left:auto;
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+  color:var(--muted);
+}
 
-  /* STATS ROW */
-  .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px}
-  .stat{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px 12px}
-  .stat-n{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:500;line-height:1}
-  .stat-l{font-size:9px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-top:3px}
+/* ── COL HEADERS ─────────────────────────────────────────────────────── */
+.col-header{
+  display:grid;
+  padding:0 6px;
+  height:28px;
+  align-items:center;
+  background:#F1F5F9;
+  border-bottom:2px solid var(--border);
+  flex-shrink:0;
+}
+.col-header span{
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  color:var(--muted);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  cursor:pointer;
+  user-select:none;
+}
+.col-header span:hover{color:var(--teal)}
+.col-header span.sort-asc::after{content:' ↑'}
+.col-header span.sort-desc::after{content:' ↓'}
 
-  /* ALERT */
-  .alert-banner{border-radius:7px;padding:10px 14px;margin-bottom:12px;border:1px solid var(--rborder);background:var(--rbg);display:flex;align-items:center;gap:14px}
-  .alert-banner .aa{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:500;color:var(--red);flex-shrink:0}
-  .alert-banner .al{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--red);margin-bottom:2px}
-  .alert-banner .as{font-size:11px;color:#7A1F1F}
+/* RV cols: date | ledger/owner | account | amount | paid */
+.rv-cols{grid-template-columns:72px 1fr 100px 68px 50px}
+/* Chase cols: date | description | card | amount */  
+.chase-cols{grid-template-columns:72px 1fr 44px 68px}
 
-  /* TABS */
-  .view-tabs{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid var(--border)}
-  .view-tab{padding:8px 16px;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .12s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
-  .view-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
-  .view-tab:hover:not(.active){color:var(--text)}
+/* ── SCROLL AREA ─────────────────────────────────────────────────────── */
+.rows-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
+.rows-wrap::-webkit-scrollbar{width:6px}
+.rows-wrap::-webkit-scrollbar-track{background:transparent}
+.rows-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
-  /* EXCEL TABLE */
-  .xl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden;margin-bottom:12px}
-  .xl-toolbar{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--s2);align-items:center;flex-wrap:wrap}
-  .srch{background:#fff;border:1px solid var(--border2);border-radius:5px;padding:4px 9px;color:var(--text);font-size:11px;font-family:'IBM Plex Mono',monospace;width:190px}
-  .srch:focus{outline:1.5px solid var(--teal);outline-offset:1px}
-  .row-ct{margin-left:auto;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace}
-  .xl-scroll{overflow:auto;max-height:540px}
+/* ── ROWS ────────────────────────────────────────────────────────────── */
+.row{
+  display:grid;
+  padding:0 6px;
+  min-height:34px;
+  align-items:center;
+  border-bottom:1px solid var(--border-light);
+  cursor:pointer;
+  transition:background .08s,box-shadow .08s;
+  position:relative;
+}
+.row:hover{background:#F0F9FF}
 
-  .xl-table{width:100%;border-collapse:collapse;font-size:11px}
-  .xl-table th{
-    position:sticky;top:0;z-index:10;
-    background:#EFF8FC;border-bottom:2px solid var(--teal);border-right:1px solid var(--border);
-    padding:6px 10px;text-align:left;
-    font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--teal-dk);
-    white-space:nowrap;cursor:pointer;user-select:none;
-  }
-  .xl-table th:hover{background:#D6EEF5}
-  .xl-table th.sa::after{content:' ↑'}
-  .xl-table th.sd::after{content:' ↓'}
-  .xl-table th:last-child{border-right:none}
+/* Row states */
+.row.matched{background:var(--green-light)}
+.row.matched:hover{background:#BBF7D0}
+.row.manual-linked{background:var(--purple-light)}
+.row.manual-linked:hover{background:#DDD6FE}
+.row.selected{
+  background:#DBEAFE !important;
+  box-shadow:inset 2px 0 0 var(--teal),inset -2px 0 0 var(--teal);
+}
+.row.pending-link{
+  background:#FEF9C3 !important;
+  box-shadow:inset 2px 0 0 var(--amber);
+  animation:pulse-amber .8s ease-in-out infinite alternate;
+}
+@keyframes pulse-amber{from{background:#FEF9C3}to{background:#FDE68A}}
+.row.dimmed{opacity:.35}
+.row.auto-partial{background:var(--amber-light)}
+.row.auto-partial:hover{background:#FDE68A}
 
-  .xl-table td{
-    padding:5px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);
-    vertical-align:middle;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  }
-  .xl-table td:last-child{border-right:none}
-  .xl-table tr:last-child td{border-bottom:none}
-  .xl-table tr.r-match td{background:var(--match-bg)}
-  .xl-table tr.r-match:hover td{background:#D4EFD8}
-  .xl-table tr.r-near td{background:var(--near-bg)}
-  .xl-table tr.r-near:hover td{background:#FEF3C7}
-  .xl-table tr.r-none td{background:#fff}
-  .xl-table tr.r-none:hover td{background:#F9FAFB}
-  .xl-table tr.r-rvonly td{background:#F9FAFB}
-  .xl-table tr.r-rvonly:hover td{background:#F0F4F8}
+/* ── ROW CELLS ───────────────────────────────────────────────────────── */
+.cell{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+  padding:0 3px;
+}
+.cell.date{font-family:'DM Mono',monospace;font-size:10px;color:var(--text2)}
+.cell.amt{font-family:'DM Mono',monospace;font-weight:500;text-align:right}
+.cell.amt.negative{color:var(--red)}
+.cell.amt.positive{color:var(--green)}
+.cell.card{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);text-align:center}
+.cell.paid-badge{display:flex;align-items:center}
 
-  .mono{font-family:'IBM Plex Mono',monospace}
-  .amt{font-family:'IBM Plex Mono',monospace;font-weight:500}
-  .amt-red{color:var(--red)}
-  .amt-green{color:var(--green)}
-  .badge{display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:600;font-family:'IBM Plex Mono',monospace;white-space:nowrap}
-  .b-match{background:var(--match-bg);color:var(--green);border:1px solid var(--gborder)}
-  .b-near{background:var(--near-bg);color:#92400E;border:1px solid var(--aborder)}
-  .b-none{background:#F9FAFB;color:var(--muted);border:1px solid var(--border2)}
-  .b-rvonly{background:var(--s2);color:var(--teal-dk);border:1px solid var(--teal)}
-  .note{font-size:10px;color:var(--amber);white-space:normal;line-height:1.3;max-width:220px}
-  .note.action{color:var(--red);font-weight:600}
-  .muted{color:var(--muted)}
+/* ── MATCH INDICATOR ─────────────────────────────────────────────────── */
+.match-dot{
+  position:absolute;
+  right:3px;
+  width:7px;height:7px;
+  border-radius:50%;
+  flex-shrink:0;
+}
+.dot-green{background:var(--green)}
+.dot-purple{background:var(--purple)}
+.dot-amber{background:var(--amber)}
 
-  /* SECTION DIVIDER ROW */
-  .xl-table tr.section-hdr td{background:var(--s2);font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-top:2px solid var(--border2);padding:5px 10px}
+/* ── MINI BADGES ─────────────────────────────────────────────────────── */
+.badge{
+  display:inline-block;
+  padding:1px 5px;
+  border-radius:10px;
+  font-size:9px;
+  font-weight:600;
+  font-family:'DM Mono',monospace;
+  white-space:nowrap;
+  line-height:1.4;
+}
+.b-paid{background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7}
+.b-unpaid{background:#FEE2E2;color:#991B1B;border:1px solid #FCA5A5}
 
-  /* LEGEND */
-  .legend{display:flex;gap:14px;padding:6px 12px;border-top:1px solid var(--border);background:var(--s2);flex-wrap:wrap}
-  .leg{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
-  .leg-dot{width:12px;height:12px;border-radius:2px;flex-shrink:0;border:1px solid}
+/* ── STATUS BAR ──────────────────────────────────────────────────────── */
+.statusbar{
+  height:28px;
+  background:#0C1929;
+  display:flex;
+  align-items:center;
+  padding:0 14px;
+  gap:20px;
+  flex-shrink:0;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.sb-item{display:flex;align-items:center;gap:5px;font-size:10px;color:#64748B}
+.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-val{font-family:'DM Mono',monospace;font-weight:500;color:#94A3B8}
+.sb-right{margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:#475569}
 
-  .xl-footer{display:flex;gap:8px;padding:7px 12px;border-top:1px solid var(--border);background:var(--s2);justify-content:space-between;align-items:center}
-  .xl-footer-info{font-size:10px;color:var(--muted)}
-  .empty-row td{padding:28px;text-align:center;color:var(--muted);font-style:italic}
+/* ── LINK MODE OVERLAY ───────────────────────────────────────────────── */
+.link-mode-banner{
+  background:linear-gradient(90deg,#7C3AED,#6D28D9);
+  color:#fff;
+  padding:6px 14px;
+  font-size:11px;
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-shrink:0;
+  display:none;
+}
+.link-mode-banner.visible{display:flex}
+.link-cancel{
+  margin-left:auto;
+  background:rgba(255,255,255,.2);
+  border:1px solid rgba(255,255,255,.3);
+  border-radius:4px;
+  padding:2px 9px;
+  color:#fff;
+  font-size:10px;
+  cursor:pointer;
+  font-family:'DM Sans',sans-serif;
+}
+
+/* ── CONFIG SCREEN ───────────────────────────────────────────────────── */
+.config-screen{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:24px;
+  padding:32px;
+  background:var(--bg);
+}
+.config-card{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:24px;
+  width:100%;
+  max-width:680px;
+}
+.config-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.drop-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.drop-box{
+  border:1.5px dashed var(--border);
+  border-radius:8px;
+  padding:16px 12px;
+  text-align:center;
+  cursor:pointer;
+  transition:all .15s;
+  min-height:70px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.drop-box:hover,.drop-box.over,.drop-box.filled{border-color:var(--teal);background:var(--teal-light)}
+.drop-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.drop-icon{font-size:18px;margin-bottom:4px}
+.drop-name{font-size:11px;font-weight:600;color:var(--text)}
+.drop-sub{font-size:10px;color:var(--muted);line-height:1.4;margin-top:2px}
+.run-btn{
+  background:var(--teal);border:none;border-radius:7px;
+  padding:12px;color:#fff;font-size:13px;font-weight:600;
+  cursor:pointer;font-family:'DM Sans',sans-serif;width:100%;
+  margin-top:14px;transition:background .12s;
+}
+.run-btn:hover{background:#0e7490}
+.run-btn:disabled{background:#CBD5E1;color:#94A3B8;cursor:not-allowed}
+.config-info{
+  background:var(--teal-light);border:1px solid var(--teal-border);
+  border-radius:7px;padding:10px 14px;font-size:11px;color:var(--teal);
+  line-height:1.7;width:100%;max-width:680px;
+}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
-// ─── STATE ────────────────────────────────────────────────────────────────────
-let S={
-  screen:'config',
-  chaseFile:null, chaseText:'',
-  rvFile:null, rvText:'',
-  error:'',
-  results:null,
-  view:'matched',    // 'matched'|'rv'|'chase'
-  search:'', filter:'all',
-  sortCol:'rv_date', sortDir:'desc',
-};
-function set(p){Object.assign(S,p);render();}
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+const ST = {
+  screen: 'config',
+  chaseFile: null, chaseText: '',
+  rvFile: null,    rvText: '',
+  error: '',
 
-// ─── PARSERS ──────────────────────────────────────────────────────────────────
+  // Parsed rows — never mutated after parsing
+  rvRows: [],
+  chaseRows: [],
+
+  // Links: { rvId: chaseId } and reverse — covers auto + manual
+  links: {},        // rvId → chaseId
+  linksRev: {},     // chaseId → rvId
+  linkTypes: {},    // rvId → 'auto'|'partial'|'manual'
+
+  // Manual linking mode
+  linkMode: false,
+  linkSourceSide: null, // 'rv' or 'chase'
+  linkSourceId: null,
+
+  // Selected (highlighted) rows
+  selectedRV: null,
+  selectedChase: null,
+
+  // Filters & sort
+  filter: 'all',       // all|matched|unmatched|unpaid|partial
+  search: '',
+  rvSort: 'date_desc',
+  chaseSort: 'date_desc',
+
+  // Scroll sync flag
+  _scrolling: false,
+};
+
+function set(p){ Object.assign(ST, p); render(); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARSE
+// ─────────────────────────────────────────────────────────────────────────────
 function pl(line){
-  const f=[];let c='',q=false;
+  const f=[]; let c='',q=false;
   for(let i=0;i<line.length;i++){
     if(line[i]==='"')q=!q;
     else if(line[i]===','&&!q){f.push(c.trim());c='';}
     else c+=line[i];
   }
-  f.push(c.trim());return f;
+  f.push(c.trim()); return f;
 }
 function pd(d){
   if(!d) return '';
   const s=String(d).trim().replace(/^"|"$/g,'').replace(/&amp;/g,'&');
   if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
-  // MM-DD-YYYY (Rentvine export format)
   let m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
   if(m) return `${m[3]}-${m[1]}-${m[2]}`;
-  // M/D/YYYY or MM/DD/YYYY
   m=s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
   return s;
 }
-function pamt(s){return Math.abs(parseFloat((s||'').replace(/[$,\s]/g,'')))||0;}
+function pamt(s){ return Math.abs(parseFloat((s||'').replace(/[$,\s]/g,'')))||0; }
 
-// Parse Chase credit card CSV
 function parseChase(text){
   const lines=text.trim().split(/\r?\n/);
-  if(lines.length<2) return [];
   const h=pl(lines[0]);
   const hi=k=>h.findIndex(x=>x.toLowerCase().includes(k.toLowerCase()));
   const iDate=hi('Transaction Date'),iDesc=hi('Description'),iAmt=hi('Amount'),iType=hi('Type'),iCard=hi('Card');
-  return lines.slice(1).map(l=>{
+  return lines.slice(1).map((l,i)=>{
     const v=pl(l);
     const type=(v[iType]||'').trim();
     const rawAmt=parseFloat((v[iAmt]||'').replace(/[$,]/g,''))||0;
     if(!rawAmt) return null;
-    if(type!=='Sale'&&rawAmt>=0) return null; // skip payments/returns
+    if(type!=='Sale'&&rawAmt>=0) return null;
     const date=pd(v[iDate]);
-    const desc=(v[iDesc]||'').replace(/&amp;/g,'&').trim();
     const amount=Math.abs(rawAmt);
     if(!date||!amount) return null;
-    return {date,description:desc,amount,card:(v[iCard]||'').trim()};
+    return {
+      id:'c'+i,
+      date, amount,
+      description:(v[iDesc]||'').replace(/&amp;/g,'&').trim(),
+      card:(v[iCard]||'').trim().slice(-4),
+    };
   }).filter(Boolean);
 }
 
-// Parse Rentvine Payables CSV export
-// Format: skip header rows until we find "Date Posted" header line
 function parseRVPayables(text){
   const lines=text.trim().split(/\r?\n/);
-  // Find the data header row
-  let headerIdx=-1;
+  let hi2=-1;
   for(let i=0;i<lines.length;i++){
-    if(lines[i].includes('Date Posted')&&lines[i].includes('Charge Amount')){
-      headerIdx=i; break;
-    }
+    if(lines[i].includes('Date Posted')&&lines[i].includes('Charge Amount')){ hi2=i; break; }
   }
-  if(headerIdx<0) throw new Error('Could not find "Date Posted" header in Rentvine CSV — make sure you exported from Reports → Payables');
-
-  const headers=pl(lines[headerIdx]);
-  const hi=k=>headers.findIndex(h=>h.toLowerCase().replace(/"/g,'').trim().includes(k.toLowerCase()));
-  const iDate=hi('Date Posted'), iLedger=hi('Ledger'), iUnit=hi('Unit');
-  const iAcct=hi('Charge Account'), iAmt=hi('Charge Amount'), iPaid=hi('Amount Paid');
-  const iUnpaid=hi('Amount Unpaid'), iDesc=hi('Description'), iPayee=hi('Payee'), iVoided=hi('Voided');
-
-  return lines.slice(headerIdx+1).map(l=>{
+  if(hi2<0) throw new Error('Cannot find "Date Posted" header in Rentvine CSV');
+  const h=pl(lines[hi2]);
+  const hi=k=>h.findIndex(x=>x.toLowerCase().replace(/"/g,'').trim().includes(k.toLowerCase()));
+  const iDate=hi('Date Posted'),iLedger=hi('Ledger'),iUnit=hi('Unit');
+  const iAcct=hi('Charge Account'),iAmt=hi('Charge Amount'),iPaid=hi('Amount Paid');
+  const iUnpaid=hi('Amount Unpaid'),iDesc=hi('Description'),iVoided=hi('Voided');
+  return lines.slice(hi2+1).map((l,i)=>{
     if(!l.trim()) return null;
     const v=pl(l);
-    const payee=(v[iPayee]||'').replace(/^"|"$/g,'').trim();
-    if(!payee||payee.toLowerCase()==='totals') return null;
     const date=pd(v[iDate]);
     const amount=pamt(v[iAmt]);
     if(!date||!amount) return null;
+    const voided=(v[iVoided]||'').toLowerCase()==='yes';
+    if(voided) return null;
+    const ledger=(v[iLedger]||'').replace(/^"|"$/g,'').trim();
+    if(!ledger||ledger.toLowerCase()==='totals') return null;
     return {
-      date,
-      ledger:(v[iLedger]||'').replace(/^"|"$/g,'').trim(),
-      unit:(v[iUnit]||'').replace(/^"|"$/g,'').trim(),
-      account:(v[iAcct]||'').replace(/^"|"$/g,'').trim(),
-      amount,
+      id:'r'+i,
+      date, amount,
       amountPaid:pamt(v[iPaid]),
       amountUnpaid:pamt(v[iUnpaid]),
+      ledger,
+      unit:(v[iUnit]||'').replace(/^"|"$/g,'').trim(),
+      account:(v[iAcct]||'').replace(/^"|"$/g,'').trim().replace(/^\d+[-:]\s*/,''),
       description:(v[iDesc]||'').replace(/^"|"$/g,'').trim(),
-      payee,
-      voided:(v[iVoided]||'').toLowerCase()==='yes',
     };
-  }).filter(Boolean).filter(r=>!r.voided);
+  }).filter(Boolean);
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-function shiftDate(d,days){
-  try{const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+days);return dt.toISOString().slice(0,10);}
-  catch(e){return d;}
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTO-MATCH
+// ─────────────────────────────────────────────────────────────────────────────
 function daysDiff(a,b){
-  try{return Math.abs((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/86400000);}
-  catch(e){return 999;}
+  try{return Math.abs((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/86400000);}catch(e){return 999;}
 }
-function descSim(a,b){
-  const tok=s=>(s||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>2);
-  const ta=new Set(tok(a)),tb=new Set(tok(b));
-  const inter=[...ta].filter(w=>tb.has(w));
-  const union=new Set([...ta,...tb]);
-  return union.size>0?inter.length/union.size:0;
-}
-const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0);
-function fmtDate(d){
-  if(!d) return '';
-  try{const dt=new Date(d+'T12:00:00');return (dt.getMonth()+1)+'/'+dt.getDate()+'/'+dt.getFullYear();}
-  catch(e){return d;}
-}
-function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function autoMatch(rvRows, chaseRows){
+  const links={}, linksRev={}, linkTypes={};
+  const usedChase=new Set();
 
-// ─── MATCHING ─────────────────────────────────────────────────────────────────
-// RV bill is the source of truth — we try to find a Chase charge for each RV bill
-// Match: amount within $0.02 AND date within 45 days, OR description similarity
-function matchBills(chaseRows,rvBills){
-  const pool=chaseRows.map(c=>({...c,matched:false}));
-  const rows=rvBills.map(rv=>({rv,chase:null,matchType:null,dateDiff:null,descScore:null}));
-
-  rows.forEach(row=>{
-    const rv=row.rv;
-
-    // Pass 1: Exact amount (±$0.02) + date within 45 days
-    let best=null,bestDiff=999;
-    pool.forEach(c=>{
-      if(c.matched) return;
+  // Pass 1: exact amount + within 45 days
+  rvRows.forEach(rv=>{
+    let best=null, bestDiff=999;
+    chaseRows.forEach(c=>{
+      if(usedChase.has(c.id)) return;
       if(Math.abs(c.amount-rv.amount)>0.02) return;
       const dd=daysDiff(c.date,rv.date);
       if(dd<=45&&dd<bestDiff){bestDiff=dd;best=c;}
     });
-    if(best){row.chase=best;row.matchType='exact';row.dateDiff=bestDiff;best.matched=true;return;}
-
-    // Pass 2: Description similarity + date within 45 days (amount can differ slightly)
-    let bestScore=0.3,bestC=null,bestDD=999;
-    pool.forEach(c=>{
-      if(c.matched) return;
-      const dd=daysDiff(c.date,rv.date);
-      if(dd>45) return;
-      const score=Math.max(
-        descSim(c.description,rv.description),
-        descSim(c.description,rv.account),
-        descSim(c.description,rv.ledger)
-      );
-      if(score>bestScore||(score===bestScore&&dd<bestDD)){bestScore=score;bestC=c;bestDD=dd;}
-    });
-    if(bestC){row.chase=bestC;row.matchType='desc';row.dateDiff=bestDD;row.descScore=Math.round(bestScore*100);bestC.matched=true;}
+    if(best){
+      links[rv.id]=best.id; linksRev[best.id]=rv.id;
+      linkTypes[rv.id]='auto'; usedChase.add(best.id);
+    }
   });
 
-  const chaseUnmatched=pool.filter(c=>!c.matched);
-  return {rows,chaseUnmatched};
+  // Pass 2: amount within $5 + within 45 days (partial)
+  rvRows.forEach(rv=>{
+    if(links[rv.id]) return;
+    let best=null, bestDiff=999;
+    chaseRows.forEach(c=>{
+      if(usedChase.has(c.id)) return;
+      if(Math.abs(c.amount-rv.amount)>5) return;
+      const dd=daysDiff(c.date,rv.date);
+      if(dd<=45&&dd<bestDiff){bestDiff=dd;best=c;}
+    });
+    if(best){
+      links[rv.id]=best.id; linksRev[best.id]=rv.id;
+      linkTypes[rv.id]='partial'; usedChase.add(best.id);
+    }
+  });
+
+  return {links, linksRev, linkTypes};
 }
 
-// ─── RUN ──────────────────────────────────────────────────────────────────────
-async function run(){
-  if(!S.chaseText){set({error:'Upload your Chase card CSV.'});return;}
-  if(!S.rvText){set({error:'Upload your Rentvine Payables CSV export.'});return;}
-  set({error:'',screen:'loading'});
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+const fmt=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0);
+function fmtDate(d){
+  if(!d) return '';
+  try{const dt=new Date(d+'T12:00:00');return `${dt.getMonth()+1}/${dt.getDate()}/${String(dt.getFullYear()).slice(2)}`;}
+  catch(e){return d;}
+}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RUN
+// ─────────────────────────────────────────────────────────────────────────────
+function run(){
+  if(!ST.chaseText||!ST.rvText){set({error:'Upload both files first.'});return;}
   try{
-    // Parse Chase — filter to 90-day window from latest date
-    const allChase=parseChase(S.chaseText);
-    if(!allChase.length) throw new Error('Could not parse Chase CSV — needs: Transaction Date, Description, Amount, Type');
-    const chaseDates=allChase.map(r=>r.date).filter(Boolean).sort();
+    const chaseAll=parseChase(ST.chaseText);
+    const chaseDates=chaseAll.map(r=>r.date).sort();
     const chaseEnd=chaseDates[chaseDates.length-1];
     const cutoff=shiftDate(chaseEnd,-90);
-    const chaseRows=allChase.filter(r=>r.date>=cutoff);
+    const chaseRows=chaseAll.filter(r=>r.date>=cutoff);
 
-    // Parse RV Payables
-    const rvBills=parseRVPayables(S.rvText);
-    if(!rvBills.length) throw new Error('Could not parse Rentvine CSV — export from Reports → Payables → Download CSV');
-
-    const rvStart=rvBills.map(r=>r.date).sort()[0];
-    const rvEnd=rvBills.map(r=>r.date).sort().reverse()[0];
-
-    const {rows,chaseUnmatched}=matchBills(chaseRows,rvBills);
+    const rvRows=parseRVPayables(ST.rvText);
+    const {links,linksRev,linkTypes}=autoMatch(rvRows,chaseRows);
 
     set({
-      results:{chaseRows,rvBills,rows,chaseUnmatched,chaseEnd,cutoff,rvStart,rvEnd},
-      screen:'results',view:'rv',search:'',filter:'all',sortCol:'rv_date',sortDir:'desc',
+      screen:'recon',
+      rvRows, chaseRows,
+      links, linksRev, linkTypes,
+      filter:'all', search:'',
+      rvSort:'date_desc', chaseSort:'date_desc',
+      selectedRV:null, selectedChase:null,
+      linkMode:false, linkSourceSide:null, linkSourceId:null,
+      error:'',
     });
-  }catch(e){set({error:e.message,screen:'config'});}
+  }catch(e){set({error:e.message});}
+}
+function shiftDate(d,days){
+  try{const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()+days);return dt.toISOString().slice(0,10);}
+  catch(e){return d;}
 }
 
-// ─── FILTERED + SORTED ROWS ───────────────────────────────────────────────────
-function getViewRows(){
-  if(!S.results) return [];
-  const {rows,chaseUnmatched}=S.results;
-  const q=S.search.toLowerCase();
-  const {sortCol,sortDir,filter,view}=S;
+// ─────────────────────────────────────────────────────────────────────────────
+// FILTER & SORT
+// ─────────────────────────────────────────────────────────────────────────────
+function filteredRV(){
+  let rows=[...ST.rvRows];
+  const q=ST.search.toLowerCase();
+  if(ST.filter==='matched')   rows=rows.filter(r=>ST.links[r.id]);
+  if(ST.filter==='unmatched') rows=rows.filter(r=>!ST.links[r.id]);
+  if(ST.filter==='unpaid')    rows=rows.filter(r=>r.amountUnpaid>0);
+  if(ST.filter==='partial')   rows=rows.filter(r=>ST.linkTypes[r.id]==='partial');
+  if(q) rows=rows.filter(r=>(r.ledger+r.account+r.description+fmt(r.amount)+fmtDate(r.date)).toLowerCase().includes(q));
+  return sortRows(rows, ST.rvSort, 'rv');
+}
+function filteredChase(){
+  let rows=[...ST.chaseRows];
+  const q=ST.search.toLowerCase();
+  if(ST.filter==='matched')   rows=rows.filter(r=>ST.linksRev[r.id]);
+  if(ST.filter==='unmatched') rows=rows.filter(r=>!ST.linksRev[r.id]);
+  if(q) rows=rows.filter(r=>(r.description+fmt(r.amount)+fmtDate(r.date)+r.card).toLowerCase().includes(q));
+  return sortRows(rows, ST.chaseSort, 'chase');
+}
+function sortRows(rows, sort, side){
+  const [col,dir]=sort.split('_');
+  const d=dir==='asc'?1:-1;
+  return rows.sort((a,b)=>{
+    if(col==='date') return d*a.date.localeCompare(b.date);
+    if(col==='amt')  return d*(a.amount-b.amount);
+    if(col==='ledger') return d*(a.ledger||'').localeCompare(b.ledger||'');
+    if(col==='desc') return d*(a.description||'').localeCompare(b.description||'');
+    return 0;
+  });
+}
 
-  let viewRows=[];
-
-  if(view==='rv'||view==='matched'){
-    // RV-centric view — one row per RV bill
-    let r=[...rows];
-    if(filter==='matched') r=r.filter(x=>x.chase&&x.matchType==='exact');
-    else if(filter==='partial') r=r.filter(x=>x.chase&&x.matchType==='desc');
-    else if(filter==='unmatched') r=r.filter(x=>!x.chase);
-    else if(filter==='unpaid') r=r.filter(x=>x.rv.amountUnpaid>0);
-
-    if(q) r=r.filter(x=>JSON.stringify(x).toLowerCase().includes(q));
-
-    // Sort
-    r.sort((a,b)=>{
-      let va,vb;
-      if(sortCol==='rv_date'){va=a.rv.date;vb=b.rv.date;}
-      else if(sortCol==='rv_amt'){va=a.rv.amount;vb=b.rv.amount;}
-      else if(sortCol==='rv_ledger'){va=a.rv.ledger;vb=b.rv.ledger;}
-      else if(sortCol==='rv_acct'){va=a.rv.account;vb=b.rv.account;}
-      else if(sortCol==='match'){va=a.matchType||'z';vb=b.matchType||'z';}
-      else if(sortCol==='chase_date'){va=a.chase?.date||'';vb=b.chase?.date||'';}
-      else if(sortCol==='chase_amt'){va=a.chase?.amount||0;vb=b.chase?.amount||0;}
-      else{va='';vb='';}
-      if(typeof va==='number') return sortDir==='asc'?va-vb:vb-va;
-      return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
-    });
-    viewRows=r;
-  } else {
-    // Chase-only view — unmatched Chase charges
-    let r=[...chaseUnmatched];
-    if(q) r=r.filter(x=>JSON.stringify(x).toLowerCase().includes(q));
-    r.sort((a,b)=>sortDir==='asc'?a.date.localeCompare(b.date):b.date.localeCompare(a.date));
-    return r; // different shape
+// ─────────────────────────────────────────────────────────────────────────────
+// LINKING
+// ─────────────────────────────────────────────────────────────────────────────
+function startLinkMode(side, id){
+  set({linkMode:true, linkSourceSide:side, linkSourceId:id});
+}
+function cancelLinkMode(){
+  set({linkMode:false, linkSourceSide:null, linkSourceId:null});
+}
+function applyLink(rvId, chaseId){
+  // Remove old links
+  const oldChase=ST.links[rvId];
+  const oldRV=ST.linksRev[chaseId];
+  const links={...ST.links};
+  const linksRev={...ST.linksRev};
+  const linkTypes={...ST.linkTypes};
+  if(oldChase){delete linksRev[oldChase];}
+  if(oldRV){delete links[oldRV];delete linkTypes[oldRV];}
+  links[rvId]=chaseId;
+  linksRev[chaseId]=rvId;
+  linkTypes[rvId]='manual';
+  set({links,linksRev,linkTypes,linkMode:false,linkSourceSide:null,linkSourceId:null,selectedRV:rvId,selectedChase:chaseId});
+}
+function removeLink(rvId){
+  const chaseId=ST.links[rvId];
+  const links={...ST.links};
+  const linksRev={...ST.linksRev};
+  const linkTypes={...ST.linkTypes};
+  delete links[rvId];
+  if(chaseId) delete linksRev[chaseId];
+  delete linkTypes[rvId];
+  set({links,linksRev,linkTypes});
+}
+function clickRow(side, id){
+  if(ST.linkMode){
+    // Complete the link
+    if(ST.linkSourceSide===side) return cancelLinkMode();
+    const rvId  = side==='rv'    ? id : ST.linkSourceId;
+    const cId   = side==='chase' ? id : ST.linkSourceId;
+    applyLink(rvId, cId);
+    return;
   }
-  return viewRows;
-}
-
-function thSort(col,label){
-  const{sortCol,sortDir}=S;
-  const cls=sortCol===col?(sortDir==='asc'?' sa':' sd'):'';
-  return `<th class="${cls}" data-col="${col}">${label}</th>`;
-}
-
-// ─── RENDER ───────────────────────────────────────────────────────────────────
-function render(){
-  document.getElementById('app').innerHTML=
-    S.screen==='loading'?rLoad():
-    S.screen==='results'?rResults():
-    rConfig();
-  bind();
-}
-
-function rLoad(){
-  return `<div class="hdr"><span class="hdr-title">ALOE RECON · BILLS</span></div>
-  <div class="loading-wrap"><div class="spinner"></div><div class="load-msg">Parsing and matching…</div></div>`;
-}
-
-function rConfig(){
-  const{chaseFile,rvFile,error}=S;
-  return `<div class="hdr">
-    <span class="hdr-title">ALOE RECON · BILLS</span>
-    <span class="hdr-sub">Chase card ↔ Rentvine Payables · Aloe PM Reimbursements</span>
-  </div>
-  <div class="body">
-    ${error?`<div class="err">⚠ ${error}</div>`:''}
-    <div class="info">
-      <strong>Two CSV uploads required:</strong><br>
-      💳 <strong>Chase CSV</strong> — Chase → Account Activity → Download → CSV<br>
-      📋 <strong>Rentvine Payables CSV</strong> — Reports → Payables → filter Payee = Aloe PM Reimbursements → Export → CSV<br><br>
-      The tool shows <strong>all Rentvine bills</strong> so you can verify everything is there, then matches each against a Chase charge by amount (±$0.02) within 45 days, with description similarity as fallback.
-    </div>
-    <div class="card">
-      <div class="card-title">Upload both files</div>
-      <div class="drop-grid">
-        <div class="drop-wrap">
-          <label>💳 Chase card CSV</label>
-          <div class="drop ${chaseFile?'filled':''}" id="drop-chase">
-            <input type="file" id="fi-chase" accept=".csv" style="display:none"/>
-            ${chaseFile
-              ?`<div class="drop-title" style="color:var(--teal)">✓ ${esc(chaseFile.name)}</div><div class="drop-sub">Click to replace</div>`
-              :`<div class="drop-icon">💳</div><div class="drop-title">Drop Chase CSV here</div><div class="drop-sub">Needs: Transaction Date, Description, Amount, Type</div>`}
-          </div>
-        </div>
-        <div class="drop-wrap">
-          <label>📋 Rentvine Payables CSV</label>
-          <div class="drop ${rvFile?'filled':''}" id="drop-rv">
-            <input type="file" id="fi-rv" accept=".csv" style="display:none"/>
-            ${rvFile
-              ?`<div class="drop-title" style="color:var(--teal)">✓ ${esc(rvFile.name)}</div><div class="drop-sub">Click to replace</div>`
-              :`<div class="drop-icon">📋</div><div class="drop-title">Drop Rentvine Payables CSV here</div><div class="drop-sub">Reports → Payables → Payee = Aloe PM Reimbursements → Export</div>`}
-          </div>
-        </div>
-      </div>
-      <button class="btn-run" id="runBtn" ${!chaseFile||!rvFile?'disabled':''}>Match bills →</button>
-    </div>
-  </div>`;
-}
-
-function rResults(){
-  const{results,search,filter,view,chaseFile,rvFile}=S;
-  const{chaseRows,rvBills,rows,chaseUnmatched,rvStart,rvEnd,cutoff,chaseEnd}=results;
-
-  const rvMatched=rows.filter(r=>r.chase&&r.matchType==='exact');
-  const rvPartial=rows.filter(r=>r.chase&&r.matchType==='desc');
-  const rvUnmatched=rows.filter(r=>!r.chase);
-  const rvUnpaid=rvBills.filter(r=>r.amountUnpaid>0);
-  const totalRV=rvBills.reduce((s,r)=>s+r.amount,0);
-  const unmatchedAmt=rvUnmatched.reduce((s,r)=>s+r.amount,0);
-
-  const viewRows=getViewRows();
-  const isChaseView=view==='chase';
-
-  // Build table rows
-  let tableHtml='';
-  if(isChaseView){
-    // Chase unmatched view
-    if(!viewRows.length){
-      tableHtml=`<tr class="empty-row"><td colspan="5">🎉 All Chase charges have a matching Rentvine bill!</td></tr>`;
-    } else {
-      tableHtml=viewRows.map(c=>`<tr class="r-none">
-        <td><span class="mono">${fmtDate(c.date)}</span></td>
-        <td title="${esc(c.description)}">${esc(c.description)}</td>
-        <td>···${esc(c.card)}</td>
-        <td><span class="amt amt-red">−${fmt(c.amount)}</span></td>
-        <td><span class="note action">Add bill to Rentvine</span></td>
-      </tr>`).join('');
-    }
+  // Normal select — highlight + show partner
+  if(side==='rv'){
+    const partner=ST.links[id]||null;
+    set({selectedRV:id, selectedChase:partner});
   } else {
-    // RV-centric view
-    if(!viewRows.length){
-      tableHtml=`<tr class="empty-row"><td colspan="9">No rows match the current filter.</td></tr>`;
-    } else {
-      tableHtml=viewRows.map(row=>{
-        const{rv,chase,matchType,dateDiff,descScore}=row;
-        const rowCls=matchType==='exact'?'r-match':matchType==='desc'?'r-near':'r-none';
-
-        let badge='',matchInfo='';
-        if(matchType==='exact'){
-          badge=`<span class="badge b-match">✓ Amount match</span>`;
-          matchInfo=dateDiff===0?'same day':`${dateDiff}d apart`;
-        } else if(matchType==='desc'){
-          badge=`<span class="badge b-near">~ Desc match${descScore?` ${descScore}%`:''}</span>`;
-          matchInfo=dateDiff===0?'same day':`${dateDiff}d apart`;
-        } else {
-          badge=`<span class="badge b-none">— No match</span>`;
-        }
-
-        const paidBadge=rv.amountUnpaid>0
-          ?`<span class="badge" style="background:var(--abg);color:var(--amber);border:1px solid var(--aborder);margin-left:4px">Unpaid ${fmt(rv.amountUnpaid)}</span>`:'';
-
-        const chaseDesc=chase?`<span title="${esc(chase.description)}">${esc(chase.description)}</span>`:
-          `<span class="muted">—</span>`;
-        const chaseDate=chase?`<span class="mono">${fmtDate(chase.date)}</span>`:`<span class="muted">—</span>`;
-        const chaseAmt=chase?`<span class="amt amt-red">−${fmt(chase.amount)}</span>`:`<span class="muted">—</span>`;
-
-        const noteCell=!chase?`<span class="note action">No Chase charge found — verify or add bill</span>`
-          :matchType==='desc'?`<span class="note">Verify — matched by description similarity</span>`:'';
-
-        return `<tr class="${rowCls}">
-          <td><span class="mono">${fmtDate(rv.date)}</span></td>
-          <td title="${esc(rv.ledger)}">${esc(rv.ledger)}</td>
-          <td title="${esc(rv.account)}">${esc(rv.account.replace(/^\d+:\s*/,''))}</td>
-          <td title="${esc(rv.description)}">${esc(rv.description||'—')}</td>
-          <td><span class="amt">${fmt(rv.amount)}</span>${paidBadge}</td>
-          <td>${badge}<br><span class="muted" style="font-size:9px">${matchInfo}</span></td>
-          <td>${chaseDate}</td>
-          <td>${chaseAmt}</td>
-          <td>${noteCell||chaseDesc}</td>
-        </tr>`;
-      }).join('');
-    }
+    const partner=ST.linksRev[id]||null;
+    set({selectedChase:id, selectedRV:partner});
   }
-
-  const filterBtns=[
-    ['all','All RV bills'],['matched','✓ Matched'],['partial','~ Partial'],
-    ['unmatched','— No match'],['unpaid','Unpaid only'],
-  ].map(([v,l])=>
-    `<button class="btn-sm ${filter===v?'active-f':''}" data-filter="${v}">${l}</button>`
-  ).join('');
-
-  return `<div class="hdr">
-    <span class="hdr-title">ALOE RECON · BILLS</span>
-    <span class="hdr-sub">RV: ${fmtDate(rvStart)} → ${fmtDate(rvEnd)} (${rvBills.length} bills) · Chase: ${fmtDate(cutoff)} → ${fmtDate(chaseEnd)} (${chaseRows.length} charges)</span>
-    <div class="hdr-right"><button class="btn-sm" id="backBtn">← New run</button></div>
-  </div>
-  <div class="body">
-    <div class="stats">
-      <div class="stat"><div class="stat-n">${rvBills.length}</div><div class="stat-l">RV bills total</div></div>
-      <div class="stat"><div class="stat-n" style="color:var(--green)">${rvMatched.length}</div><div class="stat-l">Matched</div></div>
-      <div class="stat"><div class="stat-n" style="color:var(--amber)">${rvPartial.length}</div><div class="stat-l">Partial</div></div>
-      <div class="stat"><div class="stat-n" style="color:var(--red)">${rvUnmatched.length}</div><div class="stat-l">No Chase match</div></div>
-      <div class="stat"><div class="stat-n" style="color:var(--amber)">${rvUnpaid.length}</div><div class="stat-l">Unpaid bills</div></div>
-      <div class="stat"><div class="stat-n" style="color:var(--red)">${chaseUnmatched.length}</div><div class="stat-l">Chase not in RV</div></div>
-    </div>
-
-    ${chaseUnmatched.length>0?`<div class="alert-banner">
-      <div>
-        <div class="al">⚠ Chase charges not entered in Rentvine</div>
-        <div class="aa">${chaseUnmatched.length} charge${chaseUnmatched.length>1?'s':''}</div>
-        <div class="as">These card charges have no matching RV bill — click "Chase not in RV" tab to see them and add to Rentvine</div>
-      </div>
-    </div>`:''}
-
-    <div class="xl-wrap">
-      <div style="border-bottom:2px solid var(--border);display:flex;background:var(--s2)">
-        <button class="view-tab ${view==='rv'?'active':''}" id="tab-rv">📋 All Rentvine Bills (${rvBills.length})</button>
-        <button class="view-tab ${view==='chase'?'active':''}" id="tab-chase" style="color:${chaseUnmatched.length?'var(--red)':'var(--muted)'}">💳 Chase not in RV (${chaseUnmatched.length})</button>
-      </div>
-
-      ${!isChaseView?`<div class="xl-toolbar">${filterBtns}
-        <input class="srch" id="si" placeholder="Search…" value="${esc(search)}"/>
-        <span class="row-ct">${viewRows.length} rows · ${fmt(totalRV)} total</span>
-      </div>`:`<div class="xl-toolbar">
-        <input class="srch" id="si" placeholder="Search…" value="${esc(search)}"/>
-        <span class="row-ct">${viewRows.length} rows</span>
-      </div>`}
-
-      <div class="xl-scroll">
-        <table class="xl-table">
-          ${isChaseView?`<thead><tr>
-            ${thSort('rv_date','Date')}
-            <th>Chase Description</th>
-            <th>Card</th>
-            ${thSort('chase_amt','Amount')}
-            <th>Action</th>
-          </tr></thead>`:`<thead><tr>
-            ${thSort('rv_date','RV Date')}
-            ${thSort('rv_ledger','Owner / Ledger')}
-            ${thSort('rv_acct','Account')}
-            <th>RV Description</th>
-            ${thSort('rv_amt','RV Amount')}
-            ${thSort('match','Match')}
-            ${thSort('chase_date','Chase Date')}
-            ${thSort('chase_amt','Chase Amt')}
-            <th>Chase Description / Notes</th>
-          </tr></thead>`}
-          <tbody>${tableHtml}</tbody>
-        </table>
-      </div>
-
-      <div class="legend">
-        <div class="leg"><div class="leg-dot" style="background:var(--match-bg);border-color:var(--gborder)"></div>Matched — amount within $0.02, within 45 days</div>
-        <div class="leg"><div class="leg-dot" style="background:var(--near-bg);border-color:var(--aborder)"></div>Partial — description similarity match, verify manually</div>
-        <div class="leg"><div class="leg-dot" style="background:#fff;border-color:var(--border2)"></div>No match — verify or find charge on a different statement</div>
-      </div>
-      <div class="xl-footer">
-        <span class="xl-footer-info">Click column headers to sort · RV = Rentvine Payables · Match window: ±45 days, amount ±$0.02</span>
-        <button class="btn-sm" id="exportBtn">⬇ Export unmatched</button>
-      </div>
-    </div>
-  </div>`;
 }
 
-// ─── EXPORT ───────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────────────────────────────────────
 function exportUnmatched(){
-  const{rows,chaseUnmatched}=S.results;
-  const rvUnmatched=rows.filter(r=>!r.chase);
-  const lines=[['Type','Date','Ledger/Description','Account','Amount','Action']];
-  rvUnmatched.forEach(r=>lines.push(['RV no Chase',r.rv.date,r.rv.ledger||r.rv.description,r.rv.account,r.rv.amount.toFixed(2),'Find Chase charge or verify payment method']));
-  chaseUnmatched.forEach(c=>lines.push(['Chase not in RV',c.date,'"'+c.description.replace(/"/g,'""')+'"','',c.amount.toFixed(2),'Add Reimbursement bill to Rentvine']));
+  const lines=[['Side','Date','Details','Amount','Notes']];
+  ST.rvRows.filter(r=>!ST.links[r.id]).forEach(r=>{
+    lines.push(['RV no Chase match',r.date,`"${r.ledger} — ${r.account}"`,r.amount.toFixed(2),'Find matching Chase charge']);
+  });
+  ST.chaseRows.filter(c=>!ST.linksRev[c.id]).forEach(c=>{
+    lines.push(['Chase not in RV',c.date,`"${c.description.replace(/"/g,'""')}"`,c.amount.toFixed(2),'Add bill to Rentvine']);
+  });
   const csv=lines.map(r=>r.join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv,'+encodeURIComponent(csv);
@@ -603,25 +692,331 @@ function exportUnmatched(){
   a.click();
 }
 
-// ─── BIND ─────────────────────────────────────────────────────────────────────
-function bind(){
-  if(S.screen==='config'){
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────────────────────
+function render(){
+  document.getElementById('app').innerHTML =
+    ST.screen==='config' ? renderConfig() : renderRecon();
+  bindAll();
+}
+
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+function renderConfig(){
+  const {chaseFile,rvFile,error}=ST;
+  return `
+  <div class="topbar">
+    <span class="topbar-logo"><span>Aloe</span> PM · Bills Recon</span>
+  </div>
+  <div class="config-screen">
+    ${error?`<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;padding:8px 14px;font-size:11px;color:#DC2626;width:100%;max-width:680px">⚠ ${esc(error)}</div>`:''}
+    <div class="config-info">
+      <strong>How this works:</strong> Upload your Chase card CSV and the Rentvine Payables CSV export.<br>
+      The tool displays them <strong>side by side like two spreadsheets</strong> — auto-matches by amount ±$0.02 within 45 days,
+      then lets you <strong>manually link</strong> any row by clicking it and clicking its partner.<br><br>
+      💳 <strong>Chase:</strong> Account Activity → Download → CSV &nbsp;·&nbsp;
+      📋 <strong>Rentvine:</strong> Reports → Payables → filter Payee = Aloe PM Reimbursements → Export CSV
+    </div>
+    <div class="config-card">
+      <div class="config-title">Upload both files</div>
+      <div class="drop-row">
+        <div>
+          <div class="drop-label">💳 Chase card CSV</div>
+          <div class="drop-box ${chaseFile?'filled':''}" id="drop-chase">
+            <input type="file" id="fi-chase" accept=".csv" style="display:none"/>
+            ${chaseFile
+              ?`<div class="drop-icon">✓</div><div class="drop-name" style="color:var(--teal)">${esc(chaseFile.name)}</div><div class="drop-sub">Click to replace</div>`
+              :`<div class="drop-icon">💳</div><div class="drop-name">Drop Chase CSV</div><div class="drop-sub">Transaction Date, Description, Amount, Type</div>`}
+          </div>
+        </div>
+        <div>
+          <div class="drop-label">📋 Rentvine Payables CSV</div>
+          <div class="drop-box ${rvFile?'filled':''}" id="drop-rv">
+            <input type="file" id="fi-rv" accept=".csv" style="display:none"/>
+            ${rvFile
+              ?`<div class="drop-icon">✓</div><div class="drop-name" style="color:var(--teal)">${esc(rvFile.name)}</div><div class="drop-sub">Click to replace</div>`
+              :`<div class="drop-icon">📋</div><div class="drop-name">Drop Rentvine CSV</div><div class="drop-sub">Reports → Payables → Export</div>`}
+          </div>
+        </div>
+      </div>
+      <button class="run-btn" id="run-btn" ${!chaseFile||!rvFile?'disabled':''}>Open side-by-side →</button>
+    </div>
+  </div>`;
+}
+
+// ── RECON ────────────────────────────────────────────────────────────────────
+function renderRecon(){
+  const rvRows=filteredRV();
+  const chaseRows=filteredChase();
+  const totalRV=ST.rvRows.length;
+  const totalChase=ST.chaseRows.length;
+  const matchedRV=ST.rvRows.filter(r=>ST.links[r.id]).length;
+  const unmatchedRV=totalRV-matchedRV;
+  const unmatchedChase=ST.chaseRows.filter(c=>!ST.linksRev[c.id]).length;
+  const manualCount=Object.values(ST.linkTypes).filter(t=>t==='manual').length;
+  const partialCount=Object.values(ST.linkTypes).filter(t=>t==='partial').length;
+
+  // RV sort state
+  const rvSortCol=ST.rvSort.split('_')[0], rvSortDir=ST.rvSort.split('_')[1];
+  const chaseSortCol=ST.chaseSort.split('_')[0], chaseSortDir=ST.chaseSort.split('_')[1];
+
+  // Render RV rows
+  const rvHtml=rvRows.map(rv=>{
+    const isLinked=!!ST.links[rv.id];
+    const linkType=ST.linkTypes[rv.id];
+    const isSelected=ST.selectedRV===rv.id;
+    const isPartner=ST.selectedChase&&ST.links[rv.id]===ST.selectedChase;
+    const isPending=ST.linkMode&&ST.linkSourceSide==='rv'&&ST.linkSourceId===rv.id;
+    const isDimmed=ST.linkMode&&!(isPending||isSelected);
+
+    let cls='row rv-cols';
+    if(isSelected||isPartner) cls+=' selected';
+    else if(isPending) cls+=' pending-link';
+    else if(linkType==='manual') cls+=' manual-linked';
+    else if(linkType==='partial') cls+=' auto-partial';
+    else if(isLinked) cls+=' matched';
+    if(isDimmed) cls+=' dimmed';
+
+    const dot=isLinked
+      ?(linkType==='manual'?`<div class="match-dot dot-purple"></div>`
+        :linkType==='partial'?`<div class="match-dot dot-amber"></div>`
+        :`<div class="match-dot dot-green"></div>`):'';
+
+    const paidBadge=rv.amountUnpaid>0
+      ?`<span class="badge b-unpaid">Owed</span>`
+      :`<span class="badge b-paid">Paid</span>`;
+
+    return `<div class="${cls}" data-side="rv" data-id="${rv.id}">
+      <span class="cell date">${fmtDate(rv.date)}</span>
+      <span class="cell" title="${esc(rv.ledger)}">${esc(rv.ledger)}</span>
+      <span class="cell" title="${esc(rv.account)}" style="color:var(--text2);font-size:10px">${esc(rv.account)}</span>
+      <span class="cell amt">${fmt(rv.amount)}</span>
+      <span class="cell paid-badge">${paidBadge}</span>
+      ${dot}
+    </div>`;
+  }).join('');
+
+  // Render Chase rows
+  const chaseHtml=chaseRows.map(c=>{
+    const isLinked=!!ST.linksRev[c.id];
+    const rvId=ST.linksRev[c.id];
+    const linkType=rvId?ST.linkTypes[rvId]:null;
+    const isSelected=ST.selectedChase===c.id;
+    const isPartner=ST.selectedRV&&ST.links[ST.selectedRV]===c.id;
+    const isPending=ST.linkMode&&ST.linkSourceSide==='chase'&&ST.linkSourceId===c.id;
+    const isDimmed=ST.linkMode&&!(isPending||isSelected);
+
+    let cls='row chase-cols';
+    if(isSelected||isPartner) cls+=' selected';
+    else if(isPending) cls+=' pending-link';
+    else if(linkType==='manual') cls+=' manual-linked';
+    else if(linkType==='partial') cls+=' auto-partial';
+    else if(isLinked) cls+=' matched';
+    if(isDimmed) cls+=' dimmed';
+
+    const dot=isLinked
+      ?(linkType==='manual'?`<div class="match-dot dot-purple"></div>`
+        :linkType==='partial'?`<div class="match-dot dot-amber"></div>`
+        :`<div class="match-dot dot-green"></div>`):'';
+
+    return `<div class="${cls}" data-side="chase" data-id="${c.id}">
+      <span class="cell date">${fmtDate(c.date)}</span>
+      <span class="cell" title="${esc(c.description)}">${esc(c.description)}</span>
+      <span class="cell card">···${esc(c.card)}</span>
+      <span class="cell amt negative">−${fmt(c.amount)}</span>
+      ${dot}
+    </div>`;
+  }).join('');
+
+  // Sort header helpers
+  const rvTh=(col,label)=>{
+    const active=rvSortCol===col;
+    const cls=active?(rvSortDir==='asc'?'sort-asc':'sort-desc'):'';
+    return `<span class="${cls}" data-rv-sort="${col}">${label}</span>`;
+  };
+  const cTh=(col,label)=>{
+    const active=chaseSortCol===col;
+    const cls=active?(chaseSortDir==='asc'?'sort-asc':'sort-desc'):'';
+    return `<span class="${cls}" data-chase-sort="${col}">${label}</span>`;
+  };
+
+  const filterBtns=[
+    ['all','All'],['matched','✓ Matched'],['unmatched','No match'],
+    ['partial','~ Partial'],['unpaid','Unpaid'],
+  ].map(([v,l])=>`<button class="tb-btn ${ST.filter===v?'active':''}" data-filter="${v}">${l}</button>`).join('');
+
+  const sortOpts=[
+    ['date_desc','Date ↓'],['date_asc','Date ↑'],
+    ['amt_desc','Amount ↓'],['amt_asc','Amount ↑'],
+  ];
+
+  return `
+  <div class="topbar">
+    <span class="topbar-logo"><span>Aloe</span> PM · Bills Recon</span>
+    <span style="font-size:10px;color:#475569;font-family:'DM Mono',monospace">
+      RV: ${ST.rvRows.length} bills &nbsp;·&nbsp; Chase: ${ST.chaseRows.length} charges
+    </span>
+    <div class="topbar-right">
+      <button class="top-btn" id="back-btn">← New files</button>
+      <button class="top-btn" id="export-btn">⬇ Export unmatched</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <span class="tb-label">View:</span>
+    ${filterBtns}
+    <div class="toolbar-sep"></div>
+    <span class="tb-label">Sort:</span>
+    <select class="sort-sel" id="rv-sort-sel">
+      ${sortOpts.map(([v,l])=>`<option value="${v}" ${ST.rvSort===v?'selected':''}>${l}</option>`).join('')}
+    </select>
+    <div class="toolbar-sep"></div>
+    <input class="srch" id="srch" placeholder="Search…" value="${esc(ST.search)}"/>
+    <div class="toolbar-sep"></div>
+    ${ST.linkMode?'':`<button class="tb-btn" id="link-mode-btn" title="Click a row on either side then click its partner to manually link them">🔗 Link rows</button>`}
+    ${ST.selectedRV&&ST.links[ST.selectedRV]?`<button class="tb-btn red-btn" id="unlink-btn">✕ Unlink selected</button>`:''}
+  </div>
+
+  <div class="link-mode-banner ${ST.linkMode?'visible':''}">
+    🔗 Link mode — click a row on the <strong>left</strong> (RV), then its matching row on the <strong>right</strong> (Chase)
+    <button class="link-cancel" id="cancel-link-btn">Cancel</button>
+  </div>
+
+  <div class="workspace">
+    <!-- LEFT: Rentvine -->
+    <div class="panel panel-left">
+      <div class="panel-header">
+        <span class="panel-title">📋 Rentvine — Aloe PM Reimbursements</span>
+        <span class="panel-count">${rvRows.length} / ${totalRV} rows</span>
+      </div>
+      <div class="col-header rv-cols">
+        ${rvTh('date','Date')}
+        ${rvTh('ledger','Owner / Ledger')}
+        <span>Account</span>
+        ${rvTh('amt','Amount')}
+        <span>Paid?</span>
+      </div>
+      <div class="rows-wrap" id="rv-scroll">
+        ${rvHtml||'<div style="padding:28px;text-align:center;color:var(--muted);font-size:11px">No rows match the current filter.</div>'}
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="panel-divider">
+      <span class="div-icon">MATCH</span>
+    </div>
+
+    <!-- RIGHT: Chase -->
+    <div class="panel panel-right">
+      <div class="panel-header">
+        <span class="panel-title">💳 Chase Card Charges</span>
+        <span class="panel-count">${chaseRows.length} / ${totalChase} rows</span>
+      </div>
+      <div class="col-header chase-cols">
+        ${cTh('date','Date')}
+        ${cTh('desc','Description')}
+        <span style="text-align:center">Card</span>
+        ${cTh('amt','Amount')}
+      </div>
+      <div class="rows-wrap" id="chase-scroll">
+        ${chaseHtml||'<div style="padding:28px;text-align:center;color:var(--muted);font-size:11px">No rows match the current filter.</div>'}
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <div class="sb-item"><div class="sb-dot" style="background:var(--green)"></div>Auto-matched <span class="sb-val">${matchedRV-partialCount-manualCount}</span></div>
+    <div class="sb-item"><div class="sb-dot" style="background:var(--amber)"></div>Partial <span class="sb-val">${partialCount}</span></div>
+    <div class="sb-item"><div class="sb-dot" style="background:var(--purple)"></div>Manual <span class="sb-val">${manualCount}</span></div>
+    <div class="sb-item"><div class="sb-dot" style="background:var(--border)"></div>RV no match <span class="sb-val" style="color:#DC2626">${unmatchedRV}</span></div>
+    <div class="sb-item"><div class="sb-dot" style="background:var(--border)"></div>Chase not in RV <span class="sb-val" style="color:#DC2626">${unmatchedChase}</span></div>
+    <span class="sb-right">${ST.linkMode?'🔗 Link mode active — click RV row then Chase row':'Click any row to select · Right-click matched row to unlink · Use 🔗 Link rows to manually match'}</span>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BIND
+// ─────────────────────────────────────────────────────────────────────────────
+function bindAll(){
+  if(ST.screen==='config'){
     bindDrop('drop-chase','fi-chase',(f,t)=>set({chaseFile:f,chaseText:t}));
     bindDrop('drop-rv','fi-rv',(f,t)=>set({rvFile:f,rvText:t}));
-    document.getElementById('runBtn')?.addEventListener('click',run);
+    document.getElementById('run-btn')?.addEventListener('click',run);
+    return;
   }
-  if(S.screen==='results'){
-    document.getElementById('backBtn')?.addEventListener('click',()=>set({screen:'config',results:null}));
-    document.getElementById('si')?.addEventListener('input',e=>set({search:e.target.value}));
-    document.getElementById('exportBtn')?.addEventListener('click',exportUnmatched);
-    document.getElementById('tab-rv')?.addEventListener('click',()=>set({view:'rv',search:'',filter:'all'}));
-    document.getElementById('tab-chase')?.addEventListener('click',()=>set({view:'chase',search:''}));
-    document.querySelectorAll('[data-filter]').forEach(btn=>btn.addEventListener('click',()=>set({filter:btn.dataset.filter})));
-    document.querySelectorAll('[data-col]').forEach(th=>th.addEventListener('click',()=>{
-      const col=th.dataset.col;
-      set({sortCol:col,sortDir:S.sortCol===col&&S.sortDir==='asc'?'desc':'asc'});
-    }));
-  }
+
+  // Toolbar
+  document.getElementById('back-btn')?.addEventListener('click',()=>set({screen:'config'}));
+  document.getElementById('export-btn')?.addEventListener('click',exportUnmatched);
+  document.getElementById('srch')?.addEventListener('input',e=>set({search:e.target.value}));
+  document.getElementById('rv-sort-sel')?.addEventListener('change',e=>set({rvSort:e.target.value}));
+  document.getElementById('link-mode-btn')?.addEventListener('click',()=>set({linkMode:true,linkSourceSide:null,linkSourceId:null}));
+  document.getElementById('cancel-link-btn')?.addEventListener('click',cancelLinkMode);
+  document.getElementById('unlink-btn')?.addEventListener('click',()=>{if(ST.selectedRV)removeLink(ST.selectedRV);});
+
+  // Filter buttons
+  document.querySelectorAll('[data-filter]').forEach(btn=>
+    btn.addEventListener('click',()=>set({filter:btn.dataset.filter}))
+  );
+
+  // Sort headers
+  document.querySelectorAll('[data-rv-sort]').forEach(th=>
+    th.addEventListener('click',()=>{
+      const col=th.dataset.rvSort;
+      const cur=ST.rvSort;
+      const [c,d]=cur.split('_');
+      set({rvSort:c===col?(d==='asc'?col+'_desc':col+'_asc'):col+'_desc'});
+    })
+  );
+  document.querySelectorAll('[data-chase-sort]').forEach(th=>
+    th.addEventListener('click',()=>{
+      const col=th.dataset.chaseSort;
+      const [c,d]=ST.chaseSort.split('_');
+      set({chaseSort:c===col?(d==='asc'?col+'_desc':col+'_asc'):col+'_desc'});
+    })
+  );
+
+  // Row clicks — delegate
+  document.querySelectorAll('.row').forEach(row=>{
+    row.addEventListener('click',()=>{
+      const side=row.dataset.side, id=row.dataset.id;
+      if(ST.linkMode){
+        if(!ST.linkSourceId){
+          // First click — set source
+          set({linkSourceSide:side,linkSourceId:id});
+        } else {
+          // Second click — complete link
+          if(ST.linkSourceSide===side){
+            // Same side — change source
+            set({linkSourceId:id});
+          } else {
+            const rvId=  side==='rv'    ? id : ST.linkSourceId;
+            const chaseId=side==='chase' ? id : ST.linkSourceId;
+            applyLink(rvId,chaseId);
+          }
+        }
+      } else {
+        clickRow(side,id);
+        // Scroll partner into view
+        setTimeout(()=>{
+          const partnerId=side==='rv'?ST.links[id]:ST.linksRev[id];
+          if(partnerId){
+            const scrollWrap=side==='rv'?document.getElementById('chase-scroll'):document.getElementById('rv-scroll');
+            const partnerRow=scrollWrap?.querySelector(`[data-id="${partnerId}"]`);
+            partnerRow?.scrollIntoView({behavior:'smooth',block:'nearest'});
+          }
+        },50);
+      }
+    });
+
+    // Right-click to unlink
+    row.addEventListener('contextmenu',e=>{
+      e.preventDefault();
+      const side=row.dataset.side, id=row.dataset.id;
+      if(side==='rv'&&ST.links[id]) removeLink(id);
+      else if(side==='chase'&&ST.linksRev[id]) removeLink(ST.linksRev[id]);
+    });
+  });
 }
 
 function bindDrop(dropId,inputId,cb){
