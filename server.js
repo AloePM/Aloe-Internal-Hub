@@ -2970,7 +2970,7 @@ app.get('*', function(req, res) {
 <div class="hero">
   <div class="hero-greeting">Good to see you</div>
   <div class="hero-title">Welcome back to <span>Aloe PM</span></div>
-  <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
+ stat-card <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
 </div>
 
 <div class="search-wrap">
@@ -2980,32 +2980,31 @@ app.get('*', function(req, res) {
   </div>
 </div>
 
-<div class="
-  <div class="section-label">Quick stats</div>
-  <div class="stats-row">
-    <div class="stat-card" style="padding:10px 14px">
-      <div class="stat-label">AI Agents</div>
-      <div class="stat-value">6</div>
- class="stat-card" style="padding:10px 14px":10px 14px"     <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
-    </div>
-    <div class="stat-card" style="padding:10px 14px">
-      <div class="stat-label">Markets</div>
-      <div class="stat-value">6</div>
-      <div class="stat-sub"><span class="teal">Phoenix Metro</span></div>
-    </div>
-    <div class="stat-card" style="padding:10px 14px">
-      <div class="stat-label">Integrations</div>
-      <div class="stat-value">7</div>
-      <div class="stat-sub">Rentvine · Aptly · Quo</div>
-    </div>
-    <div class="stat-card" style="padding:10px 14px">
-      <div class="stat-label">Team</div>
-      <div class="stat-value">6</div>
-      <div class="stat-sub">Randi · Persia · Dhyana +3</div>
-    </div>
-  </div>
-</div>
-
+        <div class="section">
+                  <div class="section-label">Quick stats</div>
+                            <div class="stats-row">
+                                        <div class="stat-card">
+                                                      <div class="stat-label">AI Agents</div>
+                                                                    <div class="stat-value">6</div>
+                                                                                  <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
+                                                                                              </div>
+                                                                                                          <div class="stat-card">
+                                                                                                                        <div class="stat-label">Markets</div>
+                                                                                                                                      <div class="stat-value">6</div>
+                                                                                                                                                    <div class="stat-sub"><span class="teal">Phoenix Metro</span></div>
+                                                                                                                                                                </div>
+                                                                                                                                                                            <div class="stat-card">
+                                                                                                                                                                                          <div class="stat-label">Integrations</div>
+                                                                                                                                                                                                        <div class="stat-value">7</div>
+                                                                                                                                                                                                                      <div class="stat-sub">Rentvine · Aptly · Quo</div>
+                                                                                                                                                                                                                                  </div>
+                                                                                                                                                                                                                                              <div class="stat-card">
+                                                                                                                                                                                                                                                            <div class="stat-label">Team</div>
+                                                                                                                                                                                                                                                                          <div class="stat-value">6</div>
+                                                                                                                                                                                                                                                                                        <div class="stat-sub">Randi · Persia · Dhyana +3</div>
+                                                                                                                                                                                                                                                                                                    </div>
+                                                                                                                                                                                                                                                                                                              </div>
+                                                                                                                                                                                                                                                                                                                      </div>
 <div class="section">
   <div class="section-label">AI & Automation</div>
   <div class="tool-grid" id="tool-grid">
@@ -3059,6 +3058,40 @@ app.get('*', function(req, res) {
   <div class="section-label">Operations</div>
   <div class="tool-grid">
 
+          <div class="section">
+                  <div class="section-label">Accounting & Reports</div>
+                          <div class="tool-grid">
+
+                                    <a href="/metrics" class="tool-card primary" data-name="metrics kpi dashboard portfolio occupancy leases">
+                                                <span class="tool-badge badge-live">LIVE</span>
+                                                            <div class="tool-icon icon-teal">📊</div>
+                                                                        <div class="tool-name">KPI Metrics</div>
+                                                                                    <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
+                                                                                              </a>
+
+                                                                                                        <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile vendor">
+                                                                                                                    <span class="tool-badge badge-live">LIVE</span>
+                                                                                                                                <div class="tool-icon icon-teal">🧾</div>
+                                                                                                                                            <div class="tool-name">Recon — Bills</div>
+                                                                                                                                                        <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
+                                                                                                                                                                  </a>
+                                                                                                                                                                  
+                                                                                                                                                                            <a href="/recon" class="tool-card primary" data-name="recon reconciliation maintenance work orders">
+                                                                                                                                                                                        <span class="tool-badge badge-live">LIVE</span>
+                                                                                                                                                                                                    <div class="tool-icon icon-teal">🔍</div>
+                                                                                                                                                                                                                <div class="tool-name">Recon</div>
+                                                                                                                                                                                                                            <div class="tool-desc">Cross-reference work orders between Aptly and Rentvine</div>
+                                                                                                                                                                                                                                      </a>
+                                                                                                                                                                                                                                      
+                                                                                                                                                                                                                                                <a href="/owner-report" class="tool-card primary" data-name="owner report dashboard leads marketing">
+                                                                                                                                                                                                                                                            <span class="tool-badge badge-soon">SOON</span>
+                                                                                                                                                                                                                                                                        <div class="tool-icon icon-purple">📊</div>
+                                                                                                                                                                                                                                                                                    <div class="tool-name">Owner Dashboard</div>
+                                                                                                                                                                                                                                                                                                <div class="tool-desc">Live leasing activity and marketing report per owner</div>
+                                                                                                                                                                                                                                                                                                          </a>
+                                                                                                                                                                                                                                                                                                          
+                                                                                                                                                                                                                                                                                                                  </div>
+                                                                                                                                                                                                                                                                                                                        </div>
     <a href="/leasing" class="tool-card primary" data-name="leasing leads showings applications dhyana">
       <div class="tool-icon icon-teal">🏠</div>
       <div class="tool-name">Leasing</div>
