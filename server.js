@@ -13,6 +13,11 @@ app.use('/api/chat', (req, res, next) => {
   next();
 });
 
+
+app.get('/metrics', (req, res) => {
+    res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
+});
+
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
 const RENTVINE_API_KEY    = process.env.RENTVINE_API_KEY;
 const RENTVINE_API_SECRET = process.env.RENTVINE_API_SECRET;
