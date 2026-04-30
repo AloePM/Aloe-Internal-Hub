@@ -2812,7 +2812,6 @@ app.get('/logo.png', function(req, res) {
 });
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
-<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
