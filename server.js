@@ -2980,7 +2980,7 @@ app.get('*', function(req, res) {
   </div>
 </div>
 
-<div class="section">
+<div class="
   <div class="section-label">Quick stats</div>
   <div class="stats-row">
     <div class="stat-card">
@@ -3081,7 +3081,8 @@ app.get('*', function(req, res) {
                                                                                                                                                                                                                                                                                               </a>
                                                                                                                                                                                                                                                                                               
                                                                                                                                                                                                                                                                                                       </div>
-                                                                                                                                                                                                                                                                                                            </div>class="section">
+                                                                                                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                                                                                                                  <div class="section">
   <div class="section-label">Operations</div>
   <div class="tool-grid">
 
