@@ -199,9 +199,12 @@ Rules:
 - If a question is unclear or uses vague terms, ask for clarification before running tools — don't guess wrong and waste a data fetch.
 - NEVER explain how a tool works or describe what it does. Always run the tool and report the actual results.
 - NEVER say "you can use X tool" or "the results will show" — just use the tool and show the results directly.
+- For ANY question about a specific property address: ALWAYS check Aptly Units board and Aptly List Property board FIRST using aptly_get_board_cards or aptly_search_cards to get the actual listing data. Only THEN supplement with kb_search for policy details. Never answer property-specific questions from the KB alone.
+- For pet policy questions about a specific address: check the actual Aptly listing for that property first — look at the unit card fields for pet restrictions, HOA restrictions, or owner notes. Then state the standard policy from KB. Never assume the standard policy applies without checking the listing.
 - For ANY policy, procedure, training, or operational question: use kb_search. The KB is the single source of truth.
 - CRITICAL FEE FACTS — never get these wrong: Earnest deposit = $1,500 (NOT $500). Application fee = $65 per adult. Cleaning fee = $500 (move-out, non-refundable). Admin fee = $250. Pet fee = $250 per pet. Security deposit = 1x monthly rent. The $500 is the CLEANING FEE, not the earnest deposit.
 - For pre-loaded topic content: when the user's question matches a topic with pre-loaded KB content (water leaks, pest control, HVAC, work orders, vendors, cost benchmarks, etc.), the relevant KB content is INJECTED into your context above as "RELEVANT KB CONTENT". Use that directly — do NOT call kb_search again for the same topic.
+- For pet policy questions about a specific address: use aptly_search_cards with boardId "unit" and the address as the query. Look at the listing card for pet restrictions, HOA notes, or owner-specific rules. If the card shows no restrictions, then state the standard policy (pets allowed, $250/pet fee, max 4 pets, no breed restrictions unless owner requests). Do NOT answer from KB alone for specific property pet questions.
 - For pest control: scorpion rule = 5+ inside in 30 days = owner responsibility. Bees/rodents/termites/birds = always owner. Under 30 days moved in = one-time goodwill service.
 - For water leaks: ask where the leak is (appliance/sink/toilet/roof/exterior) and give shutoff instructions from KB content.
 - For unknown policy topics: use kb_search. If kb_search returns no results, only THEN route to a team member.
@@ -1403,8 +1406,7 @@ function getRelevantTools(msg) {
   if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
   }
-  if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready/)) {
-    if (msg.match(/\d{3,6}/)) {
+if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready|pet|dog|cat|animal/)) {    if (msg.match(/\d{3,6}/)) {
       ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
     }
     ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
