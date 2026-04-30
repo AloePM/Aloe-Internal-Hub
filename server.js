@@ -2987,7 +2987,7 @@ app.get('*', function(req, res) {
                                             <span class="tool-badge badge-live">LIVE</span>
                                                         <div class="tool-icon icon-teal">🤖</div>
                                                                     <div class="tool-name">Aloe Assistant</div>
-                                                                                <div class="tool-desc">AI chat — Rentvine, Aptly, Notion, Slack all connected</div>
+                                                                                <div class="tool-desc">AI chat — Rentvine, Aptly, Knowledge Base, Slack all connected</div>
                                                                                           </a>
                                                                                           
                                                                                                     <a href="/sandbox" class="tool-card primary" data-name="sandbox agent training coaching test">
@@ -3123,7 +3123,7 @@ app.get('*', function(req, res) {
                                                                                                                                                                                               
                                                                                                                                                                                                         <a href="https://aloe-knowledge-sync.onrender.com/login" target="_blank" class="tool-card primary" data-name="Aloe sops policies knowledge base">
                                                                                                                                                                                                                     <div class="tool-icon icon-silver">📓</div>
-                                                                                                                                                                                                                                <div class="tool-name">Notion</div>
+                                                                                                                                                                                                                                <div class="tool-name">Knowledge Base</div>
                                                                                                                                                                                                                                             <div class="tool-desc">SOPs, policies, knowledge base, templates</div>
                                                                                                                                                                                                                                                       </a>
                                                                                                                                                                                                                                                       
@@ -3155,7 +3155,7 @@ app.get('*', function(req, res) {
       <span class="source-pill">Rentvine</span>
       <span class="source-pill">Aptly</span>
       <span class="source-pill">Quo</span>
-      <span class="source-pill">Notion</span>
+      <span class="source-pill">Knowledge Base</span>
       <span class="source-pill">Slack</span>
     </div>
   </div>
