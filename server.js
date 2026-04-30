@@ -2970,7 +2970,7 @@ app.get('*', function(req, res) {
 <div class="hero">
   <div class="hero-greeting">Good to see you</div>
   <div class="hero-title">Welcome back to <span>Aloe PM</span></div>
- stat-card <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
+ <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
 </div>
 
 <div class="search-wrap">
@@ -2979,32 +2979,6 @@ app.get('*', function(req, res) {
     <input type="text" placeholder="Search tools, docs, or ask a question…" id="search-input" oninput="filterTools(this.value)"/>
   </div>
 </div>
-
-        <div class="section">
-                  <div class="section-label">Quick stats</div>
-                            <div class="stats-row">
-                                        <div class="stat-card">
-                                                      <div class="stat-label">AI Agents</div>
-                                                                    <div class="stat-value">6</div>
-                                                                                  <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
-                                                                                              </div>
-                                                                                                          <div class="stat-card">
-                                                                                                                        <div class="stat-label">Markets</div>
-                                                                                                                                      <div class="stat-value">6</div>
-                                                                                                                                                    <div class="stat-sub"><span class="teal">Phoenix Metro</span></div>
-                                                                                                                                                                </div>
-                                                                                                                                                                            <div class="stat-card">
-                                                                                                                                                                                          <div class="stat-label">Integrations</div>
-                                                                                                                                                                                                        <div class="stat-value">7</div>
-                                                                                                                                                                                                                      <div class="stat-sub">Rentvine · Aptly · Quo</div>
-                                                                                                                                                                                                                                  </div>
-                                                                                                                                                                                                                                              <div class="stat-card">
-                                                                                                                                                                                                                                                            <div class="stat-label">Team</div>
-                                                                                                                                                                                                                                                                          <div class="stat-value">6</div>
-                                                                                                                                                                                                                                                                                        <div class="stat-sub">Randi · Persia · Dhyana +3</div>
-                                                                                                                                                                                                                                                                                                    </div>
-                                                                                                                                                                                                                                                                                                              </div>
-                                                                                                                                                                                                                                                                                                                      </div>
       <div class="section">
               <div class="section-label">AI & Automation</div>
                       <div class="tool-grid" id="tool-grid">
