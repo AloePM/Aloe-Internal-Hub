@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aloe PM — Metrics Dashboard</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0e0e0d;color:#c2c0b6;font-family:'Inter',sans-serif;min-height:100vh}
+.topbar{border-bottom:1px solid #1e1e1c;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;background:#0e0e0d;z-index:10}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:26px;height:26px;background:#3CC3E1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0e0e0d}
+.logo-text{font-size:14px;font-weight:600;color:#e8e6de}
+.logo-sub{font-size:11px;color:#5F5E5A;margin-left:4px}
+.status-pill{font-size:11px;padding:3px 10px;border-radius:20px;background:#3CC3E122;color:#3CC3E1;border:1px solid #3CC3E150}
+.back-btn{font-size:12px;color:#5F5E5A;text-decoration:none;display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid #2a2a28;background:none;cursor:pointer}
+.back-btn:hover{color:#c2c0b6;border-color:#3a3a38}
+.nav{border-bottom:1px solid #1e1e1c;padding:0 28px;display:flex;gap:0}
+.nav-btn{padding:11px 15px;font-size:12px;font-weight:500;color:#5F5E5A;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;font-family:'Inter',sans-serif}
+.nav-btn.active{color:#3CC3E1;border-bottom-color:#3CC3E1}
+.nav-btn:hover{color:#c2c0b6}
+.main{padding:24px 28px;max-width:1300px}
+.page-title{font-size:20px;font-weight:600;color:#e8e6de;margin-bottom:4px;letter-spacing:-0.01em}
+.page-sub{font-size:12px;color:#5F5E5A;margin-bottom:20px}
+.kpi-row{display:grid;gap:10px;margin-bottom:20px}
+.kpi-row.cols-5{grid-template-columns:repeat(5,1fr)}
+.kpi-row.cols-4{grid-template-columns:repeat(4,1fr)}
+.kpi-row.cols-6{grid-template-columns:repeat(6,1fr)}
+.kpi{background:#131312;border:1px solid #1e1e1c;border-radius:10px;padding:14px 16px}
+.kpi-label{font-size:10px;color:#5F5E5A;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.kpi-value{font-size:24px;font-weight:700;font-family:'DM Mono',monospace;line-height:1}
+.kpi-sub{font-size:11px;color:#5F5E5A;margin-top:5px}
+.kpi-trend-up{font-size:11px;color:#e05a5a;margin-top:5px}
+.kpi-trend-down{font-size:11px;color:#3CC3E1;margin-top:5px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-13{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:#131312;border:1px solid #1e1e1c;border-radius:12px;padding:18px 20px}
+.card-title{font-size:11px;font-weight:600;color:#888780;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title .bar{width:3px;height:14px;border-radius:2px;display:inline-block}
+.chart-wrap{position:relative}
+.legend{display:flex;gap:16px;margin-top:10px;flex-wrap:wrap}
+.legend-item{font-size:11px;color:#5F5E5A;display:flex;align-items:center;gap:5px}
+.legend-dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+.loading{display:flex;align-items:center;justify-content:center;height:200px;color:#5F5E5A;font-size:13px;gap:10px}
+.spinner{width:16px;height:16px;border:2px solid #2a2a28;border-top-color:#3CC3E1;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:#e05a5a;font-size:12px;padding:10px;background:#e05a5a11;border-radius:6px;margin-bottom:12px}
+.cat-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cat-label{font-size:12px;color:#888780;display:flex;align-items:center;gap:7px}
+.cat-count{font-size:12px;font-weight:600;color:#c2c0b6;font-family:'DM Mono',monospace}
+.bar-bg{height:3px;background:#1e1e1c;border-radius:2px;margin-top:3px;margin-bottom:10px}
+.bar-fill{height:3px;border-radius:2px;transition:width 0.6s ease}
+.table{width:100%;border-collapse:collapse;font-size:12px}
+.table th{text-align:left;padding:6px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#5F5E5A;border-bottom:1px solid #1e1e1c;font-weight:500}
+.table td{padding:8px 10px;border-bottom:1px solid #131312;color:#888780}
+.table td:first-child{color:#c2c0b6}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.badge-green{background:#3CC3E122;color:#3CC3E1}
+.badge-red{background:#e05a5a22;color:#e05a5a}
+.badge-yellow{background:#EF9F2722;color:#EF9F27}
+.badge-blue{background:#378ADD22;color:#378ADD}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const TEAL = '#3CC3E1';
+const GREEN = '#1D9E75';
+const AMBER = '#EF9F27';
+const RED = '#e05a5a';
+const BLUE = '#378ADD';
+const PURPLE = '#9F77DD';
+const GRAY = '#888780';
+
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function ago(months) {
+  const d = new Date();
+  d.setMonth(d.getMonth() - months);
+  return d;
+}
+
+function monthLabel(d) {
+  return MONTHS_SHORT[d.getMonth()];
+}
+
+function buildMonthBuckets(n = 9) {
+  return Array.from({length: n}, (_, i) => {
+    const d = ago(n - 1 - i);
+    return { month: monthLabel(d), year: d.getFullYear(), m: d.getMonth(), count: 0 };
+  });
+}
+
+function LineChart({ data, xKey, yKeys, colors, height = 160 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current || !window.Chart) return;
+    if (ref.current._chart) ref.current._chart.destroy();
+    ref.current._chart = new Chart(ref.current, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d[xKey]),
+        datasets: yKeys.map((k, i) => ({
+          data: data.map(d => d[k]),
+          borderColor: colors[i],
+          backgroundColor: colors[i] + '15',
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.4,
+          fill: yKeys.length === 1,
+        }))
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1a1a18', titleColor: '#c2c0b6', bodyColor: '#888780', borderColor: '#2a2a28', borderWidth: 1 } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { display: false }, border: { display: false } },
+          y: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { color: '#1e1e1c' }, border: { display: false } }
+        }
+      }
+    });
+  }, [data]);
+  return <div className="chart-wrap" style={{height}}><canvas ref={ref}/></div>;
+}
+
+function BarChart({ data, xKey, yKeys, colors, height = 160 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current || !window.Chart) return;
+    if (ref.current._chart) ref.current._chart.destroy();
+    ref.current._chart = new Chart(ref.current, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d[xKey]),
+        datasets: yKeys.map((k, i) => ({
+          data: data.map(d => d[k]),
+          backgroundColor: colors[i] + 'cc',
+          borderRadius: 3,
+          borderSkipped: false,
+        }))
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#1a1a18', titleColor: '#c2c0b6', bodyColor: '#888780', borderColor: '#2a2a28', borderWidth: 1 } },
+        scales: {
+          x: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { display: false }, border: { display: false } },
+          y: { ticks: { font: { size: 10 }, color: '#5F5E5A' }, grid: { color: '#1e1e1c' }, border: { display: false } }
+        }
+      }
+    });
+  }, [data]);
+  return <div className="chart-wrap" style={{height}}><canvas ref={ref}/></div>;
+}
+
+function Kpi({ label, value, sub, color = TEAL, trend }) {
+  return (
+    <div className="kpi">
+      <div className="kpi-label">{label}</div>
+      <div className="kpi-value" style={{color}}>{value}</div>
+      {sub && <div className="kpi-sub">{sub}</div>}
+      {trend !== undefined && (
+        <div className={trend <= 0 ? 'kpi-trend-down' : 'kpi-trend-up'}>
+          {trend <= 0 ? '▼' : '▲'} {Math.abs(trend)}% vs last month
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CardTitle({ title, color = TEAL }) {
+  return (
+    <div className="card-title">
+      <span className="bar" style={{background: color}}/>
+      {title}
+    </div>
+  );
+}
+
+function Legend({ items }) {
+  return (
+    <div className="legend">
+      {items.map((it, i) => (
+        <span key={i} className="legend-item">
+          <span className="legend-dot" style={{background: it.color}}/>
+          {it.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Loading() {
+  return <div className="loading"><div className="spinner"/><span>Loading live data…</span></div>;
+}
+
+// ─── Data helpers ──────────────────────────────────────────────────────────
+
+function diffDays(a, b) {
+  return Math.abs((new Date(b) - new Date(a)) / 86400000);
+}
+
+function processWorkOrders(raw) {
+  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.workOrders || []);
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+
+  let totalAssignTime = 0, assignCount = 0;
+  let totalCloseTime = 0, closeCount = 0;
+  let open = 0, overdue = 0;
+
+  const buckets = buildMonthBuckets(9);
+  const assignBuckets = buildMonthBuckets(9);
+  const closeBuckets = buildMonthBuckets(9);
+  const catMap = {};
+
+  all.forEach(wo => {
+    const created = wo.createdAt || wo.created_at || wo.dateCreated;
+    const assigned = wo.assignedAt || wo.assigned_at || wo.dateAssigned;
+    const closed = wo.closedAt || wo.closed_at || wo.dateClosed || wo.completedAt;
+    const status = (wo.status || '').toLowerCase();
+    const cat = wo.category || wo.type || wo.workType || 'General';
+
+    catMap[cat] = (catMap[cat] || 0) + 1;
+
+    if (assigned && created) {
+      const d = diffDays(created, assigned);
+      totalAssignTime += d; assignCount++;
+      const dt = new Date(created);
+      const b = assignBuckets.find(x => x.m === dt.getMonth() && x.year === dt.getFullYear());
+      if (b) { b.assign = (b.assign || 0) + d; b.assignN = (b.assignN || 0) + 1; }
+    }
+    if (closed && created) {
+      const d = diffDays(created, closed);
+      totalCloseTime += d; closeCount++;
+      const dt = new Date(created);
+      const b = closeBuckets.find(x => x.m === dt.getMonth() && x.year === dt.getFullYear());
+      if (b) { b.close = (b.close || 0) + d; b.closeN = (b.closeN || 0) + 1; }
+    }
+    if (!closed && (status === 'open' || status === 'in_progress' || status === 'pending' || !status)) {
+      open++;
+      if (created) {
+        const age = diffDays(created, now);
+        if (age > 30) overdue++;
+      }
+    }
+  });
+
+  const trend = buckets.map((b, i) => ({
+    month: b.month,
+    assign: assignBuckets[i].assignN ? +(assignBuckets[i].assign / assignBuckets[i].assignN).toFixed(1) : null,
+    close: closeBuckets[i].closeN ? +(closeBuckets[i].close / closeBuckets[i].closeN).toFixed(1) : null,
+  })).filter(b => b.assign !== null || b.close !== null);
+
+  const cats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 6).map(([label, count]) => ({label, count}));
+  const catColors = [TEAL, BLUE, AMBER, GREEN, PURPLE, RED];
+
+  return {
+    avgAssign: assignCount ? +(totalAssignTime / assignCount).toFixed(1) : 0,
+    avgClose: closeCount ? +(totalCloseTime / closeCount).toFixed(1) : 0,
+    open, overdue,
+    closed: closeCount,
+    trend: trend.length ? trend : buckets.map(b => ({month: b.month, assign: 0, close: 0})),
+    cats: cats.map((c, i) => ({...c, color: catColors[i]})),
+    total: all.length,
+  };
+}
+
+function processUnits(raw) {
+  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.units || []);
+  const total = all.length;
+  let vacant = 0, occupied = 0, listed = 0;
+  const buckets = buildMonthBuckets(9);
+
+  all.forEach(u => {
+    const status = (u.status || u.unitStatus || '').toLowerCase();
+    if (status.includes('vacant') || status === 'available') vacant++;
+    else if (status.includes('occupied') || status === 'leased') occupied++;
+    if (status.includes('listed') || u.isListed) listed++;
+  });
+
+  const occupancyRate = total ? +((occupied / total) * 100).toFixed(1) : 0;
+  const trend = buckets.map(b => ({month: b.month, vacancies: vacant}));
+
+  return { total, vacant, occupied, listed, occupancyRate, trend };
+}
+
+function processLeases(raw) {
+  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.leases || []);
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const in90 = new Date(); in90.setDate(in90.getDate() + 90);
+
+  let moveIns = 0, moveOuts = 0, renewals = 0, expirations = 0, upcoming = 0;
+  const buckets = buildMonthBuckets(9);
+  const leaseMap = buckets.map(b => ({...b, ins: 0, outs: 0, renewals: 0, expirations: 0}));
+
+  all.forEach(l => {
+    const start = l.startDate || l.leaseStart || l.moveInDate;
+    const end = l.endDate || l.leaseEnd || l.moveOutDate || l.expirationDate;
+    const renewed = l.renewalDate || l.renewedAt;
+
+    if (start) {
+      const d = new Date(start);
+      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) moveIns++;
+      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) b.ins++;
+    }
+    if (end) {
+      const d = new Date(end);
+      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) { moveOuts++; expirations++; }
+      if (d <= in90 && d >= now) upcoming++;
+      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) { b.outs++; b.expirations++; }
+    }
+    if (renewed) {
+      const d = new Date(renewed);
+      if (d.getMonth() === thisMonth && d.getFullYear() === thisYear) renewals++;
+      const b = leaseMap.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) b.renewals++;
+    }
+  });
+
+  const renewalRate = expirations ? Math.round((renewals / expirations) * 100) : 0;
+
+  return {
+    moveIns, moveOuts, renewals, expirations, upcoming, renewalRate,
+    moveTrend: leaseMap.map(b => ({month: b.month, ins: b.ins, outs: b.outs})),
+    leaseTrend: leaseMap.map(b => ({month: b.month, renewals: b.renewals, expirations: b.expirations})),
+    total: all.length,
+  };
+}
+
+function processProperties(raw) {
+  const all = Array.isArray(raw) ? raw : (raw?.data || raw?.properties || []);
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const buckets = buildMonthBuckets(9);
+  const map = buckets.map(b => ({...b, gained: 0, lost: 0}));
+
+  all.forEach(p => {
+    const created = p.createdAt || p.created_at || p.dateAdded;
+    const terminated = p.terminatedAt || p.terminated_at || p.dateRemoved || p.endDate;
+    if (created) {
+      const d = new Date(created);
+      const b = map.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) b.gained++;
+    }
+    if (terminated) {
+      const d = new Date(terminated);
+      const b = map.find(x => x.m === d.getMonth() && x.year === d.getFullYear());
+      if (b) b.lost++;
+    }
+  });
+
+  const thisMonthData = map.find(b => b.m === thisMonth && b.year === thisYear) || {gained: 0, lost: 0};
+
+  return {
+    total: all.length,
+    gained: thisMonthData.gained,
+    lost: thisMonthData.lost,
+    net: thisMonthData.gained - thisMonthData.lost,
+    trend: map.map(b => ({month: b.month, gained: b.gained, lost: b.lost})),
+  };
+}
+
+// ─── Main App ──────────────────────────────────────────────────────────────
+
+const TABS = [
+  {id: 'overview', label: 'Overview'},
+  {id: 'workorders', label: 'Work Orders'},
+  {id: 'portfolio', label: 'Portfolio'},
+  {id: 'occupancy', label: 'Occupancy'},
+  {id: 'leases', label: 'Leases'},
+];
+
+function App() {
+  const [tab, setTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        setLoading(true);
+        const [woRes, unitsRes, leasesRes, propsRes] = await Promise.allSettled([
+          fetch('/api/rentvine/maintenance/workorders?page=1&pageSize=500').then(r => r.json()),
+          fetch('/api/rentvine/units?page=1&pageSize=500').then(r => r.json()),
+          fetch('/api/rentvine/leases?page=1&pageSize=500').then(r => r.json()),
+          fetch('/api/rentvine/properties?page=1&pageSize=500').then(r => r.json()),
+        ]);
+
+        const wo = woRes.status === 'fulfilled' ? processWorkOrders(woRes.value) : null;
+        const units = unitsRes.status === 'fulfilled' ? processUnits(unitsRes.value) : null;
+        const leases = leasesRes.status === 'fulfilled' ? processLeases(leasesRes.value) : null;
+        const props = propsRes.status === 'fulfilled' ? processProperties(propsRes.value) : null;
+
+        setData({ wo, units, leases, props });
+        setError(null);
+      } catch(e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const wo = data?.wo;
+  const units = data?.units;
+  const leases = data?.leases;
+  const props = data?.props;
+
+  return (
+    <div>
+      <div className="topbar">
+        <div className="logo">
+          <div className="logo-icon">A</div>
+          <span className="logo-text">Aloe PM</span>
+          <span className="logo-sub">· Metrics Dashboard</span>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          {!loading && !error && <span className="status-pill">● Live · Rentvine</span>}
+          {loading && <span style={{fontSize:11,color:'#5F5E5A'}}>Loading…</span>}
+          <a href="/" className="back-btn">← Hub</a>
+        </div>
+      </div>
+
+      <div className="nav">
+        {TABS.map(t => (
+          <button key={t.id} className={'nav-btn' + (tab === t.id ? ' active' : '')} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="main">
+        {error && <div className="err">API error: {error}. Check that Rentvine API routes are active on this server.</div>}
+
+        {/* ── OVERVIEW ── */}
+        {tab === 'overview' && (
+          <div>
+            <div className="page-title">Operations Overview</div>
+            <div className="page-sub">Live data from Rentvine · {new Date().toLocaleDateString('en-US', {month:'long', year:'numeric'})}</div>
+
+            {loading ? <Loading/> : (
+              <>
+                <div className="kpi-row cols-6">
+                  <Kpi label="Properties" value={props?.total ?? '—'} color={AMBER} sub="total managed"/>
+                  <Kpi label="Total Units" value={units?.total ?? '—'} color={TEAL} sub="all portfolios"/>
+                  <Kpi label="Vacancies" value={units?.vacant ?? '—'} color={RED} sub={units ? `${units.occupancyRate}% occupied` : ''}/>
+                  <Kpi label="Open W/Os" value={wo?.open ?? '—'} color={AMBER} sub={wo ? `${wo.overdue} overdue` : ''}/>
+                  <Kpi label="Avg Close" value={wo ? `${wo.avgClose}d` : '—'} color={GREEN} sub="work orders"/>
+                  <Kpi label="Renewal Rate" value={leases ? `${leases.renewalRate}%` : '—'} color={PURPLE} sub="this month"/>
+                </div>
+                <div className="grid-3">
+                  <div className="card">
+                    <CardTitle title="Work Order Times" color={AMBER}/>
+                    {wo?.trend?.length ? <>
+                      <BarChart data={wo.trend} xKey="month" yKeys={['assign','close']} colors={[GREEN, AMBER]} height={140}/>
+                      <Legend items={[{label:'Assign (days)',color:GREEN},{label:'Close (days)',color:AMBER}]}/>
+                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No work order trend data</div>}
+                  </div>
+                  <div className="card">
+                    <CardTitle title="Portfolio Changes" color={GREEN}/>
+                    {props?.trend?.length ? <>
+                      <BarChart data={props.trend} xKey="month" yKeys={['gained','lost']} colors={[GREEN, RED]} height={140}/>
+                      <Legend items={[{label:'Gained',color:GREEN},{label:'Lost',color:RED}]}/>
+                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No portfolio data</div>}
+                  </div>
+                  <div className="card">
+                    <CardTitle title="Move Activity" color={TEAL}/>
+                    {leases?.moveTrend?.length ? <>
+                      <BarChart data={leases.moveTrend} xKey="month" yKeys={['ins','outs']} colors={[TEAL, GRAY]} height={140}/>
+                      <Legend items={[{label:'Move-ins',color:TEAL},{label:'Move-outs',color:GRAY}]}/>
+                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No lease data</div>}
+                  </div>
+                </div>
+                <div className="grid-2">
+                  <div className="card">
+                    <CardTitle title="Vacancy Trend" color={RED}/>
+                    {units?.trend?.length ? <LineChart data={units.trend} xKey="month" yKeys={['vacancies']} colors={[RED]} height={120}/> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No unit data</div>}
+                  </div>
+                  <div className="card">
+                    <CardTitle title="Lease Renewals vs Expirations" color={PURPLE}/>
+                    {leases?.leaseTrend?.length ? <>
+                      <BarChart data={leases.leaseTrend} xKey="month" yKeys={['renewals','expirations']} colors={[PURPLE, RED]} height={120}/>
+                      <Legend items={[{label:'Renewals',color:PURPLE},{label:'Expirations',color:RED}]}/>
+                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'20px 0'}}>No lease data</div>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── WORK ORDERS ── */}
+        {tab === 'workorders' && (
+          <div>
+            <div className="page-title">Work Orders</div>
+            <div className="page-sub">Sourced from Rentvine maintenance records</div>
+            {loading ? <Loading/> : (
+              <>
+                <div className="kpi-row cols-5">
+                  <Kpi label="Avg Assign Time" value={wo ? `${wo.avgAssign}d` : '—'} color={GREEN} sub="days to assign"/>
+                  <Kpi label="Avg Close Time" value={wo ? `${wo.avgClose}d` : '—'} color={AMBER} sub="days to close"/>
+                  <Kpi label="Open" value={wo?.open ?? '—'} color={TEAL} sub="currently active"/>
+                  <Kpi label="Overdue" value={wo?.overdue ?? '—'} color={RED} sub="30+ days open"/>
+                  <Kpi label="Total (all time)" value={wo?.total ?? '—'} color={GRAY}/>
+                </div>
+                <div className="grid-13">
+                  <div className="card">
+                    <CardTitle title="Assign & Close Time Trend" color={AMBER}/>
+                    {wo?.trend?.length ? <>
+                      <LineChart data={wo.trend} xKey="month" yKeys={['assign','close']} colors={[GREEN, AMBER]} height={200}/>
+                      <Legend items={[{label:'Avg assign (days)',color:GREEN},{label:'Avg close (days)',color:AMBER}]}/>
+                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'40px 0',textAlign:'center'}}>No trend data available</div>}
+                  </div>
+                  <div className="card">
+                    <CardTitle title="By Category" color={TEAL}/>
+                    {wo?.cats?.length ? wo.cats.map((c, i) => {
+                      const max = wo.cats[0].count;
+                      return (
+                        <div key={i}>
+                          <div className="cat-row">
+                            <span className="cat-label"><span style={{width:8,height:8,borderRadius:2,background:c.color,display:'inline-block'}}/>{c.label}</span>
+                            <span className="cat-count">{c.count}</span>
+                          </div>
+                          <div className="bar-bg"><div className="bar-fill" style={{width:`${(c.count/max)*100}%`,background:c.color}}/></div>
+                        </div>
+                      );
+                    }) : <div style={{color:'#5F5E5A',fontSize:12,padding:'40px 0',textAlign:'center'}}>No category data</div>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── PORTFOLIO ── */}
+        {tab === 'portfolio' && (
+          <div>
+            <div className="page-title">Portfolio Changes</div>
+            <div className="page-sub">Properties gained and lost each month</div>
+            {loading ? <Loading/> : (
+              <>
+                <div className="kpi-row cols-4">
+                  <Kpi label="Total Properties" value={props?.total ?? '—'} color={AMBER}/>
+                  <Kpi label="Gained (MTD)" value={props?.gained ?? '—'} color={GREEN} sub="new this month"/>
+                  <Kpi label="Lost (MTD)" value={props?.lost ?? '—'} color={RED} sub="lost this month"/>
+                  <Kpi label="Net (MTD)" value={props ? (props.net >= 0 ? `+${props.net}` : props.net) : '—'} color={props?.net >= 0 ? GREEN : RED}/>
+                </div>
+                <div className="card">
+                  <CardTitle title="Properties Gained vs Lost" color={GREEN}/>
+                  {props?.trend?.length ? <>
+                    <BarChart data={props.trend} xKey="month" yKeys={['gained','lost']} colors={[GREEN, RED]} height={240}/>
+                    <Legend items={[{label:'Properties gained',color:GREEN},{label:'Properties lost',color:RED}]}/>
+                  </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No property data available</div>}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── OCCUPANCY ── */}
+        {tab === 'occupancy' && (
+          <div>
+            <div className="page-title">Occupancy & Move Activity</div>
+            <div className="page-sub">Unit status and tenant movement</div>
+            {loading ? <Loading/> : (
+              <>
+                <div className="kpi-row cols-5">
+                  <Kpi label="Total Units" value={units?.total ?? '—'} color={GRAY}/>
+                  <Kpi label="Occupied" value={units?.occupied ?? '—'} color={GREEN}/>
+                  <Kpi label="Vacant" value={units?.vacant ?? '—'} color={RED}/>
+                  <Kpi label="Occupancy Rate" value={units ? `${units.occupancyRate}%` : '—'} color={TEAL}/>
+                  <Kpi label="Move-Ins (MTD)" value={leases?.moveIns ?? '—'} color={BLUE}/>
+                </div>
+                <div className="grid-2">
+                  <div className="card">
+                    <CardTitle title="Vacancy Trend" color={RED}/>
+                    {units?.trend?.length ? <LineChart data={units.trend} xKey="month" yKeys={['vacancies']} colors={[RED]} height={200}/> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No unit data</div>}
+                  </div>
+                  <div className="card">
+                    <CardTitle title="Move-Ins vs Move-Outs" color={BLUE}/>
+                    {leases?.moveTrend?.length ? <>
+                      <BarChart data={leases.moveTrend} xKey="month" yKeys={['ins','outs']} colors={[BLUE, GRAY]} height={200}/>
+                      <Legend items={[{label:'Move-ins',color:BLUE},{label:'Move-outs',color:GRAY}]}/>
+                    </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No lease data</div>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── LEASES ── */}
+        {tab === 'leases' && (
+          <div>
+            <div className="page-title">Lease Activity</div>
+            <div className="page-sub">Renewals, expirations, and upcoming deadlines</div>
+            {loading ? <Loading/> : (
+              <>
+                <div className="kpi-row cols-4">
+                  <Kpi label="Renewals (MTD)" value={leases?.renewals ?? '—'} color={PURPLE}/>
+                  <Kpi label="Expirations (MTD)" value={leases?.expirations ?? '—'} color={RED}/>
+                  <Kpi label="Renewal Rate" value={leases ? `${leases.renewalRate}%` : '—'} color={GREEN} sub="of expiring leases"/>
+                  <Kpi label="Expiring (90d)" value={leases?.upcoming ?? '—'} color={AMBER} sub="upcoming deadlines"/>
+                </div>
+                <div className="card">
+                  <CardTitle title="Renewals vs Expirations" color={PURPLE}/>
+                  {leases?.leaseTrend?.length ? <>
+                    <BarChart data={leases.leaseTrend} xKey="month" yKeys={['renewals','expirations']} colors={[PURPLE, RED]} height={240}/>
+                    <Legend items={[{label:'Renewals',color:PURPLE},{label:'Expirations',color:RED}]}/>
+                  </> : <div style={{color:'#5F5E5A',fontSize:12,padding:'60px 0',textAlign:'center'}}>No lease data available</div>}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
