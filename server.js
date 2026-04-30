@@ -3074,12 +3074,6 @@ app.get('*', function(req, res) {
       <div class="tool-icon icon-silver">🔧</div>
       <div class="tool-name">Maintenance</div>
 
-                <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence">
-                            <span class="tool-badge badge-live">LIVE</span>
-                                        <div class="tool-icon icon-teal">🏠</div>
-                                                    <div class="tool-name">Vacancy Risk & Market Intelligence</div>
-                                                                <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
-                                                                          </a>
       <div class="tool-desc">Work orders, vendors, and scheduling — Roberto's domain</div>
     </a>
 
