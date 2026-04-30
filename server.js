@@ -22,6 +22,10 @@ app.get('/vacancy', (req, res) => {
     res.sendFile(new URL('./vacancy.html', import.meta.url).pathname);
 });
 
+app.get('/vacancy-risk', (req, res) => {
+  res.sendFile(new URL('./vacancy-risk.html', import.meta.url).pathname);
+});
+
 app.get('/api/aptly/leads', async (req, res) => {
     try {
           const r = await fetch('https://api.getaptly.com/v1/boards?page=0&size=200', {
