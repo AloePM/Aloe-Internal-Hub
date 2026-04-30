@@ -2983,22 +2983,22 @@ app.get('*', function(req, res) {
 <div class="
   <div class="section-label">Quick stats</div>
   <div class="stats-row">
-    <div class="stat-card">
+    <div class="stat-card" style="padding:10px 14px">
       <div class="stat-label">AI Agents</div>
       <div class="stat-value">6</div>
-      <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
+ class="stat-card" style="padding:10px 14px" style="padding:10px 14px"     <div class="stat-sub"><span class="up">2 live</span> · 2 draft</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="padding:10px 14px">
       <div class="stat-label">Markets</div>
       <div class="stat-value">6</div>
       <div class="stat-sub"><span class="teal">Phoenix Metro</span></div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="padding:10px 14px">
       <div class="stat-label">Integrations</div>
       <div class="stat-value">7</div>
       <div class="stat-sub">Rentvine · Aptly · Quo</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="padding:10px 14px">
       <div class="stat-label">Team</div>
       <div class="stat-value">6</div>
       <div class="stat-sub">Randi · Persia · Dhyana +3</div>
@@ -3052,36 +3052,9 @@ app.get('*', function(req, res) {
       <div class="tool-desc">Review and approve AI-drafted responses before sending</div>
               </a>
               
-                        <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
-                                    <span class="tool-badge badge-live">LIVE</span>
-                                                <div class="tool-icon icon-teal">🏠</div>
-                                                            <div class="tool-name">Vacancy Risk</div>
-                                                                        <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
-                                                                                  </a>
-                                                                                  
-                                                                                            <a href="/metrics" class="tool-card primary" data-name="metrics kpi dashboard portfolio occupancy leases">
-                                                                                                        <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                    <div class="tool-icon icon-teal">📊</div>
-                                                                                                                                <div class="tool-name">KPI Metrics</div>
-                                                                                                                                            <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
-                                                                                                                                                      </a>
-                                                                                                                                                      
-                                                                                                                                                                <a href="/recon" class="tool-card primary" data-name="recon reconciliation maintenance work orders">
-                                                                                                                                                                            <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                                                                                        <div class="tool-icon icon-teal">🔍</div>
-                                                                                                                                                                                                    <div class="tool-name">Recon</div>
-                                                                                                                                                                                                                <div class="tool-desc">Cross-reference work orders between Aptly and Rentvine</div>
-                                                                                                                                                                                                                          </a>
-                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                    <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile">
-                                                                                                                                                                                                                                                <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                                                                                                                                                            <div class="tool-icon icon-teal">🧾</div>
-                                                                                                                                                                                                                                                                        <div class="tool-name">Recon — Bills</div>
-                                                                                                                                                                                                                                                                                    <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
-                                                                                                                                                                                                                                                                                              </a>
-                                                                                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                                                      </div>
-                                                                                                                                                                                                                                                                                                            </div>
+                        
+                                </div>
+                                      </div></div>
                                                                                                                                                                                                                                                                                                                   <div class="section">
   <div class="section-label">Operations</div>
   <div class="tool-grid">
@@ -3095,6 +3068,13 @@ app.get('*', function(req, res) {
     <a href="/maintenance" class="tool-card silver-top" data-name="maintenance work orders vendors roberto">
       <div class="tool-icon icon-silver">🔧</div>
       <div class="tool-name">Maintenance</div>
+
+                <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
+                            <span class="tool-badge badge-live">LIVE</span>
+                                        <div class="tool-icon icon-teal">🏠</div>
+                                                    <div class="tool-name">Vacancy Risk</div>
+                                                                <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
+                                                                          </a>
       <div class="tool-desc">Work orders, vendors, scheduling — Roberto's domain</div>
     </a>
 
