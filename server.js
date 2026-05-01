@@ -178,7 +178,9 @@ app.get('/api/aptly/leads-rich', async function(req, res) {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/aptly/units', async function(req, res) {
-  try {
+ app.get('/rent-analysis', (req, res) => res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
+app.get('/sale-analysis', (req, res) => res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
+ try {
     const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
     let allCards = [];
     let page = 0;
