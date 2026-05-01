@@ -2702,11 +2702,13 @@ if (isPetQ && addressInMsg) {
       return hasNum && hasWord;
     };
 
-    // Step 1 — try Units board (vacant/published listings)
-    const units = await getUnitsCards();
-    const unitMatch = units.find(function(c) {
-      return addrMatch(c.Street || c.Address || c['Marketing Name'] || c.Title || '');
-    });
+    app.get('/debug/pet-test', async function(req, res) {
+  const cards = await getUnitsCards();
+  const match = cards.find(function(c) {
+    return JSON.stringify(c).toLowerCase().includes('lake mirage');
+  });
+  res.json({ total: cards.length, match: match || 'NOT FOUND', sampleKeys: cards[0] ? Object.keys(cards[0]).slice(0, 30) : [] });
+});
     if (unitMatch) {
       const addr = unitMatch.Street || unitMatch.Address || unitMatch['Marketing Name'] || unitMatch.Title || '?';
       const stage = unitMatch.Stage || unitMatch.Status || '';
