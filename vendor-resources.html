@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vendor Resources — Aloe Property Management</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#F5F6F8;color:#0F172A;font-size:14px;line-height:1.6;}
+a{color:#0891B2;text-decoration:none;}
+a:hover{text-decoration:underline;}
+
+/* HEADER */
+.header{background:#0C1929;padding:0 32px;height:64px;display:flex;align-items:center;justify-content:space-between;}
+.header-logo{display:flex;align-items:center;gap:12px;}
+.logo-mark{width:36px;height:36px;background:#3CC3E1;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:16px;}
+.logo-name{color:#fff;font-weight:700;font-size:18px;}
+  .logo-tagline{color:#94A3B8;font-size:12px;}
+.header-contact{color:#94A3B8;font-size:13px;text-align:right;}
+.header-contact a{color:#3CC3E1;}
+
+/* HERO */
+.hero{background:linear-gradient(135deg,#0C1929 0%,#0E3A4A 100%);padding:64px 32px;text-align:center;}
+.hero-badge{display:inline-block;background:rgba(60,195,225,0.15);color:#3CC3E1;border:1px solid rgba(60,195,225,0.3);border-radius:20px;padding:4px 16px;font-size:12px;font-weight:600;letter-spacing:0.5px;margin-bottom:16px;}
+.hero h1{color:#fff;font-size:36px;font-weight:700;margin-bottom:12px;line-height:1.2;}
+.hero h1 span{color:#3CC3E1;}
+.hero p{color:#94A3B8;font-size:16px;max-width:560px;margin:0 auto 28px;}
+.hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+.btn-primary{background:#0891B2;color:#fff;border:none;border-radius:8px;padding:12px 28px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;}
+.btn-primary:hover{background:#0E7490;text-decoration:none;color:#fff;}
+.btn-outline{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:12px 28px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s;}
+.btn-outline:hover{background:rgba(255,255,255,0.08);text-decoration:none;color:#fff;}
+
+/* STATS BAR */
+.stats-bar{background:#fff;border-bottom:1px solid #E2E5EC;padding:20px 32px;display:flex;gap:40px;justify-content:center;flex-wrap:wrap;}
+  .stat-item{text-align:center;}
+.stat-num{font-size:24px;font-weight:700;color:#0891B2;}
+.stat-label{font-size:12px;color:#475569;margin-top:2px;}
+
+/* MAIN LAYOUT */
+.page{max-width:900px;margin:0 auto;padding:48px 32px;}
+.section{margin-bottom:56px;}
+  .section-label{font-size:11px;font-weight:700;color:#0891B2;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.section h2{font-size:26px;font-weight:700;margin-bottom:12px;}
+.section p{color:#475569;font-size:15px;margin-bottom:12px;}
+
+/* INFO CARDS */
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px;}
+.card{background:#fff;border:1px solid #E2E5EC;border-radius:12px;padding:20px;}
+.card-icon{font-size:28px;margin-bottom:10px;}
+.card h3{font-size:15px;font-weight:600;margin-bottom:6px;}
+.card p{font-size:13px;color:#475569;line-height:1.5;}
+
+/* CHECKLIST */
+.checklist{background:#fff;border:1px solid #E2E5EC;border-radius:12px;padding:24px;margin-top:20px;}
+  .checklist h3{font-size:16px;font-weight:600;margin-bottom:16px;color:#0F172A;}
+.checklist-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #F1F5F9;}
+.checklist-item:last-child{border-bottom:none;padding-bottom:0;}
+.check-icon{width:22px;height:22px;border-radius:50%;background:#D1FAE5;border:1px solid #6EE7B7;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#059669;margin-top:1px;}
+.check-text{flex:1;}
+.check-text strong{display:block;font-size:14px;font-weight:600;color:#0F172A;}
+.check-text span{font-size:12px;color:#64748B;}
+
+/* EXPECTATIONS */
+.expect-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
+.expect-card{background:#fff;border:1px solid #E2E5EC;border-radius:12px;padding:20px;}
+  .expect-card.green{border-left:4px solid #059669;}
+.expect-card.red{border-left:4px solid #DC2626;}
+.expect-card h4{font-size:14px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.expect-card ul{list-style:none;display:flex;flex-direction:column;gap:6px;}
+.expect-card li{font-size:13px;color:#475569;padding-left:16px;position:relative;}
+.expect-card li::before{content:'•';position:absolute;left:4px;color:#94A3B8;}
+
+/* PROCESS STEPS */
+.steps{display:flex;flex-direction:column;gap:4px;margin-top:20px;}
+.step{display:flex;gap:20px;padding:16px 0;}
+.step:not(:last-child){border-bottom:1px solid #F1F5F9;}
+.step-num{width:36px;height:36px;border-radius:50%;background:#E0F7FC;border:2px solid #7DD3FC;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#0891B2;flex-shrink:0;}
+.step-content h4{font-size:15px;font-weight:600;margin-bottom:4px;}
+.step-content p{font-size:13px;color:#475569;}
+
+/* FAQ */
+.faq{display:flex;flex-direction:column;gap:2px;margin-top:20px;}
+.faq-item{background:#fff;border:1px solid #E2E5EC;border-radius:8px;overflow:hidden;}
+  .faq-q{padding:14px 18px;font-size:14px;font-weight:600;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;}
+.faq-q:hover{background:#F8FAFC;}
+.faq-a{padding:0 18px 14px;font-size:13px;color:#475569;line-height:1.6;display:none;}
+.faq-item.open .faq-a{display:block;}
+.faq-item.open .faq-arrow{transform:rotate(180deg);}
+.faq-arrow{transition:transform 0.2s;color:#94A3B8;font-size:12px;}
+
+/* CONTACT FORM */
+.contact-box{background:#fff;border:1px solid #E2E5EC;border-radius:12px;padding:32px;margin-top:20px;}
+  .contact-box h3{font-size:18px;font-weight:700;margin-bottom:6px;}
+.contact-box p{font-size:14px;color:#475569;margin-bottom:24px;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.form-group{display:flex;flex-direction:column;gap:6px;}
+.form-group.full{grid-column:1/-1;}
+.form-group label{font-size:12px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:0.3px;}
+.form-group input,.form-group select,.form-group textarea{background:#F8FAFC;border:1px solid #E2E5EC;border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;outline:none;color:#0F172A;width:100%;transition:border-color 0.15s;}
+  .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#0891B2;background:#fff;}
+.form-group textarea{resize:vertical;min-height:100px;}
+.form-submit{margin-top:20px;display:flex;align-items:center;gap:12px;}
+.form-note{font-size:12px;color:#94A3B8;}
+.success-msg{display:none;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:8px;padding:12px 16px;font-size:14px;color:#059669;margin-top:12px;}
+
+/* HIGHLIGHT BOX */
+.highlight{background:linear-gradient(135deg,#E0F7FC,#F0FDF4);border:1px solid #7DD3FC;border-radius:12px;padding:24px;margin-top:20px;display:flex;gap:16px;align-items:flex-start;}
+  .highlight-icon{font-size:28px;flex-shrink:0;}
+.highlight h4{font-size:15px;font-weight:700;margin-bottom:6px;}
+.highlight p{font-size:13px;color:#475569;}
+
+/* FOOTER */
+.footer{background:#0C1929;padding:32px;text-align:center;color:#475569;font-size:13px;}
+.footer a{color:#3CC3E1;}
+
+@media(max-width:700px){
+  .card-grid{grid-template-columns:1fr;}
+  .expect-grid{grid-template-columns:1fr;}
+  .form-grid{grid-template-columns:1fr;}
+  .hero h1{font-size:26px;}
+  .stats-bar{gap:24px;}
+    }
+</style>
+    </head>
+    <body>
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-logo">
+        <div class="logo-mark">A</div>
+        <div>
+          <div class="logo-name">Aloe Property Management</div>
+      <div class="logo-tagline">Phoenix Metro · Vendor Resources</div>
+    </div>
+  </div>
+  <div class="header-contact">
+    Questions? <a href="mailto:maintenance@aloepm.com">maintenance@aloepm.com</a>
+      </div>
+    </div>
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-badge">Vendor Partnership Program</div>
+  <h1>Work With <span>Aloe PM</span></h1>
+  <p>We manage 500+ properties across the Phoenix Metro area and partner with trusted vendors who share our commitment to quality, communication, and reliability.</p>
+      <div class="hero-actions">
+        <a href="#apply" class="btn-primary">Apply to Be a Vendor</a>
+        <a href="#expectations" class="btn-outline">View Our Standards</a>
+      </div>
+    </div>
+
+    <!-- STATS BAR -->
+    <div class="stats-bar">
+      <div class="stat-item"><div class="stat-num">500+</div><div class="stat-label">Properties Managed</div></div>
+      <div class="stat-item"><div class="stat-num">Phoenix Metro</div><div class="stat-label">Service Area</div></div>
+      <div class="stat-item"><div class="stat-num">24hr</div><div class="stat-label">Work Order Response</div></div>
+  <div class="stat-item"><div class="stat-num">Fast Pay</div><div class="stat-label">Invoice Processing</div></div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="page">
+
+      <!-- WHY WORK WITH US -->
+      <div class="section">
+        <div class="section-label">Why Partner With Us</div>
+        <h2>A reliable, professional client for your business</h2>
+    <p>We treat our vendors as partners. When you work with Aloe PM, you get consistent work orders, clear communication, and prompt payment — so you can focus on what you do best.</p>
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-icon">📋</div>
+            <h3>Clear Work Orders</h3>
+            <p>Every job comes with a detailed work order through our system — scope, access instructions, and tenant contact all in one place.</p>
+      </div>
+      <div class="card">
+            <div class="card-icon">💳</div>
+            <h3>Prompt Payment</h3>
+            <p>Submit your invoice and get paid quickly. We reconcile vendor invoices weekly and process payments without the runaround.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">📱</div>
+            <h3>Easy Communication</h3>
+            <p>Work directly with our maintenance team. We're responsive, professional, and available — no chasing down approvals.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">🔄</div>
+            <h3>Steady Volume</h3>
+            <p>With 500+ properties under management, qualified vendors receive consistent recurring work — not just one-off calls.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">🤝</div>
+            <h3>Long-Term Relationships</h3>
+            <p>We build lasting vendor relationships. Reliable partners move to our preferred vendor list and get priority dispatching.</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">🏠</div>
+            <h3>Professional Properties</h3>
+            <p>Our portfolio is professionally managed — tenants are notified, access is coordinated, and properties are well-maintained.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- WHAT WE NEED -->
+      <div class="section" id="expectations">
+        <div class="section-label">Our Standards</div>
+        <h2>What we expect from our vendors</h2>
+        <p>We hold our vendors to a high standard — and in return, we give you the tools, communication, and volume to make the partnership worth it.</p>
+        <div class="expect-grid">
+          <div class="expect-card green">
+            <h4>✅ We Expect</h4>
+            <ul>
+              <li>Licensed and insured for your trade</li>
+          <li>Response to work orders within 24 hours</li>
+              <li>Professional communication with tenants</li>
+              <li>Itemized invoices submitted within 7 days</li>
+              <li>Photos of completed work uploaded to system</li>
+          <li>Notify us immediately of any issues found</li>
+          <li>Honest, accurate scoping and pricing</li>
+              <li>Clean, safe worksite — respect the tenant's home</li>
+            </ul>
+          </div>
+          <div class="expect-card red">
+            <h4>🚫 We Do Not Accept</h4>
+            <ul>
+              <li>Unlicensed work in licensed trades</li>
+          <li>Skipping work order documentation</li>
+              <li>Direct payment arrangements with tenants</li>
+          <li>Incomplete work without notification</li>
+          <li>Price changes after job completion</li>
+              <li>Unresponsiveness after assignment</li>
+          <li>Unprofessional conduct with tenants</li>
+              <li>Subcontracting without prior approval</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="highlight" style="margin-top:16px;">
+          <div class="highlight-icon">💡</div>
+          <div>
+            <h4>The Golden Rule</h4>
+        <p>Treat every property like it belongs to someone you know. Our owners trust us with their investments, and our tenants call these homes. Every job reflects on all of us.</p>
+      </div>
+    </div>
+      </div>
+
+      <!-- REQUIREMENTS -->
+      <div class="section">
+        <div class="section-label">Requirements</div>
+        <h2>What you need to get started</h2>
+        <p>Before we can assign work orders, we need the following on file. This protects you, our owners, and our tenants.</p>
+    <div class="checklist">
+      <h3>Required Documentation</h3>
+      <div class="checklist-item">
+        <div class="check-icon">✓</div>
+        <div class="check-text">
+              <strong>Valid Business License</strong>
+          <span>Arizona business license or applicable trade license (ROC number for contractors)</span>
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="check-icon">✓</div>
+            <div class="check-text">
+              <strong>General Liability Insurance</strong>
+          <span>Minimum $1M per occurrence — Aloe Property Management listed as additional insured</span>
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="check-icon">✓</div>
+            <div class="check-text">
+              <strong>Workers' Compensation (if applicable)</strong>
+              <span>Required if you have employees — or signed waiver if sole proprietor</span>
+        </div>
+      </div>
+      <div class="checklist-item">
+            <div class="check-icon">✓</div>
+            <div class="check-text">
+              <strong>W-9 Form</strong>
+              <span>Required for payment processing and year-end 1099 reporting</span>
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="check-icon">✓</div>
+            <div class="check-text">
+              <strong>Trade / Specialty Info</strong>
+              <span>Your primary trade, service area zip codes, and typical availability/lead time</span>
+            </div>
+          </div>
+          <div class="checklist-item">
+            <div class="check-icon">✓</div>
+            <div class="check-text">
+              <strong>Contact Info & Preferred Communication</strong>
+              <span>Primary contact name, phone, email — and whether you prefer text, call, or email for dispatching</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+      <div class="section">
+        <div class="section-label">The Process</div>
+        <h2>How work orders work</h2>
+        <p>Once you're approved, here's what a typical job looks like from dispatch to payment.</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4>Work Order Dispatched</h4>
+          <p>You'll receive a work order via text or email with the property address, tenant contact, scope of work, and any entry instructions. Acknowledge within 24 hours.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4>Coordinate with Tenant</h4>
+          <p>Contact the tenant directly to schedule. Be professional and flexible. Confirm the appointment and notify us if access is an issue.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4>Complete the Work</h4>
+          <p>Do the job right. If you find additional issues beyond the original scope, call us before proceeding — don't assume authorization for extra work.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4>Document & Submit</h4>
+              <p>Take before/after photos, complete the work order in our system, and submit your itemized invoice within 7 days of job completion.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h4>Get Paid</h4>
+              <p>Approved invoices are processed on our regular payment cycle. Disputes or questions? Contact our accounting team directly — we resolve issues fast.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FAQ -->
+      <div class="section">
+        <div class="section-label">FAQ</div>
+        <h2>Common questions</h2>
+        <div class="faq">
+          <div class="faq-item">
+            <div class="faq-q" onclick="toggleFaq(this)">How long does vendor approval take? <span class="faq-arrow">▼</span></div>
+            <div class="faq-a">Once we have all required documents on file, most vendors are approved within 2–5 business days. We'll confirm via email when your profile is active in our system.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q" onclick="toggleFaq(this)">What trades are you looking for? <span class="faq-arrow">▼</span></div>
+            <div class="faq-a">We regularly need: HVAC, plumbing, electrical, appliance repair, landscaping, pool service, handyman, painting, flooring, roofing, pest control, locksmith, and cleaning/turnover crews. If your trade isn't listed, apply anyway — we'll reach out when we have a need.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q" onclick="toggleFaq(this)">What are your payment terms? <span class="faq-arrow">▼</span></div>
+            <div class="faq-a">We process approved invoices on a weekly cycle. Net-15 is standard, though we aim to pay faster when volume allows. We do not pay COD for standard work orders — emergency situations may be handled differently.</div>
+      </div>
+      <div class="faq-item">
+            <div class="faq-q" onclick="toggleFaq(this)">Can I set my own rates? <span class="faq-arrow">▼</span></div>
+            <div class="faq-a">Yes — we expect market rates for quality work. We don't low-ball vendors; we expect fair pricing in return for consistent volume and prompt payment. Invoices that significantly exceed the original estimate without prior approval may be disputed.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q" onclick="toggleFaq(this)">What if a job is bigger than expected? <span class="faq-arrow">▼</span></div>
+        <div class="faq-a">Always call us before doing additional work beyond the original scope. We need to authorize the extra cost, notify the owner, and update the work order. Unapproved work may not be reimbursed.</div>
+          </div>
+          <div class="faq-item">
+            <div class="faq-q" onclick="toggleFaq(this)">Do you require background checks? <span class="faq-arrow">▼</span></div>
+            <div class="faq-a">We don't currently require formal background checks, but we do verify licensing, insurance, and references. All vendors agree to conduct themselves professionally with tenants and represent Aloe PM appropriately.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- APPLY FORM -->
+      <div class="section" id="apply">
+        <div class="section-label">Get Started</div>
+        <h2>Apply to become a vendor</h2>
+    <p>Fill out the form below and our maintenance team will be in touch. Please have your license and insurance info ready.</p>
+        <div class="contact-box">
+          <h3>Vendor Application</h3>
+          <p>All fields are required. We'll review your application and reach out within 2–5 business days.</p>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Business Name</label>
+              <input type="text" id="f-business" placeholder="ABC Plumbing LLC" />
+            </div>
+            <div class="form-group">
+              <label>Primary Contact Name</label>
+          <input type="text" id="f-name" placeholder="John Smith" />
+            </div>
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="tel" id="f-phone" placeholder="(480) 555-0100" />
+            </div>
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" id="f-email" placeholder="john@abcplumbing.com" />
+            </div>
+            <div class="form-group">
+              <label>Primary Trade / Specialty</label>
+              <select id="f-trade">
+                <option value="">Select your trade...</option>
+                <option>HVAC</option>
+                <option>Plumbing</option>
+                <option>Electrical</option>
+                <option>Appliance Repair</option>
+                <option>General Handyman</option>
+                <option>Landscaping / Irrigation</option>
+                <option>Pool Service</option>
+                <option>Roofing</option>
+                <option>Pest Control</option>
+                <option>Cleaning / Turnover</option>
+                <option>Locksmith</option>
+                <option>Drywall / Patching</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Arizona ROC / License Number</label>
+              <input type="text" id="f-license" placeholder="ROC123456 or N/A" />
+            </div>
+            <div class="form-group full">
+              <label>Service Area (Cities or Zip Codes)</label>
+          <input type="text" id="f-area" placeholder="e.g. Phoenix, Scottsdale, Chandler, Gilbert" />
+            </div>
+            <div class="form-group full">
+              <label>Tell Us About Your Business</label>
+          <textarea id="f-about" placeholder="Years in business, what sets you apart, any property management experience?"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Do you have General Liability Insurance? (Min $1M)</label>
+              <select id="f-insurance">
+                <option value="">Select...</option>
+                <option>Yes — I can provide a certificate</option>
+                <option>Yes — but need to add additional insured</option>
+            <option>No — I need to obtain insurance</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-submit">
+            <button class="btn-primary" onclick="submitForm()">Submit Application</button>
+            <span class="form-note">We will respond within 2-5 business days</span>
+          </div>
+          <div class="success-msg" id="success-msg">Application received! Our team will be in touch within 2-5 business days. Thank you for your interest in partnering with Aloe PM.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer">
+      <p style="margin-bottom:6px;"><strong style="color:#fff;">Aloe Property Management</strong> · Phoenix Metro</p>
+  <p>Maintenance: <a href="mailto:maintenance@aloepm.com">maintenance@aloepm.com</a></p>
+    </div>
+
+    <script>
+    function toggleFaq(el){
+  var item=el.parentElement;
+
+  if(!wasOpen)item.classList.add('open');
+  }
+function submitForm(){
+  var b=document.getElementById('f-business').value.trim();
+  var n=document.getElementById('f-name').value.trim();
+  var p=document.getElementById('f-phone').value.trim();
+  var e=document.getElementById('f-email').value.trim();
+  var t=document.getElementById('f-trade').value;
+  var ins=document.getElementById('f-insurance').value;
+  if(!b||!n||!p||!e||!t||!ins){alert('Please fill out all required fields.');return;}
+      var body=encodeURIComponent('Business: '+b+'\nContact: '+n+'\nPhone: '+p+'\nEmail: '+e+'\nTrade: '+t+'\nLicense: '+document.getElementById('f-license').value+'\nArea: '+document.getElementById('f-area').value+'\nInsurance: '+ins+'\n\nAbout: '+document.getElementById('f-about').value);
+  window.location.href='mailto:maintenance@aloepm.com?subject='+encodeURIComponent('Vendor Application - '+b)+'&body='+body;
+  document.getElementById('success-msg').style.display='block';
+}
+document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click',function(e){
+          var t=document.querySelector(this.getAttribute('href'));
+    if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'});}
+    });
+});
+</script>
+                  </body>
+  </html>
