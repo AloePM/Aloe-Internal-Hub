@@ -3156,6 +3156,15 @@ app.get('/rent-analysis', (req, res) =>
   res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
 app.get('/sale-analysis', (req, res) =>
   res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
+app.get('/rent-analysis', (req, res) =>
+  res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
+
+app.get('/sale-analysis', (req, res) =>
+  res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
+
+app.get('/owner-report', (req, res) =>
+  res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
+
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
