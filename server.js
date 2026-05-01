@@ -1768,17 +1768,24 @@ BENCHMARK DATA:
         }).slice(0, 50);
         if (listCards.length > 0) {
           const fmt = function(c) {
-            let addr = c.Street || c.Address || c['Marketing Name'] || c.Title || '?';
-            addr = addr.replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
-            const rentRaw = c['Market Rent'] || c['Rent'] || '';
-            const rent = rentRaw && typeof rentRaw === 'object' && rentRaw.amount ? '$' + Number(rentRaw.amount).toLocaleString() : rentRaw;
-            const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
-            const availRaw = c['Available Date'] || '';
-            const avail = availRaw ? new Date(availRaw).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
-            const stage = c.Stage || c.Status || '';
-            const occupied = stage === 'Occupied' ? ' (occupied)' : '';
-            return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied;
-          };
+  let addr = c.Street || c.Address || c['Marketing Name'] || c.Title || '?';
+  addr = addr.replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '');
+  const rentRaw = c['Market Rent'] || c['Rent'] || '';
+  const rent = rentRaw && typeof rentRaw === 'object' && rentRaw.amount ? '$' + Number(rentRaw.amount).toLocaleString() : rentRaw;
+  const beds = c.Beds ? c.Beds + 'bd/' + (c.Baths || '?') + 'ba' : '';
+  const availRaw = c['Available Date'] || '';
+  const avail = availRaw ? new Date(availRaw).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
+  const stage = c.Stage || c.Status || '';
+  const occupied = stage === 'Occupied' ? ' (occupied)' : '';
+  // Pet restriction from raw card fields
+  const restr = Array.isArray(c['Pet Restrictions']) ? c['Pet Restrictions'] : [];
+  const pa = c['Pets Allowed'];
+  const noDogs = restr.some(function(r){ return /no dog/i.test(r); });
+  const noCats = restr.some(function(r){ return /no cat/i.test(r); });
+  const noPets = pa === false || (noDogs && noCats);
+  const petLabel = noPets ? ' 🚫 No Pets' : (noDogs ? ' 🐾 Cats Only' : (noCats ? ' 🐾 Dogs Only' : ''));
+  return addr + (beds ? ' — ' + beds : '') + (rent ? ', ' + rent : '') + (avail ? ', avail ' + avail : '') + occupied + petLabel;
+};
           const notTourable = isNotTourableQ
             ? listCards.filter(function(c) { return (c.Stage || c.Status || '') === 'Occupied'; })
             : null;
