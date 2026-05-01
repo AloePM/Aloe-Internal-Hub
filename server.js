@@ -2665,8 +2665,8 @@ BENCHMARK DATA:
     }
 // Pet policy shortcut — fetch all units and location board, fuzzy match address
 const isPetQ = lowerMsg.match(/pet|dog|cat|animal|fur/);
-const addressInMsg = userMsg.match(/\d+\s+\w[\w\s]+(?:court|ct|drive|dr|street|st|avenue|ave|lane|ln|way|road|rd|place|pl|blvd|boulevard|circle|cir|trail|trl)/i);
-if (isPetQ && addressInMsg) {
+const addressInMsg = userMsg.match(/\d+\s+[a-z]\w[\w\s]{4,40}/i);
+   if (isPetQ && addressInMsg) {
   try {
     const searchAddr = addressInMsg[0].toLowerCase().trim();
     const numMatch = searchAddr.match(/\d+/)?.[0];
