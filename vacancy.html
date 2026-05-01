@@ -479,7 +479,7 @@ function App() {
         {!loading && tab==='reports' && d && (
           <div>
             <div className="page-hdr"><div className="page-title">Owner Reports</div><div className="page-sub">Per-listing marketing summary, tour feedback, and weekly activity</div></div>
-            {d.units.map(u=><OwnerReport key={u.cardId} u={u}/>)}
+            {(d.units||[]).map((u,idx)=><OwnerReport key={u.cardId||idx} u={u}/>)}
           </div>
         )}
 
@@ -518,7 +518,7 @@ function App() {
 function PropertyRow({ u, expanded, setExpanded, showComp }) {
   const isExpanded = expanded === u.cardId;
   const pet = u.petInfo || { label: 'Pets OK*', cls: 'pet-ok' };
-  const tourIcon = u.completedTours > 0 ? '✅' : u.scheduledTours > 0 ? '📅' : '';
+  const tourIcon = (u.completedTours||0) > 0 ? '✅' : (u.scheduledTours||0) > 0 ? '📅' : '';
   return (
     <>
       <div className={`prop-row ${u.level.toLowerCase()}`} onClick={()=>setExpanded(isExpanded?null:u.cardId)}>
@@ -528,10 +528,10 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
         </div>
         <div className="prop-col"><span className={`badge badge-${u.level.toLowerCase()}`}>{u.level} ({u.score})</span></div>
         <div className="prop-col">
-          {u.leads}L
-          {u.leads>0&&u.showings===0&&<span className="tag tag-ol">OL</span>}
-          {' / '}{tourIcon}{u.completedTours}✓{u.scheduledTours>0&&` ${u.scheduledTours}📅`}
-          {u.canceledTours>0&&<span className="tag tag-ol">{u.canceledTours}✗</span>}
+          {u.leads||0}L
+          {(u.leads||0)>0&&(u.showings||0)===0&&<span className="tag tag-ol">OL</span>}
+          {' / '}{tourIcon}{u.completedTours||0}✓{(u.scheduledTours||0)>0&&` ${u.scheduledTours}📅`}
+          {(u.canceledTours||0)>0&&<span className="tag tag-ol">{u.canceledTours}✗</span>}
         </div>
         <div className="prop-col">{u.dom>0?u.dom:'—'}{u.dom>30&&<span className="tag tag-dom">{u.dom}d</span>}</div>
         <div className="prop-col">${u.rent>0?u.rent.toLocaleString():'—'}/mo</div>
@@ -554,12 +554,12 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
                 <div>
                   <div style={{fontSize:10,color:'var(--text3)',marginBottom:4,fontWeight:600}}>LEADS PER WEEK</div>
                   {u.weeklyActivity.map((w,i)=>{
-                    const max = Math.max(...u.weeklyActivity.map(x=>x.leads),1);
+                    const max = Math.max(...u.weeklyActivity.map(x=>x.leads||0).concat([1]));
                     return (
                       <div key={i} className="week-bar">
                         <div className="week-label">{w.label}</div>
-                        <div className="week-track"><div className="week-fill" style={{width:`${(w.leads/max)*100}%`}}/></div>
-                        <div className="week-count">{w.leads}</div>
+                        <div className="week-track"><div className="week-fill" style={{width:`${((w.leads||0)/max)*100}%`}}/></div>
+                        <div className="week-count">{w.leads||0}</div>
                       </div>
                     );
                   })}
@@ -567,12 +567,12 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
                 <div>
                   <div style={{fontSize:10,color:'var(--text3)',marginBottom:4,fontWeight:600}}>TOURS PER WEEK</div>
                   {u.weeklyActivity.map((w,i)=>{
-                    const max = Math.max(...u.weeklyActivity.map(x=>x.showings),1);
+                    const max = Math.max(...u.weeklyActivity.map(x=>x.showings||0).concat([1]));
                     return (
                       <div key={i} className="week-bar">
                         <div className="week-label">{w.label}</div>
-                        <div className="week-track"><div className="week-fill" style={{width:`${(w.showings/max)*100}%`,background:'var(--green)'}}/></div>
-                        <div className="week-count">{w.showings}</div>
+                        <div className="week-track"><div className="week-fill" style={{width:`${((w.showings||0)/max)*100}%`,background:'var(--green)'}}/></div>
+                        <div className="week-count">{w.showings||0}</div>
                       </div>
                     );
                   })}
