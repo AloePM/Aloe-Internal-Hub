@@ -342,19 +342,30 @@ function App() {
       let petInfo = { label: 'Pets OK*', cls: 'pet-ok' };
       try { petInfo = getPetLabel(u); } catch(e) {}
 
-      const owner = Array.isArray(u.owners) && u.owners.length > 0 ? (u.owners[0].name||'') : (Array.isArray(u.portfolio) && u.portfolio.length > 0 ? (u.portfolio[0].name||'') : '');
+      const ownerRaw = Array.isArray(u.owners) && u.owners.length > 0 ? u.owners[0] : (Array.isArray(u.portfolio) && u.portfolio.length > 0 ? u.portfolio[0] : null);
+      const owner = ownerRaw ? (typeof ownerRaw === 'string' ? ownerRaw : String(ownerRaw.name || ownerRaw.label || '')) : '';
+
+      const safeStr = v => {
+        if (v == null) return '';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'number') return String(v);
+        if (typeof v === 'object' && v.name) return String(v.name);
+        if (typeof v === 'object' && v.label) return String(v.label);
+        return '';
+      };
 
       return {
-        cardId: u.cardId || ('unit-'+uidx), address, city, rent, beds, baths, sqft,
+        cardId: String(u.cardId || ('unit-'+uidx)), 
+        address: safeStr(address), city: safeStr(city), 
+        rent, beds, baths: safeStr(baths), sqft,
         dom, listDate,
         leads: totalLeads, showings: scheduledTours + completedTours,
         scheduledTours, completedTours, canceledTours, applied,
         weeklyActivity, tourLeads,
-        petInfo, owner,
+        petInfo, owner: safeStr(owner),
         availableDate: u.availableDate ? new Date(u.availableDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD',
-        publishedForRent: u.publishedForRent, syndicate: u.syndicate,
-        rentReady: u.rentReady, lockboxNumber: u.lockboxNumber,
-        virtualTour: u.virtualTourUrl, applicationUrl: u.applicationUrl,
+        rentReady: !!u.rentReady, lockboxNumber: safeStr(u.lockboxNumber),
+        virtualTour: safeStr(u.virtualTourUrl), applicationUrl: safeStr(u.applicationUrl),
         ...risk, lostPerDay: rent > 0 ? +(rent / 30).toFixed(2) : 0, lostPerMonth: rent,
       };
       } catch(unitErr) {
