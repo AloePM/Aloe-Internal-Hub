@@ -2749,26 +2749,69 @@ BENCHMARK DATA:
         console.error('Showing shortcut error:', e.message);
       }
     }
-// Pet policy shortcut — calls /api/pet-policy route
+// Pet policy shortcut — calls /api/pet-policy logic directly
 var isPetQ2 = lowerMsg.match(/pet|dog|cat|animal|fur/);
 var addrInMsg2 = userMsg.match(/\d+\s+[a-z]\w[\w\s]{4,40}/i);
 if (isPetQ2 && addrInMsg2) {
   try {
-    var petRes = await fetch('http://localhost:' + (process.env.PORT || 10000) + '/api/pet-policy?address=' + encodeURIComponent(addrInMsg2[0]));
-    var petData = await petRes.json();
-    if (petData.found) {
-      var petText = 'Found ' + petData.address + ' in Aptly.\nStatus: ' + petData.stage + (petData.beds ? ' | ' + petData.beds + 'bd/' + petData.baths + 'ba' : '') + (petData.rent ? ' | $' + petData.rent + '/mo' : '') + (petData.owner ? ' | Owner: ' + petData.owner : '') + '\n\n' + petData.verdict;
-      if (petData.petRestrictions && petData.petRestrictions.length > 0) petText += '\nRestrictions: ' + petData.petRestrictions.join(', ');
-      if (petData.petDeposit) petText += '\nPet deposit: $' + petData.petDeposit;
-      petText += '\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed restrictions unless owner requests. All pets require screening.';
-      return res.json({ content: [{ type: 'text', text: petText }] });
-    } else if (petData.partial && petData.partial.length > 0) {
-      return res.json({ content: [{ type: 'text', text: 'Couldn\'t find "' + addrInMsg2[0] + '" in Aptly. Similar addresses:\n\n' + petData.partial.join('\n') + '\n\nDid you mean one of these?' }] });
+    const petLookup = await (async function() {
+      const addr = addrInMsg2[0].toLowerCase().trim();
+      const numMatch2 = addr.match(/\d+/) ? addr.match(/\d+/)[0] : null;
+      const words2 = addr.replace(/\d+/g,'').replace(/\b(court|ct|drive|dr|street|st|avenue|ave|lane|ln|way|road|rd|place|pl|blvd|circle|cir|trail|trl)\b/gi,'').trim().split(/\s+/).filter(function(w){ return w.length > 2; });
+      let allCards2 = [];
+      let pg2 = 0;
+      while (pg2 < 10) {
+        const d2 = await unitsFetch('/api/board/unit', { page: pg2, pageSize: 100 });
+        const batch2 = Array.isArray(d2) ? d2 : (d2 && d2.data) || [];
+        if (batch2.length === 0) break;
+        allCards2 = allCards2.concat(batch2);
+        if (batch2.length < 100) break;
+        pg2++;
+      }
+      const found2 = allCards2.find(function(c) {
+        const s = (c.street || '').toLowerCase();
+        const hasNum2 = numMatch2 && s.includes(numMatch2);
+        const hasWord2 = words2.some(function(w){ return s.includes(w); });
+        return hasNum2 && hasWord2;
+      });
+      if (!found2) {
+        const partial2 = allCards2.filter(function(c){ return numMatch2 && (c.street||'').toLowerCase().includes(numMatch2); }).slice(0,5).map(function(c){ return c.street||'?'; });
+        return { found: false, partial: partial2 };
+      }
+      const restr2 = Array.isArray(found2.petRestrictions) ? found2.petRestrictions : [];
+      const pa2 = found2.petsAllowed;
+      const noDogs2 = restr2.some(function(r){ return /no dog/i.test(r); });
+      const noCats2 = restr2.some(function(r){ return /no cat/i.test(r); });
+      const dogsOk2 = restr2.some(function(r){ return /dog.*allow/i.test(r); });
+      const catsOk2 = restr2.some(function(r){ return /cat.*allow/i.test(r); });
+      const noPets2 = pa2 === false || (noDogs2 && noCats2);
+      const fullyOk2 = (pa2 === true || dogsOk2 || catsOk2) && !noDogs2 && !noCats2;
+      var verdict2;
+      if (noPets2) verdict2 = '🚫 No pets allowed at this property.';
+      else if (noDogs2 && !noCats2) verdict2 = '⚠️ Cats allowed, but NO DOGS at this property.';
+      else if (noCats2 && !noDogs2) verdict2 = '⚠️ Dogs allowed, but NO CATS at this property.';
+      else if (fullyOk2) verdict2 = '✅ Pets allowed (dogs and cats).';
+      else verdict2 = '⚠️ No specific pet restriction on file — standard Aloe policy applies.';
+      const owners2 = Array.isArray(found2.owners) ? found2.owners.map(function(o){ return o.name||''; }).join(', ') : '';
+      const deposit2 = found2.animalDeposit ? found2.animalDeposit.amount : null;
+      return { found: true, address: found2.street||'?', stage: found2.stage||'', beds: found2.beds||'', baths: found2.baths||'', rent: found2.marketRent ? (found2.marketRent.amount||'') : '', owner: owners2, verdict: verdict2, petRestrictions: restr2, deposit: deposit2 };
+    })();
+    if (petLookup.found) {
+      var petText2 = 'Found ' + petLookup.address + ' in Aptly.';
+      petText2 += '\nStatus: ' + petLookup.stage + (petLookup.beds ? ' | ' + petLookup.beds + 'bd/' + petLookup.baths + 'ba' : '') + (petLookup.rent ? ' | $' + petLookup.rent + '/mo' : '') + (petLookup.owner ? ' | Owner: ' + petLookup.owner : '');
+      petText2 += '\n\n' + petLookup.verdict;
+      if (petLookup.petRestrictions && petLookup.petRestrictions.length > 0) petText2 += '\nRestrictions: ' + petLookup.petRestrictions.join(', ');
+      if (petLookup.deposit) petText2 += '\nPet deposit: $' + petLookup.deposit;
+      petText2 += '\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed restrictions unless owner requests. All pets require screening.';
+      return res.json({ content: [{ type: 'text', text: petText2 }] });
+    } else if (petLookup.partial && petLookup.partial.length > 0) {
+      return res.json({ content: [{ type: 'text', text: 'Couldn\'t find "' + addrInMsg2[0] + '" in Aptly. Similar addresses:\n\n' + petLookup.partial.join('\n') + '\n\nDid you mean one of these?' }] });
     }
   } catch(e) {
-    console.error('Pet route error:', e.message);
+    console.error('Pet shortcut error:', e.message);
   }
 }
+
     // ─── Main Claude tool-loop ───────────────────────────────────────────────
     let current = messages.slice();
     for (let i = 0; i < 10; i++) {
