@@ -239,6 +239,7 @@ const TABS = [
   { id: "reports", label: "Owner Reports" },
   { id: "market", label: "Market Data" },
   { id: "sync", label: "🔄 Sync Check" },
+  { id: "commercial", label: "🏢 Commercial Comps" },
 ];
 
 function App() {
@@ -251,6 +252,11 @@ function App() {
   const [search, setSearch] = useState("");
   const [syncData, setSyncData] = useState(null);
   const [syncLoading, setSyncLoading] = useState(false);
+  const [commercialData, setCommercialData] = useState(null);
+  const [commercialLoading, setCommercialLoading] = useState(false);
+  const [commercialCity, setCommercialCity] = useState('Chandler');
+  const [commercialType, setCommercialType] = useState('all');
+  const [commercialTxn, setCommercialTxn] = useState('lease');
   const [expanded, setExpanded] = useState(null);
 
   async function fetchAll() {
@@ -461,6 +467,19 @@ function App() {
   }
 
   useEffect(() => { if (tab === 'sync' && !syncData) fetchSync(); }, [tab]);
+
+  async function fetchCommercial(city, type, txn) {
+    setCommercialLoading(true);
+    setCommercialData(null);
+    try {
+      const params = new URLSearchParams({ city: city||commercialCity, state:'AZ', type: type||commercialType, listingType: txn||commercialTxn, maxItems:30 });
+      const data = await fetch('/api/commercial-comps?' + params).then(r=>r.json());
+      setCommercialData(data);
+    } catch(e) { setCommercialData({ error: e.message }); }
+    finally { setCommercialLoading(false); }
+  }
+
+  useEffect(() => { if (tab === 'commercial' && !commercialData) fetchCommercial(); }, [tab]);
 
   const filteredUnits = (data?.units || []).filter(u => {
     const matchFilter = filter === 'ALL' || u.level === filter;
@@ -847,6 +866,196 @@ function App() {
 
                   <div style={{textAlign:'right',paddingTop:4}}>
                     <button className="action-btn" onClick={()=>{setSyncData(null);fetchSync();}} style={{background:'var(--teal)',color:'#fff',border:'none',fontSize:12,padding:'6px 14px'}}>↻ Re-run Sync Check</button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {tab==='commercial' && (
+          <div>
+            <div className="page-hdr">
+              <div className="page-title">🏢 Commercial Comp Analysis</div>
+              <div className="page-sub">Live commercial listings from Crexi + LoopNet via Apify — sale and lease comps for Phoenix metro</div>
+            </div>
+
+            {/* Controls */}
+            <div style={{display:'flex',gap:10,marginBottom:20,flexWrap:'wrap',alignItems:'flex-end'}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:5}}>City</div>
+                <select value={commercialCity} onChange={e=>setCommercialCity(e.target.value)}
+                  style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:8,fontFamily:'inherit',fontSize:13,background:'var(--bg)',color:'var(--text)',outline:'none'}}>
+                  {['Chandler','Gilbert','Scottsdale','Maricopa','Phoenix','Mesa','Tempe','Glendale','Peoria','Queen Creek','San Tan Valley'].map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:5}}>Property Type</div>
+                <select value={commercialType} onChange={e=>setCommercialType(e.target.value)}
+                  style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:8,fontFamily:'inherit',fontSize:13,background:'var(--bg)',color:'var(--text)',outline:'none'}}>
+                  <option value="all">All Types</option>
+                  <option value="office">Office</option>
+                  <option value="retail">Retail / NNN</option>
+                  <option value="industrial">Industrial</option>
+                  <option value="multifamily">Multifamily</option>
+                  <option value="land">Land</option>
+                  <option value="mixed-use">Mixed Use</option>
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:5}}>Transaction</div>
+                <select value={commercialTxn} onChange={e=>setCommercialTxn(e.target.value)}
+                  style={{padding:'8px 12px',border:'1px solid var(--border)',borderRadius:8,fontFamily:'inherit',fontSize:13,background:'var(--bg)',color:'var(--text)',outline:'none'}}>
+                  <option value="lease">For Lease</option>
+                  <option value="sale">For Sale</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+              <button className="action-btn" onClick={()=>fetchCommercial(commercialCity,commercialType,commercialTxn)}
+                style={{background:'var(--teal)',color:'#fff',border:'none',padding:'8px 18px',fontSize:13,fontWeight:600,cursor:'pointer',borderRadius:8}}>
+                🔍 Search
+              </button>
+            </div>
+
+            {/* Loading */}
+            {commercialLoading && (
+              <div className="loading">
+                <div className="spinner"/>
+                <div>Pulling {commercialType==='all'?'commercial':commercialType} listings from Crexi for {commercialCity}…</div>
+                <div style={{fontSize:11,color:'var(--text3)'}}>First run takes ~30–60s · Results cached 7 days</div>
+              </div>
+            )}
+
+            {/* Error / No key */}
+            {!commercialLoading && commercialData?.error && (
+              <div style={{background:commercialData.error.includes('APIFY')?'#eff6ff':'#fef2f2',border:'1px solid '+(commercialData.error.includes('APIFY')?'#bfdbfe':'#fecaca'),borderRadius:12,padding:'24px 28px',textAlign:'center'}}>
+                {commercialData.error.includes('APIFY') ? (
+                  <>
+                    <div style={{fontSize:18,fontWeight:700,color:'#1d4ed8',marginBottom:8}}>🔑 Apify API Key Needed</div>
+                    <div style={{fontSize:13,color:'#3b82f6',marginBottom:16}}>Add your Apify key to Render environment variables to enable commercial comp lookups</div>
+                    <div style={{textAlign:'left',background:'#fff',borderRadius:10,padding:'14px 18px',display:'inline-block',minWidth:320}}>
+                      <div style={{display:'flex',gap:8,marginBottom:8,fontSize:13,color:'var(--text2)'}}><span style={{width:20,height:20,borderRadius:'50%',background:'var(--teal)',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>1</span><span>Go to <strong>apify.com</strong> → create free account</span></div>
+                      <div style={{display:'flex',gap:8,marginBottom:8,fontSize:13,color:'var(--text2)'}}><span style={{width:20,height:20,borderRadius:'50%',background:'var(--teal)',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>2</span><span>Settings → Integrations → copy <strong>API Token</strong></span></div>
+                      <div style={{display:'flex',gap:8,fontSize:13,color:'var(--text2)'}}><span style={{width:20,height:20,borderRadius:'50%',background:'var(--teal)',color:'#fff',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>3</span><span>Render → Environment → <code style={{background:'#f1f5f9',padding:'1px 5px',borderRadius:4,fontFamily:'monospace',fontSize:11}}>APIFY_API_KEY = your-token</code></span></div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{color:'var(--red)',fontSize:13}}>❌ {commercialData.error}</div>
+                )}
+              </div>
+            )}
+
+            {/* Results */}
+            {!commercialLoading && commercialData && !commercialData.error && (() => {
+              const d = commercialData;
+              const listings = d.listings || [];
+              const stats = d.stats;
+              const fmt$ = v => v > 0 ? '$'+Number(Math.round(v)).toLocaleString() : '—';
+              const fmtSqft = v => v > 0 ? Number(Math.round(v)).toLocaleString()+' sqft' : '—';
+
+              return (
+                <div>
+                  {/* KPI strip */}
+                  <div className="kpi-row cols-5" style={{marginBottom:16}}>
+                    <div className="kpi" style={{borderTop:'3px solid var(--purple)'}}>
+                      <div className="kpi-label">Listings Found</div>
+                      <div className="kpi-value" style={{color:'var(--purple)'}}>{listings.length}</div>
+                      <div className="kpi-sub">{d.city}, AZ · {d.listingType}</div>
+                    </div>
+                    <div className="kpi">
+                      <div className="kpi-label">Median Price</div>
+                      <div className="kpi-value" style={{fontSize:20}}>{stats ? fmt$(stats.medianPrice) : '—'}</div>
+                      <div className="kpi-sub">{d.listingType==='lease'?'per sqft/yr or total':'asking price'}</div>
+                    </div>
+                    <div className="kpi">
+                      <div className="kpi-label">Avg Price/SqFt</div>
+                      <div className="kpi-value" style={{fontSize:20}}>{stats?.avgPricePerSqft > 0 ? '$'+stats.avgPricePerSqft : '—'}</div>
+                      <div className="kpi-sub">per square foot</div>
+                    </div>
+                    <div className="kpi">
+                      <div className="kpi-label">Avg Cap Rate</div>
+                      <div className="kpi-value" style={{fontSize:20}}>{stats?.avgCapRate || '—'}</div>
+                      <div className="kpi-sub">investment return</div>
+                    </div>
+                    <div className="kpi">
+                      <div className="kpi-label">Sources</div>
+                      <div className="kpi-value" style={{fontSize:16}}>{(d.sources||[]).join(', ') || '—'}</div>
+                      <div className="kpi-sub">{d.fromCache?'Cached 7 days':'Live pull'}</div>
+                    </div>
+                  </div>
+
+                  {listings.length === 0 ? (
+                    <div style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:10,padding:'24px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+                      No listings found for {d.city} · {d.type} · {d.listingType}. Try a different city or property type, or Crexi may have limited data for this combination.
+                    </div>
+                  ) : (
+                    <div className="card" style={{padding:0,overflow:'hidden'}}>
+                      <div style={{padding:'14px 20px 12px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                        <div className="card-title" style={{marginBottom:0}}><span className="card-bar" style={{background:'var(--purple)'}}/>Commercial Listings — {d.city}, AZ ({listings.length})</div>
+                        <div style={{fontSize:11,color:'var(--text3)'}}>Via Crexi{d.sources?.includes('loopnet')?' + LoopNet':''} · Apify</div>
+                      </div>
+                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                        <thead>
+                          <tr style={{background:'var(--bg3)'}}>
+                            <th style={{padding:'8px 14px',textAlign:'left',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>Address / Property</th>
+                            <th style={{padding:'8px 10px',textAlign:'left',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>Type</th>
+                            <th style={{padding:'8px 10px',textAlign:'right',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>Price / Rate</th>
+                            <th style={{padding:'8px 10px',textAlign:'right',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>Size</th>
+                            <th style={{padding:'8px 10px',textAlign:'right',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>$/SqFt</th>
+                            <th style={{padding:'8px 10px',textAlign:'right',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>Cap Rate</th>
+                            <th style={{padding:'8px 10px',textAlign:'right',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>NOI</th>
+                            <th style={{padding:'8px 10px',textAlign:'left',color:'var(--text3)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'1px solid var(--border)'}}>Src</th>
+                            <th style={{padding:'8px 10px',borderBottom:'1px solid var(--border)'}}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {listings.map((c,i) => (
+                            <tr key={i} style={{borderBottom:'1px solid var(--border)'}}>
+                              <td style={{padding:'10px 14px'}}>
+                                <div style={{fontWeight:600,color:'var(--text)',fontSize:13}}>{c.address||'—'}</div>
+                                {c.tenants && <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>Tenant: {c.tenants}</div>}
+                                {c.leaseTerm && <div style={{fontSize:11,color:'var(--text3)'}}>Lease: {c.leaseTerm}</div>}
+                              </td>
+                              <td style={{padding:'10px',color:'var(--text2)',fontSize:12}}>
+                                <span style={{background:'#ede9fe',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:10,fontWeight:600}}>{c.propertyType||d.type}</span>
+                                <div style={{fontSize:10,color:'var(--text3)',marginTop:3}}>{c.listingType}</div>
+                              </td>
+                              <td style={{padding:'10px',textAlign:'right',fontWeight:700,color:'var(--text)',fontFamily:'var(--mono)',fontSize:13}}>{c.price>0?fmt$(c.price):c.leaseRate>0?fmt$(c.leaseRate)+'/sf/yr':'—'}</td>
+                              <td style={{padding:'10px',textAlign:'right',color:'var(--text2)',fontFamily:'var(--mono)',fontSize:12}}>{fmtSqft(c.sqft)}</td>
+                              <td style={{padding:'10px',textAlign:'right',color:'var(--text3)',fontFamily:'var(--mono)',fontSize:12}}>{c.pricePerSqft>0?'$'+c.pricePerSqft:'—'}</td>
+                              <td style={{padding:'10px',textAlign:'right',fontWeight:600,color:c.capRate>0?'var(--green)':'var(--text3)',fontSize:13}}>{c.capRate>0?c.capRate.toFixed(2)+'%':'—'}</td>
+                              <td style={{padding:'10px',textAlign:'right',color:'var(--text2)',fontFamily:'var(--mono)',fontSize:12}}>{c.noi>0?fmt$(c.noi)+'/yr':'—'}</td>
+                              <td style={{padding:'10px'}}>
+                                <span style={{fontSize:10,padding:'2px 6px',borderRadius:8,fontWeight:600,background:c.source==='crexi'?'#ecfdf5':'#e0f2fe',color:c.source==='crexi'?'#065f46':'#0369a1'}}>{c.source||'?'}</span>
+                              </td>
+                              <td style={{padding:'10px'}}>
+                                {c.listingUrl && <a href={c.listingUrl} target="_blank" rel="noopener noreferrer" style={{color:'var(--teal-d)',textDecoration:'none',fontSize:11}}>View ↗</a>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{padding:'10px 14px',fontSize:11,color:'var(--text3)',borderTop:'1px solid var(--border)'}}>
+                        Data from Crexi.com via Apify · Cached 7 days · {d.fromCache?'Cached '+new Date(d.fetchedAt).toLocaleDateString():'Fresh pull '+new Date().toLocaleDateString()}
+                        <span style={{marginLeft:12,color:'var(--purple)',fontWeight:600}}>Apify cost: ~$0.003/listing</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quick links */}
+                  <div className="card" style={{marginTop:8}}>
+                    <div className="card-title"><span className="card-bar" style={{background:'var(--purple)'}}/>Research Links</div>
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                      {[
+                        ['🏢 Crexi — For Lease', `https://www.crexi.com/lease/az/${commercialCity.toLowerCase().replace(/\s+/g,'-')}`],
+                        ['🏢 Crexi — For Sale', `https://www.crexi.com/properties/az/${commercialCity.toLowerCase().replace(/\s+/g,'-')}`],
+                        ['🔍 LoopNet — For Lease', `https://www.loopnet.com/search/commercial-real-estate/${commercialCity.toLowerCase().replace(/\s+/g,'-')}-az/for-lease/`],
+                        ['🔍 LoopNet — For Sale', `https://www.loopnet.com/search/commercial-real-estate/${commercialCity.toLowerCase().replace(/\s+/g,'-')}-az/for-sale/`],
+                        ['📊 CommercialCafe', `https://www.commercialcafe.com/commercial-property/us/az/${commercialCity.toLowerCase().replace(/\s+/g,'-')}/`],
+                      ].map(([label,url]) => (
+                        <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="comp-link">{label}</a>
+                      ))}
+                    </div>
                   </div>
                 </div>
               );
