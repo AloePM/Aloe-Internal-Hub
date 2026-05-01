@@ -3152,6 +3152,10 @@ app.get('/debug/pet-test', async function(req, res) {
 app.get('/logo.png', function(req, res) {
   res.sendFile(new URL('AloePM-Logo_FullColor__2_.png', import.meta.url).pathname);
 });
+app.get('/rent-analysis', (req, res) =>
+  res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
+app.get('/sale-analysis', (req, res) =>
+  res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -3367,13 +3371,26 @@ app.get('*', function(req, res) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               </a>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
   <span class="tool-badge badge-live">LIVE</span>
   <div class="tool-icon icon-teal">🏠</div>
   <div class="tool-name">Vacancy Risk & Market Intelligence</div>
   <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
-</a>           
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+</a>
+
+<a href="/rent-analysis" class="tool-card primary" data-name="rent analysis market comps zillow redfin LTR STR furnished">
+  <span class="tool-badge badge-live">LIVE</span>
+  <div class="tool-icon icon-teal">🏘️</div>
+  <div class="tool-name">Rent Analysis</div>
+  <div class="tool-desc">Live comps from Zillow, Redfin & Realtor.com · STR/Airbnb · Furnished</div>
+</a>
+
+<a href="/sale-analysis" class="tool-card purple-top" data-name="sale analysis comps zestimate redfin estimate owner equity">
+  <span class="tool-badge badge-live">LIVE</span>
+  <div class="tool-icon icon-purple">🏡</div>
+  <div class="tool-name">Sale Analysis</div>
+  <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
+</a>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           </div>
                                                                                                     
                                                                                                                                                                                                                                                                                                                         </div>
