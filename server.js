@@ -25,7 +25,32 @@ app.get('/vacancy', (req, res) => {
 app.get('/vacancy-risk', (req, res) => {
   res.sendFile(new URL('./vacancy-risk.html', import.meta.url).pathname);
 });
-
+app.get('/api/aptly/units', async function(req, res) {
+  try {
+    const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    let allCards = [];
+    let page = 0;
+    while (page < 10) {
+      const url = new URL('https://core-api.getaptly.com/api/board/unit');
+      url.searchParams.set('page', page);
+      url.searchParams.set('pageSize', 100);
+      const r = await fetch(url.toString(), { headers: { 'x-token': token, 'Accept': 'application/json' } });
+      if (!r.ok) break;
+      const data = await r.json();
+      const batch = Array.isArray(data) ? data : (data && data.data) || [];
+      if (batch.length === 0) break;
+      allCards = allCards.concat(batch);
+      if (batch.length < 100) break;
+      page++;
+    }
+    const published = allCards.filter(function(u) {
+      return u.publishedForRent === true || u.syndicate === true || u['Published For Rent'] === 'checked';
+    });
+    res.json({ units: published, total: allCards.length, published: published.length });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/aptly/leads', async (req, res) => {
     try {
           const r = await fetch('https://api.getaptly.com/v1/boards?page=0&size=200', {
