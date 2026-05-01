@@ -2751,8 +2751,8 @@ BENCHMARK DATA:
     }
 // Pet policy shortcut — calls /api/pet-policy logic directly
 var isPetQ2 = lowerMsg.match(/pet|dog|cat|animal|fur/);
-var addrInMsg2 = userMsg.match(/\d+\s+[a-z]\w[\w\s]{4,40}/i);
-if (isPetQ2 && addrInMsg2) {
+var addrInMsg2 = userMsg.match(/\d+\s+[\w\s]{5,50}/i);
+   if (isPetQ2 && addrInMsg2) {
   try {
     const petLookup = await (async function() {
       const addr = addrInMsg2[0].toLowerCase().trim();
