@@ -38,7 +38,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .nav-btn{padding:12px 16px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;font-family:'Inter',sans-serif}
 .nav-btn.active{color:var(--teal-d);border-bottom-color:var(--teal)}
 .nav-btn:hover{color:var(--text)}
-.main{padding:20px 24px;max-width:1400px}
+.main{padding:20px 24px;max-width:1400px;padding-top:24px}
 .page-hdr{margin-bottom:20px}
 .page-title{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
 .page-sub{font-size:13px;color:var(--text3);margin-top:2px}
@@ -260,11 +260,13 @@ function App() {
         u['Published For Rent'] === 'checked' || u['Syndicate'] === 'checked'
       );
 
-      // Fetch leads — use basic endpoint, leads-rich requires server route not yet deployed
+      // Fetch leads from leads-rich route (schema-mapped from core API)
       let richLeads = [];
       try {
-        const ar = await fetch('/api/aptly/leads').then(r => r.json());
-        richLeads = Array.isArray(ar) ? ar : (ar?.leads || []);
+        const leadsRes = await fetch('/api/aptly/leads-rich').then(r => r.json());
+        if (leadsRes && Array.isArray(leadsRes.leads)) {
+          richLeads = leadsRes.leads;
+        }
       } catch(e) { richLeads = []; }
 
       const processed = processData(publishedUnits, richLeads);
@@ -297,14 +299,14 @@ function App() {
         }
       } catch(e) {}
 
-      // Match leads to this property (safely)
-      const addrNorm = normalize(address);
-      const propLeads = safeLeads.filter(l => {
+      // Match leads to this property by street number + word
+      const streetNum = (address.match(/^\d+/) || [])[0] || '';
+      const propLeads = streetNum ? safeLeads.filter(l => {
         try {
-          const pref = normalize(l.address || l.propertyAddress || l.preferredRental || l.title || '');
-          return addrNorm && pref && pref.length > 3 && (addrNorm.includes(pref.substring(0,8)) || pref.includes(addrNorm.substring(0,8)));
+          const pref = (l.address || l.preferredRental || '');
+          return pref && pref.includes(streetNum);
         } catch(e) { return false; }
-      });
+      }) : [];
 
       const totalLeads = propLeads.length;
       const scheduledTours = propLeads.filter(l => /scheduled tour/i.test(l.stage||'')).length;
@@ -418,7 +420,7 @@ function App() {
 
       <div className="nav">
         {TABS.map(t => (
-          <button key={t.id} className={`nav-btn${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>{t.label}</button>
+          <button key={t.id} className={`nav-btn${tab===t.id?' active':''}`} onClick={()=>{ setTab(t.id); window.scrollTo(0,0); }}>{t.label}</button>
         ))}
       </div>
 
