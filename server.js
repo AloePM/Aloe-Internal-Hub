@@ -2663,96 +2663,79 @@ BENCHMARK DATA:
         console.error('Showing shortcut error:', e.message);
       }
     }
-// Pet policy shortcut — fetch all units, fuzzy match, read pet fields directly
+// Pet policy shortcut
 const isPetQ = lowerMsg.match(/pet|dog|cat|animal|fur/);
 const addressInMsg = userMsg.match(/\d+\s+[a-z]\w[\w\s]{4,40}/i);
 if (isPetQ && addressInMsg) {
   try {
     const searchAddr = addressInMsg[0].toLowerCase().trim();
-    const numMatch = searchAddr.match(/\d+/)?.[0];
+    const numMatch = searchAddr.match(/\d+/) ? searchAddr.match(/\d+/)[0] : null;
     const wordMatch = searchAddr
       .replace(/\d+/g, '')
       .replace(/\b(court|ct|drive|dr|street|st|avenue|ave|lane|ln|way|road|rd|place|pl|blvd|boulevard|circle|cir|trail|trl)\b/gi, '')
       .trim().split(/\s+/).filter(function(w) { return w.length > 2; });
-
     const addrMatch = function(addr) {
       const a = (addr || '').toLowerCase();
       const hasNum = numMatch && a.includes(numMatch);
       const hasWord = wordMatch.some(function(w) { return a.includes(w); });
       return hasNum && hasWord;
     };
-
     const getPetVerdict = function(card) {
-      // Read Pet Restrictions array directly
       const restrictions = Array.isArray(card['Pet Restrictions']) ? card['Pet Restrictions'] : [];
-      const restrictStr = restrictions.join(', ').toLowerCase();
       const petsAllowed = card['Pets Allowed'];
       const petsAllowedStr = String(petsAllowed || '').toLowerCase();
-
       const noDogs = restrictions.some(function(r) { return /no dog/i.test(r); }) || /no dog/i.test(petsAllowedStr);
       const noCats = restrictions.some(function(r) { return /no cat/i.test(r); }) || /no cat/i.test(petsAllowedStr);
       const dogsOk = restrictions.some(function(r) { return /dog.*allow/i.test(r); });
       const catsOk = restrictions.some(function(r) { return /cat.*allow/i.test(r); });
       const noPets = petsAllowed === false || /^no$/i.test(petsAllowedStr) || (noDogs && noCats);
       const fullyOk = (petsAllowed === true || dogsOk || catsOk) && !noDogs && !noCats;
-
-      let verdict = '';
-      if (noPets) {
-        verdict = '🚫 No pets allowed at this property.';
-      } else if (noDogs && !noCats) {
-        verdict = '⚠️ Cats allowed, but NO DOGS at this property.';
-      } else if (noCats && !noDogs) {
-        verdict = '⚠️ Dogs allowed, but NO CATS at this property.';
-      } else if (fullyOk) {
-        verdict = '✅ Pets allowed (dogs and cats).';
-      } else {
-        verdict = '⚠️ No specific restriction on file — standard Aloe policy applies (pets allowed, $250/pet fee, max 4 pets).';
-      }
-
-      let details = '';
-      if (restrictions.length > 0) details += '\nPet Restrictions: ' + restrictions.join(', ');
-      if (petsAllowed !== undefined && petsAllowed !== '') details += '\nPets Allowed field: ' + petsAllowed;
-      const petDeposit = card['Pet Deposit'] || '';
-      if (petDeposit) details += '\nPet Deposit: ' + petDeposit;
-
+      var verdict = '';
+      if (noPets) { verdict = '🚫 No pets allowed at this property.'; }
+      else if (noDogs && !noCats) { verdict = '⚠️ Cats allowed, but NO DOGS at this property.'; }
+      else if (noCats && !noDogs) { verdict = '⚠️ Dogs allowed, but NO CATS at this property.'; }
+      else if (fullyOk) { verdict = '✅ Pets allowed (dogs and cats).'; }
+      else { verdict = '⚠️ No specific restriction on file — standard Aloe policy applies (pets allowed, $250/pet fee, max 4 pets).'; }
+      var details = '';
+      if (restrictions.length > 0) { details += '\nPet Restrictions: ' + restrictions.join(', '); }
+      if (petsAllowed !== undefined && petsAllowed !== '') { details += '\nPets Allowed field: ' + petsAllowed; }
+      var petDeposit = card['Pet Deposit'] || '';
+      if (petDeposit) { details += '\nPet Deposit: ' + petDeposit; }
       return verdict + details;
     };
-
-    // Search ALL units (occupied and vacant) by street field
     const units = await getUnitsCards();
-    const unitMatch = units.find(function(c) {
-      return addrMatch(c['Street'] || '') || addrMatch((c['Address'] && c['Address'].address) || '');
-    });
-
-    if (unitMatch) {
-      const addr = unitMatch['Street'] || unitMatch['Marketing Name'] || '?';
-      const stage = unitMatch['Stage'] || '';
-      const beds = unitMatch['Beds'] ? unitMatch['Beds'] + 'bd/' + (unitMatch['Baths'] || '?') + 'ba' : '';
-      const rent = unitMatch['Market Rent'] || '';
-      const owner = Array.isArray(unitMatch['Owners'])
-        ? unitMatch['Owners'].map(function(o) { return o.name || ''; }).join(', ')
-        : '';
-      const verdict = getPetVerdict(unitMatch);
-      const text = 'Found ' + addr + ' in Aptly.' +
-        '\nStatus: ' + stage + (beds ? ' | ' + beds : '') + (rent ? ' | ' + rent : '') + (owner ? ' | Owner: ' + owner : '') +
-        '\n\n' + verdict +
-        '\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed restrictions unless owner requests. All pets require screening.';
-      return res.json({ content: [{ type: 'text', text }] });
+    var unitMatch = null;
+    for (var ui = 0; ui < units.length; ui++) {
+      var c = units[ui];
+      var streetVal = c['Street'] || '';
+      var addrObj = c['Address'];
+      var addrVal = (addrObj && typeof addrObj === 'object') ? (addrObj.address || '') : '';
+      if (addrMatch(streetVal) || addrMatch(addrVal)) { unitMatch = c; break; }
     }
-
-    // Not found — show partials by street number
-    const numOnly = numMatch || '';
-    const partial = units.filter(function(c) {
-      return numOnly && (c['Street'] || '').toLowerCase().includes(numOnly);
-    }).slice(0, 5);
-    const fallback = partial.length > 0
-      ? 'Couldn\'t find "' + addressInMsg[0] + '" in Aptly. Properties with "' + numOnly + '" in the address:\n\n' +
-        partial.map(function(c) { return c['Street'] || '?'; }).join('\n') + '\n\nDid you mean one of these?'
+    if (unitMatch) {
+      var addr = unitMatch['Street'] || unitMatch['Marketing Name'] || '?';
+      var stage = unitMatch['Stage'] || '';
+      var beds = unitMatch['Beds'] ? unitMatch['Beds'] + 'bd/' + (unitMatch['Baths'] || '?') + 'ba' : '';
+      var rent = unitMatch['Market Rent'] || '';
+      var ownersArr = Array.isArray(unitMatch['Owners']) ? unitMatch['Owners'] : [];
+      var owner = ownersArr.map(function(o) { return o.name || ''; }).join(', ');
+      var verdict2 = getPetVerdict(unitMatch);
+      var text = 'Found ' + addr + ' in Aptly.\nStatus: ' + stage + (beds ? ' | ' + beds : '') + (rent ? ' | ' + rent : '') + (owner ? ' | Owner: ' + owner : '') + '\n\n' + verdict2 + '\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed restrictions unless owner requests. All pets require screening.';
+      return res.json({ content: [{ type: 'text', text: text }] });
+    }
+    var numOnly = numMatch || '';
+    var partial = [];
+    for (var pi = 0; pi < units.length && partial.length < 5; pi++) {
+      if (numOnly && (units[pi]['Street'] || '').toLowerCase().includes(numOnly)) { partial.push(units[pi]); }
+    }
+    var fallback = partial.length > 0
+      ? 'Couldn\'t find "' + addressInMsg[0] + '" in Aptly. Properties with "' + numOnly + '" in the address:\n\n' + partial.map(function(c2) { return c2['Street'] || '?'; }).join('\n') + '\n\nDid you mean one of these?'
       : 'Couldn\'t find "' + addressInMsg[0] + '" in Aptly. Try the full street name. Standard Aloe pet policy applies unless the listing notes a restriction.';
-    return res.json({ cont
-
-    // ─── Main Claude tool-loop ───────────────────────────────────────────────
-   
+    return res.json({ content: [{ type: 'text', text: fallback }] });
+  } catch(e) {
+    console.error('Pet shortcut error:', e.message);
+  }
+}
     // ─── Main Claude tool-loop ───────────────────────────────────────────────
     let current = messages.slice();
     for (let i = 0; i < 10; i++) {
