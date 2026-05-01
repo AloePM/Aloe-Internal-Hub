@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .logo-icon{width:32px;height:32px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
 .logo-text{font-size:15px;font-weight:700;color:var(--text)}
 .logo-sub{font-size:12px;color:var(--text3)}
-.status-bar{font-size:11px;padding:4px 0;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;gap:20px;padding:6px 24px;align-items:center;flex-wrap:wrap}
+.status-bar{font-size:11px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;gap:20px;padding:6px 24px;align-items:center;flex-wrap:wrap}
 .status-item{display:flex;align-items:center;gap:5px;color:var(--text2)}
 .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .dot-green{background:var(--green);animation:pulse 2s infinite}
@@ -44,7 +44,6 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .page-sub{font-size:13px;color:var(--text3);margin-top:2px}
 .kpi-row{display:grid;gap:12px;margin-bottom:20px}
 .cols-4{grid-template-columns:repeat(4,1fr)}
-.cols-5{grid-template-columns:repeat(5,1fr)}
 .cols-6{grid-template-columns:repeat(6,1fr)}
 .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
 .kpi-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;font-weight:600}
@@ -54,8 +53,6 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .badge-high{background:var(--red-bg);color:var(--red)}
 .badge-medium{background:var(--amber-bg);color:var(--amber)}
 .badge-low{background:var(--green-bg);color:var(--green)}
-.badge-gray{background:var(--bg3);color:var(--gray)}
-.badge-blue{background:var(--blue-bg);color:var(--blue)}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:16px}
 .card-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
 .card-bar{width:3px;height:14px;border-radius:2px;flex-shrink:0}
@@ -95,7 +92,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .filter-btn.active{background:var(--teal);color:#fff;border-color:var(--teal)}
 .search-box{padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);font-size:13px;width:220px;font-family:'Inter',sans-serif;outline:none;color:var(--text)}
 .search-box:focus{border-color:var(--teal)}
-.action-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:all 0.15s;display:flex;align-items:center;gap:5px}
+.action-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:500;transition:all 0.15s;display:flex;align-items:center;gap:5px;text-decoration:none}
 .action-btn:hover{background:var(--bg3);color:var(--text)}
 .urgent-strip{background:linear-gradient(90deg,#fef2f2,#fff7ed);border:1px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
 .urgent-count{font-size:28px;font-weight:700;color:var(--red)}
@@ -106,6 +103,19 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .pet-ok{background:#dcfce7;color:#166534}
 .pet-no{background:#fee2e2;color:#991b1b}
 .pet-partial{background:#fef3c7;color:#92400e}
+/* Tour feedback styles */
+.tour-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px}
+.tour-stage{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;margin-bottom:6px}
+.stage-completed{background:#dcfce7;color:#166534}
+.stage-scheduled{background:#dbeafe;color:#1d4ed8}
+.stage-canceled{background:#fee2e2;color:#991b1b}
+.stage-nurturing{background:#f1f5f9;color:#475569}
+.stage-applied{background:#ede9fe;color:#6d28d9}
+.week-bar{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.week-label{font-size:11px;color:var(--text3);min-width:60px}
+.week-track{flex:1;background:var(--bg3);border-radius:4px;height:8px;overflow:hidden}
+.week-fill{height:100%;border-radius:4px;background:var(--teal)}
+.week-count{font-size:11px;font-weight:600;color:var(--text2);min-width:24px;text-align:right}
 @media(max-width:900px){.grid-market{grid-template-columns:1fr 1fr}.prop-row,.prop-hdr-grid{grid-template-columns:2fr 1fr 1fr 1fr}}
 </style>
 </head>
@@ -117,23 +127,23 @@ const { useState, useEffect } = React;
 const MARKET_DATA = {
   metro: { vacancy: 8.4, type: "Renter-Friendly", new_units_2025: 18201, concession_rate: "50%+", outlook: "29 consecutive months of YoY rent declines. 50%+ listings offering concessions. Rent growth likely negative throughout 2026. Recovery expected late 2026-2027 as construction slows." },
   cities: {
-    maricopa: { avg_rent: 1657, median_rent: 1800, trend: "-4.8% YoY", vacancy_rate: "8.4% metro", comp_range: "$1,500-$2,100", avg_dom: 37, note: "Renter-friendly market. 57% of rentals between $1,501-$2,000. 92% single-family rentals.", by_bed: { "2bd": 1940, "3bd": 1831, "4bd": 2002, "5bd": 2200 } },
-    chandler: { avg_rent: 1680, median_rent: 2000, trend: "Stable, slight decline", vacancy_rate: "6-7%", comp_range: "$1,500-$3,000", avg_dom: 25, note: "Stable with little MoM movement. Avg house rent $2,783.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2783, "5bd": 3200 } },
-    gilbert: { avg_rent: 2150, median_rent: 2300, trend: "-2% YoY", vacancy_rate: "5-6%", comp_range: "$1,800-$3,500", avg_dom: 20, note: "Strong family market with top-rated schools. Lower vacancy due to school demand.", by_bed: { "2bd": 1900, "3bd": 2200, "4bd": 2800, "5bd": 3500 } },
-    scottsdale: { avg_rent: 2091, median_rent: 2100, trend: "+0.45% YoY", vacancy_rate: "5-6%", comp_range: "$1,500-$5,000+", avg_dom: 20, note: "Premium market. 43% of rentals $1,501-$2,000. Slight positive trend bucking metro.", by_bed: { "2bd": 2737, "3bd": 3200, "4bd": 4000, "5bd": 5000 } },
-    phoenix: { avg_rent: 1458, median_rent: 1500, trend: "-3.5% YoY", vacancy_rate: "5.1% city / 12.5% multifamily", comp_range: "$1,200-$3,500", avg_dom: 30, note: "29th consecutive month of YoY rent declines. 50%+ listings offering concessions.", by_bed: { "1bd": 1376, "2bd": 1580, "3bd": 2100, "4bd": 2500 } },
-    mesa: { avg_rent: 1650, median_rent: 1750, trend: "-2% YoY", vacancy_rate: "6-7%", comp_range: "$1,400-$2,800", avg_dom: 25, note: "Moderate competition. Light rail and ASU expansion supporting demand.", by_bed: { "2bd": 1600, "3bd": 2000, "4bd": 2400, "5bd": 2800 } },
-    peoria: { avg_rent: 1750, trend: "Stable", vacancy_rate: "6-8%", comp_range: "$1,400-$2,800", avg_dom: 30, note: "Strong single-family demand. Lower supply keeping rents stable.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
-    tempe: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7-9%", comp_range: "$1,200-$2,800", avg_dom: 25, note: "College-driven demand. High multifamily supply softening rents.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 2000, "5bd": 2400 } },
-    glendale: { avg_rent: 1550, trend: "-3% YoY", vacancy_rate: "7-9%", comp_range: "$1,200-$2,500", avg_dom: 32, note: "Budget-friendly market softening. Sports venues drive some demand.", by_bed: { "2bd": 1200, "3bd": 1500, "4bd": 1800, "5bd": 2200 } },
-    "queen creek": { avg_rent: 2300, median_rent: 2400, trend: "-2% YoY", vacancy_rate: "5-6%", comp_range: "$1,800-$3,000", avg_dom: 20, note: "Fast-growing suburb. DOM 15-25 days when priced right.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2700, "5bd": 3200 } },
-    "san tan valley": { avg_rent: 2050, median_rent: 2150, trend: "-3% YoY", vacancy_rate: "6-7%", comp_range: "$1,700-$2,500", avg_dom: 22, note: "Growing suburban market. DOM 15-25 days when priced right.", by_bed: { "2bd": 1700, "3bd": 2050, "4bd": 2300, "5bd": 2600 } },
-    surprise: { avg_rent: 1650, trend: "Stable", vacancy_rate: "6-8%", comp_range: "$1,300-$2,500", avg_dom: 30, note: "Retiree and family market. Moderate competition.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 1900, "5bd": 2300 } },
+    maricopa: { avg_rent: 1657, trend: "-4.8% YoY", vacancy_rate: "8.4% metro", comp_range: "$1,500-$2,100", avg_dom: 37, note: "Renter-friendly market. 57% of rentals between $1,501-$2,000. 92% single-family rentals.", by_bed: { "2bd": 1940, "3bd": 1831, "4bd": 2002, "5bd": 2200 } },
+    chandler: { avg_rent: 1680, trend: "Stable, slight decline", vacancy_rate: "6-7%", comp_range: "$1,500-$3,000", avg_dom: 25, note: "Stable with little MoM movement. Avg house rent $2,783.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2783, "5bd": 3200 } },
+    gilbert: { avg_rent: 2150, trend: "-2% YoY", vacancy_rate: "5-6%", comp_range: "$1,800-$3,500", avg_dom: 20, note: "Strong family market with top-rated schools.", by_bed: { "2bd": 1900, "3bd": 2200, "4bd": 2800, "5bd": 3500 } },
+    scottsdale: { avg_rent: 2091, trend: "+0.45% YoY", vacancy_rate: "5-6%", comp_range: "$1,500-$5,000+", avg_dom: 20, note: "Premium market. Slight positive trend bucking metro.", by_bed: { "2bd": 2737, "3bd": 3200, "4bd": 4000, "5bd": 5000 } },
+    phoenix: { avg_rent: 1458, trend: "-3.5% YoY", vacancy_rate: "5.1% city", comp_range: "$1,200-$3,500", avg_dom: 30, note: "50%+ listings offering concessions.", by_bed: { "1bd": 1376, "2bd": 1580, "3bd": 2100, "4bd": 2500 } },
+    mesa: { avg_rent: 1650, trend: "-2% YoY", vacancy_rate: "6-7%", comp_range: "$1,400-$2,800", avg_dom: 25, note: "Moderate competition.", by_bed: { "2bd": 1600, "3bd": 2000, "4bd": 2400, "5bd": 2800 } },
+    peoria: { avg_rent: 1750, trend: "Stable", vacancy_rate: "6-8%", comp_range: "$1,400-$2,800", avg_dom: 30, note: "Strong single-family demand.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
+    tempe: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7-9%", comp_range: "$1,200-$2,800", avg_dom: 25, note: "College-driven demand.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 2000, "5bd": 2400 } },
+    glendale: { avg_rent: 1550, trend: "-3% YoY", vacancy_rate: "7-9%", comp_range: "$1,200-$2,500", avg_dom: 32, note: "Budget-friendly market softening.", by_bed: { "2bd": 1200, "3bd": 1500, "4bd": 1800, "5bd": 2200 } },
+    "queen creek": { avg_rent: 2300, trend: "-2% YoY", vacancy_rate: "5-6%", comp_range: "$1,800-$3,000", avg_dom: 20, note: "Fast-growing suburb.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2700, "5bd": 3200 } },
+    "san tan valley": { avg_rent: 2050, trend: "-3% YoY", vacancy_rate: "6-7%", comp_range: "$1,700-$2,500", avg_dom: 22, note: "Growing suburban market.", by_bed: { "2bd": 1700, "3bd": 2050, "4bd": 2300, "5bd": 2600 } },
+    surprise: { avg_rent: 1650, trend: "Stable", vacancy_rate: "6-8%", comp_range: "$1,300-$2,500", avg_dom: 30, note: "Retiree and family market.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 1900, "5bd": 2300 } },
     avondale: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7-9%", comp_range: "$1,300-$2,400", avg_dom: 32, note: "Working-class market with growing inventory.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
-    buckeye: { avg_rent: 1600, trend: "-3% YoY", vacancy_rate: "8-10%", comp_range: "$1,300-$2,400", avg_dom: 38, note: "Rapidly growing but high new construction competing.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
-    goodyear: { avg_rent: 1750, trend: "-1% YoY", vacancy_rate: "6-8%", comp_range: "$1,400-$2,800", avg_dom: 28, note: "Strong demand near Intel campus expansion.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
-    tolleson: { avg_rent: 1500, trend: "Stable", vacancy_rate: "7-9%", comp_range: "$1,200-$2,200", avg_dom: 33, note: "Working-class industrial corridor. Budget pricing key.", by_bed: { "2bd": 1200, "3bd": 1450, "4bd": 1750, "5bd": 2100 } },
-    "rio verde": { avg_rent: 2800, median_rent: 3000, trend: "-5% YoY", vacancy_rate: "10%+", comp_range: "$2,200-$4,000", avg_dom: 45, note: "Seasonal/retirement area. Higher vacancy, longer DOM. Limited renter pool.", by_bed: { "3bd": 2800, "4bd": 3400, "5bd": 4200 } },
+    buckeye: { avg_rent: 1600, trend: "-3% YoY", vacancy_rate: "8-10%", comp_range: "$1,300-$2,400", avg_dom: 38, note: "High new construction competition.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
+    goodyear: { avg_rent: 1750, trend: "-1% YoY", vacancy_rate: "6-8%", comp_range: "$1,400-$2,800", avg_dom: 28, note: "Strong demand near Intel campus.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
+    tolleson: { avg_rent: 1500, trend: "Stable", vacancy_rate: "7-9%", comp_range: "$1,200-$2,200", avg_dom: 33, note: "Budget pricing key.", by_bed: { "2bd": 1200, "3bd": 1450, "4bd": 1750, "5bd": 2100 } },
+    "rio verde": { avg_rent: 2800, trend: "-5% YoY", vacancy_rate: "10%+", comp_range: "$2,200-$4,000", avg_dom: 45, note: "Seasonal/retirement area. Higher vacancy.", by_bed: { "3bd": 2800, "4bd": 3400, "5bd": 4200 } },
   }
 };
 
@@ -144,35 +154,28 @@ function getCityData(city) {
 }
 
 function scoreProperty({ rent, beds, city, leads, showings, dom }) {
-  let score = 0;
-  const factors = [];
-  const suggestions = [];
+  let score = 0; const factors = []; const suggestions = [];
   const cityData = getCityData(city);
-  const bedKey = beds ? `${beds}bd` : '3bd';
+  const bedKey = `${beds}bd`;
   const compRent = cityData.by_bed?.[bedKey] || cityData.avg_rent || 1700;
-
-  if (leads === 0) { score += 30; factors.push("Zero leads — no market interest"); suggestions.push("Verify syndication is active on Zillow, Apartments.com, Homes.com"); suggestions.push("Add more listing photos (aim for 25+) and a virtual tour"); }
+  if (leads === 0) { score += 30; factors.push("Zero leads — no market interest"); suggestions.push("Verify syndication active on Zillow, Apartments.com, Homes.com"); suggestions.push("Add more listing photos (aim for 25+) and a virtual tour"); }
   else if (leads === 1) { score += 20; factors.push("Only 1 lead — very low interest"); suggestions.push("Review listing title and description for keyword optimization"); }
   else if (leads < 4) { score += 10; factors.push(`${leads} leads — moderate interest`); }
   else { factors.push(`${leads} leads — good pipeline`); }
-
-  if (leads > 0 && showings === 0) { score += 20; factors.push("Leads but NO showings — conversion problem"); suggestions.push("Follow up with leads within 24 hours to schedule showings"); suggestions.push("Enable self-scheduling via Aptly showing system"); }
+  if (leads > 0 && showings === 0) { score += 20; factors.push("Leads but NO showings — conversion problem"); suggestions.push("Follow up with leads within 24 hours to schedule showings"); }
   else if (showings === 0 && leads === 0) { score += 15; factors.push("No showings (no leads to convert)"); }
   else if (showings >= 2) { factors.push(`${showings} showings — good activity`); score -= 5; }
-
   if (dom > 60) { score += 25; factors.push(`${dom} days on market — significantly stale`); suggestions.push(`URGENT: Consider price reduction. Market avg is $${compRent}/mo`); suggestions.push("Refresh listing description and photos"); }
   else if (dom > 30) { score += 15; factors.push(`${dom} days on market — getting stale`); suggestions.push("Consider offering a move-in concession (e.g., 50% off first month)"); }
   else if (dom > 14) { score += 8; factors.push(`${dom} days on market — within normal range`); }
   else { factors.push(`${dom} days on market — fresh listing`); }
-
   if (compRent > 0 && rent > 0) {
-    const premiumPct = ((rent - compRent) / compRent) * 100;
-    if (premiumPct > 10) { score += 25; factors.push(`Priced $${Math.round(rent-compRent)}/mo above market avg`); suggestions.push(`Market comp for ${beds}bd in ${city}: $${compRent}/mo. Suggest reducing to $${Math.round(compRent*1.02)}`); }
-    else if (premiumPct > 5) { score += 12; factors.push(`Priced $${Math.round(rent-compRent)}/mo above market avg`); suggestions.push("Slightly above market. Consider matching at market rate"); }
-    else if (premiumPct < -10) { score -= 5; factors.push(`Priced BELOW market by $${Math.round(compRent-rent)}/mo`); }
+    const pct = ((rent - compRent) / compRent) * 100;
+    if (pct > 10) { score += 25; factors.push(`Priced $${Math.round(rent-compRent)}/mo above market avg`); suggestions.push(`Market comp for ${beds}bd in ${city}: $${compRent}/mo. Suggest reducing to $${Math.round(compRent*1.02)}`); }
+    else if (pct > 5) { score += 12; factors.push(`Priced $${Math.round(rent-compRent)}/mo above market avg`); suggestions.push("Slightly above market. Consider matching at market rate"); }
+    else if (pct < -10) { score -= 5; factors.push(`Priced BELOW market by $${Math.round(compRent-rent)}/mo`); }
     else { factors.push(`Rent aligned with market avg ($${compRent}/mo)`); }
   }
-
   const vacancy = cityData.vacancy_rate || "";
   if (vacancy) suggestions.push(`Market context: ${city} vacancy rate is ${vacancy}. ${cityData.note || ""}`);
   score = Math.max(0, Math.min(100, score));
@@ -194,6 +197,42 @@ function getPetLabel(unit) {
   return { label: 'Pets OK*', cls: 'pet-ok' };
 }
 
+// Build weekly activity buckets from a list of leads, starting from listDate
+function buildWeeklyActivity(leads, listDate) {
+  if (!listDate || !leads || leads.length === 0) return [];
+  const start = new Date(listDate);
+  start.setHours(0,0,0,0);
+  const now = new Date();
+  const totalWeeks = Math.ceil((now - start) / (7 * 86400000)) || 1;
+  const weeks = [];
+  for (let w = 0; w < totalWeeks; w++) {
+    const wStart = new Date(start.getTime() + w * 7 * 86400000);
+    const wEnd = new Date(wStart.getTime() + 7 * 86400000);
+    const weekLeads = leads.filter(l => {
+      const d = new Date(l.createdAt || l.date || '');
+      return d >= wStart && d < wEnd;
+    });
+    const showings = weekLeads.filter(l => /scheduled tour|tour completed/i.test(l.stage || ''));
+    const completed = weekLeads.filter(l => /tour completed/i.test(l.stage || ''));
+    weeks.push({
+      week: w + 1,
+      label: `Wk ${w+1} (${wStart.toLocaleDateString('en-US',{month:'numeric',day:'numeric'})})`,
+      leads: weekLeads.length,
+      showings: showings.length,
+      completed: completed.length,
+    });
+  }
+  return weeks;
+}
+
+const STAGE_COLORS = {
+  'Tour Completed': 'stage-completed',
+  'Scheduled Tour': 'stage-scheduled',
+  'Tour Canceled / No Show': 'stage-canceled',
+  'Nurturing': 'stage-nurturing',
+  'Applied': 'stage-applied',
+};
+
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "properties", label: "All Listings" },
@@ -212,47 +251,39 @@ function App() {
   const [expanded, setExpanded] = useState(null);
 
   async function fetchAll() {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      // Fetch published units from Aptly via server proxy
+      // Fetch published units
       const unitsRes = await fetch('/api/aptly/units').then(r => r.json());
-      // Handle both core API (publishedForRent: true) and old API ("Published For Rent": "checked")
       const publishedUnits = (unitsRes.units || []).filter(u =>
-        u.publishedForRent === true ||
-        u.syndicate === true ||
-        u['Published For Rent'] === 'checked' ||
-        u['Syndicate'] === 'checked'
+        u.publishedForRent === true || u.syndicate === true ||
+        u['Published For Rent'] === 'checked' || u['Syndicate'] === 'checked'
       );
 
-      // Fetch Aptly leads for lead/showing counts
-      let aptlyLeads = [];
+      // Fetch renter leads from core API via server proxy
+      let richLeads = [];
       try {
-        const ar = await fetch('/api/aptly/leads').then(r => r.json());
-        aptlyLeads = Array.isArray(ar) ? ar : (ar?.leads || []);
-      } catch(e) {}
+        // Use the /api/rentvine proxy pattern to hit Aptly leads board with full detail
+        const leadsRes = await fetch('/api/aptly/leads-rich').then(r => r.json()).catch(() => null);
+        if (leadsRes && leadsRes.leads) {
+          richLeads = leadsRes.leads;
+        } else {
+          // Fallback to basic leads
+          const ar = await fetch('/api/aptly/leads').then(r => r.json());
+          richLeads = Array.isArray(ar) ? ar : (ar?.leads || []);
+        }
+      } catch(e) { richLeads = []; }
 
-      const processed = processData(publishedUnits, aptlyLeads);
+      const processed = processData(publishedUnits, richLeads);
       setData({ ...processed, totalInPortfolio: unitsRes.total || 0 });
       setLastRefresh(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
-    } catch(e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { setError(e.message); }
+    finally { setLoading(false); }
   }
 
-  function processData(units, aptlyLeads) {
-    // Build lead/showing count per address from Aptly leads
-    const leadsByAddr = {};
-    aptlyLeads.forEach(lead => {
-      const addr = (lead.address || lead.propertyAddress || lead.title || '').toLowerCase().trim();
-      if (addr) {
-        if (!leadsByAddr[addr]) leadsByAddr[addr] = { leads: 0, showings: 0 };
-        leadsByAddr[addr].leads++;
-        if (lead.showingDate || lead.status === 'showing') leadsByAddr[addr].showings++;
-      }
-    });
+  function processData(units, allLeads) {
+    // Index leads by property address (normalize for matching)
+    const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g,'').substring(0,12);
 
     const processed = units.map(u => {
       const address = u.street || (u.address && u.address.address) || u.marketingName || '';
@@ -262,53 +293,70 @@ function App() {
       const baths = u.baths || '';
       const sqft = u.totalArea || 0;
 
-      // Days on market from availableDate
-      let dom = 0;
+      let dom = 0, listDate = null;
       if (u.availableDate) {
         const avail = new Date(u.availableDate);
         const now = new Date();
-        if (avail < now) dom = Math.floor((now - avail) / 86400000);
+        if (avail < now) { dom = Math.floor((now - avail) / 86400000); listDate = u.availableDate; }
       }
 
-      // Lead data
-      const addrKey = address.toLowerCase().trim();
-      let leadData = { leads: 0, showings: 0 };
-      for (const [k, v] of Object.entries(leadsByAddr)) {
-        if (addrKey.includes(k.substring(0, 10)) || k.includes(addrKey.substring(0, 10))) {
-          leadData = v; break;
-        }
-      }
+      // Match leads to this property
+      const addrNorm = normalize(address);
+      const propLeads = allLeads.filter(l => {
+        const pref = normalize(l.address || l.propertyAddress || l.preferredRental || l.title || '');
+        return addrNorm && pref && (addrNorm.includes(pref.substring(0,8)) || pref.includes(addrNorm.substring(0,8)));
+      });
 
-      const risk = scoreProperty({ rent, beds, city, leads: leadData.leads, showings: leadData.showings, dom });
+      const totalLeads = propLeads.length;
+      const scheduledTours = propLeads.filter(l => /scheduled tour/i.test(l.stage || '')).length;
+      const completedTours = propLeads.filter(l => /tour completed/i.test(l.stage || '')).length;
+      const canceledTours = propLeads.filter(l => /canceled|no show/i.test(l.stage || '')).length;
+      const applied = propLeads.filter(l => /applied/i.test(l.stage || '')).length;
+
+      // Weekly activity breakdown
+      const weeklyActivity = buildWeeklyActivity(propLeads, listDate);
+
+      // Tour feedback: leads with comments (tour notes)
+      const tourLeads = propLeads.filter(l =>
+        /scheduled tour|tour completed|tour canceled/i.test(l.stage || '') ||
+        (l.comments && l.comments.length > 0)
+      ).map(l => ({
+        contact: l.contact || l.name || l.title || '?',
+        stage: l.stage || '',
+        date: l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) : '',
+        showingInfo: l.showingInfo || l.requestedShowingInformation || '',
+        comments: Array.isArray(l.comments) ? l.comments : [],
+        source: l.source || '',
+        moveDate: l.moveDate || '',
+        income: l.income || '',
+        pets: l.pets || '',
+      }));
+
+      const risk = scoreProperty({ rent, beds, city, leads: totalLeads, showings: scheduledTours + completedTours, dom });
       const petInfo = getPetLabel(u);
       const owner = Array.isArray(u.owners) && u.owners.length > 0 ? u.owners[0].name : (Array.isArray(u.portfolio) && u.portfolio.length > 0 ? u.portfolio[0].name : '');
 
       return {
-        cardId: u.cardId,
-        address, city, rent, beds, baths, sqft,
-        dom, leads: leadData.leads, showings: leadData.showings,
+        cardId: u.cardId, address, city, rent, beds, baths, sqft,
+        dom, listDate,
+        leads: totalLeads, showings: scheduledTours + completedTours,
+        scheduledTours, completedTours, canceledTours, applied,
+        weeklyActivity, tourLeads,
         petInfo, owner,
         availableDate: u.availableDate ? new Date(u.availableDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD',
-        publishedForRent: u.publishedForRent,
-        syndicate: u.syndicate,
-        rentReady: u.rentReady,
-        lockboxNumber: u.lockboxNumber,
-        virtualTour: u.virtualTourUrl,
-        applicationUrl: u.applicationUrl,
-        ...risk,
-        lostPerDay: rent > 0 ? +(rent / 30).toFixed(2) : 0,
-        lostPerMonth: rent,
+        publishedForRent: u.publishedForRent, syndicate: u.syndicate,
+        rentReady: u.rentReady, lockboxNumber: u.lockboxNumber,
+        virtualTour: u.virtualTourUrl, applicationUrl: u.applicationUrl,
+        ...risk, lostPerDay: rent > 0 ? +(rent / 30).toFixed(2) : 0, lostPerMonth: rent,
       };
     });
 
     processed.sort((a, b) => b.score - a.score);
-
     const high = processed.filter(u => u.level === 'HIGH');
     const medium = processed.filter(u => u.level === 'MEDIUM');
     const low = processed.filter(u => u.level === 'LOW');
     const zeroLeads = processed.filter(u => u.leads === 0);
     const totalLost = processed.reduce((s, u) => s + u.lostPerMonth, 0);
-
     return { units: processed, high, medium, low, zeroLeads, totalLost };
   }
 
@@ -316,7 +364,7 @@ function App() {
 
   const filteredUnits = (data?.units || []).filter(u => {
     const matchFilter = filter === 'ALL' || u.level === filter;
-    const matchSearch = !search || u.address.toLowerCase().includes(search.toLowerCase()) || u.city.toLowerCase().includes(search.toLowerCase()) || (u.owner || '').toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || u.address.toLowerCase().includes(search.toLowerCase()) || u.city.toLowerCase().includes(search.toLowerCase()) || (u.owner||'').toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
@@ -325,18 +373,18 @@ function App() {
   return (
     <div>
       <div className="topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
           <a href="/" className="logo"><div className="logo-icon">A</div></a>
           <div>
             <div className="logo-text">Vacancy Risk &amp; Market Intelligence</div>
             <div className="logo-sub">Aloe Property Management — Published Listings Only</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {lastRefresh && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Refreshed: {lastRefresh}</span>}
-          {d && <span style={{ fontSize: 12, color: 'var(--teal-d)', fontWeight: 600 }}>{d.units.length} active listings</span>}
-          {d && <span style={{ fontSize: 11, color: 'var(--text3)' }}>of {d.totalInPortfolio} in portfolio</span>}
-          <button className="action-btn" onClick={fetchAll} style={{ background: 'var(--teal)', color: '#fff', border: 'none' }}>↻ Refresh</button>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {lastRefresh && <span style={{fontSize:11,color:'var(--text3)'}}>Refreshed: {lastRefresh}</span>}
+          {d && <span style={{fontSize:12,color:'var(--teal-d)',fontWeight:600}}>{d.units.length} active listings</span>}
+          {d && <span style={{fontSize:11,color:'var(--text3)'}}>of {d.totalInPortfolio} in portfolio</span>}
+          <button className="action-btn" onClick={fetchAll} style={{background:'var(--teal)',color:'#fff',border:'none'}}>↻ Refresh</button>
           <a href="/" className="action-btn">← Hub</a>
         </div>
       </div>
@@ -344,7 +392,7 @@ function App() {
       <div className="status-bar">
         <div className="status-item"><span className="dot dot-green"/>Aptly Units: Published listings only</div>
         <div className="status-item"><span className="dot dot-gray"/>Market data: Q1 2026</div>
-        {d && <div className="status-item" style={{ marginLeft: 'auto' }}>
+        {d && <div className="status-item" style={{marginLeft:'auto'}}>
           <span style={{color:'var(--amber)',fontWeight:600}}>{d.zeroLeads.length} zero-lead</span>&nbsp;|&nbsp;
           {d.units.length} published&nbsp;|&nbsp;
           <span style={{color:'var(--red)',fontWeight:600}}>{d.high.length} high risk</span>
@@ -353,41 +401,33 @@ function App() {
 
       <div className="nav">
         {TABS.map(t => (
-          <button key={t.id} className={`nav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
+          <button key={t.id} className={`nav-btn${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>{t.label}</button>
         ))}
       </div>
 
       <div className="main">
-        {error && <div className="err">⚠ {error} — Make sure /api/aptly/units route is added to server.js</div>}
-        {loading && (
-          <div className="loading">
-            <div className="spinner"/>
-            <div>Loading published listings from Aptly…</div>
-            <div style={{fontSize:11,color:'var(--text3)'}}>Fetching only units published for rent</div>
-          </div>
-        )}
+        {error && <div className="err">⚠ {error}</div>}
+        {loading && <div className="loading"><div className="spinner"/><div>Loading published listings from Aptly…</div><div style={{fontSize:11,color:'var(--text3)'}}>Fetching units, leads, and tour activity</div></div>}
 
-        {!loading && tab === 'overview' && d && (
+        {!loading && tab==='overview' && d && (
           <div>
             <div className="kpi-row cols-6" style={{marginBottom:16}}>
               <div className="kpi"><div className="kpi-label">Published Listings</div><div className="kpi-value" style={{color:'var(--teal-d)'}}>{d.units.length}</div><div className="kpi-sub">of {d.totalInPortfolio} in portfolio</div></div>
               <div className="kpi"><div className="kpi-label">High Risk</div><div className="kpi-value" style={{color:'var(--red)'}}>{d.high.length}</div><div className="kpi-sub">Need immediate action</div></div>
               <div className="kpi"><div className="kpi-label">Medium Risk</div><div className="kpi-value" style={{color:'var(--amber)'}}>{d.medium.length}</div><div className="kpi-sub">Monitor closely</div></div>
               <div className="kpi"><div className="kpi-label">Low Risk</div><div className="kpi-value" style={{color:'var(--green)'}}>{d.low.length}</div><div className="kpi-sub">On track</div></div>
-              <div className="kpi"><div className="kpi-label">Zero Leads</div><div className="kpi-value" style={{color:'var(--red)'}}>{d.zeroLeads.length}</div><div className="kpi-sub">No inquiries at all</div></div>
+              <div className="kpi"><div className="kpi-label">Tours Completed</div><div className="kpi-value" style={{color:'var(--blue)'}}>{d.units.reduce((s,u)=>s+u.completedTours,0)}</div><div className="kpi-sub">across all listings</div></div>
               <div className="kpi"><div className="kpi-label">Monthly Vacancy Cost</div><div className="kpi-value" style={{color:'var(--red)',fontSize:22}}>${d.totalLost.toLocaleString()}</div><div className="kpi-sub">Total lost revenue/mo</div></div>
             </div>
-
             {d.high.length > 0 && (
               <div className="urgent-strip">
                 <div className="urgent-count">{d.high.length}</div>
                 <div>
-                  <div style={{fontWeight:700,color:'var(--red)',fontSize:14}}>URGENT — {d.high.length} {d.high.length === 1 ? 'property needs' : 'properties need'} action</div>
+                  <div style={{fontWeight:700,color:'var(--red)',fontSize:14}}>URGENT — {d.high.length} {d.high.length===1?'property needs':'properties need'} action</div>
                   <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>High vacancy risk scores require immediate attention</div>
                 </div>
               </div>
             )}
-
             <div className="card" style={{padding:0,overflow:'hidden'}}>
               <div style={{padding:'16px 22px 12px',borderBottom:'1px solid var(--border)'}}>
                 <div className="card-title" style={{marginBottom:0}}><span className="card-bar" style={{background:'var(--red)'}}/>Published Listings — Ranked by Risk Score</div>
@@ -395,36 +435,27 @@ function App() {
               <div className="prop-hdr-grid" style={{paddingTop:12}}>
                 <div className="prop-col-hdr" style={{textAlign:'left'}}>Property</div>
                 <div className="prop-col-hdr">Risk</div>
-                <div className="prop-col-hdr">Leads</div>
+                <div className="prop-col-hdr">Leads / Tours</div>
                 <div className="prop-col-hdr">DOM</div>
                 <div className="prop-col-hdr">Rent</div>
                 <div className="prop-col-hdr">Score</div>
               </div>
               <div style={{padding:'0 0 8px'}}>
-                {d.units.slice(0, 15).map(u => (
-                  <PropertyRow key={u.cardId} u={u} expanded={expanded} setExpanded={setExpanded} />
-                ))}
-                {d.units.length > 15 && (
-                  <div style={{textAlign:'center',padding:'12px',fontSize:12,color:'var(--text3)',cursor:'pointer'}} onClick={() => setTab('properties')}>
-                    View all {d.units.length} listings →
-                  </div>
-                )}
+                {d.units.slice(0,15).map(u => <PropertyRow key={u.cardId} u={u} expanded={expanded} setExpanded={setExpanded}/>)}
+                {d.units.length > 15 && <div style={{textAlign:'center',padding:'12px',fontSize:12,color:'var(--text3)',cursor:'pointer'}} onClick={()=>setTab('properties')}>View all {d.units.length} listings →</div>}
               </div>
             </div>
           </div>
         )}
 
-        {!loading && tab === 'properties' && d && (
+        {!loading && tab==='properties' && d && (
           <div>
-            <div className="page-hdr">
-              <div className="page-title">All Published Listings</div>
-              <div className="page-sub">{d.units.length} units published for rent · sorted by risk score</div>
-            </div>
+            <div className="page-hdr"><div className="page-title">All Published Listings</div><div className="page-sub">{d.units.length} units published for rent · sorted by risk score</div></div>
             <div className="filters">
-              <input className="search-box" placeholder="Search address, city, or owner…" value={search} onChange={e => setSearch(e.target.value)}/>
-              {['ALL','HIGH','MEDIUM','LOW'].map(f => (
-                <button key={f} className={`filter-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
-                  {f === 'ALL' ? `All (${d.units.length})` : f === 'HIGH' ? `High Risk (${d.high.length})` : f === 'MEDIUM' ? `Medium (${d.medium.length})` : `Low (${d.low.length})`}
+              <input className="search-box" placeholder="Search address, city, or owner…" value={search} onChange={e=>setSearch(e.target.value)}/>
+              {['ALL','HIGH','MEDIUM','LOW'].map(f=>(
+                <button key={f} className={`filter-btn${filter===f?' active':''}`} onClick={()=>setFilter(f)}>
+                  {f==='ALL'?`All (${d.units.length})`:f==='HIGH'?`High Risk (${d.high.length})`:f==='MEDIUM'?`Medium (${d.medium.length})`:`Low (${d.low.length})`}
                 </button>
               ))}
             </div>
@@ -432,39 +463,29 @@ function App() {
               <div className="prop-hdr-grid" style={{paddingTop:12}}>
                 <div className="prop-col-hdr" style={{textAlign:'left'}}>Property</div>
                 <div className="prop-col-hdr">Risk</div>
-                <div className="prop-col-hdr">Leads / Shows</div>
+                <div className="prop-col-hdr">Leads / Tours</div>
                 <div className="prop-col-hdr">DOM</div>
                 <div className="prop-col-hdr">Rent</div>
                 <div className="prop-col-hdr">Score</div>
               </div>
               <div style={{padding:'0 0 8px'}}>
-                {filteredUnits.map(u => (
-                  <PropertyRow key={u.cardId} u={u} expanded={expanded} setExpanded={setExpanded} showComp />
-                ))}
-                {filteredUnits.length === 0 && (
-                  <div style={{padding:'40px',textAlign:'center',color:'var(--text3)'}}>No listings match your filters</div>
-                )}
+                {filteredUnits.map(u=><PropertyRow key={u.cardId} u={u} expanded={expanded} setExpanded={setExpanded} showComp/>)}
+                {filteredUnits.length===0 && <div style={{padding:'40px',textAlign:'center',color:'var(--text3)'}}>No listings match your filters</div>}
               </div>
             </div>
           </div>
         )}
 
-        {!loading && tab === 'reports' && d && (
+        {!loading && tab==='reports' && d && (
           <div>
-            <div className="page-hdr">
-              <div className="page-title">Owner Reports</div>
-              <div className="page-sub">Per-listing marketing summary and recommendations</div>
-            </div>
-            {d.units.map(u => <OwnerReport key={u.cardId} u={u} />)}
+            <div className="page-hdr"><div className="page-title">Owner Reports</div><div className="page-sub">Per-listing marketing summary, tour feedback, and weekly activity</div></div>
+            {d.units.map(u=><OwnerReport key={u.cardId} u={u}/>)}
           </div>
         )}
 
-        {!loading && tab === 'market' && (
+        {!loading && tab==='market' && (
           <div>
-            <div className="page-hdr">
-              <div className="page-title">Phoenix Metro Market Summary</div>
-              <div className="page-sub">Data as of Q1 2026</div>
-            </div>
+            <div className="page-hdr"><div className="page-title">Phoenix Metro Market Summary</div><div className="page-sub">Data as of Q1 2026</div></div>
             <div className="card" style={{marginBottom:16}}>
               <div className="kpi-row cols-4" style={{marginBottom:0}}>
                 <div className="kpi" style={{background:'var(--bg3)'}}><div className="kpi-label">Metro Vacancy</div><div className="kpi-value" style={{color:'var(--red)'}}>{MARKET_DATA.metro.vacancy}%</div></div>
@@ -475,11 +496,11 @@ function App() {
               <div style={{marginTop:16,padding:'12px 14px',background:'var(--bg3)',borderRadius:8,fontSize:13,color:'var(--text2)'}}>{MARKET_DATA.metro.outlook}</div>
             </div>
             <div className="grid-market">
-              {Object.entries(MARKET_DATA.cities).map(([city, cd]) => (
+              {Object.entries(MARKET_DATA.cities).map(([city,cd])=>(
                 <div key={city} className="market-card">
                   <div className="market-city" style={{textTransform:'capitalize'}}>{city}</div>
                   <div className="market-row"><span className="market-label">Avg Rent</span><span className="market-value">${cd.avg_rent.toLocaleString()}</span></div>
-                  <div className="market-row"><span className="market-label">Trend</span><span className={cd.trend.includes('-') ? 'market-trend-dn' : 'market-trend-up'}>{cd.trend}</span></div>
+                  <div className="market-row"><span className="market-label">Trend</span><span className={cd.trend.includes('-')?'market-trend-dn':'market-trend-up'}>{cd.trend}</span></div>
                   <div className="market-row"><span className="market-label">Vacancy</span><span className="market-value">{cd.vacancy_rate}</span></div>
                   <div className="market-row"><span className="market-label">Comp Range</span><span className="market-value">{cd.comp_range}</span></div>
                   <div className="market-row"><span className="market-label">Avg DOM</span><span className="market-value">{cd.avg_dom} days</span></div>
@@ -497,64 +518,133 @@ function App() {
 function PropertyRow({ u, expanded, setExpanded, showComp }) {
   const isExpanded = expanded === u.cardId;
   const pet = u.petInfo || { label: 'Pets OK*', cls: 'pet-ok' };
+  const tourIcon = u.completedTours > 0 ? '✅' : u.scheduledTours > 0 ? '📅' : '';
   return (
     <>
-      <div className={`prop-row ${u.level.toLowerCase()}`} onClick={() => setExpanded(isExpanded ? null : u.cardId)}>
+      <div className={`prop-row ${u.level.toLowerCase()}`} onClick={()=>setExpanded(isExpanded?null:u.cardId)}>
         <div>
-          <div className="prop-name">
-            {u.address}
-            <span className={`pet-badge ${pet.cls}`}>{pet.label}</span>
-          </div>
-          <div className="prop-addr">{u.city}, AZ · {u.beds}bd{u.baths ? '/'+u.baths+'ba' : ''}{u.sqft > 0 ? ` · ${u.sqft.toLocaleString()} sqft` : ''} · Avail: {u.availableDate}{u.owner ? ` · ${u.owner}` : ''}</div>
+          <div className="prop-name">{u.address}<span className={`pet-badge ${pet.cls}`}>{pet.label}</span></div>
+          <div className="prop-addr">{u.city}, AZ · {u.beds}bd{u.baths?'/'+u.baths+'ba':''}{u.sqft>0?` · ${u.sqft.toLocaleString()} sqft`:''} · Avail: {u.availableDate}{u.owner?` · ${u.owner}`:''}</div>
         </div>
         <div className="prop-col"><span className={`badge badge-${u.level.toLowerCase()}`}>{u.level} ({u.score})</span></div>
         <div className="prop-col">
           {u.leads}L
-          {u.leads > 0 && u.showings === 0 && <span className="tag tag-ol">OL</span>}
-          {' / '}{u.showings}S
-          {u.showings > 0 && <span className="tag tag-os">OS</span>}
+          {u.leads>0&&u.showings===0&&<span className="tag tag-ol">OL</span>}
+          {' / '}{tourIcon}{u.completedTours}✓{u.scheduledTours>0&&` ${u.scheduledTours}📅`}
+          {u.canceledTours>0&&<span className="tag tag-ol">{u.canceledTours}✗</span>}
         </div>
-        <div className="prop-col">
-          {u.dom > 0 ? u.dom : '—'}{u.dom > 30 && <span className="tag tag-dom">{u.dom}d</span>}
-        </div>
-        <div className="prop-col">${u.rent > 0 ? u.rent.toLocaleString() : '—'}/mo</div>
-        <div className="prop-col" style={{fontWeight:700,color: u.score >= 50 ? 'var(--red)' : u.score >= 25 ? 'var(--amber)' : 'var(--green)'}}>{u.score}</div>
+        <div className="prop-col">{u.dom>0?u.dom:'—'}{u.dom>30&&<span className="tag tag-dom">{u.dom}d</span>}</div>
+        <div className="prop-col">${u.rent>0?u.rent.toLocaleString():'—'}/mo</div>
+        <div className="prop-col" style={{fontWeight:700,color:u.score>=50?'var(--red)':u.score>=25?'var(--amber)':'var(--green)'}}>{u.score}</div>
       </div>
       {isExpanded && (
         <div className="detail-panel">
           <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
-            {u.applicationUrl && <a href={u.applicationUrl} target="_blank" rel="noopener noreferrer" className="comp-link">📝 Apply</a>}
-            {u.virtualTour && <a href={u.virtualTour} target="_blank" rel="noopener noreferrer" className="comp-link">🎥 Virtual Tour</a>}
-            {u.lockboxNumber && <span className="comp-link">🔑 Lockbox: {u.lockboxNumber}</span>}
-            {u.rentReady && <span className="comp-link" style={{color:'var(--green)'}}>✓ Rent Ready</span>}
+            {u.applicationUrl&&<a href={u.applicationUrl} target="_blank" rel="noopener noreferrer" className="comp-link">📝 Apply</a>}
+            {u.virtualTour&&<a href={u.virtualTour} target="_blank" rel="noopener noreferrer" className="comp-link">🎥 Virtual Tour</a>}
+            {u.lockboxNumber&&<span className="comp-link">🔑 Lockbox: {u.lockboxNumber}</span>}
+            {u.rentReady&&<span className="comp-link" style={{color:'var(--green)'}}>✓ Rent Ready</span>}
           </div>
+
+          {/* Weekly activity chart */}
+          {u.weeklyActivity && u.weeklyActivity.length > 0 && (
+            <div style={{marginBottom:14}}>
+              <div className="detail-section" style={{marginBottom:8}}>Weekly Activity Since Listed</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                <div>
+                  <div style={{fontSize:10,color:'var(--text3)',marginBottom:4,fontWeight:600}}>LEADS PER WEEK</div>
+                  {u.weeklyActivity.map((w,i)=>{
+                    const max = Math.max(...u.weeklyActivity.map(x=>x.leads),1);
+                    return (
+                      <div key={i} className="week-bar">
+                        <div className="week-label">{w.label}</div>
+                        <div className="week-track"><div className="week-fill" style={{width:`${(w.leads/max)*100}%`}}/></div>
+                        <div className="week-count">{w.leads}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div>
+                  <div style={{fontSize:10,color:'var(--text3)',marginBottom:4,fontWeight:600}}>TOURS PER WEEK</div>
+                  {u.weeklyActivity.map((w,i)=>{
+                    const max = Math.max(...u.weeklyActivity.map(x=>x.showings),1);
+                    return (
+                      <div key={i} className="week-bar">
+                        <div className="week-label">{w.label}</div>
+                        <div className="week-track"><div className="week-fill" style={{width:`${(w.showings/max)*100}%`,background:'var(--green)'}}/></div>
+                        <div className="week-count">{w.showings}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div style={{display:'flex',gap:20,marginTop:10,padding:'8px 12px',background:'var(--bg)',borderRadius:6,fontSize:12}}>
+                <div><span style={{color:'var(--text3)'}}>Total Leads: </span><strong>{u.leads}</strong></div>
+                <div><span style={{color:'var(--text3)'}}>Tours Completed: </span><strong style={{color:'var(--green)'}}>{u.completedTours}</strong></div>
+                <div><span style={{color:'var(--text3)'}}>Scheduled: </span><strong style={{color:'var(--blue)'}}>{u.scheduledTours}</strong></div>
+                <div><span style={{color:'var(--text3)'}}>Canceled: </span><strong style={{color:'var(--red)'}}>{u.canceledTours}</strong></div>
+                {u.applied>0&&<div><span style={{color:'var(--text3)'}}>Applied: </span><strong style={{color:'var(--purple)'}}>{u.applied}</strong></div>}
+              </div>
+            </div>
+          )}
+
+          {/* Tour feedback */}
+          {u.tourLeads && u.tourLeads.length > 0 && (
+            <div style={{marginBottom:14}}>
+              <div className="detail-section" style={{marginBottom:8}}>Tour Feedback</div>
+              {u.tourLeads.slice(0,5).map((t,i)=>(
+                <div key={i} className="tour-card">
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4}}>
+                    <div style={{fontWeight:600,fontSize:12,color:'var(--text)'}}>{t.contact}</div>
+                    <span className={`tour-stage ${STAGE_COLORS[t.stage]||'stage-nurturing'}`}>{t.stage}</span>
+                  </div>
+                  {t.date&&<div style={{fontSize:11,color:'var(--text3)',marginBottom:4}}>{t.date}{t.showingInfo&&` · ${String(t.showingInfo).replace(/\([^)]+\)/g,'').trim().substring(0,60)}`}</div>}
+                  {t.source&&<div style={{fontSize:10,color:'var(--text3)',marginBottom:4}}>Source: {t.source}</div>}
+                  {t.comments && t.comments.length > 0 && (
+                    <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)'}}>
+                      {t.comments.slice(0,3).map((c,ci)=>(
+                        <div key={ci} style={{fontSize:11,color:'var(--text2)',marginBottom:3,display:'flex',gap:6}}>
+                          <span style={{color:'var(--teal)',flexShrink:0}}>→</span>
+                          <span><strong>{typeof c==='object'?c.by||c.userName:'Unknown'}:</strong> {typeof c==='object'?c.note||c.content||c.text:c}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{display:'flex',gap:12,marginTop:4,fontSize:10,color:'var(--text3)'}}>
+                    {t.moveDate&&<span>Move: {t.moveDate}</span>}
+                    {t.income&&<span>Income: {t.income}</span>}
+                    {t.pets&&<span>Pets: {t.pets}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="detail-grid">
             <div>
               <div className="detail-section">Risk Factors</div>
-              {u.factors.map((f, i) => <div key={i} className="detail-item">{f}</div>)}
+              {u.factors.map((f,i)=><div key={i} className="detail-item">{f}</div>)}
             </div>
             <div>
               <div className="detail-section">Recommendations</div>
-              {u.suggestions.slice(0, 4).map((s, i) => <div key={i} className="detail-item">{s}</div>)}
+              {u.suggestions.slice(0,4).map((s,i)=><div key={i} className="detail-item">{s}</div>)}
             </div>
           </div>
-          {showComp && (
+          {showComp&&(
             <div style={{marginTop:12}}>
               <div className="detail-section" style={{marginBottom:6}}>Comp Research</div>
               <div>
                 {[
-                  ['🏠 Zillow', `https://www.zillow.com/homes/for_rent/${encodeURIComponent(u.address+', '+u.city+', AZ')}/`],
-                  ['📊 Rentometer', `https://www.rentometer.com/analysis/new?address=${encodeURIComponent(u.address+', '+u.city+', AZ')}&bedrooms=${u.beds}&rent=${u.rent}`],
-                  ['🏡 Apartments.com', `https://www.apartments.com/houses/${u.city.toLowerCase().replace(/\s+/g,'-')}-az/`],
-                  ['📈 Redfin', `https://www.redfin.com/rentals/${u.city}-AZ`],
-                ].map(([label, url]) => (
-                  <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="comp-link">{label}</a>
-                ))}
+                  ['🏠 Zillow',`https://www.zillow.com/homes/for_rent/${encodeURIComponent(u.address+', '+u.city+', AZ')}/`],
+                  ['📊 Rentometer',`https://www.rentometer.com/analysis/new?address=${encodeURIComponent(u.address+', '+u.city+', AZ')}&bedrooms=${u.beds}&rent=${u.rent}`],
+                  ['🏡 Apartments.com',`https://www.apartments.com/houses/${u.city.toLowerCase().replace(/\s+/g,'-')}-az/`],
+                  ['📈 Redfin',`https://www.redfin.com/rentals/${u.city}-AZ`],
+                ].map(([label,url])=><a key={label} href={url} target="_blank" rel="noopener noreferrer" className="comp-link">{label}</a>)}
               </div>
             </div>
           )}
           <div style={{marginTop:10,fontSize:11,color:'var(--text3)'}}>
-            Market avg for {u.beds}bd in {u.city}: ${u.compRent?.toLocaleString() || '—'}/mo · {u.cityData?.vacancy_rate || ''} vacancy · Avg {u.cityData?.avg_dom || '—'} DOM
+            Market avg for {u.beds}bd in {u.city}: ${u.compRent?.toLocaleString()||'—'}/mo · {u.cityData?.vacancy_rate||''} vacancy · Avg {u.cityData?.avg_dom||'—'} DOM
           </div>
         </div>
       )}
@@ -565,38 +655,86 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
 function OwnerReport({ u }) {
   const premiumAmt = u.rent - (u.compRent || 0);
   const pet = u.petInfo || { label: 'Pets OK*', cls: 'pet-ok' };
+  const leadsPerWeek = u.weeklyActivity && u.weeklyActivity.length > 0
+    ? (u.leads / u.weeklyActivity.length).toFixed(1)
+    : '—';
+  const toursPerWeek = u.weeklyActivity && u.weeklyActivity.length > 0
+    ? ((u.scheduledTours + u.completedTours) / u.weeklyActivity.length).toFixed(1)
+    : '—';
   return (
     <div className="card" style={{marginBottom:12}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
         <div>
           <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>{u.address}</div>
           <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{u.city}, AZ — ${u.rent>0?u.rent.toLocaleString():'—'}/mo — {u.beds}bd{u.baths?'/'+u.baths+'ba':''} — <span className={`pet-badge ${pet.cls}`}>{pet.label}</span></div>
-          {u.owner && <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Owner: {u.owner}</div>}
+          {u.owner&&<div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Owner: {u.owner}</div>}
         </div>
         <span className={`badge badge-${u.level.toLowerCase()}`} style={{fontSize:12,padding:'4px 12px'}}>{u.level}</span>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:20}}>
+        {/* Marketing summary */}
         <div>
           <div className="detail-section" style={{marginBottom:8}}>Marketing Summary</div>
-          <div className="market-row"><span className="market-label">Leads Generated</span><span className="market-value">{u.leads}</span></div>
-          <div className="market-row"><span className="market-label">Showings Completed</span><span className="market-value">{u.showings}</span></div>
-          <div className="market-row"><span className="market-label">Days Listed</span><span className="market-value">{u.dom > 0 ? u.dom : '< 1'}</span></div>
+          <div className="market-row"><span className="market-label">Total Leads</span><span className="market-value">{u.leads}</span></div>
+          <div className="market-row"><span className="market-label">Leads / Week</span><span className="market-value">{leadsPerWeek}</span></div>
+          <div className="market-row"><span className="market-label">Tours Completed</span><span className="market-value" style={{color:'var(--green)'}}>{u.completedTours}</span></div>
+          <div className="market-row"><span className="market-label">Tours Scheduled</span><span className="market-value" style={{color:'var(--blue)'}}>{u.scheduledTours}</span></div>
+          <div className="market-row"><span className="market-label">Canceled / No Show</span><span className="market-value" style={{color:'var(--red)'}}>{u.canceledTours}</span></div>
+          <div className="market-row"><span className="market-label">Tours / Week</span><span className="market-value">{toursPerWeek}</span></div>
+          <div className="market-row"><span className="market-label">Applications</span><span className="market-value" style={{color:'var(--purple)'}}>{u.applied}</span></div>
+          <div className="market-row"><span className="market-label">Days Listed</span><span className="market-value">{u.dom>0?u.dom:'< 1'}</span></div>
           <div className="market-row"><span className="market-label">Available Date</span><span className="market-value">{u.availableDate}</span></div>
-          <div style={{marginTop:16}} className="detail-section">Vacancy Impact</div>
-          <div className="market-row"><span className="market-label">Lost Revenue/Day</span><span style={{color:'var(--red)',fontWeight:700}}>${u.lostPerDay.toFixed(2)}</span></div>
-          <div className="market-row"><span className="market-label">Lost Revenue/Month</span><span style={{color:'var(--red)',fontWeight:700}}>${u.lostPerMonth.toLocaleString()}</span></div>
+          <div style={{marginTop:12}} className="detail-section">Vacancy Impact</div>
+          <div className="market-row"><span className="market-label">Lost/Day</span><span style={{color:'var(--red)',fontWeight:700}}>${u.lostPerDay.toFixed(2)}</span></div>
+          <div className="market-row"><span className="market-label">Lost/Month</span><span style={{color:'var(--red)',fontWeight:700}}>${u.lostPerMonth.toLocaleString()}</span></div>
         </div>
+
+        {/* Market position */}
         <div>
           <div className="detail-section" style={{marginBottom:8}}>Market Position</div>
           <div className="market-row"><span className="market-label">Your Rent</span><span className="market-value">${u.rent.toLocaleString()}</span></div>
-          <div className="market-row"><span className="market-label">Market Average ({u.beds}bd)</span><span className="market-value">${(u.compRent||0).toLocaleString()}</span></div>
+          <div className="market-row"><span className="market-label">Market Avg ({u.beds}bd)</span><span className="market-value">${(u.compRent||0).toLocaleString()}</span></div>
           <div className="market-row"><span className="market-label">Comp Range</span><span className="market-value">{u.cityData?.comp_range||'—'}</span></div>
           <div className="market-row"><span className="market-label">vs Market</span><span style={{color:premiumAmt>0?'var(--amber)':'var(--green)',fontWeight:600}}>{premiumAmt>0?`+$${premiumAmt.toLocaleString()}/mo above`:premiumAmt<0?`$${Math.abs(premiumAmt).toLocaleString()}/mo below`:'At market'}</span></div>
-          {u.suggestions.length > 0 && (
+          {u.suggestions.length>0&&(
             <>
               <div style={{marginTop:16}} className="detail-section">Recommendations</div>
-              {u.suggestions.slice(0,3).map((s,i) => <div key={i} style={{fontSize:12,color:'var(--text2)',marginBottom:5,display:'flex',gap:6}}><span style={{color:'var(--teal)',flexShrink:0}}>→</span>{s}</div>)}
+              {u.suggestions.slice(0,3).map((s,i)=><div key={i} style={{fontSize:12,color:'var(--text2)',marginBottom:5,display:'flex',gap:6}}><span style={{color:'var(--teal)',flexShrink:0}}>→</span>{s}</div>)}
             </>
+          )}
+        </div>
+
+        {/* Tour feedback */}
+        <div>
+          <div className="detail-section" style={{marginBottom:8}}>Tour Feedback</div>
+          {u.weeklyActivity && u.weeklyActivity.length > 0 && (
+            <div style={{marginBottom:12}}>
+              {u.weeklyActivity.map((w,i)=>(
+                <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:11,marginBottom:3}}>
+                  <span style={{color:'var(--text3)'}}>{w.label}</span>
+                  <span style={{color:'var(--text2)'}}>{w.leads}L / {w.showings} tours</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {u.tourLeads && u.tourLeads.length > 0 ? (
+            u.tourLeads.slice(0,4).map((t,i)=>(
+              <div key={i} style={{marginBottom:8,paddingBottom:8,borderBottom:i<u.tourLeads.slice(0,4).length-1?'1px solid var(--border)':'none'}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
+                  <span style={{fontSize:12,fontWeight:600,color:'var(--text)'}}>{t.contact}</span>
+                  <span className={`tour-stage ${STAGE_COLORS[t.stage]||'stage-nurturing'}`}>{t.stage}</span>
+                </div>
+                {t.date&&<div style={{fontSize:10,color:'var(--text3)'}}>{t.date}</div>}
+                {t.comments && t.comments.length > 0 && (
+                  <div style={{fontSize:11,color:'var(--text2)',marginTop:4,fontStyle:'italic'}}>
+                    "{typeof t.comments[0]==='object'?t.comments[0].note||t.comments[0].content||'':t.comments[0]}"
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div style={{fontSize:12,color:'var(--text3)'}}>No tour activity yet</div>
           )}
         </div>
       </div>
