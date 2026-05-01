@@ -1473,7 +1473,7 @@ app.post('/api/chat', async function(req, res) {
     console.log('Tools:', tools.map(function(t) { return t.name; }).join(', '));
 
     const lastContent = messages[messages.length - 1]?.content;
-    const lowerMsg = (typeof lastContent === 'string' ? lastContent : ...).toLowerCase();
+    const lowerMsg = (typeof lastContent === 'string' ? lastContent :
       (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '')
     ).toLowerCase();
     const userMsg = typeof lastContent === 'string' ? lastContent : (Array.isArray(lastContent) ? lastContent.map(function(b) { return b.text || ''; }).join(' ') : '');
