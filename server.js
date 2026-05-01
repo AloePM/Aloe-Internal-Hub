@@ -25,6 +25,40 @@ app.get('/vacancy', (req, res) => {
 app.get('/vacancy-risk', (req, res) => {
   res.sendFile(new URL('./vacancy-risk.html', import.meta.url).pathname);
 });
+
+app.get('/vendors', (req, res) => {
+     res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
+});
+
+app.get('/api/vendors', async (req, res) => {
+   try {
+        let allVendors = [];
+        let page = 0;
+        while (page < 20) {
+               const data = await rvFetch('/api/vendor', { page, pageSize: 100 });
+               const batch = Array.isArray(data) ? data : (data && data.data) || [];
+               if (batch.length === 0) break;
+               allVendors = allVendors.concat(batch);
+               if (batch.length < 100) break;
+               page++;
+        }
+        const vendors = allVendors.map(v => ({
+               vendorID: v.vendorID || v.id || '',
+               name: v.name || v.vendorName || '',
+               companyName: v.companyName || '',
+               category: v.vendorType || v.category || v.tradeType || '',
+               phone: v.phone || v.phoneNumber || v.primaryPhone || '',
+               email: v.email || v.emailAddress || '',
+               isActive: v.isActive !== false && v.status !== 'Inactive',
+               workOrderCount: v.workOrderCount || v.totalWorkOrders || 0,
+               openWorkOrders: v.openWorkOrders || v.openWorkOrderCount || 0,
+        }));
+        res.json({ vendors, total: vendors.length });
+   } catch (err) {
+        console.error('Vendors API error:', err);
+        res.status(500).json({ error: err.message, vendors: [] });
+   }
+});
 app.get('/api/pet-policy', async function(req, res) {
   const addr = (req.query.address || '').toLowerCase().trim();
   if (!addr) return res.json({ error: 'address param required' });
