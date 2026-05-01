@@ -150,7 +150,40 @@ app.get('/api/aptly/units', async function(req, res) {
     const published = allCards.filter(function(u) {
       return u.publishedForRent === true || u.syndicate === true || u['Published For Rent'] === 'checked';
     });
-    res.json({ units: published, total: allCards.length, published: published.length });
+    // Sanitize — strip all {_id, name, duogram} Aptly contact objects before sending to browser
+    const strVal = function(v) {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || '') : String(i); }).filter(Boolean).join(', ');
+      if (typeof v === 'object') return v.name || v.label || v.address || '';
+      return String(v);
+    };
+    const sanitized = published.map(function(u) {
+      return {
+        cardId: u.cardId || '',
+        street: u.street || '',
+        city: u.city || (u.address && typeof u.address === 'object' ? u.address.city : '') || '',
+        beds: u.beds || 0,
+        baths: u.baths || 0,
+        totalArea: u.totalArea || 0,
+        marketRent: u.marketRent || null,
+        availableDate: u.availableDate || null,
+        publishedForRent: u.publishedForRent || false,
+        syndicate: u.syndicate || false,
+        rentReady: u.rentReady || false,
+        lockboxNumber: strVal(u.lockboxNumber),
+        virtualTourUrl: strVal(u.virtualTourUrl),
+        applicationUrl: strVal(u.applicationUrl),
+        petsAllowed: u.petsAllowed || false,
+        petRestrictions: Array.isArray(u.petRestrictions) ? u.petRestrictions : [],
+        animalDeposit: u.animalDeposit || null,
+        owners: Array.isArray(u.owners) ? u.owners.map(function(o) { return { name: strVal(o) }; }) : [],
+        portfolio: Array.isArray(u.portfolio) ? u.portfolio.map(function(p) { return { name: strVal(p) }; }) : [],
+        stage: u.stage || '',
+        marketingName: strVal(u.marketingName),
+      };
+    });
+    res.json({ units: sanitized, total: allCards.length, published: sanitized.length });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
