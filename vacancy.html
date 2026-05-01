@@ -260,18 +260,11 @@ function App() {
         u['Published For Rent'] === 'checked' || u['Syndicate'] === 'checked'
       );
 
-      // Fetch renter leads from core API via server proxy
+      // Fetch leads — use basic endpoint, leads-rich requires server route not yet deployed
       let richLeads = [];
       try {
-        // Use the /api/rentvine proxy pattern to hit Aptly leads board with full detail
-        const leadsRes = await fetch('/api/aptly/leads-rich').then(r => r.json()).catch(() => null);
-        if (leadsRes && leadsRes.leads) {
-          richLeads = leadsRes.leads;
-        } else {
-          // Fallback to basic leads
-          const ar = await fetch('/api/aptly/leads').then(r => r.json());
-          richLeads = Array.isArray(ar) ? ar : (ar?.leads || []);
-        }
+        const ar = await fetch('/api/aptly/leads').then(r => r.json());
+        richLeads = Array.isArray(ar) ? ar : (ar?.leads || []);
       } catch(e) { richLeads = []; }
 
       const processed = processData(publishedUnits, richLeads);
@@ -282,62 +275,75 @@ function App() {
   }
 
   function processData(units, allLeads) {
-    // Index leads by property address (normalize for matching)
-    const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g,'').substring(0,12);
+    try {
+    const safeLeads = Array.isArray(allLeads) ? allLeads : [];
+    const normalize = s => { try { return (s||'').toLowerCase().replace(/[^a-z0-9]/g,'').substring(0,12); } catch(e) { return ''; } };
 
-    const processed = units.map(u => {
-      const address = u.street || (u.address && u.address.address) || u.marketingName || '';
-      const city = u.city || (u.address && u.address.city) || '';
+    const processed = (Array.isArray(units) ? units : []).map((u, uidx) => {
+      try {
+      const address = u.street || (u.address && typeof u.address === 'object' ? u.address.address : '') || u.marketingName || '';
+      const city = u.city || (u.address && typeof u.address === 'object' ? u.address.city : '') || '';
       const rent = u.marketRent ? (typeof u.marketRent === 'object' ? parseFloat(u.marketRent.amount || 0) : parseFloat(u.marketRent || 0)) : 0;
-      const beds = parseInt(u.beds || 3);
+      const beds = parseInt(u.beds || 3) || 3;
       const baths = u.baths || '';
       const sqft = u.totalArea || 0;
 
       let dom = 0, listDate = null;
-      if (u.availableDate) {
-        const avail = new Date(u.availableDate);
-        const now = new Date();
-        if (avail < now) { dom = Math.floor((now - avail) / 86400000); listDate = u.availableDate; }
-      }
+      try {
+        if (u.availableDate) {
+          const avail = new Date(u.availableDate);
+          const now = new Date();
+          if (avail < now) { dom = Math.floor((now - avail) / 86400000); listDate = u.availableDate; }
+        }
+      } catch(e) {}
 
-      // Match leads to this property
+      // Match leads to this property (safely)
       const addrNorm = normalize(address);
-      const propLeads = allLeads.filter(l => {
-        const pref = normalize(l.address || l.propertyAddress || l.preferredRental || l.title || '');
-        return addrNorm && pref && (addrNorm.includes(pref.substring(0,8)) || pref.includes(addrNorm.substring(0,8)));
+      const propLeads = safeLeads.filter(l => {
+        try {
+          const pref = normalize(l.address || l.propertyAddress || l.preferredRental || l.title || '');
+          return addrNorm && pref && pref.length > 3 && (addrNorm.includes(pref.substring(0,8)) || pref.includes(addrNorm.substring(0,8)));
+        } catch(e) { return false; }
       });
 
       const totalLeads = propLeads.length;
-      const scheduledTours = propLeads.filter(l => /scheduled tour/i.test(l.stage || '')).length;
-      const completedTours = propLeads.filter(l => /tour completed/i.test(l.stage || '')).length;
-      const canceledTours = propLeads.filter(l => /canceled|no show/i.test(l.stage || '')).length;
-      const applied = propLeads.filter(l => /applied/i.test(l.stage || '')).length;
+      const scheduledTours = propLeads.filter(l => /scheduled tour/i.test(l.stage||'')).length;
+      const completedTours = propLeads.filter(l => /tour completed/i.test(l.stage||'')).length;
+      const canceledTours = propLeads.filter(l => /canceled|no show/i.test(l.stage||'')).length;
+      const applied = propLeads.filter(l => /applied/i.test(l.stage||'')).length;
 
-      // Weekly activity breakdown
-      const weeklyActivity = buildWeeklyActivity(propLeads, listDate);
+      // Weekly activity — wrapped safely
+      let weeklyActivity = [];
+      try { weeklyActivity = buildWeeklyActivity(propLeads, listDate); } catch(e) {}
 
-      // Tour feedback: leads with comments (tour notes)
-      const tourLeads = propLeads.filter(l =>
-        /scheduled tour|tour completed|tour canceled/i.test(l.stage || '') ||
-        (l.comments && l.comments.length > 0)
-      ).map(l => ({
-        contact: l.contact || l.name || l.title || '?',
-        stage: l.stage || '',
-        date: l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) : '',
-        showingInfo: l.showingInfo || l.requestedShowingInformation || '',
-        comments: Array.isArray(l.comments) ? l.comments : [],
-        source: l.source || '',
-        moveDate: l.moveDate || '',
-        income: l.income || '',
-        pets: l.pets || '',
-      }));
+      // Tour leads — wrapped safely
+      let tourLeads = [];
+      try {
+        tourLeads = propLeads.filter(l =>
+          /scheduled tour|tour completed|tour canceled/i.test(l.stage||'') || (l.comments && l.comments.length > 0)
+        ).map(l => ({
+          contact: l.contact || l.name || l.title || '?',
+          stage: l.stage || '',
+          date: l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) : '',
+          showingInfo: l.showingInfo || '',
+          comments: Array.isArray(l.comments) ? l.comments : [],
+          source: l.source || '',
+          moveDate: l.moveDate || '',
+          income: l.income || '',
+          pets: l.pets || '',
+        }));
+      } catch(e) {}
 
-      const risk = scoreProperty({ rent, beds, city, leads: totalLeads, showings: scheduledTours + completedTours, dom });
-      const petInfo = getPetLabel(u);
-      const owner = Array.isArray(u.owners) && u.owners.length > 0 ? u.owners[0].name : (Array.isArray(u.portfolio) && u.portfolio.length > 0 ? u.portfolio[0].name : '');
+      let risk = { score: 0, level: 'LOW', factors: [], suggestions: [], compRent: 0, cityData: getCityData(city) };
+      try { risk = scoreProperty({ rent, beds, city, leads: totalLeads, showings: scheduledTours + completedTours, dom }); } catch(e) {}
+
+      let petInfo = { label: 'Pets OK*', cls: 'pet-ok' };
+      try { petInfo = getPetLabel(u); } catch(e) {}
+
+      const owner = Array.isArray(u.owners) && u.owners.length > 0 ? (u.owners[0].name||'') : (Array.isArray(u.portfolio) && u.portfolio.length > 0 ? (u.portfolio[0].name||'') : '');
 
       return {
-        cardId: u.cardId, address, city, rent, beds, baths, sqft,
+        cardId: u.cardId || ('unit-'+uidx), address, city, rent, beds, baths, sqft,
         dom, listDate,
         leads: totalLeads, showings: scheduledTours + completedTours,
         scheduledTours, completedTours, canceledTours, applied,
@@ -349,15 +355,23 @@ function App() {
         virtualTour: u.virtualTourUrl, applicationUrl: u.applicationUrl,
         ...risk, lostPerDay: rent > 0 ? +(rent / 30).toFixed(2) : 0, lostPerMonth: rent,
       };
+      } catch(unitErr) {
+        // Return a safe stub if a unit crashes
+        return { cardId: 'err-'+uidx, address: u.street||'Unknown', city:'', rent:0, beds:3, baths:'', sqft:0, dom:0, listDate:null, leads:0, showings:0, scheduledTours:0, completedTours:0, canceledTours:0, applied:0, weeklyActivity:[], tourLeads:[], petInfo:{label:'?',cls:'pet-ok'}, owner:'', availableDate:'TBD', score:0, level:'LOW', factors:[], suggestions:[], compRent:0, cityData:{}, lostPerDay:0, lostPerMonth:0 };
+      }
     });
 
-    processed.sort((a, b) => b.score - a.score);
+    processed.sort((a, b) => (b.score||0) - (a.score||0));
     const high = processed.filter(u => u.level === 'HIGH');
     const medium = processed.filter(u => u.level === 'MEDIUM');
     const low = processed.filter(u => u.level === 'LOW');
     const zeroLeads = processed.filter(u => u.leads === 0);
-    const totalLost = processed.reduce((s, u) => s + u.lostPerMonth, 0);
+    const totalLost = processed.reduce((s, u) => s + (u.lostPerMonth||0), 0);
     return { units: processed, high, medium, low, zeroLeads, totalLost };
+    } catch(e) {
+      console.error('processData error:', e);
+      return { units: [], high: [], medium: [], low: [], zeroLeads: [], totalLost: 0 };
+    }
   }
 
   useEffect(() => { fetchAll(); }, []);
