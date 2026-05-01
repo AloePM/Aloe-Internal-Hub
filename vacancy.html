@@ -102,34 +102,38 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .comp-link{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-size:11px;color:var(--blue);text-decoration:none;background:var(--bg2);margin:2px;cursor:pointer;transition:all 0.15s}
 .comp-link:hover{background:var(--blue-bg);border-color:var(--blue)}
 .grid-market{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pet-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;margin-left:4px}
+.pet-ok{background:#dcfce7;color:#166534}
+.pet-no{background:#fee2e2;color:#991b1b}
+.pet-partial{background:#fef3c7;color:#92400e}
 @media(max-width:900px){.grid-market{grid-template-columns:1fr 1fr}.prop-row,.prop-hdr-grid{grid-template-columns:2fr 1fr 1fr 1fr}}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect } = React;
 
-// ─── Market Data (Phoenix Metro, hardcoded from research) ─────────────────
 const MARKET_DATA = {
-  metro: { vacancy: 8.4, type: "Renter-Friendly", new_units_2025: 18201, concession_rate: "50%+", outlook: "Rent growth likely negative throughout 2026. Recovery expected late 2026–2027 as construction slows." },
+  metro: { vacancy: 8.4, type: "Renter-Friendly", new_units_2025: 18201, concession_rate: "50%+", outlook: "29 consecutive months of YoY rent declines. 50%+ listings offering concessions. Rent growth likely negative throughout 2026. Recovery expected late 2026-2027 as construction slows." },
   cities: {
-    maricopa: { avg_rent: 1657, trend: "-4.8% YoY", vacancy_rate: "8.4% metro", comp_range: "$1,500 – $2,100", avg_dom: 37, note: "Renter-friendly market. 57% of rentals between $1,501–$2,000. 92% single-family rentals.", by_bed: { "2bd": 1450, "3bd": 1650, "4bd": 1800, "5bd": 2000 } },
-    chandler: { avg_rent: 1680, trend: "Stable, slight decline", vacancy_rate: "6–7%", comp_range: "$1,500 – $3,000", avg_dom: 25, note: "Stable with little MoM movement. Avg house rent $2,783.", by_bed: { "2bd": 1600, "3bd": 1900, "4bd": 2400, "5bd": 3000 } },
-    gilbert: { avg_rent: 2150, trend: "-2% YoY", vacancy_rate: "5–6%", comp_range: "$1,800 – $3,500", avg_dom: 20, note: "Strong family market with top-rated schools. Lower vacancy due to school demand.", by_bed: { "2bd": 1800, "3bd": 2100, "4bd": 2600, "5bd": 3200 } },
-    scottsdale: { avg_rent: 2000, trend: "Slight decline", vacancy_rate: "6–8%", comp_range: "$1,600 – $4,000", avg_dom: 22, note: "Luxury segment softening. Strong demand for 2-3BR under $2,500.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2800, "5bd": 3500 } },
-    phoenix: { avg_rent: 1458, trend: "-3.5% YoY", vacancy_rate: "5.1% city / 12.5% multifamily", comp_range: "$1,200 – $3,500", avg_dom: 30, note: "Over 50% of metro listings offering concessions. Softening rents.", by_bed: { "2bd": 1200, "3bd": 1500, "4bd": 1900, "5bd": 2400 } },
-    mesa: { avg_rent: 1850, trend: "-1% YoY", vacancy_rate: "6–8%", comp_range: "$1,400 – $3,000", avg_dom: 28, note: "Moderate competition. Light rail and ASU expansion supporting demand.", by_bed: { "2bd": 1400, "3bd": 1750, "4bd": 2100, "5bd": 2600 } },
-    peoria: { avg_rent: 1750, trend: "Stable", vacancy_rate: "6–8%", comp_range: "$1,400 – $2,800", avg_dom: 30, note: "Strong single-family demand. Lower supply keeping rents stable.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
-    tempe: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7–9%", comp_range: "$1,200 – $2,800", avg_dom: 25, note: "College-driven demand. High multifamily supply softening rents.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 2000, "5bd": 2400 } },
-    glendale: { avg_rent: 1550, trend: "-3% YoY", vacancy_rate: "7–9%", comp_range: "$1,200 – $2,500", avg_dom: 32, note: "Budget-friendly market softening. Sports venues drive some demand.", by_bed: { "2bd": 1200, "3bd": 1500, "4bd": 1800, "5bd": 2200 } },
-    "queen creek": { avg_rent: 2000, trend: "-2% YoY", vacancy_rate: "6–8%", comp_range: "$1,600 – $3,200", avg_dom: 28, note: "Fast-growing suburb with new construction inventory.", by_bed: { "2bd": 1600, "3bd": 1900, "4bd": 2300, "5bd": 2800 } },
-    "san tan valley": { avg_rent: 1700, trend: "-3% YoY", vacancy_rate: "7–9%", comp_range: "$1,400 – $2,500", avg_dom: 35, note: "Large supply of new builds. Competitive pricing needed.", by_bed: { "2bd": 1400, "3bd": 1650, "4bd": 1900, "5bd": 2300 } },
-    surprise: { avg_rent: 1650, trend: "Stable", vacancy_rate: "6–8%", comp_range: "$1,300 – $2,500", avg_dom: 30, note: "Retiree and family market. Moderate competition.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 1900, "5bd": 2300 } },
-    avondale: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7–9%", comp_range: "$1,300 – $2,400", avg_dom: 32, note: "Working-class market with growing inventory.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
-    buckeye: { avg_rent: 1600, trend: "-3% YoY", vacancy_rate: "8–10%", comp_range: "$1,300 – $2,400", avg_dom: 38, note: "Rapidly growing but high new construction competing.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
-    goodyear: { avg_rent: 1750, trend: "-1% YoY", vacancy_rate: "6–8%", comp_range: "$1,400 – $2,800", avg_dom: 28, note: "Strong demand near Intel campus expansion.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
-    tolleson: { avg_rent: 1500, trend: "Stable", vacancy_rate: "7–9%", comp_range: "$1,200 – $2,200", avg_dom: 33, note: "Working-class industrial corridor. Budget pricing key.", by_bed: { "2bd": 1200, "3bd": 1450, "4bd": 1750, "5bd": 2100 } },
+    maricopa: { avg_rent: 1657, median_rent: 1800, trend: "-4.8% YoY", vacancy_rate: "8.4% metro", comp_range: "$1,500-$2,100", avg_dom: 37, note: "Renter-friendly market. 57% of rentals between $1,501-$2,000. 92% single-family rentals.", by_bed: { "2bd": 1940, "3bd": 1831, "4bd": 2002, "5bd": 2200 } },
+    chandler: { avg_rent: 1680, median_rent: 2000, trend: "Stable, slight decline", vacancy_rate: "6-7%", comp_range: "$1,500-$3,000", avg_dom: 25, note: "Stable with little MoM movement. Avg house rent $2,783.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2783, "5bd": 3200 } },
+    gilbert: { avg_rent: 2150, median_rent: 2300, trend: "-2% YoY", vacancy_rate: "5-6%", comp_range: "$1,800-$3,500", avg_dom: 20, note: "Strong family market with top-rated schools. Lower vacancy due to school demand.", by_bed: { "2bd": 1900, "3bd": 2200, "4bd": 2800, "5bd": 3500 } },
+    scottsdale: { avg_rent: 2091, median_rent: 2100, trend: "+0.45% YoY", vacancy_rate: "5-6%", comp_range: "$1,500-$5,000+", avg_dom: 20, note: "Premium market. 43% of rentals $1,501-$2,000. Slight positive trend bucking metro.", by_bed: { "2bd": 2737, "3bd": 3200, "4bd": 4000, "5bd": 5000 } },
+    phoenix: { avg_rent: 1458, median_rent: 1500, trend: "-3.5% YoY", vacancy_rate: "5.1% city / 12.5% multifamily", comp_range: "$1,200-$3,500", avg_dom: 30, note: "29th consecutive month of YoY rent declines. 50%+ listings offering concessions.", by_bed: { "1bd": 1376, "2bd": 1580, "3bd": 2100, "4bd": 2500 } },
+    mesa: { avg_rent: 1650, median_rent: 1750, trend: "-2% YoY", vacancy_rate: "6-7%", comp_range: "$1,400-$2,800", avg_dom: 25, note: "Moderate competition. Light rail and ASU expansion supporting demand.", by_bed: { "2bd": 1600, "3bd": 2000, "4bd": 2400, "5bd": 2800 } },
+    peoria: { avg_rent: 1750, trend: "Stable", vacancy_rate: "6-8%", comp_range: "$1,400-$2,800", avg_dom: 30, note: "Strong single-family demand. Lower supply keeping rents stable.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
+    tempe: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7-9%", comp_range: "$1,200-$2,800", avg_dom: 25, note: "College-driven demand. High multifamily supply softening rents.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 2000, "5bd": 2400 } },
+    glendale: { avg_rent: 1550, trend: "-3% YoY", vacancy_rate: "7-9%", comp_range: "$1,200-$2,500", avg_dom: 32, note: "Budget-friendly market softening. Sports venues drive some demand.", by_bed: { "2bd": 1200, "3bd": 1500, "4bd": 1800, "5bd": 2200 } },
+    "queen creek": { avg_rent: 2300, median_rent: 2400, trend: "-2% YoY", vacancy_rate: "5-6%", comp_range: "$1,800-$3,000", avg_dom: 20, note: "Fast-growing suburb. DOM 15-25 days when priced right.", by_bed: { "2bd": 1800, "3bd": 2200, "4bd": 2700, "5bd": 3200 } },
+    "san tan valley": { avg_rent: 2050, median_rent: 2150, trend: "-3% YoY", vacancy_rate: "6-7%", comp_range: "$1,700-$2,500", avg_dom: 22, note: "Growing suburban market. DOM 15-25 days when priced right.", by_bed: { "2bd": 1700, "3bd": 2050, "4bd": 2300, "5bd": 2600 } },
+    surprise: { avg_rent: 1650, trend: "Stable", vacancy_rate: "6-8%", comp_range: "$1,300-$2,500", avg_dom: 30, note: "Retiree and family market. Moderate competition.", by_bed: { "2bd": 1300, "3bd": 1600, "4bd": 1900, "5bd": 2300 } },
+    avondale: { avg_rent: 1600, trend: "-2% YoY", vacancy_rate: "7-9%", comp_range: "$1,300-$2,400", avg_dom: 32, note: "Working-class market with growing inventory.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
+    buckeye: { avg_rent: 1600, trend: "-3% YoY", vacancy_rate: "8-10%", comp_range: "$1,300-$2,400", avg_dom: 38, note: "Rapidly growing but high new construction competing.", by_bed: { "2bd": 1300, "3bd": 1550, "4bd": 1850, "5bd": 2200 } },
+    goodyear: { avg_rent: 1750, trend: "-1% YoY", vacancy_rate: "6-8%", comp_range: "$1,400-$2,800", avg_dom: 28, note: "Strong demand near Intel campus expansion.", by_bed: { "2bd": 1400, "3bd": 1700, "4bd": 2100, "5bd": 2500 } },
+    tolleson: { avg_rent: 1500, trend: "Stable", vacancy_rate: "7-9%", comp_range: "$1,200-$2,200", avg_dom: 33, note: "Working-class industrial corridor. Budget pricing key.", by_bed: { "2bd": 1200, "3bd": 1450, "4bd": 1750, "5bd": 2100 } },
+    "rio verde": { avg_rent: 2800, median_rent: 3000, trend: "-5% YoY", vacancy_rate: "10%+", comp_range: "$2,200-$4,000", avg_dom: 45, note: "Seasonal/retirement area. Higher vacancy, longer DOM. Limited renter pool.", by_bed: { "3bd": 2800, "4bd": 3400, "5bd": 4200 } },
   }
 };
 
@@ -139,7 +143,6 @@ function getCityData(city) {
   return MARKET_DATA.cities[key] || MARKET_DATA.cities.maricopa;
 }
 
-// ─── Risk Scorer (JS port of risk_scorer.py) ─────────────────────────────
 function scoreProperty({ rent, beds, city, leads, showings, dom }) {
   let score = 0;
   const factors = [];
@@ -148,87 +151,52 @@ function scoreProperty({ rent, beds, city, leads, showings, dom }) {
   const bedKey = beds ? `${beds}bd` : '3bd';
   const compRent = cityData.by_bed?.[bedKey] || cityData.avg_rent || 1700;
 
-  // Factor 1: Lead volume (0–30 points)
-  if (leads === 0) {
-    score += 30;
-    factors.push("Zero leads — no market interest");
-    suggestions.push("Verify syndication is active on Zillow, Apartments.com, Homes.com, and Realtor.com");
-    suggestions.push("Add more listing photos (aim for 25+) and a virtual tour");
-  } else if (leads === 1) {
-    score += 20;
-    factors.push("Only 1 lead — very low interest");
-    suggestions.push("Review listing title and description for keyword optimization");
-  } else if (leads < 4) {
-    score += 10;
-    factors.push(`${leads} leads — moderate interest`);
-  } else {
-    factors.push(`${leads} leads — good pipeline`);
-  }
+  if (leads === 0) { score += 30; factors.push("Zero leads — no market interest"); suggestions.push("Verify syndication is active on Zillow, Apartments.com, Homes.com"); suggestions.push("Add more listing photos (aim for 25+) and a virtual tour"); }
+  else if (leads === 1) { score += 20; factors.push("Only 1 lead — very low interest"); suggestions.push("Review listing title and description for keyword optimization"); }
+  else if (leads < 4) { score += 10; factors.push(`${leads} leads — moderate interest`); }
+  else { factors.push(`${leads} leads — good pipeline`); }
 
-  // Factor 2: Showing activity (0–20 points)
-  if (leads > 0 && showings === 0) {
-    score += 20;
-    factors.push("Leads but NO showings scheduled — conversion problem");
-    suggestions.push("Follow up with existing leads within 24 hours to schedule showings");
-    suggestions.push("Enable self-scheduling via Aptly showing system");
-  } else if (showings === 0 && leads === 0) {
-    score += 15;
-    factors.push("No showings (no leads to convert)");
-  } else if (showings >= 2) {
-    factors.push(`${showings} showings — good activity`);
-    score -= 5;
-  }
+  if (leads > 0 && showings === 0) { score += 20; factors.push("Leads but NO showings — conversion problem"); suggestions.push("Follow up with leads within 24 hours to schedule showings"); suggestions.push("Enable self-scheduling via Aptly showing system"); }
+  else if (showings === 0 && leads === 0) { score += 15; factors.push("No showings (no leads to convert)"); }
+  else if (showings >= 2) { factors.push(`${showings} showings — good activity`); score -= 5; }
 
-  // Factor 3: Days on market (0–25 points)
-  if (dom > 60) {
-    score += 25;
-    factors.push(`${dom} days on market — significantly stale listing`);
-    suggestions.push(`URGENT: Consider price reduction. At $${rent}/mo, market avg is $${compRent}/mo`);
-    suggestions.push("Refresh listing description and photos");
-  } else if (dom > 30) {
-    score += 15;
-    factors.push(`${dom} days on market — getting stale`);
-    suggestions.push("Consider offering a move-in concession (e.g., 50% off first month)");
-  } else if (dom > 14) {
-    score += 8;
-    factors.push(`${dom} days on market — within normal range`);
-  } else {
-    factors.push(`${dom} days on market — fresh listing`);
-  }
+  if (dom > 60) { score += 25; factors.push(`${dom} days on market — significantly stale`); suggestions.push(`URGENT: Consider price reduction. Market avg is $${compRent}/mo`); suggestions.push("Refresh listing description and photos"); }
+  else if (dom > 30) { score += 15; factors.push(`${dom} days on market — getting stale`); suggestions.push("Consider offering a move-in concession (e.g., 50% off first month)"); }
+  else if (dom > 14) { score += 8; factors.push(`${dom} days on market — within normal range`); }
+  else { factors.push(`${dom} days on market — fresh listing`); }
 
-  // Factor 4: Rent vs market (0–25 points)
   if (compRent > 0 && rent > 0) {
     const premiumPct = ((rent - compRent) / compRent) * 100;
-    if (premiumPct > 10) {
-      score += 25;
-      factors.push(`Priced ${rent - compRent > 0 ? '+' : ''}$${Math.round(rent - compRent)}/mo above market avg`);
-      suggestions.push(`Market comp for ${beds}bd in ${city}: $${compRent}/mo. Suggest reducing to $${Math.round(compRent * 1.02)}`);
-    } else if (premiumPct > 5) {
-      score += 12;
-      factors.push(`Priced $${Math.round(rent - compRent)}/mo above market avg`);
-      suggestions.push("Slightly above market. Consider matching at market rate");
-    } else if (premiumPct < -10) {
-      score -= 5;
-      factors.push(`Priced BELOW market by $${Math.round(compRent - rent)}/mo`);
-    } else {
-      factors.push(`Rent aligned with market avg ($${compRent}/mo)`);
-    }
+    if (premiumPct > 10) { score += 25; factors.push(`Priced $${Math.round(rent-compRent)}/mo above market avg`); suggestions.push(`Market comp for ${beds}bd in ${city}: $${compRent}/mo. Suggest reducing to $${Math.round(compRent*1.02)}`); }
+    else if (premiumPct > 5) { score += 12; factors.push(`Priced $${Math.round(rent-compRent)}/mo above market avg`); suggestions.push("Slightly above market. Consider matching at market rate"); }
+    else if (premiumPct < -10) { score -= 5; factors.push(`Priced BELOW market by $${Math.round(compRent-rent)}/mo`); }
+    else { factors.push(`Rent aligned with market avg ($${compRent}/mo)`); }
   }
 
-  // Market context
   const vacancy = cityData.vacancy_rate || "";
   if (vacancy) suggestions.push(`Market context: ${city} vacancy rate is ${vacancy}. ${cityData.note || ""}`);
-
   score = Math.max(0, Math.min(100, score));
   const level = score >= 50 ? "HIGH" : score >= 25 ? "MEDIUM" : "LOW";
-
   return { score, level, factors, suggestions, compRent, cityData };
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────
+function getPetLabel(unit) {
+  const restrictions = Array.isArray(unit.petRestrictions) ? unit.petRestrictions : [];
+  const petsAllowed = unit.petsAllowed;
+  const noDogs = restrictions.some(r => /no dog/i.test(r));
+  const noCats = restrictions.some(r => /no cat/i.test(r));
+  const dogsOk = restrictions.some(r => /dog.*allow/i.test(r));
+  const catsOk = restrictions.some(r => /cat.*allow/i.test(r));
+  if (petsAllowed === false || (noDogs && noCats)) return { label: 'No Pets', cls: 'pet-no' };
+  if (noDogs && !noCats) return { label: 'Cats Only', cls: 'pet-partial' };
+  if (noCats && !noDogs) return { label: 'Dogs Only', cls: 'pet-partial' };
+  if (petsAllowed === true || dogsOk || catsOk) return { label: 'Pets OK', cls: 'pet-ok' };
+  return { label: 'Pets OK*', cls: 'pet-ok' };
+}
+
 const TABS = [
   { id: "overview", label: "Overview" },
-  { id: "properties", label: "All Properties" },
+  { id: "properties", label: "All Listings" },
   { id: "reports", label: "Owner Reports" },
   { id: "market", label: "Market Data" },
 ];
@@ -247,25 +215,25 @@ function App() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch units (marketed/vacant) via leases + units
-      let allLeases = [], page = 1, hasMore = true;
-      while (hasMore && page <= 20) {
-        const r = await fetch(`/api/rentvine/leases?page=${page}&pageSize=200`).then(r => r.json());
-        const batch = Array.isArray(r) ? r : [];
-        allLeases = allLeases.concat(batch);
-        hasMore = batch.length === 200;
-        page++;
-      }
+      // Fetch published units from Aptly via server proxy
+      const unitsRes = await fetch('/api/aptly/units').then(r => r.json());
+      // Handle both core API (publishedForRent: true) and old API ("Published For Rent": "checked")
+      const publishedUnits = (unitsRes.units || []).filter(u =>
+        u.publishedForRent === true ||
+        u.syndicate === true ||
+        u['Published For Rent'] === 'checked' ||
+        u['Syndicate'] === 'checked'
+      );
 
-      // Fetch Aptly leads
+      // Fetch Aptly leads for lead/showing counts
       let aptlyLeads = [];
       try {
         const ar = await fetch('/api/aptly/leads').then(r => r.json());
         aptlyLeads = Array.isArray(ar) ? ar : (ar?.leads || []);
-      } catch(e) { /* Aptly optional */ }
+      } catch(e) {}
 
-      const processed = processData(allLeases, aptlyLeads);
-      setData(processed);
+      const processed = processData(publishedUnits, aptlyLeads);
+      setData({ ...processed, totalInPortfolio: unitsRes.total || 0 });
       setLastRefresh(new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
     } catch(e) {
       setError(e.message);
@@ -274,8 +242,8 @@ function App() {
     }
   }
 
-  function processData(leases, aptlyLeads) {
-    // Build lead/showing count per address from Aptly
+  function processData(units, aptlyLeads) {
+    // Build lead/showing count per address from Aptly leads
     const leadsByAddr = {};
     aptlyLeads.forEach(lead => {
       const addr = (lead.address || lead.propertyAddress || lead.title || '').toLowerCase().trim();
@@ -286,35 +254,23 @@ function App() {
       }
     });
 
-    // Find marketed/vacant units — leaseStatusID != 2 means not actively occupied
-    const marketedUnits = [];
-    const seen = new Set();
-
-    leases.forEach(item => {
-      const l = item.lease || item;
-      const u = item.unit || {};
-      const status = parseInt(l.leaseStatusID);
-
-      // Only vacant/marketed units (not status 2 = active)
-      if (status === 2) return;
-      const unitId = u.unitID || l.unitID;
-      if (!unitId || seen.has(unitId)) return;
-      seen.add(unitId);
-
-      const address = u.address || u.name || '';
-      const city = u.city || '';
-      const rent = parseFloat(u.rent || 0);
+    const processed = units.map(u => {
+      const address = u.street || (u.address && u.address.address) || u.marketingName || '';
+      const city = u.city || (u.address && u.address.city) || '';
+      const rent = u.marketRent ? (typeof u.marketRent === 'object' ? parseFloat(u.marketRent.amount || 0) : parseFloat(u.marketRent || 0)) : 0;
       const beds = parseInt(u.beds || 3);
-      const size = parseInt(u.size || 0);
-      const now = new Date();
-      const available = l.moveOutDate || l.expectedMoveOutDate || l.endDate;
+      const baths = u.baths || '';
+      const sqft = u.totalArea || 0;
+
+      // Days on market from availableDate
       let dom = 0;
-      if (available) {
-        const d = new Date(available);
-        if (d < now) dom = Math.floor((now - d) / 86400000);
+      if (u.availableDate) {
+        const avail = new Date(u.availableDate);
+        const now = new Date();
+        if (avail < now) dom = Math.floor((now - avail) / 86400000);
       }
 
-      // Look up Aptly leads by address match
+      // Lead data
       const addrKey = address.toLowerCase().trim();
       let leadData = { leads: 0, showings: 0 };
       for (const [k, v] of Object.entries(leadsByAddr)) {
@@ -324,34 +280,43 @@ function App() {
       }
 
       const risk = scoreProperty({ rent, beds, city, leads: leadData.leads, showings: leadData.showings, dom });
+      const petInfo = getPetLabel(u);
+      const owner = Array.isArray(u.owners) && u.owners.length > 0 ? u.owners[0].name : (Array.isArray(u.portfolio) && u.portfolio.length > 0 ? u.portfolio[0].name : '');
 
-      marketedUnits.push({
-        unitID: unitId, address, city, rent, beds, size,
+      return {
+        cardId: u.cardId,
+        address, city, rent, beds, baths, sqft,
         dom, leads: leadData.leads, showings: leadData.showings,
-        leaseStatus: status, ...risk,
+        petInfo, owner,
+        availableDate: u.availableDate ? new Date(u.availableDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'TBD',
+        publishedForRent: u.publishedForRent,
+        syndicate: u.syndicate,
+        rentReady: u.rentReady,
+        lockboxNumber: u.lockboxNumber,
+        virtualTour: u.virtualTourUrl,
+        applicationUrl: u.applicationUrl,
+        ...risk,
         lostPerDay: rent > 0 ? +(rent / 30).toFixed(2) : 0,
         lostPerMonth: rent,
-      });
+      };
     });
 
-    // Sort by score descending
-    marketedUnits.sort((a, b) => b.score - a.score);
+    processed.sort((a, b) => b.score - a.score);
 
-    const high = marketedUnits.filter(u => u.level === 'HIGH');
-    const medium = marketedUnits.filter(u => u.level === 'MEDIUM');
-    const low = marketedUnits.filter(u => u.level === 'LOW');
-    const zeroLeads = marketedUnits.filter(u => u.leads === 0);
-    const totalLost = marketedUnits.reduce((s, u) => s + u.lostPerMonth, 0);
-    const avgRent = marketedUnits.length ? Math.round(marketedUnits.reduce((s, u) => s + u.rent, 0) / marketedUnits.length) : 0;
+    const high = processed.filter(u => u.level === 'HIGH');
+    const medium = processed.filter(u => u.level === 'MEDIUM');
+    const low = processed.filter(u => u.level === 'LOW');
+    const zeroLeads = processed.filter(u => u.leads === 0);
+    const totalLost = processed.reduce((s, u) => s + u.lostPerMonth, 0);
 
-    return { units: marketedUnits, high, medium, low, zeroLeads, totalLost, avgRent, aptlyConnected: aptlyLeads.length > 0 };
+    return { units: processed, high, medium, low, zeroLeads, totalLost };
   }
 
   useEffect(() => { fetchAll(); }, []);
 
   const filteredUnits = (data?.units || []).filter(u => {
     const matchFilter = filter === 'ALL' || u.level === filter;
-    const matchSearch = !search || u.address.toLowerCase().includes(search.toLowerCase()) || u.city.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search || u.address.toLowerCase().includes(search.toLowerCase()) || u.city.toLowerCase().includes(search.toLowerCase()) || (u.owner || '').toLowerCase().includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
@@ -359,32 +324,33 @@ function App() {
 
   return (
     <div>
-      {/* Topbar */}
       <div className="topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <a href="/" className="logo"><div className="logo-icon">A</div></a>
           <div>
-            <div className="logo-text">Vacancy Risk & Market Intelligence</div>
-            <div className="logo-sub">Aloe Property Management</div>
+            <div className="logo-text">Vacancy Risk &amp; Market Intelligence</div>
+            <div className="logo-sub">Aloe Property Management — Published Listings Only</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {lastRefresh && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Last refresh: {lastRefresh}</span>}
-          {d && <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 500 }}>{d.units.length} active rentals</span>}
-          <button className="action-btn" onClick={fetchAll} style={{ background: 'var(--teal)', color: '#fff', border: 'none' }}>↻ Refresh Data</button>
+          {lastRefresh && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Refreshed: {lastRefresh}</span>}
+          {d && <span style={{ fontSize: 12, color: 'var(--teal-d)', fontWeight: 600 }}>{d.units.length} active listings</span>}
+          {d && <span style={{ fontSize: 11, color: 'var(--text3)' }}>of {d.totalInPortfolio} in portfolio</span>}
+          <button className="action-btn" onClick={fetchAll} style={{ background: 'var(--teal)', color: '#fff', border: 'none' }}>↻ Refresh</button>
           <a href="/" className="action-btn">← Hub</a>
         </div>
       </div>
 
-      {/* Status bar */}
       <div className="status-bar">
-        <div className="status-item"><span className="dot dot-green"/>Rentvine: Connected</div>
-        <div className="status-item"><span className={`dot ${d?.aptlyConnected ? 'dot-green' : 'dot-amber'}`}/>Aptly: {d?.aptlyConnected ? 'Connected' : 'Limited (leads via cache)'}</div>
-        <div className="status-item"><span className="dot dot-gray"/>Rentometer: Market data loaded</div>
-        {d && <div className="status-item" style={{ marginLeft: 'auto' }}>{d.units.filter(u=>u.leads===0).length > 0 && <span style={{color:'var(--amber)',fontWeight:600}}>{d.units.filter(u=>u.leads===0).length} zero-lead properties</span>} | {d.units.length} marketed units | {d?.high?.length || 0} high risk</div>}
+        <div className="status-item"><span className="dot dot-green"/>Aptly Units: Published listings only</div>
+        <div className="status-item"><span className="dot dot-gray"/>Market data: Q1 2026</div>
+        {d && <div className="status-item" style={{ marginLeft: 'auto' }}>
+          <span style={{color:'var(--amber)',fontWeight:600}}>{d.zeroLeads.length} zero-lead</span>&nbsp;|&nbsp;
+          {d.units.length} published&nbsp;|&nbsp;
+          <span style={{color:'var(--red)',fontWeight:600}}>{d.high.length} high risk</span>
+        </div>}
       </div>
 
-      {/* Nav */}
       <div className="nav">
         {TABS.map(t => (
           <button key={t.id} className={`nav-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
@@ -392,21 +358,19 @@ function App() {
       </div>
 
       <div className="main">
-        {error && <div className="err">⚠ {error}</div>}
+        {error && <div className="err">⚠ {error} — Make sure /api/aptly/units route is added to server.js</div>}
         {loading && (
           <div className="loading">
             <div className="spinner"/>
-            <div>Loading vacancy & lead data from Rentvine…</div>
-            <div style={{fontSize:11,color:'var(--text3)'}}>Fetching all pages of lease records</div>
+            <div>Loading published listings from Aptly…</div>
+            <div style={{fontSize:11,color:'var(--text3)'}}>Fetching only units published for rent</div>
           </div>
         )}
 
-        {/* ── OVERVIEW ── */}
         {!loading && tab === 'overview' && d && (
           <div>
-            {/* KPI row */}
             <div className="kpi-row cols-6" style={{marginBottom:16}}>
-              <div className="kpi"><div className="kpi-label">Active Rentals</div><div className="kpi-value" style={{color:'var(--teal-d)'}}>{d.units.length}</div><div className="kpi-sub">Published for rent</div></div>
+              <div className="kpi"><div className="kpi-label">Published Listings</div><div className="kpi-value" style={{color:'var(--teal-d)'}}>{d.units.length}</div><div className="kpi-sub">of {d.totalInPortfolio} in portfolio</div></div>
               <div className="kpi"><div className="kpi-label">High Risk</div><div className="kpi-value" style={{color:'var(--red)'}}>{d.high.length}</div><div className="kpi-sub">Need immediate action</div></div>
               <div className="kpi"><div className="kpi-label">Medium Risk</div><div className="kpi-value" style={{color:'var(--amber)'}}>{d.medium.length}</div><div className="kpi-sub">Monitor closely</div></div>
               <div className="kpi"><div className="kpi-label">Low Risk</div><div className="kpi-value" style={{color:'var(--green)'}}>{d.low.length}</div><div className="kpi-sub">On track</div></div>
@@ -414,21 +378,19 @@ function App() {
               <div className="kpi"><div className="kpi-label">Monthly Vacancy Cost</div><div className="kpi-value" style={{color:'var(--red)',fontSize:22}}>${d.totalLost.toLocaleString()}</div><div className="kpi-sub">Total lost revenue/mo</div></div>
             </div>
 
-            {/* Urgent strip */}
             {d.high.length > 0 && (
               <div className="urgent-strip">
                 <div className="urgent-count">{d.high.length}</div>
                 <div>
                   <div style={{fontWeight:700,color:'var(--red)',fontSize:14}}>URGENT — {d.high.length} {d.high.length === 1 ? 'property needs' : 'properties need'} action</div>
-                  <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>High vacancy risk scores require immediate attention to prevent extended vacancies</div>
+                  <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>High vacancy risk scores require immediate attention</div>
                 </div>
               </div>
             )}
 
-            {/* Property list */}
             <div className="card" style={{padding:0,overflow:'hidden'}}>
               <div style={{padding:'16px 22px 12px',borderBottom:'1px solid var(--border)'}}>
-                <div className="card-title" style={{marginBottom:0}}><span className="card-bar" style={{background:'var(--red)'}}/>Urgent — Properties Ranked by Risk Score</div>
+                <div className="card-title" style={{marginBottom:0}}><span className="card-bar" style={{background:'var(--red)'}}/>Published Listings — Ranked by Risk Score</div>
               </div>
               <div className="prop-hdr-grid" style={{paddingTop:12}}>
                 <div className="prop-col-hdr" style={{textAlign:'left'}}>Property</div>
@@ -439,12 +401,12 @@ function App() {
                 <div className="prop-col-hdr">Score</div>
               </div>
               <div style={{padding:'0 0 8px'}}>
-                {d.units.slice(0, 12).map(u => (
-                  <PropertyRow key={u.unitID} u={u} expanded={expanded} setExpanded={setExpanded} />
+                {d.units.slice(0, 15).map(u => (
+                  <PropertyRow key={u.cardId} u={u} expanded={expanded} setExpanded={setExpanded} />
                 ))}
-                {d.units.length > 12 && (
+                {d.units.length > 15 && (
                   <div style={{textAlign:'center',padding:'12px',fontSize:12,color:'var(--text3)',cursor:'pointer'}} onClick={() => setTab('properties')}>
-                    View all {d.units.length} properties →
+                    View all {d.units.length} listings →
                   </div>
                 )}
               </div>
@@ -452,15 +414,14 @@ function App() {
           </div>
         )}
 
-        {/* ── ALL PROPERTIES ── */}
         {!loading && tab === 'properties' && d && (
           <div>
             <div className="page-hdr">
-              <div className="page-title">All Properties</div>
-              <div className="page-sub">{d.units.length} active rentals · sorted by risk score</div>
+              <div className="page-title">All Published Listings</div>
+              <div className="page-sub">{d.units.length} units published for rent · sorted by risk score</div>
             </div>
             <div className="filters">
-              <input className="search-box" placeholder="Search by address, city, or owner…" value={search} onChange={e => setSearch(e.target.value)}/>
+              <input className="search-box" placeholder="Search address, city, or owner…" value={search} onChange={e => setSearch(e.target.value)}/>
               {['ALL','HIGH','MEDIUM','LOW'].map(f => (
                 <button key={f} className={`filter-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
                   {f === 'ALL' ? `All (${d.units.length})` : f === 'HIGH' ? `High Risk (${d.high.length})` : f === 'MEDIUM' ? `Medium (${d.medium.length})` : `Low (${d.low.length})`}
@@ -478,33 +439,31 @@ function App() {
               </div>
               <div style={{padding:'0 0 8px'}}>
                 {filteredUnits.map(u => (
-                  <PropertyRow key={u.unitID} u={u} expanded={expanded} setExpanded={setExpanded} showComp />
+                  <PropertyRow key={u.cardId} u={u} expanded={expanded} setExpanded={setExpanded} showComp />
                 ))}
                 {filteredUnits.length === 0 && (
-                  <div style={{padding:'40px',textAlign:'center',color:'var(--text3)'}}>No properties match your filters</div>
+                  <div style={{padding:'40px',textAlign:'center',color:'var(--text3)'}}>No listings match your filters</div>
                 )}
               </div>
             </div>
           </div>
         )}
 
-        {/* ── OWNER REPORTS ── */}
         {!loading && tab === 'reports' && d && (
           <div>
             <div className="page-hdr">
               <div className="page-title">Owner Reports</div>
-              <div className="page-sub">Per-property marketing summary and recommendations</div>
+              <div className="page-sub">Per-listing marketing summary and recommendations</div>
             </div>
-            {d.units.map(u => <OwnerReport key={u.unitID} u={u} />)}
+            {d.units.map(u => <OwnerReport key={u.cardId} u={u} />)}
           </div>
         )}
 
-        {/* ── MARKET DATA ── */}
         {!loading && tab === 'market' && (
           <div>
             <div className="page-hdr">
               <div className="page-title">Phoenix Metro Market Summary</div>
-              <div className="page-sub">Data as of Q1 2026 · Rentometer + Market Research</div>
+              <div className="page-sub">Data as of Q1 2026</div>
             </div>
             <div className="card" style={{marginBottom:16}}>
               <div className="kpi-row cols-4" style={{marginBottom:0}}>
@@ -536,13 +495,17 @@ function App() {
 }
 
 function PropertyRow({ u, expanded, setExpanded, showComp }) {
-  const isExpanded = expanded === u.unitID;
+  const isExpanded = expanded === u.cardId;
+  const pet = u.petInfo || { label: 'Pets OK*', cls: 'pet-ok' };
   return (
     <>
-      <div className={`prop-row ${u.level.toLowerCase()}`} onClick={() => setExpanded(isExpanded ? null : u.unitID)}>
+      <div className={`prop-row ${u.level.toLowerCase()}`} onClick={() => setExpanded(isExpanded ? null : u.cardId)}>
         <div>
-          <div className="prop-name">{u.address}</div>
-          <div className="prop-addr">{u.city}, AZ · {u.beds}bd/{u.size > 0 ? `${u.size} sqft` : 'n/a'}</div>
+          <div className="prop-name">
+            {u.address}
+            <span className={`pet-badge ${pet.cls}`}>{pet.label}</span>
+          </div>
+          <div className="prop-addr">{u.city}, AZ · {u.beds}bd{u.baths ? '/'+u.baths+'ba' : ''}{u.sqft > 0 ? ` · ${u.sqft.toLocaleString()} sqft` : ''} · Avail: {u.availableDate}{u.owner ? ` · ${u.owner}` : ''}</div>
         </div>
         <div className="prop-col"><span className={`badge badge-${u.level.toLowerCase()}`}>{u.level} ({u.score})</span></div>
         <div className="prop-col">
@@ -552,13 +515,19 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
           {u.showings > 0 && <span className="tag tag-os">OS</span>}
         </div>
         <div className="prop-col">
-          {u.dom > 0 ? u.dom : '—'}{u.dom > 30 && <span className="tag tag-dom">{u.dom} DOM</span>}
+          {u.dom > 0 ? u.dom : '—'}{u.dom > 30 && <span className="tag tag-dom">{u.dom}d</span>}
         </div>
         <div className="prop-col">${u.rent > 0 ? u.rent.toLocaleString() : '—'}/mo</div>
         <div className="prop-col" style={{fontWeight:700,color: u.score >= 50 ? 'var(--red)' : u.score >= 25 ? 'var(--amber)' : 'var(--green)'}}>{u.score}</div>
       </div>
       {isExpanded && (
         <div className="detail-panel">
+          <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+            {u.applicationUrl && <a href={u.applicationUrl} target="_blank" rel="noopener noreferrer" className="comp-link">📝 Apply</a>}
+            {u.virtualTour && <a href={u.virtualTour} target="_blank" rel="noopener noreferrer" className="comp-link">🎥 Virtual Tour</a>}
+            {u.lockboxNumber && <span className="comp-link">🔑 Lockbox: {u.lockboxNumber}</span>}
+            {u.rentReady && <span className="comp-link" style={{color:'var(--green)'}}>✓ Rent Ready</span>}
+          </div>
           <div className="detail-grid">
             <div>
               <div className="detail-section">Risk Factors</div>
@@ -571,13 +540,13 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
           </div>
           {showComp && (
             <div style={{marginTop:12}}>
-              <div className="detail-section" style={{marginBottom:6}}>Comp Research Links</div>
+              <div className="detail-section" style={{marginBottom:6}}>Comp Research</div>
               <div>
                 {[
-                  ['🏠 Zillow Rentals', `https://www.zillow.com/homes/for_rent/${encodeURIComponent(u.address + ', ' + u.city + ', AZ')}/`],
-                  ['📊 Rentometer', `https://www.rentometer.com/analysis/new?address=${encodeURIComponent(u.address + ', ' + u.city + ', AZ')}&bedrooms=${u.beds}&rent=${u.rent}`],
+                  ['🏠 Zillow', `https://www.zillow.com/homes/for_rent/${encodeURIComponent(u.address+', '+u.city+', AZ')}/`],
+                  ['📊 Rentometer', `https://www.rentometer.com/analysis/new?address=${encodeURIComponent(u.address+', '+u.city+', AZ')}&bedrooms=${u.beds}&rent=${u.rent}`],
                   ['🏡 Apartments.com', `https://www.apartments.com/houses/${u.city.toLowerCase().replace(/\s+/g,'-')}-az/`],
-                  ['📈 Redfin Rentals', `https://www.redfin.com/rentals/${u.city}-AZ`],
+                  ['📈 Redfin', `https://www.redfin.com/rentals/${u.city}-AZ`],
                 ].map(([label, url]) => (
                   <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="comp-link">{label}</a>
                 ))}
@@ -595,12 +564,14 @@ function PropertyRow({ u, expanded, setExpanded, showComp }) {
 
 function OwnerReport({ u }) {
   const premiumAmt = u.rent - (u.compRent || 0);
+  const pet = u.petInfo || { label: 'Pets OK*', cls: 'pet-ok' };
   return (
     <div className="card" style={{marginBottom:12}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
         <div>
           <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>{u.address}</div>
-          <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{u.city}, AZ — ${u.rent > 0 ? u.rent.toLocaleString() : '—'}/mo</div>
+          <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{u.city}, AZ — ${u.rent>0?u.rent.toLocaleString():'—'}/mo — {u.beds}bd{u.baths?'/'+u.baths+'ba':''} — <span className={`pet-badge ${pet.cls}`}>{pet.label}</span></div>
+          {u.owner && <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Owner: {u.owner}</div>}
         </div>
         <span className={`badge badge-${u.level.toLowerCase()}`} style={{fontSize:12,padding:'4px 12px'}}>{u.level}</span>
       </div>
@@ -610,6 +581,7 @@ function OwnerReport({ u }) {
           <div className="market-row"><span className="market-label">Leads Generated</span><span className="market-value">{u.leads}</span></div>
           <div className="market-row"><span className="market-label">Showings Completed</span><span className="market-value">{u.showings}</span></div>
           <div className="market-row"><span className="market-label">Days Listed</span><span className="market-value">{u.dom > 0 ? u.dom : '< 1'}</span></div>
+          <div className="market-row"><span className="market-label">Available Date</span><span className="market-value">{u.availableDate}</span></div>
           <div style={{marginTop:16}} className="detail-section">Vacancy Impact</div>
           <div className="market-row"><span className="market-label">Lost Revenue/Day</span><span style={{color:'var(--red)',fontWeight:700}}>${u.lostPerDay.toFixed(2)}</span></div>
           <div className="market-row"><span className="market-label">Lost Revenue/Month</span><span style={{color:'var(--red)',fontWeight:700}}>${u.lostPerMonth.toLocaleString()}</span></div>
@@ -617,13 +589,13 @@ function OwnerReport({ u }) {
         <div>
           <div className="detail-section" style={{marginBottom:8}}>Market Position</div>
           <div className="market-row"><span className="market-label">Your Rent</span><span className="market-value">${u.rent.toLocaleString()}</span></div>
-          <div className="market-row"><span className="market-label">Market Average ({u.beds}bd)</span><span className="market-value">${(u.compRent || 0).toLocaleString()}</span></div>
-          <div className="market-row"><span className="market-label">Comp Range</span><span className="market-value">{u.cityData?.comp_range || '—'}</span></div>
-          <div className="market-row"><span className="market-label">vs Market</span><span style={{color: premiumAmt > 0 ? 'var(--amber)' : 'var(--green)',fontWeight:600}}>{premiumAmt > 0 ? `+$${premiumAmt.toLocaleString()}/mo above` : premiumAmt < 0 ? `$${Math.abs(premiumAmt).toLocaleString()}/mo below` : 'At market'}</span></div>
+          <div className="market-row"><span className="market-label">Market Average ({u.beds}bd)</span><span className="market-value">${(u.compRent||0).toLocaleString()}</span></div>
+          <div className="market-row"><span className="market-label">Comp Range</span><span className="market-value">{u.cityData?.comp_range||'—'}</span></div>
+          <div className="market-row"><span className="market-label">vs Market</span><span style={{color:premiumAmt>0?'var(--amber)':'var(--green)',fontWeight:600}}>{premiumAmt>0?`+$${premiumAmt.toLocaleString()}/mo above`:premiumAmt<0?`$${Math.abs(premiumAmt).toLocaleString()}/mo below`:'At market'}</span></div>
           {u.suggestions.length > 0 && (
             <>
               <div style={{marginTop:16}} className="detail-section">Recommendations</div>
-              {u.suggestions.slice(0, 3).map((s, i) => <div key={i} style={{fontSize:12,color:'var(--text2)',marginBottom:5,display:'flex',gap:6}}><span style={{color:'var(--teal)',flexShrink:0}}>→</span>{s}</div>)}
+              {u.suggestions.slice(0,3).map((s,i) => <div key={i} style={{fontSize:12,color:'var(--text2)',marginBottom:5,display:'flex',gap:6}}><span style={{color:'var(--teal)',flexShrink:0}}>→</span>{s}</div>)}
             </>
           )}
         </div>
