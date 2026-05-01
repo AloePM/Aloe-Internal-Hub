@@ -2709,21 +2709,74 @@ if (isPetQ && addressInMsg) {
       const text = `Here's what I found for ${addr}:\n\nStatus: ${stage}${beds?' | '+beds:''}${rent?' | '+rent:''}\n\n${verdict}${petSummary}\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed or weight restrictions unless owner specifically requests. No exotic pets. All pets require screening.`;
       return res.json({ content: [{ type: 'text', text }] });
     } else {
-      // No match found — show closest units so staff can identify
+      // Not found in Units board — try the location board (has ALL properties)
+      try {
+        const locSchema = await unitsFetch('/api/schema/location');
+        const locMap = {};
+        if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
+        let allLocs = [];
+        let pg = 0;
+        while (pg < 5) {
+          const data = await unitsFetch('/api/board/location', { page: pg, pageSize: 100 });
+          const batch = Array.isArray(data) ? data : (data && data.data) || [];
+          if (batch.length === 0) break;
+          allLocs = allLocs.concat(batch);
+          if (batch.length < 100) break;
+          pg++;
+        }
+        const locMatch = allLocs.find(function(card) {
+          const mapped = {};
+          Object.keys(card).forEach(function(k) { mapped[locMap[k] || k] = card[k]; });
+          const addr = (mapped['Street'] || mapped['Address'] || card.name || '').toLowerCase();
+          const hasNum = numMatch && addr.includes(numMatch);
+          const hasWord = wordMatch.some(function(w) { return addr.includes(w); });
+          return hasNum && hasWord;
+        });
+        if (locMatch) {
+          const mapped = {};
+          Object.keys(locMatch).forEach(function(k) { mapped[locMap[k] || k] = locMatch[k]; });
+          const addr = mapped['Street'] || mapped['Address'] || locMatch.name || '?';
+          const allFields = JSON.stringify(mapped).toLowerCase();
+          const noPets = allFields.includes('no pet') || allFields.includes('no dogs') || allFields.includes('no cats') || allFields.includes('pet free');
+          const petsAllowed = allFields.includes('pet friendly') || allFields.includes('pets allowed') || allFields.includes('pets ok');
+          const petFields = Object.entries(mapped).filter(function(e) {
+            return e[0].toLowerCase().includes('pet') || (typeof e[1] === 'string' && e[1].toLowerCase().includes('pet'));
+          });
+          const hoaFields = Object.entries(mapped).filter(function(e) {
+            return e[0].toLowerCase().includes('hoa') || (typeof e[1] === 'string' && e[1].toLowerCase().includes('hoa'));
+          });
+          const verdict = noPets
+            ? '🚫 This property appears to have a NO PETS restriction.'
+            : petsAllowed
+            ? '✅ This property is marked pet friendly.'
+            : '⚠️ No specific pet restriction found on this property record — standard Aloe policy applies.';
+          let extras = '';
+          if (petFields.length > 0) extras += '\n\nPet fields: ' + petFields.map(function(e) { return e[0] + ': ' + e[1]; }).join(', ');
+          if (hoaFields.length > 0) extras += '\n\nHOA fields: ' + hoaFields.map(function(e) { return e[0] + ': ' + e[1]; }).join(', ');
+          const owner = (function() {
+            const raw = mapped['Owner'] || mapped['Portfolio'] || '';
+            if (Array.isArray(raw)) return raw.map(function(o) { return typeof o === 'object' ? (o.name || '') : String(o); }).join(', ');
+            if (typeof raw === 'object' && raw) return raw.name || '';
+            return String(raw || '');
+          })();
+          const text = 'Found ' + addr + ' in the property portfolio' + (owner ? ' (Owner: ' + owner + ')' : '') + '.\n\nNote: This property is not currently listed as vacant/available.\n\n' + verdict + extras + '\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed or weight restrictions unless owner requests. All pets require screening.';
+          return res.json({ content: [{ type: 'text', text }] });
+        }
+      } catch(e) {
+        console.error('Pet location board fallback error:', e.message);
+      }
+      // Still not found
       const numOnly = numMatch || '';
-      const partial = cards.filter(c=>{
+      const partial = cards.filter(function(c) {
         const addr = ((c.Street||c.Address||c['Marketing Name']||c.Title||'')).toLowerCase();
         return numOnly && addr.includes(numOnly);
-      }).slice(0,5);
+      }).slice(0, 5);
       const fallback = partial.length > 0
-        ? `I couldn't find an exact match for "${addressInMsg[0]}" in the Units board. Properties with "${numOnly}" in the address:\n\n`+partial.map(c=>(c.Street||c.Address||c['Marketing Name']||c.Title||'?')).join('\n')+'\n\nDid you mean one of these? Try asking again with the full address.'
-        : `I couldn't find "${addressInMsg[0]}" in the Aptly Units board. The address may be formatted differently — try the full street name (e.g. "West Lake Mirage Court"). Standard Aloe pet policy applies to all properties unless the listing notes a restriction.`;
+        ? 'I couldn\'t find an exact match for "' + addressInMsg[0] + '" in the listings. Properties with "' + numOnly + '" in the address:\n\n' + partial.map(function(c) { return c.Street||c.Address||c['Marketing Name']||c.Title||'?'; }).join('\n') + '\n\nDid you mean one of these?'
+        : 'I couldn\'t find "' + addressInMsg[0] + '" in Aptly. Try the full street name (e.g. "West Lake Mirage Court"). Standard Aloe pet policy applies to all properties unless the listing notes a restriction.';
       return res.json({ content: [{ type: 'text', text: fallback }] });
     }
-  } catch(e) {
-    console.error('Pet shortcut error:', e.message);
-  }
-}
+   
     // ─── Main Claude tool-loop ───────────────────────────────────────────────
     let current = messages.slice();
     for (let i = 0; i < 10; i++) {
