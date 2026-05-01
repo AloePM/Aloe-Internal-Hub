@@ -30,6 +30,10 @@ app.get('/vendors', (req, res) => {
      res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
 });
 
+app.get('/resources/vendors', (req, res) => {
+     res.sendFile(new URL('./vendor-resources.html', import.meta.url).pathname);
+});
+
 app.get('/api/vendors', async (req, res) => {
    try {
         let allVendors = [];
