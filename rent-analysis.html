@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aloe PM — Rent Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --teal:#3CC3E1;--teal-d:#2aa8c4;--teal-dim:rgba(60,195,225,0.1);
+  --green:#16a34a;--red:#dc2626;--amber:#d97706;
+  --bg:#F8FAFC;--bg2:#fff;--bg3:#f1f5f9;
+  --border:#e2e8f0;--text:#1a2b2b;--text2:#4a6060;--text3:#94a3b8;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:20;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo-dot{width:30px;height:30px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}
+.logo-text{font-weight:700;font-size:15px;color:var(--text)}
+.logo-sub{font-size:11px;color:var(--text3)}
+.badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;background:var(--teal-dim);color:var(--teal-d);border:1px solid rgba(60,195,225,0.2)}
+.main{max-width:1100px;margin:0 auto;padding:28px 24px}
+h1{font-size:24px;font-weight:700;letter-spacing:-0.02em;color:var(--text);margin-bottom:4px}
+.subtitle{font-size:14px;color:var(--text3);margin-bottom:24px}
+
+/* Search form */
+.search-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px 24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+.form-grid{display:grid;grid-template-columns:2fr 1fr 80px 80px auto;gap:10px;align-items:end}
+.field label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
+.field input,.field select{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg);outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus{border-color:var(--teal)}
+.btn{padding:9px 20px;border-radius:8px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--teal);color:#fff}
+.btn-primary:hover{background:var(--teal-d)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--border)}
+
+/* Status */
+.status-banner{padding:14px 18px;border-radius:10px;margin-bottom:20px;font-size:13px;display:flex;align-items:center;gap:10px}
+.status-loading{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8}
+.status-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.status-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.spinner{width:16px;height:16px;border:2px solid rgba(29,78,216,.3);border-top-color:#1d4ed8;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* KPI strip */
+.kpi-row{display:grid;gap:12px;margin-bottom:20px}
+.cols-5{grid-template-columns:repeat(5,1fr)}
+.cols-4{grid-template-columns:repeat(4,1fr)}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.kpi-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.kpi-value{font-size:24px;font-weight:700;letter-spacing:-0.02em;color:var(--text)}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* Gauge — subject vs market */
+.gauge-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:20px}
+.gauge-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.gauge-bar-wrap{position:relative;height:36px;background:var(--bg3);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.gauge-fill{height:100%;border-radius:8px;transition:width .6s ease;display:flex;align-items:center;padding:0 12px;font-size:12px;font-weight:600;color:#fff;gap:4px}
+.gauge-markers{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:var(--mono)}
+.verdict{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-top:10px}
+.verdict-low{background:#dcfce7;color:#15803d}
+.verdict-fair{background:#dbeafe;color:#1d4ed8}
+.verdict-high{background:#fef3c7;color:#92400e}
+.verdict-over{background:#fee2e2;color:#991b1b}
+
+/* Comp table */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-bar{width:3px;height:14px;border-radius:2px;background:var(--teal)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:8px 10px;text-align:left;color:var(--text3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--bg3)}
+td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg3)}
+.price-cell{font-weight:700;color:var(--text);font-family:var(--mono)}
+.src-badge{font-size:10px;padding:2px 6px;border-radius:10px;font-weight:600}
+.src-zillow{background:#e0f2fe;color:#0369a1}
+.src-redfin{background:#fce7f3;color:#9d174d}
+.src-realtor{background:#ecfdf5;color:#065f46}
+.src-apartments{background:#ede9fe;color:#5b21b6}
+.link{color:var(--teal-d);text-decoration:none;font-size:11px}
+.link:hover{text-decoration:underline}
+
+/* Distribution chart */
+.dist-chart{display:flex;align-items:flex-end;gap:4px;height:80px;padding:0 0 4px;margin:12px 0 6px}
+.dist-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.dist-bar{width:100%;background:var(--teal-dim);border-radius:4px 4px 0 0;border:1px solid rgba(60,195,225,0.3);transition:height .4s ease;cursor:default}
+.dist-bar.subject{background:var(--teal);border-color:var(--teal-d)}
+.dist-label{font-size:9px;color:var(--text3);font-family:var(--mono);text-align:center}
+
+/* City market cards */
+.city-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
+.city-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px}
+.city-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px}
+.city-stat{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+.city-stat-label{color:var(--text3)}
+.city-stat-value{font-weight:600;color:var(--text);font-family:var(--mono)}
+
+/* Tabs */
+.tab-row{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+.tab-btn{padding:9px 16px;font-size:13px;font-weight:500;color:var(--text3);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;font-family:var(--font)}
+.tab-btn.active{color:var(--teal-d);border-bottom-color:var(--teal);font-weight:600}
+.tab-btn:hover:not(.active){color:var(--text)}
+
+/* No-key state */
+.setup-card{background:linear-gradient(135deg,#eff6ff 0%,#e0f2fe 100%);border:1px solid #bfdbfe;border-radius:14px;padding:28px 32px;text-align:center;margin-bottom:24px}
+.setup-title{font-size:18px;font-weight:700;color:#1d4ed8;margin-bottom:8px}
+.setup-sub{font-size:14px;color:#3b82f6;margin-bottom:20px;line-height:1.6}
+.setup-steps{text-align:left;display:inline-block;background:#fff;border-radius:10px;padding:16px 20px;margin-bottom:16px;min-width:320px}
+.setup-step{display:flex;gap:10px;margin-bottom:10px;font-size:13px;color:var(--text2);align-items:flex-start}
+.step-num{width:20px;height:20px;border-radius:50%;background:var(--teal);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:12px;color:var(--teal-d)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" class="logo">
+    <div class="logo-dot">A</div>
+    <div>
+      <div class="logo-text">Aloe PM</div>
+      <div class="logo-sub">Rent Analysis</div>
+    </div>
+  </a>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="badge">Powered by Apify</span>
+    <a href="/vacancy" style="font-size:12px;color:var(--text3);text-decoration:none">← Vacancy</a>
+  </div>
+</div>
+
+<div class="main">
+  <h1>🏘️ Rental Comp Analysis</h1>
+  <p class="subtitle">Live rental comps from Zillow, Redfin, Realtor.com + Rentometer benchmarks</p>
+
+  <div class="search-card">
+    <div class="form-grid">
+      <div class="field">
+        <label>Property Address</label>
+        <input type="text" id="inp-address" placeholder="e.g. 21054 North Sansom Drive" value=""/>
+      </div>
+      <div class="field">
+        <label>City</label>
+        <input type="text" id="inp-city" placeholder="e.g. Maricopa" value=""/>
+      </div>
+      <div class="field">
+        <label>Beds</label>
+        <select id="inp-beds">
+          <option value="">Any</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Asking Rent</label>
+        <input type="number" id="inp-rent" placeholder="$2,000" step="50"/>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" id="btn-search" onclick="runAnalysis()">Analyze</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap" id="quick-btns">
+      <span style="font-size:11px;color:var(--text3);font-weight:600;align-self:center">Recent:</span>
+    </div>
+  </div>
+
+  <div id="status-area"></div>
+  <div id="results-area"></div>
+  <div id="market-area"></div>
+</div>
+
+<script>
+const API = window.location.origin;
+let recentSearches = JSON.parse(localStorage.getItem('rent_recent') || '[]');
+let currentData = null;
+
+// ── Apify key check ───────────────────────────────────────────────────────────
+async function checkApiKey() {
+  try {
+    const r = await fetch(API + '/api/comps?address=test&city=test').then(r => r.json());
+    if (r.error && r.error.includes('APIFY_API_KEY not configured')) return false;
+    return true;
+  } catch(e) { return true; } // assume configured if network error
+}
+
+// ── Format helpers ────────────────────────────────────────────────────────────
+const fmt$ = v => v ? '$' + Number(v).toLocaleString() : '—';
+const fmtPct = v => v > 0 ? '+' + v + '%' : v + '%';
+
+function srcBadge(src) {
+  const map = { zillow: 'src-zillow', redfin: 'src-redfin', realtor: 'src-realtor', apartments: 'src-apartments' };
+  return `<span class="src-badge ${map[src]||'src-zillow'}">${src||'?'}</span>`;
+}
+
+// ── Verdict logic ─────────────────────────────────────────────────────────────
+function getVerdict(asking, median) {
+  if (!asking || !median) return null;
+  const pct = ((asking - median) / median * 100).toFixed(1);
+  if (asking < median * 0.92) return { cls: 'verdict-low', icon: '📉', text: `${Math.abs(pct)}% below market — room to increase`, pct };
+  if (asking <= median * 1.05) return { cls: 'verdict-fair', icon: '✅', text: `Fair market price (${pct > 0 ? '+' : ''}${pct}% vs median)`, pct };
+  if (asking <= median * 1.12) return { cls: 'verdict-high', icon: '⚠️', text: `${pct}% above median — may slow leasing`, pct };
+  return { cls: 'verdict-over', icon: '🚨', text: `${pct}% over market — consider reducing`, pct };
+}
+
+// ── Distribution chart ────────────────────────────────────────────────────────
+function buildDistChart(comps, askingRent) {
+  if (!comps.length) return '';
+  const prices = comps.map(c => c.price).filter(Boolean).sort((a,b) => a-b);
+  const min = prices[0], max = prices[prices.length-1];
+  const buckets = 8;
+  const step = (max - min) / buckets || 1;
+  const bins = Array(buckets).fill(0).map((_, i) => ({ start: min + i*step, end: min + (i+1)*step, count: 0 }));
+  prices.forEach(p => {
+    const i = Math.min(Math.floor((p - min) / step), buckets - 1);
+    bins[i].count++;
+  });
+  const maxCount = Math.max(...bins.map(b => b.count), 1);
+  const subjectBin = askingRent ? Math.min(Math.floor((askingRent - min) / step), buckets - 1) : -1;
+  return `
+    <div class="dist-chart">
+      ${bins.map((b, i) => `
+        <div class="dist-bar-wrap">
+          <div class="dist-bar ${i === subjectBin ? 'subject' : ''}" style="height:${Math.max(8, b.count/maxCount*72)}px" title="${b.count} listings ~${fmt$(Math.round((b.start+b.end)/2))}"></div>
+        </div>
+      `).join('')}
+    </div>
+    <div class="dist-markers" style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);font-family:var(--mono)">
+      <span>${fmt$(Math.round(min))}</span><span>${fmt$(Math.round((min+max)/2))}</span><span>${fmt$(Math.round(max))}</span>
+    </div>
+    ${askingRent ? `<div style="margin-top:8px;font-size:11px;color:var(--text3)">★ Your asking rent (${fmt$(askingRent)}) shown in teal</div>` : ''}
+  `;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function renderResults(data, askingRent) {
+  const r = data.rental;
+  const stats = r.stats;
+  if (!stats || !r.comps.length) {
+    document.getElementById('results-area').innerHTML = `
+      <div class="status-banner status-warn">⚠️ No rental comps found for this address. Try broadening the search or check that the address is correct.</div>`;
+    return;
+  }
+
+  const verdict = getVerdict(askingRent, stats.median);
+  const rentVsZestimate = data.zestimate ? ((askingRent - data.zestimate) / data.zestimate * 100).toFixed(1) : null;
+
+  document.getElementById('results-area').innerHTML = `
+    <!-- KPI Strip -->
+    <div class="kpi-row cols-5">
+      <div class="kpi" style="border-top:3px solid var(--teal)">
+        <div class="kpi-label">Median Rent</div>
+        <div class="kpi-value" style="color:var(--teal-d)">${fmt$(stats.median)}</div>
+        <div class="kpi-sub">${stats.count} comps</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Market Range</div>
+        <div class="kpi-value" style="font-size:17px">${fmt$(stats.p25)} – ${fmt$(stats.p75)}</div>
+        <div class="kpi-sub">25th–75th percentile</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg Price/SqFt</div>
+        <div class="kpi-value">${stats.avgPricePerSqft ? '$' + stats.avgPricePerSqft : '—'}</div>
+        <div class="kpi-sub">per square foot</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Zillow Zestimate</div>
+        <div class="kpi-value" style="font-size:${data.zestimate?'22px':'16px'}">${data.zestimate ? fmt$(data.zestimate) : 'N/A'}</div>
+        <div class="kpi-sub">${rentVsZestimate ? 'You: ' + (rentVsZestimate > 0 ? '+' : '') + rentVsZestimate + '% vs Zestimate' : 'Add API key for estimates'}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Avg Days Listed</div>
+        <div class="kpi-value">${stats.avgDaysOnMarket !== null ? stats.avgDaysOnMarket : '—'}</div>
+        <div class="kpi-sub">days on market avg</div>
+      </div>
+    </div>
+
+    <!-- Price gauge -->
+    ${askingRent ? `
+    <div class="gauge-card">
+      <div class="gauge-title">📊 Your Rent vs Market</div>
+      <div class="gauge-bar-wrap">
+        <div class="gauge-fill" style="width:${Math.min(100, Math.round(askingRent/stats.max*100))}%;background:${verdict ? (verdict.cls==='verdict-low'?'var(--green)':verdict.cls==='verdict-fair'?'var(--teal)':verdict.cls==='verdict-high'?'var(--amber)':'var(--red)') : 'var(--teal)'}">
+          ${fmt$(askingRent)}
+        </div>
+      </div>
+      <div class="gauge-markers">
+        <span>${fmt$(stats.min)} min</span>
+        <span>${fmt$(stats.p25)} p25</span>
+        <span>${fmt$(stats.median)} median</span>
+        <span>${fmt$(stats.p75)} p75</span>
+        <span>${fmt$(stats.max)} max</span>
+      </div>
+      ${verdict ? `<div class="verdict ${verdict.cls}">${verdict.icon} ${verdict.text}</div>` : ''}
+      <div style="margin-top:16px">${buildDistChart(r.comps, askingRent)}</div>
+    </div>
+    ` : `<div class="card">${buildDistChart(r.comps, null)}</div>`}
+
+    <!-- Comp table -->
+    <div class="card">
+      <div class="card-title"><span class="card-bar"></span>Rental Comps (${r.comps.length})</div>
+      <table>
+        <thead><tr>
+          <th>Address</th><th>Beds/Ba</th><th>SqFt</th><th>Rent/Mo</th><th>$/SqFt</th><th>DOM</th><th>Source</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${r.comps.map(c => `<tr>
+            <td>${c.address || '—'}</td>
+            <td>${c.beds||'?'}bd/${c.baths||'?'}ba</td>
+            <td style="font-family:var(--mono)">${c.sqft ? Number(c.sqft).toLocaleString() : '—'}</td>
+            <td class="price-cell">${fmt$(c.price)}</td>
+            <td style="font-family:var(--mono);color:var(--text3)">${c.pricePerSqft ? '$'+c.pricePerSqft : '—'}</td>
+            <td style="color:var(--text3)">${c.daysOnMarket || '—'}</td>
+            <td>${srcBadge(c.source)}</td>
+            <td>${c.listingUrl ? `<a href="${c.listingUrl}" target="_blank" class="link">View ↗</a>` : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:12px;font-size:11px;color:var(--text3)">
+        Data from Zillow, Redfin, Realtor.com via Apify · Cached 7 days · ${data.fromCache ? 'Cached ' + new Date(data.fetchedAt).toLocaleDateString() : 'Fresh pull ' + new Date().toLocaleDateString()}
+      </div>
+    </div>
+  `;
+}
+
+// ── Run analysis ──────────────────────────────────────────────────────────────
+async function runAnalysis(address, city, beds, askingRent) {
+  address = address || document.getElementById('inp-address').value.trim();
+  city = city || document.getElementById('inp-city').value.trim();
+  beds = beds || document.getElementById('inp-beds').value;
+  askingRent = askingRent || parseFloat(document.getElementById('inp-rent').value) || null;
+
+  if (!address || !city) {
+    document.getElementById('status-area').innerHTML = `<div class="status-banner status-error">⚠️ Enter an address and city first.</div>`;
+    return;
+  }
+
+  // Save to recent
+  const key = `${address}, ${city}`;
+  recentSearches = [key, ...recentSearches.filter(s => s !== key)].slice(0, 5);
+  localStorage.setItem('rent_recent', JSON.stringify(recentSearches));
+  renderRecentBtns();
+
+  document.getElementById('btn-search').disabled = true;
+  document.getElementById('status-area').innerHTML = `
+    <div class="status-banner status-loading">
+      <div class="spinner"></div>
+      Pulling live comps from Zillow, Redfin & Realtor.com via Apify… this takes ~30–60 seconds on first run, instant if cached.
+    </div>`;
+  document.getElementById('results-area').innerHTML = '';
+
+  try {
+    const params = new URLSearchParams({ address, city, type: 'rent' });
+    if (beds) params.set('beds', beds);
+    const data = await fetch(`${API}/api/comps?${params}`).then(r => r.json());
+
+    if (data.error) {
+      if (data.error.includes('APIFY_API_KEY')) {
+        document.getElementById('status-area').innerHTML = renderSetupGuide();
+      } else {
+        document.getElementById('status-area').innerHTML = `<div class="status-banner status-error">❌ ${data.error}</div>`;
+      }
+      return;
+    }
+
+    document.getElementById('status-area').innerHTML = '';
+    currentData = data;
+    renderResults(data, askingRent);
+
+    // Also fetch city-level market data
+    fetchMarketData(city, beds);
+
+  } catch(e) {
+    document.getElementById('status-area').innerHTML = `<div class="status-banner status-error">❌ ${e.message}</div>`;
+  } finally {
+    document.getElementById('btn-search').disabled = false;
+  }
+}
+
+async function fetchMarketData(city, beds) {
+  document.getElementById('market-area').innerHTML = `<div style="font-size:12px;color:var(--text3);padding:8px 0">Loading ${city} market overview…</div>`;
+  try {
+    const params = new URLSearchParams({ city, type: 'rent' });
+    if (beds) params.set('beds', beds);
+    const data = await fetch(`${API}/api/comps/market?${params}`).then(r => r.json());
+    if (data.error || !data.overall) { document.getElementById('market-area').innerHTML = ''; return; }
+
+    const byBeds = Object.entries(data.byBeds || {}).sort((a,b) => parseInt(a[0]) - parseInt(b[0]));
+    document.getElementById('market-area').innerHTML = `
+      <div class="card">
+        <div class="card-title"><span class="card-bar" style="background:#7c3aed"></span>${city}, AZ — Rental Market Overview</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${data.totalListings} active rental listings · ${data.fromCache ? 'Cached' : 'Live pull'}</div>
+        <div class="city-grid">
+          ${byBeds.map(([b, s]) => `
+            <div class="city-card">
+              <div class="city-name">${b === 'unknown' ? 'All' : b + ' Bed'}</div>
+              <div class="city-stat"><span class="city-stat-label">Median</span><span class="city-stat-value">${fmt$(s.median)}</span></div>
+              <div class="city-stat"><span class="city-stat-label">Range</span><span class="city-stat-value">${fmt$(s.p25)}–${fmt$(s.p75)}</span></div>
+              <div class="city-stat"><span class="city-stat-label">Avg DOM</span><span class="city-stat-value">${s.avgDaysOnMarket || '—'}</span></div>
+              <div class="city-stat"><span class="city-stat-label">Listings</span><span class="city-stat-value">${s.count}</span></div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  } catch(e) { document.getElementById('market-area').innerHTML = ''; }
+}
+
+function renderSetupGuide() {
+  return `
+    <div class="setup-card">
+      <div class="setup-title">🔑 Apify API Key Needed</div>
+      <div class="setup-sub">Connect Apify to pull live comps from Zillow, Redfin & Realtor.com</div>
+      <div class="setup-steps">
+        <div class="setup-step"><div class="step-num">1</div><div>Go to <strong>apify.com</strong> and create a free account</div></div>
+        <div class="setup-step"><div class="step-num">2</div><div>Settings → Integrations → copy your <strong>API Token</strong></div></div>
+        <div class="setup-step"><div class="step-num">3</div><div>In Render → your service → <strong>Environment</strong> → add:<br/><code>APIFY_API_KEY = your-token-here</code></div></div>
+        <div class="setup-step"><div class="step-num">4</div><div>Add the Apify routes to <strong>server.js</strong> (see apify-routes.js)</div></div>
+        <div class="setup-step"><div class="step-num">5</div><div>Redeploy → come back here and run your first analysis!</div></div>
+      </div>
+      <div style="font-size:12px;color:#3b82f6">Free plan: $5/credits/month · Starter: $39/mo · ~$0.003 per comp lookup</div>
+    </div>`;
+}
+
+function renderRecentBtns() {
+  const area = document.getElementById('quick-btns');
+  if (!recentSearches.length) { area.innerHTML = ''; return; }
+  area.innerHTML = '<span style="font-size:11px;color:var(--text3);font-weight:600;align-self:center">Recent:</span>' +
+    recentSearches.map(s => {
+      const [addr, city] = s.split(', ');
+      return `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="quickSearch('${addr.replace(/'/g,"\\'")}','${city}')">${s.slice(0,40)}</button>`;
+    }).join('');
+}
+
+function quickSearch(address, city) {
+  document.getElementById('inp-address').value = address;
+  document.getElementById('inp-city').value = city;
+  runAnalysis();
+}
+
+document.getElementById('inp-address').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
+renderRecentBtns();
+</script>
+</body>
+</html>
