@@ -478,8 +478,113 @@ function App() {
 
         {!loading && tab==='reports' && d && (
           <div>
-            <div className="page-hdr"><div className="page-title">Owner Reports</div><div className="page-sub">Per-listing marketing summary, tour feedback, and weekly activity</div></div>
-            {(d.units||[]).map((u,idx)=><OwnerReport key={u.cardId||idx} u={u}/>)}
+            <div className="page-hdr"><div className="page-title">Owner Reports</div><div className="page-sub">{(d.units||[]).length} listings</div></div>
+            {(d.units||[]).map((u,idx)=>{
+              try {
+                const level = (u.level||'low').toLowerCase();
+                const rent = u.rent||0;
+                const dom = u.dom||0;
+                const leads = u.leads||0;
+                const completedTours = u.completedTours||0;
+                const scheduledTours = u.scheduledTours||0;
+                const canceledTours = u.canceledTours||0;
+                const applied = u.applied||0;
+                const lostPerDay = rent>0?(rent/30).toFixed(2):'0.00';
+                const compRent = u.compRent||0;
+                const premiumAmt = rent - compRent;
+                const suggestions = Array.isArray(u.suggestions)?u.suggestions:[];
+                const weekly = Array.isArray(u.weeklyActivity)?u.weeklyActivity:[];
+                const tours = Array.isArray(u.tourLeads)?u.tourLeads:[];
+                const pet = u.petInfo||{label:'Pets OK*',cls:'pet-ok'};
+                const leadsPerWk = weekly.length>0?(leads/weekly.length).toFixed(1):'—';
+                const toursPerWk = weekly.length>0?((scheduledTours+completedTours)/weekly.length).toFixed(1):'—';
+                return (
+                  <div key={u.cardId||idx} className="card" style={{marginBottom:12}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+                      <div>
+                        <div style={{fontSize:15,fontWeight:700,color:'var(--text)'}}>{u.address||'Unknown'}</div>
+                        <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>
+                          {u.city||''}, AZ &mdash; ${rent>0?rent.toLocaleString():'—'}/mo &mdash; {u.beds||'?'}bd{u.baths?'/'+u.baths+'ba':''} &mdash; <span className={'pet-badge '+(pet.cls||'pet-ok')}>{pet.label}</span>
+                        </div>
+                        {u.owner&&<div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>Owner: {u.owner}</div>}
+                      </div>
+                      <span className={'badge badge-'+level} style={{fontSize:12,padding:'4px 12px'}}>{u.level||'LOW'}</span>
+                    </div>
+
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:16}}>
+                      {/* Col 1: Marketing */}
+                      <div>
+                        <div className="detail-section" style={{marginBottom:8}}>Marketing Summary</div>
+                        <div className="market-row"><span className="market-label">Total Leads</span><span className="market-value">{leads}</span></div>
+                        <div className="market-row"><span className="market-label">Leads / Week</span><span className="market-value">{leadsPerWk}</span></div>
+                        <div className="market-row"><span className="market-label">Tours Completed</span><span className="market-value" style={{color:'var(--green)'}}>{completedTours}</span></div>
+                        <div className="market-row"><span className="market-label">Tours Scheduled</span><span className="market-value" style={{color:'var(--blue)'}}>{scheduledTours}</span></div>
+                        <div className="market-row"><span className="market-label">Canceled/No Show</span><span className="market-value" style={{color:'var(--red)'}}>{canceledTours}</span></div>
+                        <div className="market-row"><span className="market-label">Tours / Week</span><span className="market-value">{toursPerWk}</span></div>
+                        <div className="market-row"><span className="market-label">Applications</span><span className="market-value" style={{color:'var(--purple)'}}>{applied}</span></div>
+                        <div className="market-row"><span className="market-label">Days Listed</span><span className="market-value">{dom>0?dom:'&lt; 1'}</span></div>
+                        <div className="market-row"><span className="market-label">Available</span><span className="market-value">{u.availableDate||'TBD'}</span></div>
+                        <div style={{marginTop:10}} className="detail-section">Vacancy Cost</div>
+                        <div className="market-row"><span className="market-label">Lost/Day</span><span style={{color:'var(--red)',fontWeight:700}}>${lostPerDay}</span></div>
+                        <div className="market-row"><span className="market-label">Lost/Month</span><span style={{color:'var(--red)',fontWeight:700}}>${rent.toLocaleString()}</span></div>
+                      </div>
+
+                      {/* Col 2: Market */}
+                      <div>
+                        <div className="detail-section" style={{marginBottom:8}}>Market Position</div>
+                        <div className="market-row"><span className="market-label">Your Rent</span><span className="market-value">${rent.toLocaleString()}</span></div>
+                        <div className="market-row"><span className="market-label">Market Avg</span><span className="market-value">${compRent.toLocaleString()}</span></div>
+                        <div className="market-row"><span className="market-label">vs Market</span><span style={{color:premiumAmt>0?'var(--amber)':'var(--green)',fontWeight:600}}>{premiumAmt>0?'+$'+premiumAmt.toLocaleString()+'/mo above':premiumAmt<0?'$'+Math.abs(premiumAmt).toLocaleString()+'/mo below':'At market'}</span></div>
+                        {suggestions.length>0&&(
+                          <div style={{marginTop:12}}>
+                            <div className="detail-section" style={{marginBottom:6}}>Recommendations</div>
+                            {suggestions.slice(0,3).map((s,si)=>(
+                              <div key={si} style={{fontSize:12,color:'var(--text2)',marginBottom:4,display:'flex',gap:6}}>
+                                <span style={{color:'var(--teal)',flexShrink:0}}>→</span>{s}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Col 3: Weekly + Tours */}
+                      <div>
+                        {weekly.length>0&&(
+                          <div style={{marginBottom:12}}>
+                            <div className="detail-section" style={{marginBottom:6}}>Activity by Week</div>
+                            {weekly.map((w,wi)=>(
+                              <div key={wi} style={{display:'flex',justifyContent:'space-between',fontSize:11,padding:'2px 0',borderBottom:'1px solid var(--bg3)'}}>
+                                <span style={{color:'var(--text3)'}}>{w.label||('Wk '+(wi+1))}</span>
+                                <span style={{color:'var(--text2)'}}>{w.leads||0}L / {w.showings||0} tours</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="detail-section" style={{marginBottom:6}}>Tour Feedback</div>
+                        {tours.length>0?tours.slice(0,4).map((t,ti)=>(
+                          <div key={ti} style={{marginBottom:8,paddingBottom:6,borderBottom:ti<Math.min(tours.length,4)-1?'1px solid var(--border)':'none'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
+                              <span style={{fontSize:12,fontWeight:600,color:'var(--text)'}}>{t.contact||'Unknown'}</span>
+                              <span className={'tour-stage '+(STAGE_COLORS[t.stage]||'stage-nurturing')}>{t.stage||'—'}</span>
+                            </div>
+                            {t.date&&<div style={{fontSize:10,color:'var(--text3)'}}>{t.date}</div>}
+                            {t.comments&&t.comments.length>0&&(
+                              <div style={{fontSize:11,color:'var(--text2)',marginTop:3,fontStyle:'italic'}}>
+                                "{typeof t.comments[0]==='object'?(t.comments[0].note||t.comments[0].content||''):String(t.comments[0]||'')}"
+                              </div>
+                            )}
+                          </div>
+                        )):(
+                          <div style={{fontSize:12,color:'var(--text3)'}}>No tour activity yet</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              } catch(e) {
+                return <div key={idx} className="card" style={{marginBottom:8,borderColor:'var(--red)'}}><span style={{color:'var(--red)',fontSize:12}}>Error: {e.message} — {u.address||'unknown'}</span></div>;
+              }
+            })}
           </div>
         )}
 
