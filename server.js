@@ -86,6 +86,49 @@ app.get('/api/pet-policy', async function(req, res) {
     res.status(500).json({ error: e.message });
   }
 });
+app.get('/api/aptly/leads-rich', async function(req, res) {
+  try {
+    const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    const schemaRes = await fetch('https://core-api.getaptly.com/api/schema/4EMDSYKirhQaNdQKz', { headers: { 'x-token': token } });
+    const schema = await schemaRes.json();
+    const schemaMap = {};
+    if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
+    let allLeads = [], page = 0;
+    while (page < 5) {
+      const r = await fetch(`https://core-api.getaptly.com/api/board/4EMDSYKirhQaNdQKz?page=${page}&pageSize=100`, { headers: { 'x-token': token } });
+      if (!r.ok) break;
+      const data = await r.json();
+      const batch = Array.isArray(data) ? data : (data && data.data) || [];
+      if (batch.length === 0) break;
+      allLeads = allLeads.concat(batch);
+      if (batch.length < 100) break;
+      page++;
+    }
+    const mapped = allLeads.map(function(c) {
+      const m = { cardId: c.cardId, stage: c.stage, createdAt: c.createdAt };
+      Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
+      const pref = m['Preferred Rental'] || m['Unit'] || '';
+      const prefStr = typeof pref === 'object' ? (pref.name || pref.address || JSON.stringify(pref)) : String(pref || '');
+      return {
+        cardId: c.cardId,
+        stage: c.stage,
+        createdAt: c.createdAt,
+        contact: m['Primary Contact'] || c.name || '',
+        preferredRental: prefStr,
+        address: prefStr,
+        source: m['Source'] || '',
+        showingInfo: m['Requested Showing Information'] || '',
+        moveDate: m['Move Date'] || '',
+        income: m['Household Income'] || '',
+        pets: m['Pets'] || '',
+        comments: Array.isArray(c.comments) ? c.comments.map(function(cm) {
+          return { by: cm.userName || 'Unknown', note: cm.content || '', date: (cm.createdAt || '').slice(0,10) };
+        }) : [],
+      };
+    });
+    res.json({ leads: mapped, total: mapped.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/aptly/units', async function(req, res) {
   try {
     const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
