@@ -2664,7 +2664,9 @@ BENCHMARK DATA:
       }
     }
 // Pet policy shortcut
+console.log('PET CHECK:', lowerMsg.slice(0, 60));
 const isPetQ = lowerMsg.match(/pet|dog|cat|animal|fur/);
+console.log('isPetQ:', !!isPetQ, 'addressInMsg:', userMsg.match(/\d+\s+[a-z]\w[\w\s]{4,40}/i)?.[0]);
 const addressInMsg = userMsg.match(/\d+\s+[a-z]\w[\w\s]{4,40}/i);
 if (isPetQ && addressInMsg) {
   try {
