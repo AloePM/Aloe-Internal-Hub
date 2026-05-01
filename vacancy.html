@@ -412,34 +412,29 @@ function App() {
         return all;
       }
 
-      const [rvRaw, rvActive, rvFuture] = await Promise.all([
-        fetchAllPages('/properties/units/export?isActive=true'),
-        fetchAllPages('/leases/export?primaryLeaseStatusIDs[]=1'),
-        fetchAllPages('/leases/export?primaryLeaseStatusIDs[]=3'),
-      ]);
+      const rvRaw = await fetchAllPages('/properties/units/export?isActive=true');
 
-      // Build leased unit ID set (active + pending)
-      const leasedIds = new Set();
-      [...rvActive, ...rvFuture].forEach(item => {
-        const uid = item.lease && item.lease.unitID;
-        if (uid) leasedIds.add(uid);
+      // Build unitID -> address map
+      const unitMap = {};
+      rvRaw.forEach(item => {
+        const u = item.unit || item;
+        const p = item.property || {};
+        unitMap[u.unitID] = u.address || p.address || '';
       });
 
-      // RV marketed = no lease + rent > 0
-      const rvMarketed = rvRaw.filter(item => {
-        const unit = item.unit || item;
-        return !leasedIds.has(unit.unitID) && (unit.rent || 0) > 0;
-      }).map(item => {
-        const unit = item.unit || item;
-        const prop = item.property || {};
-        return {
-          address: unit.address || prop.address || '',
-          city: unit.city || prop.city || '',
-          beds: unit.beds || '',
-          rent: unit.rent || 0,
-          unitID: unit.unitID,
-        };
-      });
+      // Use the real Rentvine marketing listings endpoint (isActive=1 = actively marketed)
+      const rvListingsRaw = await fetchAllPages('/properties/listings');
+      const rvMarketed = rvListingsRaw
+        .filter(item => item.listing && String(item.listing.isActive) === '1')
+        .map(item => ({
+          address: unitMap[item.listing.unitID] || item.listing.headline || '',
+          propertyID: item.listing.propertyID,
+          unitID: item.listing.unitID,
+          availabilityDate: item.listing.availabilityDate,
+          advertisedDate: item.listing.advertisedDate,
+          isZillowActive: item.listing.isZillowActive,
+          isWebsiteActive: item.listing.isWebsiteActive,
+        }));
 
       // Match by street number
       const streetNum = s => ((s||'').match(/^\d+/) || [])[0] || '';
@@ -453,7 +448,7 @@ function App() {
       setSyncData({
         aptlyCount: aptlyUnits.length,
         rvTotalUnits: rvRaw.length,
-        rvLeased: leasedIds.size,
+        rvTotalListings: rvListingsRaw.length,
         rvMarketedCount: rvMarketed.length,
         matchedCount: matched.length,
         matched,
@@ -748,7 +743,7 @@ function App() {
                     <div className="kpi" style={{background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.3)'}}>
                       <div className="kpi-label">RV Marketed</div>
                       <div className="kpi-value" style={{color:'#16a34a'}}>{s.rvMarketedCount}</div>
-                      <div className="kpi-sub">no lease + rent {'>'} $0</div>
+                      <div className="kpi-sub">active marketing listings</div>
                     </div>
                     <div className="kpi" style={{background:s.matchedCount===s.aptlyCount?'rgba(74,222,128,0.08)':'rgba(245,166,35,0.08)',border:s.matchedCount===s.aptlyCount?'1px solid rgba(74,222,128,0.3)':'1px solid rgba(245,166,35,0.3)'}}>
                       <div className="kpi-label">Matched Both</div>
@@ -765,7 +760,7 @@ function App() {
                   {/* Status banner */}
                   <div style={{padding:'12px 16px',borderRadius:10,marginBottom:16,background:isInSync?'rgba(74,222,128,0.1)':'rgba(245,166,35,0.1)',border:isInSync?'1px solid rgba(74,222,128,0.3)':'1px solid rgba(245,166,35,0.3)',fontSize:13,color:isInSync?'#16a34a':'var(--amber)',fontWeight:600}}>
                     {isInSync ? '✅ In Sync — All Aptly published listings are confirmed marketed in Rentvine' : `⚠️ Sync Gap Detected — ${s.inAptlyNotRV.length} Aptly listing${s.inAptlyNotRV.length!==1?'s':''} not found in Rentvine marketed units`}
-                    <span style={{fontWeight:400,marginLeft:8,color:'var(--text2)'}}>RV portfolio: {s.rvTotalUnits} total units · {s.rvLeased} leased · {s.rvMarketedCount} marketed</span>
+                    <span style={{fontWeight:400,marginLeft:8,color:'var(--text2)'}}>RV portfolio: {s.rvTotalUnits} total units · {s.rvTotalListings} all-time listings · {s.rvMarketedCount} active</span>
                   </div>
 
                   {/* In Aptly NOT in Rentvine — the critical list */}
@@ -825,8 +820,8 @@ function App() {
                   <div className="card" style={{marginBottom:16}}>
                     <div className="card-title"><span className="card-bar" style={{background:'var(--silver)'}}/>ℹ️ In Rentvine Marketed — NOT in Aptly ({s.inRVNotAptlyCount})</div>
                     <div style={{padding:'10px 12px',background:'var(--bg3)',borderRadius:8,fontSize:13,color:'var(--text2)',marginBottom:12}}>
-                      Rentvine's "marketed" filter (no lease + rent {'>'} $0) returns <strong>{s.rvMarketedCount} units</strong> vs Aptly's <strong>{s.aptlyCount} published listings</strong>. 
-                      The gap of <strong>{s.inRVNotAptlyCount} units</strong> exists because Rentvine includes properties with rent set but <em>not actively published</em> — occupied homes where rent is configured but no listing is live, or properties between tenants with rent pre-set. This is expected and does not indicate a problem.
+                      The Rentvine <strong>Marketing Listings</strong> endpoint (<code>properties/listings?isActive=1</code>) returns <strong>{s.rvMarketedCount} active listings</strong> vs Aptly's <strong>{s.aptlyCount} published listings</strong>. 
+                      The gap of <strong>{s.inRVNotAptlyCount} units</strong> are actively marketed in Rentvine but not yet published to Aptly — they may be pending syndication approval or in the process of being set up.
                     </div>
                     <div style={{fontSize:12,color:'var(--text3)',marginBottom:8}}>Sample of first 10 RV-marketed-only units:</div>
                     <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
