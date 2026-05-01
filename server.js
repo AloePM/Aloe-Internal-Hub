@@ -2663,7 +2663,67 @@ BENCHMARK DATA:
         console.error('Showing shortcut error:', e.message);
       }
     }
-
+// Pet policy shortcut — fetch all units, fuzzy match address, return pet info
+const isPetQ = lowerMsg.match(/pet|dog|cat|animal|fur/);
+const addressInMsg = userMsg.match(/\d+\s+\w[\w\s]+(?:court|ct|drive|dr|street|st|avenue|ave|lane|ln|way|road|rd|place|pl|blvd|boulevard|circle|cir|trail|trl)/i);
+if (isPetQ && addressInMsg) {
+  try {
+    const searchAddr = addressInMsg[0].toLowerCase().trim();
+    const cards = await getUnitsCards();
+    // Fuzzy match — find unit where address contains the street number + street name words
+    const numMatch = searchAddr.match(/\d+/)?.[0];
+    const wordMatch = searchAddr.replace(/\d+/g,'').replace(/\b(court|ct|drive|dr|street|st|avenue|ave|lane|ln|way|road|rd|place|pl|blvd|boulevard|circle|cir|trail|trl)\b/gi,'').trim().split(/\s+/).filter(w=>w.length>2);
+    const match = cards.find(function(c) {
+      const addr = ((c.Street||c.Address||c['Marketing Name']||c.Title||'')).toLowerCase();
+      const hasNum = numMatch && addr.includes(numMatch);
+      const hasWord = wordMatch.some(w => addr.includes(w));
+      return hasNum && hasWord;
+    });
+    if (match) {
+      const addr = match.Street||match.Address||match['Marketing Name']||match.Title||'?';
+      const stage = match.Stage||match.Status||'';
+      const rent = match['Market Rent']||'';
+      const beds = match.Beds ? match.Beds+'bd/'+match.Baths+'ba' : '';
+      // Look for pet-related fields
+      const allFields = JSON.stringify(match).toLowerCase();
+      const petFields = Object.entries(match).filter(([k,v])=>
+        k.toLowerCase().includes('pet') || (typeof v === 'string' && v.toLowerCase().includes('pet'))
+      );
+      const hoa = Object.entries(match).filter(([k,v])=>
+        k.toLowerCase().includes('hoa') || (typeof v === 'string' && v.toLowerCase().includes('hoa'))
+      );
+      const noPets = allFields.includes('no pet') || allFields.includes('no dogs') || allFields.includes('no cats') || allFields.includes('pet free') || allFields.includes('pets not');
+      const petsAllowed = allFields.includes('pet friendly') || allFields.includes('pets allowed') || allFields.includes('pets ok') || allFields.includes('pet ok');
+      let petSummary = '';
+      if (petFields.length > 0) {
+        petSummary = '\n\nPet-related fields on this listing:\n' + petFields.map(([k,v])=>`${k}: ${v}`).join('\n');
+      }
+      if (hoa.length > 0) {
+        petSummary += '\n\nHOA fields:\n' + hoa.map(([k,v])=>`${k}: ${v}`).join('\n');
+      }
+      const verdict = noPets
+        ? '🚫 This listing appears to have a NO PETS restriction based on the listing data.'
+        : petsAllowed
+        ? '✅ This listing is marked pet friendly.'
+        : '⚠️ No specific pet restriction noted on this listing — standard Aloe policy applies (pets allowed, $250/pet fee, max 4 pets, no breed restrictions unless owner requests).';
+      const text = `Here's what I found for ${addr}:\n\nStatus: ${stage}${beds?' | '+beds:''}${rent?' | '+rent:''}\n\n${verdict}${petSummary}\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed or weight restrictions unless owner specifically requests. No exotic pets. All pets require screening.`;
+      return res.json({ content: [{ type: 'text', text }] });
+    } else {
+      // No match found — show closest units so staff can identify
+      const numOnly = numMatch || '';
+      const partial = cards.filter(c=>{
+        const addr = ((c.Street||c.Address||c['Marketing Name']||c.Title||'')).toLowerCase();
+        return numOnly && addr.includes(numOnly);
+      }).slice(0,5);
+      const fallback = partial.length > 0
+        ? `I couldn't find an exact match for "${addressInMsg[0]}" in the Units board. Properties with "${numOnly}" in the address:\n\n`+partial.map(c=>(c.Street||c.Address||c['Marketing Name']||c.Title||'?')).join('\n')+'\n\nDid you mean one of these? Try asking again with the full address.'
+        : `I couldn't find "${addressInMsg[0]}" in the Aptly Units board. The address may be formatted differently — try the full street name (e.g. "West Lake Mirage Court"). Standard Aloe pet policy applies to all properties unless the listing notes a restriction.`;
+      return res.json({ content: [{ type: 'text', text: fallback }] });
+    }
+  } catch(e) {
+    console.error('Pet shortcut error:', e.message);
+  }
+}
     // ─── Main Claude tool-loop ───────────────────────────────────────────────
     let current = messages.slice();
     for (let i = 0; i < 10; i++) {
