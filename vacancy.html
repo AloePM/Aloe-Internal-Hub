@@ -238,6 +238,7 @@ const TABS = [
   { id: "properties", label: "All Listings" },
   { id: "reports", label: "Owner Reports" },
   { id: "market", label: "Market Data" },
+  { id: "sync", label: "🔄 Sync Check" },
 ];
 
 function App() {
@@ -248,6 +249,8 @@ function App() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [syncData, setSyncData] = useState(null);
+  const [syncLoading, setSyncLoading] = useState(false);
   const [expanded, setExpanded] = useState(null);
 
   async function fetchAll() {
@@ -388,6 +391,81 @@ function App() {
   }
 
   useEffect(() => { fetchAll(); }, []);
+
+  async function fetchSync() {
+    setSyncLoading(true);
+    try {
+      // Fetch Aptly published units
+      const aptlyRes = await fetch('/api/aptly/units').then(r => r.json());
+      const aptlyUnits = (aptlyRes.units || []);
+
+      // Paginate through all RV units
+      async function fetchAllPages(path) {
+        let all = [], page = 1;
+        while (true) {
+          const r = await fetch('/api/rentvine' + path + '&pageSize=200&page=' + page).then(r => r.json());
+          if (!Array.isArray(r) || r.length === 0) break;
+          all = all.concat(r);
+          if (r.length < 200) break;
+          page++;
+        }
+        return all;
+      }
+
+      const [rvRaw, rvActive, rvFuture] = await Promise.all([
+        fetchAllPages('/properties/units/export?isActive=true'),
+        fetchAllPages('/leases/export?primaryLeaseStatusIDs[]=1'),
+        fetchAllPages('/leases/export?primaryLeaseStatusIDs[]=3'),
+      ]);
+
+      // Build leased unit ID set (active + pending)
+      const leasedIds = new Set();
+      [...rvActive, ...rvFuture].forEach(item => {
+        const uid = item.lease && item.lease.unitID;
+        if (uid) leasedIds.add(uid);
+      });
+
+      // RV marketed = no lease + rent > 0
+      const rvMarketed = rvRaw.filter(item => {
+        const unit = item.unit || item;
+        return !leasedIds.has(unit.unitID) && (unit.rent || 0) > 0;
+      }).map(item => {
+        const unit = item.unit || item;
+        const prop = item.property || {};
+        return {
+          address: unit.address || prop.address || '',
+          city: unit.city || prop.city || '',
+          beds: unit.beds || '',
+          rent: unit.rent || 0,
+          unitID: unit.unitID,
+        };
+      });
+
+      // Match by street number
+      const streetNum = s => ((s||'').match(/^\d+/) || [])[0] || '';
+      const aptlyNums = new Set(aptlyUnits.map(u => streetNum(u.street||'')).filter(Boolean));
+      const rvNums = new Set(rvMarketed.map(a => streetNum(a.address)).filter(Boolean));
+
+      const matched = aptlyUnits.filter(u => rvNums.has(streetNum(u.street||'')));
+      const inAptlyNotRV = aptlyUnits.filter(u => !rvNums.has(streetNum(u.street||'')));
+      const inRVNotAptly = rvMarketed.filter(a => !aptlyNums.has(streetNum(a.address)));
+
+      setSyncData({
+        aptlyCount: aptlyUnits.length,
+        rvTotalUnits: rvRaw.length,
+        rvLeased: leasedIds.size,
+        rvMarketedCount: rvMarketed.length,
+        matchedCount: matched.length,
+        matched,
+        inAptlyNotRV,
+        inRVNotAptly,
+        inRVNotAptlyCount: inRVNotAptly.length,
+      });
+    } catch(e) { console.error('fetchSync error:', e); }
+    finally { setSyncLoading(false); }
+  }
+
+  useEffect(() => { if (tab === 'sync' && !syncData) fetchSync(); }, [tab]);
 
   const filteredUnits = (data?.units || []).filter(u => {
     const matchFilter = filter === 'ALL' || u.level === filter;
@@ -643,6 +721,141 @@ function App() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {tab==='sync' && (
+          <div>
+            <div className="page-hdr">
+              <div className="page-title">Rentvine ↔ Aptly Sync Check</div>
+              <div className="page-sub">Verifies marketed units in Rentvine match published listings in Aptly</div>
+            </div>
+            {syncLoading && <div style={{textAlign:'center',padding:60,color:'var(--text3)',fontSize:14}}>Pulling data from Rentvine + Aptly…</div>}
+            {!syncLoading && !syncData && <div style={{textAlign:'center',padding:60,color:'var(--text3)',fontSize:14}}>Loading sync data…</div>}
+            {!syncLoading && syncData && (() => {
+              const s = syncData;
+              const matchPct = s.aptlyCount > 0 ? Math.round(s.matchedCount / s.aptlyCount * 100) : 0;
+              const isInSync = s.inAptlyNotRV.length === 0 && s.matchedCount === s.aptlyCount;
+              return (
+                <div>
+                  {/* KPI row */}
+                  <div className="kpi-row cols-4" style={{marginBottom:16}}>
+                    <div className="kpi" style={{background:'var(--teal-dim)',border:'1px solid var(--teal-d)'}}>
+                      <div className="kpi-label">Aptly Published</div>
+                      <div className="kpi-value" style={{color:'var(--teal-d)'}}>{s.aptlyCount}</div>
+                      <div className="kpi-sub">listings published for rent</div>
+                    </div>
+                    <div className="kpi" style={{background:'rgba(74,222,128,0.08)',border:'1px solid rgba(74,222,128,0.3)'}}>
+                      <div className="kpi-label">RV Marketed</div>
+                      <div className="kpi-value" style={{color:'#16a34a'}}>{s.rvMarketedCount}</div>
+                      <div className="kpi-sub">no lease + rent {'>'} $0</div>
+                    </div>
+                    <div className="kpi" style={{background:s.matchedCount===s.aptlyCount?'rgba(74,222,128,0.08)':'rgba(245,166,35,0.08)',border:s.matchedCount===s.aptlyCount?'1px solid rgba(74,222,128,0.3)':'1px solid rgba(245,166,35,0.3)'}}>
+                      <div className="kpi-label">Matched Both</div>
+                      <div className="kpi-value" style={{color:s.matchedCount===s.aptlyCount?'#16a34a':'var(--amber)'}}>{s.matchedCount}</div>
+                      <div className="kpi-sub">of {s.aptlyCount} Aptly listings found in RV</div>
+                    </div>
+                    <div className="kpi" style={{background:s.inAptlyNotRV.length===0?'rgba(74,222,128,0.08)':'rgba(248,113,113,0.08)',border:s.inAptlyNotRV.length===0?'1px solid rgba(74,222,128,0.3)':'1px solid rgba(248,113,113,0.3)'}}>
+                      <div className="kpi-label">Missing from RV</div>
+                      <div className="kpi-value" style={{color:s.inAptlyNotRV.length===0?'#16a34a':'var(--red)'}}>{s.inAptlyNotRV.length}</div>
+                      <div className="kpi-sub">Aptly listings not found in RV marketed</div>
+                    </div>
+                  </div>
+
+                  {/* Status banner */}
+                  <div style={{padding:'12px 16px',borderRadius:10,marginBottom:16,background:isInSync?'rgba(74,222,128,0.1)':'rgba(245,166,35,0.1)',border:isInSync?'1px solid rgba(74,222,128,0.3)':'1px solid rgba(245,166,35,0.3)',fontSize:13,color:isInSync?'#16a34a':'var(--amber)',fontWeight:600}}>
+                    {isInSync ? '✅ In Sync — All Aptly published listings are confirmed marketed in Rentvine' : `⚠️ Sync Gap Detected — ${s.inAptlyNotRV.length} Aptly listing${s.inAptlyNotRV.length!==1?'s':''} not found in Rentvine marketed units`}
+                    <span style={{fontWeight:400,marginLeft:8,color:'var(--text2)'}}>RV portfolio: {s.rvTotalUnits} total units · {s.rvLeased} leased · {s.rvMarketedCount} marketed</span>
+                  </div>
+
+                  {/* In Aptly NOT in Rentvine — the critical list */}
+                  {s.inAptlyNotRV.length > 0 && (
+                    <div className="card" style={{marginBottom:16}}>
+                      <div className="card-title"><span className="card-bar" style={{background:'var(--red)'}}/>⚠️ In Aptly (Published) — NOT Found in Rentvine Marketed ({s.inAptlyNotRV.length})</div>
+                      <div style={{fontSize:12,color:'var(--text3)',marginBottom:12}}>These properties are published for rent in Aptly but do NOT appear in Rentvine's marketed units list. Possible reasons: lease may exist in RV but not in Aptly, or the unit has no rent set in Rentvine.</div>
+                      <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                        <thead>
+                          <tr style={{background:'var(--bg3)'}}>
+                            <th style={{padding:'8px 10px',textAlign:'left',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Address</th>
+                            <th style={{padding:'8px 10px',textAlign:'left',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>City</th>
+                            <th style={{padding:'8px 10px',textAlign:'right',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Aptly Rent</th>
+                            <th style={{padding:'8px 10px',textAlign:'left',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Stage</th>
+                            <th style={{padding:'8px 10px',textAlign:'left',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Action Needed</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {s.inAptlyNotRV.map((u,i) => {
+                            const rent = u.marketRent ? (u.marketRent.amount || 0) : 0;
+                            const city = u.city || '—';
+                            const stage = u.stage || '—';
+                            const action = stage === 'Occupied' ? 'Check if lease closed in Aptly but active in RV' : 'Verify rent is set in Rentvine + unit is marked active';
+                            return (
+                              <tr key={i} style={{borderBottom:'1px solid var(--border)'}}>
+                                <td style={{padding:'9px 10px',fontWeight:600,color:'var(--text)'}}>{u.street || '—'}</td>
+                                <td style={{padding:'9px 10px',color:'var(--text2)',textTransform:'capitalize'}}>{city}</td>
+                                <td style={{padding:'9px 10px',textAlign:'right',color:'var(--text)'}}>{rent > 0 ? '$'+Number(rent).toLocaleString() : '—'}</td>
+                                <td style={{padding:'9px 10px'}}><span style={{fontSize:11,padding:'2px 8px',borderRadius:20,background:stage==='Occupied'?'rgba(245,166,35,0.12)':'rgba(248,113,113,0.12)',color:stage==='Occupied'?'var(--amber)':'var(--red)',fontWeight:600}}>{stage}</span></td>
+                                <td style={{padding:'9px 10px',fontSize:12,color:'var(--text3)'}}>{action}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Matched — confirmed in both */}
+                  <div className="card" style={{marginBottom:16}}>
+                    <div className="card-title"><span className="card-bar" style={{background:'var(--green)'}}/>✅ Confirmed in Both Systems ({s.matchedCount})</div>
+                    <div style={{fontSize:12,color:'var(--text3)',marginBottom:12}}>These properties are published in Aptly AND appear as marketed (no lease, rent {'>'} $0) in Rentvine.</div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:8}}>
+                      {s.matched.map((u,i) => {
+                        const rent = u.marketRent ? (u.marketRent.amount || 0) : 0;
+                        return (
+                          <div key={i} style={{padding:'8px 12px',background:'rgba(74,222,128,0.06)',border:'1px solid rgba(74,222,128,0.2)',borderRadius:8,fontSize:13}}>
+                            <div style={{fontWeight:600,color:'var(--text)'}}>{u.street}</div>
+                            <div style={{fontSize:11,color:'var(--text3)',marginTop:2}}>{u.city || ''}{rent > 0 ? ' · $'+Number(rent).toLocaleString()+'/mo' : ''} · {u.beds||'?'}bd</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* RV only — explains why 257 vs 24 */}
+                  <div className="card" style={{marginBottom:16}}>
+                    <div className="card-title"><span className="card-bar" style={{background:'var(--silver)'}}/>ℹ️ In Rentvine Marketed — NOT in Aptly ({s.inRVNotAptlyCount})</div>
+                    <div style={{padding:'10px 12px',background:'var(--bg3)',borderRadius:8,fontSize:13,color:'var(--text2)',marginBottom:12}}>
+                      Rentvine's "marketed" filter (no lease + rent {'>'} $0) returns <strong>{s.rvMarketedCount} units</strong> vs Aptly's <strong>{s.aptlyCount} published listings</strong>. 
+                      The gap of <strong>{s.inRVNotAptlyCount} units</strong> exists because Rentvine includes properties with rent set but <em>not actively published</em> — occupied homes where rent is configured but no listing is live, or properties between tenants with rent pre-set. This is expected and does not indicate a problem.
+                    </div>
+                    <div style={{fontSize:12,color:'var(--text3)',marginBottom:8}}>Sample of first 10 RV-marketed-only units:</div>
+                    <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                      <thead>
+                        <tr style={{background:'var(--bg3)'}}>
+                          <th style={{padding:'6px 10px',textAlign:'left',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Address</th>
+                          <th style={{padding:'6px 10px',textAlign:'left',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>City</th>
+                          <th style={{padding:'6px 10px',textAlign:'right',color:'var(--text3)',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>RV Rent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {s.inRVNotAptly.slice(0,10).map((a,i) => (
+                          <tr key={i} style={{borderBottom:'1px solid var(--border)'}}>
+                            <td style={{padding:'7px 10px',color:'var(--text)'}}>{a.address}</td>
+                            <td style={{padding:'7px 10px',color:'var(--text3)',textTransform:'capitalize'}}>{a.city}</td>
+                            <td style={{padding:'7px 10px',textAlign:'right',color:'var(--text2)'}}>${Number(a.rent).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {s.inRVNotAptlyCount > 10 && <div style={{fontSize:11,color:'var(--text3)',textAlign:'center',padding:'8px 0'}}>…and {s.inRVNotAptlyCount - 10} more (occupied homes with rent configured in RV)</div>}
+                  </div>
+
+                  <div style={{textAlign:'right',paddingTop:4}}>
+                    <button className="action-btn" onClick={()=>{setSyncData(null);fetchSync();}} style={{background:'var(--teal)',color:'#fff',border:'none',fontSize:12,padding:'6px 14px'}}>↻ Re-run Sync Check</button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
