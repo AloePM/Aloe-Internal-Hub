@@ -108,12 +108,22 @@ app.get('/api/aptly/leads-rich', async function(req, res) {
       const m = { cardId: c.cardId, stage: c.stage, createdAt: c.createdAt };
       Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
       const pref = m['Preferred Rental'] || m['Unit'] || '';
-      const prefStr = typeof pref === 'object' ? (pref.name || pref.address || JSON.stringify(pref)) : String(pref || '');
+      let prefStr = '';
+      if (Array.isArray(pref)) prefStr = pref.map(p => p.name || '').filter(Boolean).join(', ');
+      else if (typeof pref === 'object' && pref) prefStr = pref.name || pref.address || '';
+      else prefStr = String(pref || '');
+
+      const contactRaw = m['Primary Contact'] || c.name || '';
+      let contactStr = '';
+      if (Array.isArray(contactRaw)) contactStr = contactRaw.map(p => p.name || '').filter(Boolean).join(', ');
+      else if (typeof contactRaw === 'object' && contactRaw) contactStr = contactRaw.name || '';
+      else contactStr = String(contactRaw || '');
+
       return {
         cardId: c.cardId,
         stage: c.stage,
         createdAt: c.createdAt,
-        contact: m['Primary Contact'] || c.name || '',
+        contact: contactStr,
         preferredRental: prefStr,
         address: prefStr,
         source: m['Source'] || '',
