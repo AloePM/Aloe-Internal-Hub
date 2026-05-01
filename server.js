@@ -2938,6 +2938,39 @@ app.get('/recon', function(req, res) {
 app.get('/recon-bills', (req, res) => 
   res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
 );
+app.get('/debug/pet-test', async function(req, res) {
+  try {
+    const cards = await getUnitsCards();
+    const match = cards.find(function(c) {
+      return JSON.stringify(c).toLowerCase().includes('lake mirage');
+    });
+    const locSchema = await unitsFetch('/api/schema/location');
+    const locMap = {};
+    if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
+    let allLocs = [];
+    const data = await unitsFetch('/api/board/location', { page: 0, pageSize: 100 });
+    const batch = Array.isArray(data) ? data : (data && data.data) || [];
+    allLocs = batch;
+    const locMatch = allLocs.find(function(card) {
+      return JSON.stringify(card).toLowerCase().includes('lake mirage');
+    });
+    const locMatchMapped = locMatch ? (function() {
+      const m = {};
+      Object.keys(locMatch).forEach(function(k) { m[locMap[k] || k] = locMatch[k]; });
+      return m;
+    })() : null;
+    res.json({
+      unitsTotal: cards.length,
+      unitMatch: match || 'NOT FOUND IN UNITS',
+      unitSampleKeys: cards[0] ? Object.keys(cards[0]).slice(0, 30) : [],
+      locationsTotal: allLocs.length,
+      locMatch: locMatchMapped || 'NOT FOUND IN LOCATIONS',
+      locSampleKeys: allLocs[0] ? Object.keys(allLocs[0]).slice(0, 20) : [],
+    });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
 app.get('/logo.png', function(req, res) {
   res.sendFile(new URL('AloePM-Logo_FullColor__2_.png', import.meta.url).pathname);
 });
