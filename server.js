@@ -3386,19 +3386,6 @@ app.get('*', function(req, res) {
   <div class="tool-name">Vacancy Risk & Market Intelligence</div>
   <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
 </a>
-<a href="/rent-analysis" class="tool-card primary" data-name="rent analysis comps zillow redfin str airbnb furnished">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">🏘️</div>
-  <div class="tool-name">Rent Analysis</div>
-  <div class="tool-desc">Live comps · STR/Airbnb · Furnished — Zillow, Redfin & Realtor.com</div>
-</a>
-
-<a href="/sale-analysis" class="tool-card purple-top" data-name="sale analysis comps zestimate redfin equity">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-purple">🏡</div>
-  <div class="tool-name">Sale Analysis</div>
-  <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
-</a>
 
 <a href="/owner-report" class="tool-card primary" data-name="owner report email generator vacancy update">
   <span class="tool-badge badge-live">LIVE</span>
