@@ -378,7 +378,10 @@ function App() {
 
   const filteredUnits = (data?.units || []).filter(u => {
     const matchFilter = filter === 'ALL' || u.level === filter;
-    const matchSearch = !search || u.address.toLowerCase().includes(search.toLowerCase()) || u.city.toLowerCase().includes(search.toLowerCase()) || (u.owner||'').toLowerCase().includes(search.toLowerCase());
+    const addr = (u.address || '').toLowerCase();
+    const city = (u.city || '').toLowerCase();
+    const owner = (u.owner || '').toLowerCase();
+    const matchSearch = !search || addr.includes(search.toLowerCase()) || city.includes(search.toLowerCase()) || owner.includes(search.toLowerCase());
     return matchFilter && matchSearch;
   });
 
