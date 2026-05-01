@@ -34,31 +34,37 @@ h1{font-size:24px;font-weight:700;letter-spacing:-0.02em;color:var(--text);margi
 .btn-primary:hover{background:#6d28d9}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed}
 .btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--border)}
 .status-banner{padding:14px 18px;border-radius:10px;margin-bottom:20px;font-size:13px;display:flex;align-items:center;gap:10px}
 .status-loading{background:#f5f3ff;border:1px solid #ddd6fe;color:#5b21b6}
 .status-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
-.spinner{width:16px;height:16px;border:2px solid rgba(91,33,182,.3);border-top-color:#7c3aed;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.status-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.spinner{width:16px;height:16px;border:2px solid rgba(91,33,182,.3);border-top-color:var(--purple);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* AVM comparison */
-.avm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-.avm-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
-.avm-source{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
-.avm-value{font-size:26px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px}
+/* AVM cards */
+.avm-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.avm-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;text-align:center;position:relative;overflow:hidden}
+.avm-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.avm-zillow::before{background:#0369a1}
+.avm-redfin::before{background:#9d174d}
+.avm-market::before{background:var(--purple)}
+.avm-source{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.avm-value{font-size:26px;font-weight:700;letter-spacing:-0.02em;margin-bottom:3px}
 .avm-sub{font-size:11px;color:var(--text3)}
-.avm-zillow{border-top:3px solid #0369a1;--avm-color:#0369a1}
-.avm-redfin{border-top:3px solid #9d174d;--avm-color:#9d174d}
-.avm-market{border-top:3px solid var(--purple);--avm-color:var(--purple)}
-.avm-value{color:var(--avm-color,var(--text))}
+.avm-zillow .avm-value{color:#0369a1}
+.avm-redfin .avm-value{color:#9d174d}
+.avm-market .avm-value{color:var(--purple)}
 
-/* Owner context */
-.owner-box{background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1px solid #ddd6fe;border-radius:12px;padding:16px 20px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px}
-.owner-stat .label{font-size:10px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
-.owner-stat .value{font-size:18px;font-weight:700;color:#4c1d95}
-.owner-stat .sub{font-size:11px;color:#6d28d9;margin-top:1px}
+/* Equity box */
+.equity-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;border-radius:12px;padding:16px 20px}
+.eq-stat .eq-label{font-size:10px;font-weight:600;color:#7c3aed;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.eq-stat .eq-value{font-size:20px;font-weight:700;color:#4c1d95;letter-spacing:-0.02em}
+.eq-stat .eq-sub{font-size:11px;color:#6d28d9;margin-top:2px}
 
-.kpi-row{display:grid;gap:12px;margin-bottom:20px}
+.kpi-row{display:grid;gap:12px;margin-bottom:16px}
 .cols-5{grid-template-columns:repeat(5,1fr)}
+.cols-4{grid-template-columns:repeat(4,1fr)}
 .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
 .kpi-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
 .kpi-value{font-size:24px;font-weight:700;letter-spacing:-0.02em;color:var(--text)}
@@ -76,18 +82,13 @@ tr:hover td{background:var(--bg3)}
 .src-zillow{background:#e0f2fe;color:#0369a1}
 .src-redfin{background:#fce7f3;color:#9d174d}
 .src-realtor{background:#ecfdf5;color:#065f46}
-.link{color:var(--purple);text-decoration:none;font-size:11px}
-.link:hover{text-decoration:underline}
-.status-pill{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600}
+.status-pill{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
 .status-active{background:#dcfce7;color:#15803d}
 .status-sold{background:#fee2e2;color:#991b1b}
 .status-pending{background:#fef3c7;color:#92400e}
-
-/* Insight box */
-.insight-box{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 16px;margin-top:14px;font-size:13px;color:#4c1d95;line-height:1.6}
-.insight-box strong{font-weight:700}
-
-/* Setup */
+.link{color:var(--purple);text-decoration:none;font-size:11px}
+.link:hover{text-decoration:underline}
+.note-box{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px}
 .setup-card{background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #ddd6fe;border-radius:14px;padding:28px 32px;text-align:center;margin-bottom:24px}
 .setup-title{font-size:18px;font-weight:700;color:var(--purple);margin-bottom:8px}
 .setup-sub{font-size:14px;color:#6d28d9;margin-bottom:20px;line-height:1.6}
@@ -108,7 +109,7 @@ code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:var(--mono
     </div>
   </a>
   <div style="display:flex;gap:8px;align-items:center">
-    <span class="badge">Powered by Apify</span>
+    <span class="badge">Apify + MLS</span>
     <a href="/rent-analysis" style="font-size:12px;color:var(--text3);text-decoration:none">Rent Analysis →</a>
     <a href="/" style="font-size:12px;color:var(--text3);text-decoration:none;margin-left:4px">← Hub</a>
   </div>
@@ -116,7 +117,7 @@ code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:var(--mono
 
 <div class="main">
   <h1>🏡 Sale Comp Analysis</h1>
-  <p class="subtitle">Live sale comps, Zestimate, Redfin Estimate + owner equity context</p>
+  <p class="subtitle">Zestimate + Redfin Estimate + live sale comps · owner equity · rent yield calculator</p>
 
   <div class="search-card">
     <div class="form-grid">
@@ -141,7 +142,7 @@ code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:var(--mono
       </div>
       <div class="field">
         <label>SqFt</label>
-        <input type="number" id="inp-sqft" placeholder="e.g. 1800" step="100"/>
+        <input type="number" id="inp-sqft" placeholder="1,800" step="100"/>
       </div>
       <div class="field">
         <label>Owner Paid</label>
@@ -162,185 +163,149 @@ code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:var(--mono
 <script>
 const API = window.location.origin;
 let recentSearches = JSON.parse(localStorage.getItem('sale_recent') || '[]');
-
 const fmt$ = v => v ? '$' + Number(v).toLocaleString() : '—';
 
 function srcBadge(src) {
-  const map = { zillow: 'src-zillow', redfin: 'src-redfin', realtor: 'src-realtor' };
+  const map = { zillow:'src-zillow', redfin:'src-redfin', realtor:'src-realtor' };
   return `<span class="src-badge ${map[src]||'src-realtor'}">${src||'?'}</span>`;
 }
-
-function statusPill(status) {
-  const s = (status||'').toLowerCase();
-  const cls = s.includes('sold') ? 'status-sold' : s.includes('pending') ? 'status-pending' : 'status-active';
-  return `<span class="status-pill ${cls}">${status||'Active'}</span>`;
+function statusPill(s) {
+  const v = (s||'').toLowerCase();
+  const cls = v.includes('sold')?'status-sold':v.includes('pending')?'status-pending':'status-active';
+  return `<span class="status-pill ${cls}">${s||'Active'}</span>`;
 }
 
 function renderResults(data, sqft, purchasePrice) {
   const s = data.sale;
   const stats = s.stats;
   if (!stats || !s.comps.length) {
-    document.getElementById('results-area').innerHTML = `<div class="status-banner status-error">⚠️ No sale comps found. Try broadening the search.</div>`;
+    document.getElementById('results-area').innerHTML = `<div class="status-banner status-warn">⚠️ No sale comps found. Try a nearby city or check the address.</div>`;
     return;
   }
-
-  const zestimate = data.zestimate;
-  const redfin = data.redfin_estimate;
-  const avgAVM = [zestimate, redfin, stats.median].filter(Boolean);
-  const consensus = avgAVM.length ? Math.round(avgAVM.reduce((s,v) => s+v, 0) / avgAVM.length) : stats.median;
+  const z = data.zestimate;
+  const rf = data.redfin_estimate;
+  const avms = [z, rf, stats.medianSalePrice || stats.median].filter(Boolean);
+  const consensus = avms.length ? Math.round(avms.reduce((s,v)=>s+v,0)/avms.length) : stats.median;
   const equity = purchasePrice ? Math.round(consensus - purchasePrice) : null;
-  const equityPct = equity && purchasePrice ? ((equity / purchasePrice) * 100).toFixed(1) : null;
-  const capRateEst = consensus ? (consensus * 0.007 / 12 * 12 / consensus * 100).toFixed(1) : null; // rough 0.7% rule
+  const equityPct = equity && purchasePrice ? ((equity/purchasePrice)*100).toFixed(1) : null;
+  const estRent = consensus ? Math.round(consensus * 0.007) : null;
 
   document.getElementById('results-area').innerHTML = `
-    <!-- AVM Comparison -->
-    <div class="avm-grid">
+    <!-- AVM comparison -->
+    <div class="avm-row">
       <div class="avm-card avm-zillow">
         <div class="avm-source">Zillow Zestimate</div>
-        <div class="avm-value">${fmt$(zestimate)}</div>
+        <div class="avm-value">${z ? fmt$(z) : 'N/A'}</div>
         <div class="avm-sub">Automated valuation</div>
       </div>
       <div class="avm-card avm-redfin">
         <div class="avm-source">Redfin Estimate</div>
-        <div class="avm-value">${fmt$(redfin)}</div>
+        <div class="avm-value">${rf ? fmt$(rf) : 'N/A'}</div>
         <div class="avm-sub">Automated valuation</div>
       </div>
       <div class="avm-card avm-market">
-        <div class="avm-source">Market Comp Median</div>
-        <div class="avm-value">${fmt$(stats.median)}</div>
-        <div class="avm-sub">${stats.count} nearby comps</div>
+        <div class="avm-source">Comp Median</div>
+        <div class="avm-value">${fmt$(stats.medianSalePrice || stats.median)}</div>
+        <div class="avm-sub">${stats.soldCount||stats.count||0} nearby comps</div>
       </div>
     </div>
 
-    <!-- Consensus + Owner Equity -->
-    <div class="owner-box">
-      <div class="owner-stat">
-        <div class="label">Consensus Value</div>
-        <div class="value">${fmt$(consensus)}</div>
-        <div class="sub">avg of all sources</div>
+    <!-- Equity / owner context -->
+    <div class="equity-row">
+      <div class="eq-stat">
+        <div class="eq-label">Consensus Value</div>
+        <div class="eq-value">${fmt$(consensus)}</div>
+        <div class="eq-sub">avg of all sources</div>
       </div>
-      <div class="owner-stat">
-        <div class="label">Est. Equity</div>
-        <div class="value">${equity !== null ? fmt$(equity) : '—'}</div>
-        <div class="sub">${equityPct ? equityPct + '% return' : 'Enter purchase price'}</div>
+      <div class="eq-stat">
+        <div class="eq-label">Est. Owner Equity</div>
+        <div class="eq-value">${equity !== null ? fmt$(equity) : '—'}</div>
+        <div class="eq-sub">${equityPct ? equityPct+'% return' : 'Enter purchase price'}</div>
       </div>
-      <div class="owner-stat">
-        <div class="label">Price / SqFt</div>
-        <div class="value">${sqft && consensus ? '$' + Math.round(consensus/sqft) : stats.avgPricePerSqft ? '$'+stats.avgPricePerSqft : '—'}</div>
-        <div class="sub">vs market avg $${stats.avgPricePerSqft||'?'}/sqft</div>
+      <div class="eq-stat">
+        <div class="eq-label">Price / SqFt</div>
+        <div class="eq-value">${sqft && consensus ? '$'+Math.round(consensus/sqft) : stats.avgPricePerSqft ? '$'+stats.avgPricePerSqft : '—'}</div>
+        <div class="eq-sub">vs market avg $${stats.avgPricePerSqft||'?'}/sqft</div>
       </div>
-      <div class="owner-stat">
-        <div class="label">Gross Rent Yield</div>
-        <div class="value">${consensus ? (consensus * 0.007).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,',') : '—'}</div>
-        <div class="sub">est. monthly rent (0.7% rule)</div>
+      <div class="eq-stat">
+        <div class="eq-label">Est. Rent (0.7% rule)</div>
+        <div class="eq-value">${estRent ? fmt$(estRent) : '—'}</div>
+        <div class="eq-sub">per month LTR estimate</div>
       </div>
     </div>
 
-    <!-- Market Stats -->
+    <!-- Market stats -->
     <div class="kpi-row cols-5">
-      <div class="kpi">
-        <div class="kpi-label">Comp Range</div>
-        <div class="kpi-value" style="font-size:17px">${fmt$(stats.p25)} – ${fmt$(stats.p75)}</div>
-        <div class="kpi-sub">25th–75th percentile</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Avg Price/SqFt</div>
-        <div class="kpi-value">$${stats.avgPricePerSqft||'—'}</div>
-        <div class="kpi-sub">market average</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Low / High</div>
-        <div class="kpi-value" style="font-size:17px">${fmt$(stats.min)} / ${fmt$(stats.max)}</div>
-        <div class="kpi-sub">comp range extremes</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Avg Days on Market</div>
-        <div class="kpi-value">${stats.avgDaysOnMarket !== null ? stats.avgDaysOnMarket : '—'}</div>
-        <div class="kpi-sub">days listed avg</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Total Comps</div>
-        <div class="kpi-value">${stats.count}</div>
-        <div class="kpi-sub">nearby active + sold</div>
-      </div>
+      <div class="kpi"><div class="kpi-label">Comp Range</div><div class="kpi-value" style="font-size:16px">${fmt$(stats.minSalePrice||stats.min)} – ${fmt$(stats.maxSalePrice||stats.max)}</div><div class="kpi-sub">min to max</div></div>
+      <div class="kpi"><div class="kpi-label">25th–75th Pct</div><div class="kpi-value" style="font-size:16px">${fmt$(stats.priceRange?.p25||stats.p25)} – ${fmt$(stats.priceRange?.p75||stats.p75)}</div><div class="kpi-sub">middle range</div></div>
+      <div class="kpi"><div class="kpi-label">Avg Price/SqFt</div><div class="kpi-value">$${stats.avgPricePerSqft||'—'}</div><div class="kpi-sub">market avg</div></div>
+      <div class="kpi"><div class="kpi-label">Avg Days on Market</div><div class="kpi-value">${stats.avgDaysOnMarket||'—'}</div><div class="kpi-sub">days listed avg</div></div>
+      <div class="kpi"><div class="kpi-label">Comps Found</div><div class="kpi-value">${(s.comps||[]).length}</div><div class="kpi-sub">active + sold nearby</div></div>
     </div>
 
-    <!-- Insight -->
+    <!-- Owner insight -->
     ${purchasePrice ? `
-    <div class="insight-box">
-      📊 <strong>Owner Summary:</strong>
-      Purchased at ${fmt$(purchasePrice)} · Current consensus value ${fmt$(consensus)} ·
-      ${equity > 0 ? `Estimated equity <strong>${fmt$(equity)} (${equityPct}% gain)</strong>` : `Estimated loss of ${fmt$(Math.abs(equity))}`} ·
-      At current market rates, this property could rent for approximately <strong>${consensus ? fmt$(Math.round(consensus * 0.007)) : '—'}/month</strong>.
+    <div class="note-box">
+      📊 <strong>Owner Summary:</strong> Purchased at ${fmt$(purchasePrice)} · Consensus value ${fmt$(consensus)} ·
+      ${equity > 0 ? `Estimated equity <strong>${fmt$(equity)} (${equityPct}% gain)</strong>` : `Estimated underwater by ${fmt$(Math.abs(equity))}`} ·
+      At 0.7% rule, this property could rent for <strong>${fmt$(estRent)}/mo</strong> as a long-term rental.
     </div>` : ''}
 
-    <!-- Comp Table -->
-    <div class="card" style="margin-top:${purchasePrice?'0':'0'}">
+    <!-- Comp table -->
+    <div class="card">
       <div class="card-title"><span class="card-bar"></span>Sale Comps (${s.comps.length})</div>
       <table>
-        <thead><tr>
-          <th>Address</th><th>Beds/Ba</th><th>SqFt</th><th>List/Sale Price</th><th>$/SqFt</th><th>DOM</th><th>Status</th><th>Source</th><th></th>
-        </tr></thead>
+        <thead><tr><th>Address</th><th>Beds/Ba</th><th>SqFt</th><th>Price</th><th>$/SqFt</th><th>DOM</th><th>Status</th><th>Source</th><th></th></tr></thead>
         <tbody>
-          ${s.comps.map(c => `<tr>
+          ${s.comps.map(c=>`<tr>
             <td>${c.address||'—'}</td>
             <td>${c.beds||'?'}bd/${c.baths||'?'}ba</td>
-            <td style="font-family:var(--mono)">${c.sqft ? Number(c.sqft).toLocaleString() : '—'}</td>
+            <td style="font-family:var(--mono)">${c.sqft?Number(c.sqft).toLocaleString():'—'}</td>
             <td class="price-cell">${fmt$(c.price)}</td>
-            <td style="font-family:var(--mono);color:var(--text3)">${c.pricePerSqft ? '$'+c.pricePerSqft : '—'}</td>
+            <td style="font-family:var(--mono);color:var(--text3)">${c.pricePerSqft?'$'+c.pricePerSqft:'—'}</td>
             <td style="color:var(--text3)">${c.daysOnMarket||'—'}</td>
             <td>${statusPill(c.status)}</td>
             <td>${srcBadge(c.source)}</td>
-            <td>${c.listingUrl ? `<a href="${c.listingUrl}" target="_blank" class="link">View ↗</a>` : ''}</td>
+            <td>${c.listingUrl?`<a href="${c.listingUrl}" target="_blank" class="link">View ↗</a>`:''}</td>
           </tr>`).join('')}
         </tbody>
       </table>
       <div style="margin-top:12px;font-size:11px;color:var(--text3)">
-        Data from Zillow, Redfin, Realtor.com via Apify · Cached 7 days · ${data.fromCache ? 'Cached ' + new Date(data.fetchedAt).toLocaleDateString() : 'Fresh pull'}
+        Zillow, Redfin, Realtor.com via Apify · Cached 7 days · ${data.fromCache?'Cached '+new Date(data.fetchedAt).toLocaleDateString():'Fresh pull'}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-async function runAnalysis(address, city, beds) {
-  address = address || document.getElementById('inp-address').value.trim();
-  city = city || document.getElementById('inp-city').value.trim();
-  beds = beds || document.getElementById('inp-beds').value;
-  const sqft = parseFloat(document.getElementById('inp-sqft').value) || null;
-  const purchasePrice = parseFloat(document.getElementById('inp-purchase').value) || null;
+async function runAnalysis() {
+  const address = document.getElementById('inp-address').value.trim();
+  const city = document.getElementById('inp-city').value.trim();
+  const beds = document.getElementById('inp-beds').value;
+  const sqft = parseFloat(document.getElementById('inp-sqft').value)||null;
+  const purchasePrice = parseFloat(document.getElementById('inp-purchase').value)||null;
 
   if (!address || !city) {
     document.getElementById('status-area').innerHTML = `<div class="status-banner status-error">⚠️ Enter an address and city first.</div>`;
     return;
   }
-
   const key = `${address}, ${city}`;
-  recentSearches = [key, ...recentSearches.filter(s => s !== key)].slice(0,5);
+  recentSearches = [key,...recentSearches.filter(s=>s!==key)].slice(0,5);
   localStorage.setItem('sale_recent', JSON.stringify(recentSearches));
   renderRecentBtns();
 
   document.getElementById('btn-search').disabled = true;
-  document.getElementById('status-area').innerHTML = `
-    <div class="status-banner status-loading">
-      <div class="spinner"></div>
-      Pulling sale comps + Zestimate from Zillow, Redfin & Realtor.com… ~30–60 seconds first run.
-    </div>`;
+  document.getElementById('status-area').innerHTML = `<div class="status-banner status-loading"><div class="spinner"></div>Pulling sale comps + Zestimate + Redfin Estimate via Apify… ~30–60s first run.</div>`;
   document.getElementById('results-area').innerHTML = '';
 
   try {
-    const params = new URLSearchParams({ address, city, type: 'sale' });
+    const params = new URLSearchParams({ address, city, type:'sale' });
     if (beds) params.set('beds', beds);
-    const data = await fetch(`${API}/api/comps?${params}`).then(r => r.json());
-
+    const data = await fetch(`${API}/api/comps?${params}`).then(r=>r.json());
     if (data.error) {
-      if (data.error.includes('APIFY_API_KEY')) {
-        document.getElementById('status-area').innerHTML = renderSetupGuide();
-      } else {
-        document.getElementById('status-area').innerHTML = `<div class="status-banner status-error">❌ ${data.error}</div>`;
-      }
+      document.getElementById('status-area').innerHTML = data.error.includes('APIFY_API_KEY')
+        ? `<div class="setup-card"><div class="setup-title">🔑 Apify API Key Needed</div><div class="setup-sub" style="color:#6d28d9">Add APIFY_API_KEY to Render to enable live comps</div><div class="setup-steps"><div class="setup-step"><div class="step-num">1</div><div>Go to <strong>apify.com</strong> → create free account</div></div><div class="setup-step"><div class="step-num">2</div><div>Settings → Integrations → copy API Token</div></div><div class="setup-step"><div class="step-num">3</div><div>Render → Environment: <code>APIFY_API_KEY = your-token</code></div></div></div><div style="font-size:12px;color:#6d28d9">Free: $5/mo credits · Starter: $39/mo</div></div>`
+        : `<div class="status-banner status-error">❌ ${data.error}</div>`;
       return;
     }
-
     document.getElementById('status-area').innerHTML = '';
     renderResults(data, sqft, purchasePrice);
   } catch(e) {
@@ -350,37 +315,21 @@ async function runAnalysis(address, city, beds) {
   }
 }
 
-function renderSetupGuide() {
-  return `<div class="setup-card">
-    <div class="setup-title">🔑 Apify API Key Needed</div>
-    <div class="setup-sub">Add your Apify API key to Render environment variables to enable live comp lookups.</div>
-    <div class="setup-steps">
-      <div class="setup-step"><div class="step-num">1</div><div>Sign up at <strong>apify.com</strong> (free plan works)</div></div>
-      <div class="setup-step"><div class="step-num">2</div><div>Settings → Integrations → copy your <strong>API Token</strong></div></div>
-      <div class="setup-step"><div class="step-num">3</div><div>Render → service → Environment:<br/><code>APIFY_API_KEY = paste-token-here</code></div></div>
-      <div class="setup-step"><div class="step-num">4</div><div>Add Apify routes to server.js and redeploy</div></div>
-    </div>
-    <div style="font-size:12px;color:#6d28d9">Free: $5/mo credits · Starter: $39/mo · ~25 property lookups/month on free tier</div>
-  </div>`;
-}
-
 function renderRecentBtns() {
   const area = document.getElementById('quick-btns');
-  if (!recentSearches.length) { area.innerHTML = ''; return; }
+  if (!recentSearches.length) { area.innerHTML=''; return; }
   area.innerHTML = '<span style="font-size:11px;color:var(--text3);font-weight:600;align-self:center">Recent:</span>' +
     recentSearches.map(s => {
-      const [addr, city] = s.split(', ');
-      return `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="quickSearch('${addr.replace(/'/g,"\\'")}','${city}')">${s.slice(0,40)}</button>`;
+      const parts = s.split(', ');
+      return `<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="quickSearch('${parts[0].replace(/'/g,"\\'")}','${parts.slice(1).join(', ')}')">${s.slice(0,42)}</button>`;
     }).join('');
 }
-
 function quickSearch(address, city) {
   document.getElementById('inp-address').value = address;
   document.getElementById('inp-city').value = city;
   runAnalysis();
 }
-
-document.getElementById('inp-address').addEventListener('keydown', e => { if (e.key === 'Enter') runAnalysis(); });
+document.getElementById('inp-address').addEventListener('keydown', e=>{if(e.key==='Enter')runAnalysis();});
 renderRecentBtns();
 </script>
 </body>
