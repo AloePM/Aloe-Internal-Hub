@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aloe PM · Vendor Directory</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{--bg:#F5F6F8;--bg2:#FFFFFF;--bg3:#EEF0F4;--border:#E2E5EC;--text:#0F172A;--text2:#475569;--text3:#94A3B8;--muted:#94A3B8;--header-h:48px;--toolbar-h:44px;--teal:#3CC3E1;--teal-light:#E0F7FC;--teal-border:#7DD3FC;--teal-dim:#0891B2;--teal-dark:#0E7490;--green:#059669;--green-light:#D1FAE5;--green-border:#6EE7B7;--amber:#D97706;--amber-light:#FEF3C7;--amber-border:#FCD34D;--red:#DC2626;--red-light:#FEE2E2;--red-border:#FCA5A5;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:13px;}
+.topbar{height:var(--header-h);background:#0C1929;display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;}
+.logo-icon{width:28px;height:28px;background:var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;}
+.logo-text{color:#fff;font-weight:600;font-size:14px;}.logo-sub{color:var(--muted);font-size:12px;margin-left:4px;}
+  .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.btn-hub{background:rgba(255,255,255,0.1);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:4px;}
+.btn-hub:hover{background:rgba(255,255,255,0.18);}
+.toolbar{height:var(--toolbar-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:4px;flex-shrink:0;}
+.tab-btn{padding:8px 14px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.15s;}
+.tab-btn.active{color:var(--teal-dim);border-bottom-color:var(--teal);font-weight:600;}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.search-box{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 10px 5px 28px;font-size:12px;font-family:inherit;outline:none;width:220px;color:var(--text);}
+.search-wrap{position:relative;display:flex;align-items:center;}
+.search-wrap svg{position:absolute;left:8px;color:var(--text3);pointer-events:none;}
+.main{flex:1;overflow-y:auto;padding:20px;}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;}
+.stat-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
+.stat-value{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-0.5px;}
+.stat-sub{font-size:11px;color:var(--text2);margin-top:2px;}
+.up{color:var(--green);}.warn{color:var(--amber);}
+.vendor-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.vendor-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;transition:all 0.15s;}
+.vendor-card:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(60,195,225,0.12);transform:translateY(-1px);}
+.vendor-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;}
+.vendor-avatar{width:40px;height:40px;border-radius:10px;background:var(--teal-light);border:1px solid var(--teal-border);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:var(--teal-dim);flex-shrink:0;}
+.vendor-info{flex:1;min-width:0;}
+.vendor-name{font-weight:600;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.vendor-trade{font-size:11px;color:var(--text2);margin-top:1px;}
+.vendor-status{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;border:1px solid transparent;}
+.pill-green{background:var(--green-light);color:var(--green);border-color:var(--green-border);}
+.pill-amber{background:var(--amber-light);color:var(--amber);border-color:var(--amber-border);}
+.pill-red{background:var(--red-light);color:var(--red);border-color:var(--red-border);}
+.pill-gray{background:var(--bg3);color:var(--text2);border-color:var(--border);}
+.vendor-meta{display:flex;flex-direction:column;gap:4px;}
+.vendor-meta-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);}
+.vendor-actions{display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);}
+.btn-sm{flex:1;padding:6px 8px;border-radius:6px;font-size:11px;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-weight:500;text-align:center;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;transition:all 0.15s;}
+.btn-sm:hover{background:var(--border);color:var(--text);}
+.btn-sm.primary{background:var(--teal-dim);color:#fff;border-color:var(--teal-dim);}
+.btn-sm.primary:hover{background:var(--teal-dark);}
+.section-header{display:flex;align-items:center;margin-bottom:14px;}
+.section-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap;}
+.divider-line{flex:1;height:1px;background:var(--border);margin-left:12px;}
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
+.filter-chip{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);font-size:11px;font-weight:500;cursor:pointer;color:var(--text2);transition:all 0.15s;}
+.filter-chip.active,.filter-chip:hover{background:var(--teal-dim);color:#fff;border-color:var(--teal-dim);}
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;color:var(--text2);gap:10px;}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.tab-content{display:none;}.tab-content.active{display:block;}
+.empty-state{text-align:center;padding:40px;color:var(--text2);}
+.empty-state h3{font-size:15px;font-weight:600;margin-bottom:6px;color:var(--text);}
+@media(max-width:900px){.vendor-grid{grid-template-columns:repeat(2,1fr);}.stats-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:640px){.vendor-grid{grid-template-columns:1fr;}}
+</style>
+  </head>
+  <body>
+  <div class="topbar">
+    <div class="logo-icon">A</div>
+    <span class="logo-text">Aloe PM</span><span class="logo-sub">· Vendor Directory</span>
+    <div class="topbar-right">
+      <span id="last-updated" style="font-size:11px;color:#94A3B8;"></span>
+      <a href="/" class="btn-hub">← Hub</a>
+    </div>
+  </div>
+  <div class="toolbar">
+    <button class="tab-btn active" onclick="switchTab('directory',this)">Directory</button>
+    <button class="tab-btn" onclick="switchTab('by-trade',this)">By Trade</button>
+    <button class="tab-btn" onclick="switchTab('insurance',this)">Insurance &amp; Docs</button>
+    <div class="toolbar-right">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input class="search-box" type="text" id="search-input" placeholder="Search vendors..." oninput="filterVendors(this.value)" />
+      </div>
+      <button class="btn-hub" style="background:#0891B2;color:#fff;" onclick="loadVendors()">Refresh</button>
+    </div>
+  </div>
+  <div class="main">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">Total Vendors</div><div class="stat-value" id="stat-total">--</div><div class="stat-sub">In Rentvine</div></div>
+      <div class="stat-card"><div class="stat-label">Active</div><div class="stat-value" id="stat-active">--</div><div class="stat-sub"><span class="up">Approved</span></div></div>
+      <div class="stat-card"><div class="stat-label">Trade Categories</div><div class="stat-value" id="stat-trades">--</div><div class="stat-sub">Distinct trades</div></div>
+      <div class="stat-card"><div class="stat-label">With Insurance</div><div class="stat-value" id="stat-insured">--</div><div class="stat-sub"><span class="warn">On file</span></div></div>
+    </div>
+    <div class="tab-content active" id="tab-directory">
+      <div class="filter-row" id="filter-row"><div class="filter-chip active" onclick="setCategory('all',this)">All</div></div>
+      <div id="vendor-grid-wrap"><div class="loading"><div class="spinner"></div><span>Loading vendors from Rentvine...</span></div></div>
+    </div>
+    <div class="tab-content" id="tab-by-trade"><div id="trade-list-wrap"><div class="loading"><div class="spinner"></div><span>Loading...</span></div></div></div>
+    <div class="tab-content" id="tab-insurance"><div id="insurance-wrap"><div class="loading"><div class="spinner"></div><span>Loading...</span></div></div></div>
+  </div>
+  <script>
+  var allVendors=[],activeCategory='all',searchQuery='';
+function loadVendors(){
+    fetch('/api/vendors').then(function(r){return r.json();}).then(function(data){
+      allVendors=data.vendors||data||[];
+    var now=new Date();
+    document.getElementById('last-updated').textContent='Updated '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    buildUI();
+}).catch(function(){
+    document.getElementById('vendor-grid-wrap').innerHTML='<div class="loading"><span style="color:#DC2626">Could not load vendors. Check API connection.</span></div>';
+});
+}
+function buildUI(){updateStats();buildFilters();renderGrid();renderByTrade();renderInsurance();}
+function updateStats(){
+    var active=allVendors.filter(function(v){return isActive(v);});
+  var trades=new Set(allVendors.map(function(v){return getTrade(v);}).filter(Boolean));
+  var insured=allVendors.filter(function(v){return v.insuranceExpiration||v.insurance_expiration;});
+  document.getElementById('stat-total').textContent=allVendors.length;
+  document.getElementById('stat-active').textContent=active.length;
+  document.getElementById('stat-trades').textContent=trades.size;
+  document.getElementById('stat-insured').textContent=insured.length;
+}
+function buildFilters(){
+    var trades=[...new Set(allVendors.map(function(v){return getTrade(v);}).filter(Boolean))].sort();
+  var row=document.getElementById('filter-row');
+  row.innerHTML='<div class="filter-chip active" onclick="setCategory(\'all\',this)">All</div>';
+  trades.forEach(function(t){
+        var d=document.createElement('div');d.className='filter-chip';d.textContent=t;
+    d.onclick=function(){setCategory(t,this);};row.appendChild(d);
+                        });
+  }
+function setCategory(cat,el){
+    activeCategory=cat;
+  document.querySelectorAll('.filter-chip').forEach(function(c){c.classList.remove('active');});
+  el.classList.add('active');renderGrid();
+}
+function filterVendors(q){searchQuery=q.toLowerCase();renderGrid();}
+function renderGrid(){
+    var vs=allVendors.slice();
+  if(activeCategory!=='all')vs=vs.filter(function(v){return getTrade(v)===activeCategory;});
+  if(searchQuery)vs=vs.filter(function(v){
+        return (v.name||v.companyName||'').toLowerCase().indexOf(searchQuery)>-1||(getTrade(v)||'').toLowerCase().indexOf(searchQuery)>-1||(v.phone||'').indexOf(searchQuery)>-1;
+          });
+  if(!vs.length){document.getElementById('vendor-grid-wrap').innerHTML='<div class="empty-state"><h3>No vendors found</h3><p>Try adjusting your search or filter.</p></div>';return;}
+  document.getElementById('vendor-grid-wrap').innerHTML='<div class="vendor-grid">'+vs.map(function(v){return vendorCard(v,false);}).join('')+'</div>';
+    }
+    function renderByTrade(){
+        var grouped={};
+  allVendors.forEach(function(v){var t=getTrade(v)||'Uncategorized';if(!grouped[t])grouped[t]=[];grouped[t].push(v);});
+  var html='';
+  Object.keys(grouped).sort().forEach(function(t){
+        html+='<div class="section-header"><span class="section-title">'+esc(t)+' ('+grouped[t].length+')</span><div class="divider-line"></div></div>';
+    html+='<div class="vendor-grid" style="margin-bottom:24px">'+grouped[t].map(function(v){return vendorCard(v,false);}).join('')+'</div>';
+      });
+  document.getElementById('trade-list-wrap').innerHTML=html||'<div class="empty-state"><h3>No vendors loaded</h3></div>';
+  }
+function renderInsurance(){
+    var now=new Date(),soon=new Date(now.getTime()+60*86400000);
+  var expired=allVendors.filter(function(v){var d=getIns(v);return d&&d<now;});
+  var expSoon=allVendors.filter(function(v){var d=getIns(v);return d&&d>=now&&d<=soon;});
+  var ok=allVendors.filter(function(v){var d=getIns(v);return d&&d>soon;});
+  var none=allVendors.filter(function(v){return !getIns(v);});
+  var html='';
+  if(expired.length)html+='<div class="section-header"><span class="section-title" style="color:#DC2626">Expired ('+expired.length+')</span><div class="divider-line"></div></div><div class="vendor-grid" style="margin-bottom:24px">'+expired.map(function(v){return vendorCard(v,true);}).join('')+'</div>';
+      if(expSoon.length)html+='<div class="section-header"><span class="section-title" style="color:#D97706">Expiring Soon ('+expSoon.length+')</span><div class="divider-line"></div></div><div class="vendor-grid" style="margin-bottom:24px">'+expSoon.map(function(v){return vendorCard(v,true);}).join('')+'</div>';
+      if(ok.length)html+='<div class="section-header"><span class="section-title" style="color:#059669">Current ('+ok.length+')</span><div class="divider-line"></div></div><div class="vendor-grid" style="margin-bottom:24px">'+ok.map(function(v){return vendorCard(v,true);}).join('')+'</div>';
+      if(none.length)html+='<div class="section-header"><span class="section-title">No Insurance on File ('+none.length+')</span><div class="divider-line"></div></div><div class="vendor-grid" style="margin-bottom:24px">'+none.map(function(v){return vendorCard(v,true);}).join('')+'</div>';
+      document.getElementById('insurance-wrap').innerHTML=html||'<div class="empty-state"><h3>No vendors loaded</h3></div>';
+    }
+    function vendorCard(v,showIns){
+        var name=v.name||v.companyName||'Unknown Vendor';
+  var initials=name.split(' ').slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase();
+      var trade=getTrade(v);var phone=v.phone||v.primaryPhone||v.phoneNumber||'';
+  var email=v.email||v.emailAddress||'';var active=isActive(v);
+  var insDate=getIns(v);var now=new Date();var soon=new Date(now.getTime()+60*86400000);
+  var isStat=insDate?(insDate<now?'red':insDate<soon?'amber':'green'):'none';
+  var rvId=v.id||v.vendorID||'';
+  var rvLink=rvId?'https://aloepm.rentvine.com/vendors/'+rvId:'https://aloepm.rentvine.com/vendors';
+  var html='<div class="vendor-card">';
+  html+='<div class="vendor-header"><div class="vendor-avatar">'+esc(initials)+'</div>';
+  html+='<div class="vendor-info"><div class="vendor-name" title="'+esc(name)+'">'+esc(name)+'</div>';
+  html+='<div class="vendor-trade">'+esc(trade||'General')+'</div></div></div>';
+  html+='<div class="vendor-status">';
+  html+=active?'<span class="pill pill-green">Active</span>':'<span class="pill pill-gray">Inactive</span>';
+  if(showIns&&insDate)html+='<span class="pill pill-'+isStat+'">Ins '+insDate.toLocaleDateString('en-US',{month:'short',year:'numeric'})+'</span>';
+  html+='</div><div class="vendor-meta">';
+  if(phone)html+='<div class="vendor-meta-row">📞 <a href="tel:'+esc(phone)+'" style="color:var(--text2);text-decoration:none;">'+esc(phone)+'</a></div>';
+  if(email)html+='<div class="vendor-meta-row">✉ <a href="mailto:'+esc(email)+'" style="color:var(--text2);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;display:inline-block;">'+esc(email)+'</a></div>';
+  if(!phone&&!email)html+='<div class="vendor-meta-row" style="color:var(--text3)">No contact info on file</div>';
+  html+='</div><div class="vendor-actions">';
+  if(phone)html+='<a href="tel:'+esc(phone)+'" class="btn-sm">Call</a>';
+  if(email)html+='<a href="mailto:'+esc(email)+'" class="btn-sm">Email</a>';
+  html+='<a href="'+esc(rvLink)+'" target="_blank" class="btn-sm primary">View in RV</a>';
+  html+='</div></div>';
+  return html;
+                                                         }
+function getTrade(v){return v.trade||v.vendorType||v.category||v.specialty||'';}
+  function isActive(v){var s=(v.status||v.vendorStatus||'').toLowerCase();return !s||s==='active'||s==='approved';}
+    function getIns(v){var d=v.insuranceExpiration||v.insurance_expiration||v.insuranceExp;return d?new Date(d):null;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function switchTab(name,btn){
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('.tab-content').forEach(function(t){t.classList.remove('active');});
+  btn.classList.add('active');document.getElementById('tab-'+name).classList.add('active');
+               }
+loadVendors();
+</script>
+  </body>
+  </html>
