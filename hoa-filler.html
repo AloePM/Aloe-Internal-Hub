@@ -1,477 +1,409 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Aloe PM — HOA Form Filler</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --teal:#3CC3E1;--teal-d:#2aa8c4;--teal-dim:rgba(60,195,225,0.1);
-  --green:#16a34a;--red:#dc2626;--amber:#d97706;--purple:#7c3aed;
-  --bg:#F8FAFC;--bg2:#fff;--bg3:#f1f5f9;
-  --border:#e2e8f0;--text:#1a2b2b;--text2:#4a6060;--text3:#94a3b8;
-  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
-}
-body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh}
-.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:20;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
-.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-dot{width:30px;height:30px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}
-.logo-text{font-weight:700;font-size:15px;color:var(--text)}
-.logo-sub{font-size:11px;color:var(--text3)}
-.badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:20px;background:var(--teal-dim);color:var(--teal-d);border:1px solid rgba(60,195,225,0.2)}
-.main{max-width:1100px;margin:0 auto;padding:28px 24px;display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
-h1{font-size:22px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px}
-.subtitle{font-size:13px;color:var(--text3);margin-bottom:0}
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HOA Form Filler — Aloe PM</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --teal:#3CC3E1;
+      --teal-dark:#4BB4D2;
+      --teal-dim:rgba(60,195,225,0.12);
+      --silver:#B4C3C3;
+      --silver-dim:rgba(180,195,195,0.15);
+      --bg:#F8FAFC;
+      --bg2:#ffffff;
+      --border:rgba(180,195,195,0.3);
+      --border2:rgba(60,195,225,0.25);
+      --text:#1a2b2b;
+      --text2:#4a6060;
+      --text3:#8aa0a0;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
-/* Left panel */
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px}
-.panel-title{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:16px;display:flex;align-items:center;gap:7px}
-.bar{width:3px;height:13px;border-radius:2px;background:var(--teal)}
-.field{margin-bottom:14px}
-.field:last-child{margin-bottom:0}
-.field label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:5px}
-.field select,.field input,.field textarea{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);outline:none;transition:border-color .15s}
-.field select:focus,.field input:focus,.field textarea:focus{border-color:var(--teal)}
-.field textarea{resize:vertical;min-height:60px;line-height:1.5}
-.btn{padding:10px 20px;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;width:100%;margin-bottom:8px}
-.btn-primary{background:var(--teal);color:#fff}
-.btn-primary:hover{background:var(--teal-d)}
-.btn-primary:disabled{opacity:.5;cursor:not-allowed}
-.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
-.btn-ghost:hover{background:var(--border)}
-.btn-sm{width:auto;padding:6px 14px;font-size:12px}
+    .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 32px;height:56px;display:flex;align-items:center;gap:12px}
+    .topbar-logo{width:28px;height:28px;border-radius:8px;background:var(--teal-dim);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:14px}
+    .topbar-name{font-size:13px;font-weight:600;color:var(--text)}
+    .topbar-sub{font-size:12px;color:var(--text3)}
 
-/* Status */
-.status{padding:12px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
-.status-loading{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8}
-.status-success{background:#dcfce7;border:1px solid #bbf7d0;color:#15803d}
-.status-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
-.status-warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
-.spinner{width:14px;height:14px;border:2px solid rgba(29,78,216,.3);border-top-color:#1d4ed8;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
-@keyframes spin{to{transform:rotate(360deg)}}
+    .layout{display:grid;grid-template-columns:480px 1fr;gap:24px;max-width:1100px;margin:32px auto;padding:0 24px}
 
-/* Right panel — data preview + download */
-.preview-panel{display:flex;flex-direction:column;gap:14px}
-.data-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
-.data-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px}
-.data-row{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px}
-.data-row:last-child{margin-bottom:0}
-.data-label{color:var(--text3)}
-.data-val{font-weight:500;color:var(--text);text-align:right;max-width:60%}
-.tag{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;background:var(--teal-dim);color:var(--teal-d)}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px}
+    .card-title{font-size:14px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+    .step-num{width:22px;height:22px;border-radius:6px;background:var(--teal-dim);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--teal-dark);flex-shrink:0}
 
-/* Vehicle cards */
-.vehicle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-.vehicle-card{background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:12px}
-.vehicle-card .vc-title{font-weight:600;color:var(--text);margin-bottom:4px}
-.vehicle-card .vc-row{display:flex;justify-content:space-between;color:var(--text2);margin-bottom:2px}
-.vehicle-card .vc-plate{font-family:var(--mono);font-size:11px;background:var(--text);color:#fff;padding:2px 8px;border-radius:4px;display:inline-block;margin-top:4px}
+    .field-group{margin-bottom:18px}
+    .field-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;display:block;margin-bottom:6px}
 
-/* Download area */
-.download-card{background:linear-gradient(135deg,var(--teal-dim),rgba(74,222,128,0.05));border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center}
-.download-icon{font-size:40px;margin-bottom:10px}
-.download-name{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
-.download-sub{font-size:12px;color:var(--text3);margin-bottom:16px}
+    /* SEARCH INPUT */
+    .search-wrap{position:relative}
+    .search-input{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;transition:border-color 0.15s}
+    .search-input:focus{border-color:var(--teal);background:#fff}
+    .search-input::placeholder{color:var(--text3)}
 
-/* Upload zone */
-.upload-zone{border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .15s}
-.upload-zone:hover,.upload-zone.drag-over{border-color:var(--teal);background:var(--teal-dim)}
-.upload-zone p{font-size:13px;color:var(--text3)}
-.upload-zone strong{color:var(--teal-d)}
+    .lease-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow-y:auto;background:#fff;border:1px solid var(--border2);border-radius:10px;z-index:100;box-shadow:0 8px 24px rgba(60,195,225,0.12)}
+    .lease-option{padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s}
+    .lease-option:last-child{border-bottom:none}
+    .lease-option:hover{background:var(--teal-dim)}
+    .lease-option-addr{font-size:13px;font-weight:500;color:var(--text)}
+    .lease-option-meta{font-size:11px;color:var(--text3);margin-top:2px}
+    .lease-no-results{padding:14px;font-size:13px;color:var(--text3);text-align:center}
 
-/* Empty state */
-.empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px}
+    .selected-badge{margin-top:7px;font-size:11px;color:var(--teal-dark);background:var(--teal-dim);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;display:inline-flex;align-items:center;gap:6px}
+    .selected-badge.hidden{display:none}
 
-/* Service offline */
-.offline-banner{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px 18px;font-size:13px;color:#92400e;margin-bottom:16px}
-.offline-steps{text-align:left;margin-top:10px;font-size:12px;line-height:1.8}
-code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:11px}
-</style>
+    /* SELECT */
+    select{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:13px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;transition:border-color 0.15s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238aa0a0' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+    select:focus{border-color:var(--teal)}
+
+    textarea{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:12px;font-family:'SF Mono',Monaco,monospace;color:var(--text);background:var(--bg);outline:none;resize:vertical;min-height:80px;transition:border-color 0.15s}
+    textarea:focus{border-color:var(--teal)}
+
+    .btn-generate{width:100%;padding:13px;background:var(--teal);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all 0.18s;letter-spacing:-0.2px;margin-top:8px}
+    .btn-generate:hover{background:var(--teal-dark);transform:translateY(-1px);box-shadow:0 4px 14px rgba(60,195,225,0.3)}
+    .btn-generate:disabled{background:var(--silver);cursor:not-allowed;transform:none;box-shadow:none}
+    .btn-reset{width:100%;padding:10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:10px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer;margin-top:8px;transition:all 0.15s}
+    .btn-reset:hover{border-color:var(--silver);background:var(--silver-dim)}
+
+    /* RIGHT PANEL */
+    .preview-panel{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center}
+    .preview-icon{font-size:48px;margin-bottom:16px;opacity:0.5}
+    .preview-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+    .preview-sub{font-size:13px;color:var(--text3)}
+
+    .status-msg{margin-top:14px;padding:10px 14px;border-radius:8px;font-size:12px;font-weight:500;display:none}
+    .status-msg.loading{background:var(--teal-dim);color:var(--teal-dark);border:1px solid var(--border2);display:flex;align-items:center;gap:8px}
+    .status-msg.error{background:rgba(248,113,113,0.1);color:#dc2626;border:1px solid rgba(248,113,113,0.25);display:block}
+    .status-msg.success{background:rgba(74,222,128,0.1);color:#16a34a;border:1px solid rgba(74,222,128,0.25);display:block}
+
+    .spinner{width:14px;height:14px;border:2px solid var(--teal-dim);border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .download-btn{display:none;margin-top:16px;padding:12px 28px;background:var(--teal);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all 0.18s;text-decoration:none}
+    .download-btn:hover{background:var(--teal-dark)}
+
+    .field-row{display:flex;gap:16px}
+    .field-row .field-group{flex:1}
+
+    @media(max-width:800px){
+      .layout{grid-template-columns:1fr;padding:0 16px}
+    }
+  </style>
 </head>
 <body>
 
 <div class="topbar">
-  <a href="/" class="logo">
-    <div class="logo-dot">A</div>
-    <div>
-      <div class="logo-text">Aloe PM</div>
-      <div class="logo-sub">HOA Form Filler</div>
-    </div>
-  </a>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="badge" id="service-badge">Checking service…</span>
-    <a href="/" style="font-size:12px;color:var(--text3);text-decoration:none">← Hub</a>
-  </div>
-</div>
-
-<div class="main">
-  <!-- LEFT: Controls -->
+  <div class="topbar-logo">📋</div>
   <div>
-    <div style="margin-bottom:16px">
-      <h1>📋 HOA Form Filler</h1>
-      <p class="subtitle">Auto-fill HOA registration forms with live Rentvine data</p>
-    </div>
-
-    <div id="offline-banner" style="display:none" class="offline-banner">
-      <strong>⚠️ HOA Form Filler service is offline.</strong>
-      <div class="offline-steps">
-        This tool requires the <code>aloe-hoa-form-filler</code> Python service on Render.<br>
-        To deploy:
-        <ol style="margin-top:6px;padding-left:16px">
-          <li>Push the <code>AloePM/hoa-form-filler</code> repo to GitHub</li>
-          <li>Create a new Render Python service connected to that repo</li>
-          <li>Add <code>HOA_FILLER_URL</code> env var to this server pointing to it</li>
-          <li>Reload this page</li>
-        </ol>
-      </div>
-    </div>
-
-    <div class="panel" style="margin-bottom:12px">
-      <div class="panel-title"><span class="bar"></span>1. Select Property</div>
-      <div class="field">
-        <label>Lease / Property</label>
-<label class="field-label">LEASE / PROPERTY</label>
-<div style="position:relative">
-  <input
-    type="text"
-    id="leaseSearch"
-    placeholder="Type address or lease ID…"
-    autocomplete="off"
-    style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit;outline:none"
-    oninput="filterLeases(this.value)"
-    onfocus="showDropdown()"
-  />
-  <div id="leaseDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:#fff;border:1px solid #d1d5db;border-top:none;border-radius:0 0 8px 8px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
+    <div class="topbar-name">Aloe PM</div>
+    <div class="topbar-sub">HOA Form Filler</div>
+  </div>
 </div>
-<input type="hidden" id="leaseSelect" value="" />
-<div id="selectedLease" style="margin-top:6px;font-size:12px;color:#6b7280"></div>
-        <option value="">Loading leases…</option>
-        </select>
-      </div>
-      <div id="lease-preview" style="display:none;margin-top:4px">
-        <button class="btn btn-ghost btn-sm" onclick="previewData()" id="btn-preview">👁 Preview Data</button>
-      </div>
-    </div>
 
-    <div class="panel" style="margin-bottom:12px">
-      <div class="panel-title"><span class="bar"></span>2. Select HOA Form</div>
-      <div class="field">
-        <label>Template</label>
-        <select id="sel-template">
-          <option value="">Loading templates…</option>
-          <option value="__upload__">📎 Upload a PDF form…</option>
-        </select>
-      </div>
+<div class="layout">
 
-      <div id="upload-zone-wrap" style="display:none;margin-top:8px">
-        <div class="upload-zone" id="upload-zone"
-             ondragover="this.classList.add('drag-over');event.preventDefault()"
-             ondragleave="this.classList.remove('drag-over')"
-             ondrop="handleDrop(event)"
-             onclick="document.getElementById('file-input').click()">
-          <p>Drag & drop a PDF here or <strong>click to browse</strong></p>
-          <p id="upload-filename" style="margin-top:4px;font-size:11px;color:var(--teal-d)"></p>
+  <!-- LEFT: FORM -->
+  <div>
+    <div class="card">
+      <div class="card-title"><div class="step-num">1</div> SELECT PROPERTY</div>
+
+      <div class="field-group">
+        <label class="field-label">Search by Address, Tenant, or Lease ID</label>
+        <div class="search-wrap">
+          <input
+            type="text"
+            id="leaseSearch"
+            class="search-input"
+            placeholder="Type address, tenant name, or lease ID…"
+            autocomplete="off"
+            oninput="filterLeases(this.value)"
+            onfocus="onSearchFocus()"
+          />
+          <div id="leaseDropdown" class="lease-dropdown"></div>
         </div>
-        <input type="file" id="file-input" accept=".pdf" style="display:none" onchange="handleFileSelect(this.files[0])"/>
+        <div id="selectedBadge" class="selected-badge hidden">
+          <span>✓</span>
+          <span id="selectedBadgeText"></span>
+        </div>
+        <input type="hidden" id="leaseIdHidden" value=""/>
+      </div>
+
+      <div id="leaseStatus" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-title"><div class="step-num">2</div> SELECT HOA TEMPLATE</div>
+
+      <div class="field-group">
+        <label class="field-label">HOA Form Template</label>
+        <select id="templateSelect">
+          <option value="">— Loading templates… —</option>
+        </select>
       </div>
     </div>
 
-    <div class="panel" style="margin-bottom:12px">
-      <div class="panel-title"><span class="bar"></span>3. Manual Overrides (optional)</div>
-      <div class="field">
-        <label>Override any field</label>
-        <textarea id="overrides-json" placeholder='{"tenant_name": "John & Jane Smith", "community": "Trestle HOA"}'></textarea>
+    <div class="card" style="margin-top:14px">
+      <div class="card-title"><div class="step-num">3</div> MANUAL OVERRIDES <span style="font-size:10px;color:var(--text3);font-weight:400">(OPTIONAL)</span></div>
+
+      <div class="field-group">
+        <label class="field-label">Override Any Field</label>
+        <textarea id="overrideJson" placeholder='{"tenant_name": "John & Jane Smith", "community": "Trestle HOA"}'></textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px">Enter JSON key/value pairs. Overrides take precedence over Rentvine data.</div>
       </div>
-      <div style="font-size:11px;color:var(--text3)">Enter JSON key/value pairs. Overrides take precedence over Rentvine data.</div>
     </div>
 
-    <button class="btn btn-primary" id="btn-fill" onclick="fillForm()">✨ Generate Filled PDF</button>
-    <button class="btn btn-ghost" onclick="resetAll()">↺ Reset</button>
+    <button class="btn-generate" id="generateBtn" onclick="generatePDF()" disabled>
+      ✨ Generate Filled PDF
+    </button>
+    <button class="btn-reset" onclick="resetForm()">↺ Reset</button>
+
+    <div id="statusMsg" class="status-msg"></div>
   </div>
 
-  <!-- RIGHT: Preview + Download -->
-  <div class="preview-panel" id="right-panel">
-    <div class="empty">
-      <div style="font-size:40px;margin-bottom:12px">📋</div>
-      <div style="font-weight:600;color:var(--text2);margin-bottom:4px">Select a property to get started</div>
-      <div>Choose a lease and HOA template, then click Generate</div>
-    </div>
+  <!-- RIGHT: PREVIEW -->
+  <div class="card preview-panel" id="previewPanel">
+    <div class="preview-icon">📋</div>
+    <div class="preview-title">Select a property to get started</div>
+    <div class="preview-sub">Choose a lease and HOA template, then click Generate</div>
+    <a id="downloadLink" class="download-btn" href="#" download>⬇ Download PDF</a>
   </div>
+
 </div>
 
 <script>
-const HOA_API = window.location.origin + '/api/hoa';
-let selectedLeaseId = null, selectedTemplate = null, uploadedPdfB64 = null, previewedData = null;
+let ALL_LEASES = [];
+let selectedLeaseId = null;
+let searchTimeout = null;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-async function init() {
-  // Check service health
+// ── Load leases on page start ─────────────────────────────────────────────
+async function loadLeases() {
+  const statusEl = document.getElementById('leaseStatus');
+  statusEl.textContent = 'Loading leases…';
   try {
-    const r = await fetch('/api/hoa/health');
-    if (r.ok) {
-      document.getElementById('service-badge').textContent = 'Service Online';
-      document.getElementById('service-badge').style.cssText = 'background:#dcfce7;color:#15803d;border-color:rgba(22,163,74,.2)';
-    } else {
-      throw new Error('offline');
-    }
-  } catch {
-    document.getElementById('service-badge').textContent = 'Service Offline';
-    document.getElementById('service-badge').style.cssText = 'background:#fee2e2;color:#991b1b;border-color:rgba(220,38,38,.2)';
-    document.getElementById('offline-banner').style.display = 'block';
-    document.getElementById('btn-fill').disabled = true;
-  }
-
-  // Load leases
-  try {
-    const r = await fetch('/api/hoa/leases');
-    const data = await r.json();
-    const sel = document.getElementById('sel-lease');
-    sel.innerHTML = '<option value="">— Select a property —</option>';
-    (data.leases || []).forEach(l => {
-      const opt = document.createElement('option');
-      opt.value = l.leaseID;
-      opt.textContent = `${l.address}${l.city ? ', ' + l.city : ''} — ${l.tenant}`;
-      sel.appendChild(opt);
-    });
+    const res = await fetch('/api/hoa/leases');
+    const data = await res.json();
+    ALL_LEASES = (data.leases || []).sort((a,b) => (a.address||'').localeCompare(b.address||''));
+    statusEl.textContent = ALL_LEASES.length + ' leases loaded — type to search';
   } catch(e) {
-    document.getElementById('sel-lease').innerHTML = '<option value="">Failed to load leases</option>';
+    statusEl.textContent = 'Error loading leases: ' + e.message;
   }
+}
 
-  // Load templates
+// ── Load templates ────────────────────────────────────────────────────────
+async function loadTemplates() {
   try {
-    const r = await fetch('/api/hoa/templates');
-    const data = await r.json();
-    const sel = document.getElementById('sel-template');
-    sel.innerHTML = '<option value="">— Select an HOA form —</option>';
-    (data.templates || []).forEach(t => {
-      const opt = document.createElement('option');
-      opt.value = t.id;
-      opt.textContent = t.name;
-      sel.appendChild(opt);
-    });
-    // Add upload option at end
-    sel.innerHTML += '<option value="__upload__">📎 Upload a PDF form…</option>';
-  } catch(e) {
-    const sel = document.getElementById('sel-template');
-    sel.innerHTML = '<option value="">Failed to load templates</option><option value="__upload__">📎 Upload a PDF form…</option>';
-  }
-
-  // Template select change
-  document.getElementById('sel-template').addEventListener('change', function() {
-    selectedTemplate = this.value;
-    const uploadWrap = document.getElementById('upload-zone-wrap');
-    uploadWrap.style.display = this.value === '__upload__' ? 'block' : 'none';
-  });
-}
-
-function onLeaseSelect() {
-  const sel = document.getElementById('sel-lease');
-  selectedLeaseId = sel.value;
-  document.getElementById('lease-preview').style.display = selectedLeaseId ? 'block' : 'none';
-  if (selectedLeaseId) previewData();
-}
-
-// ── Preview data ──────────────────────────────────────────────────────────────
-async function previewData() {
-  if (!selectedLeaseId) return;
-  showRight('<div class="status status-loading"><div class="spinner"></div>Loading lease data from Rentvine…</div>');
-  try {
-    const r = await fetch(`/api/hoa/lease-data/${selectedLeaseId}`);
-    const d = await r.json();
-    if (d.error) { showRight(`<div class="status status-error">❌ ${d.error}</div>`); return; }
-    previewedData = d;
-    renderPreview(d);
-  } catch(e) {
-    showRight(`<div class="status status-error">❌ ${e.message}</div>`);
-  }
-}
-
-function renderPreview(d) {
-  const tenant = d.tenant || {};
-  const prop = d.property || {};
-  const lease = d.lease || {};
-  const vehicles = d.vehicles || [];
-  const mgmt = d.management || {};
-
-  let vehicleHTML = '';
-  if (vehicles.length > 0) {
-    vehicleHTML = `
-      <div class="data-card">
-        <div class="data-title">🚗 Vehicles (${vehicles.length})</div>
-        <div class="vehicle-grid">
-          ${vehicles.map((v, i) => `
-            <div class="vehicle-card">
-              <div class="vc-title">Vehicle ${i+1}</div>
-              <div class="vc-row"><span>${v.year} ${v.make}</span><span>${v.model}</span></div>
-              <div class="vc-row"><span>${v.color}</span></div>
-              <div class="vc-plate">${v.plate} ${v.plate_state}</div>
-            </div>
-          `).join('')}
-        </div>
-      </div>`;
-  } else {
-    vehicleHTML = '<div class="data-card"><div class="data-title">🚗 Vehicles</div><div style="font-size:12px;color:var(--text3)">No vehicles on file</div></div>';
-  }
-
-  const tenantNames = d.all_tenants || [tenant.name];
-
-  showRight(`
-    <div class="data-card">
-      <div class="data-title">👤 Tenant</div>
-      ${tenantNames.map(n => `<div class="data-row"><span class="data-label">Name</span><span class="data-val">${n}</span></div>`).join('')}
-      <div class="data-row"><span class="data-label">Phone</span><span class="data-val">${tenant.phone || '—'}</span></div>
-      <div class="data-row"><span class="data-label">Email</span><span class="data-val">${tenant.email || '—'}</span></div>
-    </div>
-    <div class="data-card">
-      <div class="data-title">🏠 Property</div>
-      <div class="data-row"><span class="data-label">Address</span><span class="data-val">${prop.address || '—'}</span></div>
-      <div class="data-row"><span class="data-label">City</span><span class="data-val">${prop.city || '—'}, ${prop.state || 'AZ'} ${prop.zip || ''}</span></div>
-      <div class="data-row"><span class="data-label">Community / HOA</span><span class="data-val">${d.community_name || '—'}</span></div>
-    </div>
-    <div class="data-card">
-      <div class="data-title">📄 Lease</div>
-      <div class="data-row"><span class="data-label">Move-in</span><span class="data-val">${lease.moveInDate || lease.startDate || '—'}</span></div>
-      <div class="data-row"><span class="data-label">Lease end</span><span class="data-val">${lease.endDate || '—'}</span></div>
-      <div class="data-row"><span class="data-label">Rent</span><span class="data-val">${lease.rent ? '$' + parseFloat(lease.rent).toLocaleString() + '/mo' : '—'}</span></div>
-    </div>
-    ${vehicleHTML}
-    <div class="data-card">
-      <div class="data-title">🏢 Management Info</div>
-      <div class="data-row"><span class="data-label">Company</span><span class="data-val">${mgmt.company || '—'}</span></div>
-      <div class="data-row"><span class="data-label">Phone</span><span class="data-val">${mgmt.phone || '—'}</span></div>
-      <div class="data-row"><span class="data-label">Email</span><span class="data-val">${mgmt.email || '—'}</span></div>
-    </div>
-    <div style="text-align:center;padding:12px 0;font-size:12px;color:var(--text3)">
-      ✅ Data loaded from Rentvine · Select a template and click Generate PDF
-    </div>
-  `);
-}
-
-// ── Fill form ─────────────────────────────────────────────────────────────────
-async function fillForm() {
-  if (!selectedLeaseId) { alert('Select a property first.'); return; }
-  if (!selectedTemplate && !uploadedPdfB64) { alert('Select a form template or upload a PDF.'); return; }
-
-  let overrides = {};
-  const overrideText = document.getElementById('overrides-json').value.trim();
-  if (overrideText) {
-    try { overrides = JSON.parse(overrideText); }
-    catch { alert('Overrides must be valid JSON.'); return; }
-  }
-
-  document.getElementById('btn-fill').disabled = true;
-  showRight('<div class="status status-loading"><div class="spinner"></div>Filling PDF with Rentvine data… this may take a few seconds.</div>');
-
-  try {
-    const body = {
-      lease_id: selectedLeaseId,
-      overrides,
-    };
-    if (uploadedPdfB64) {
-      body.pdf_base64 = uploadedPdfB64;
-      body.template_id = 'custom';
-    } else {
-      body.template_id = selectedTemplate;
-    }
-
-    const r = await fetch('/api/hoa/fill', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await r.json();
-
-    if (data.error) {
-      showRight(`<div class="status status-error">❌ ${data.error}</div>`);
+    const res = await fetch('/api/hoa/templates');
+    const data = await res.json();
+    const sel = document.getElementById('templateSelect');
+    if (!data.templates || data.templates.length === 0) {
+      sel.innerHTML = '<option value="">— No templates found —</option>';
       return;
     }
-
-    renderDownload(data);
-
+    sel.innerHTML = '<option value="">— Select HOA template —</option>' +
+      data.templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
   } catch(e) {
-    showRight(`<div class="status status-error">❌ ${e.message}</div>`);
-  } finally {
-    document.getElementById('btn-fill').disabled = false;
+    document.getElementById('templateSelect').innerHTML = '<option value="">— Error loading templates —</option>';
   }
 }
 
-function renderDownload(data) {
-  const summary = data.data_summary || {};
-  const fieldsCount = Object.keys(data.fields_used || {}).length;
+// ── Search / filter ───────────────────────────────────────────────────────
+function filterLeases(query) {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => doFilter(query), 80);
+}
 
-  showRight(`
-    <div class="status status-success">✅ PDF generated · ${fieldsCount} fields filled · Method: ${data.fill_method}</div>
+function doFilter(query) {
+  const dropdown = document.getElementById('leaseDropdown');
+  const q = query.trim().toLowerCase();
 
-    <div class="download-card">
-      <div class="download-icon">📄</div>
-      <div class="download-name">${data.filename || 'HOA_Form.pdf'}</div>
-      <div class="download-sub">
-        ${summary.tenant || '—'} · ${summary.address || '—'} · ${summary.community || '—'}
+  if (!q) {
+    dropdown.style.display = 'none';
+    return;
+  }
+
+  // Match address, tenant name, OR lease ID
+  const matches = ALL_LEASES.filter(l => {
+    const addr = (l.address || '').toLowerCase();
+    const tenant = (l.tenant || '').toLowerCase();
+    const id = String(l.leaseID || '');
+    return addr.includes(q) || tenant.includes(q) || id.startsWith(q);
+  }).slice(0, 40);
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = '<div class="lease-no-results">No matches — try a street number or tenant name</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+
+  dropdown.innerHTML = matches.map(l => `
+    <div class="lease-option" onclick="selectLease(${l.leaseID}, '${esc(l.address)}', '${esc(l.tenant)}')">
+      <div class="lease-option-addr">${highlight(l.address || '—', q)}</div>
+      <div class="lease-option-meta">${highlight(l.tenant || '', q)} · Lease #${l.leaseID}</div>
+    </div>
+  `).join('');
+  dropdown.style.display = 'block';
+}
+
+function highlight(str, q) {
+  if (!q || !str) return str;
+  const idx = str.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return str;
+  return str.slice(0, idx) +
+    '<strong style="color:var(--teal-dark)">' + str.slice(idx, idx + q.length) + '</strong>' +
+    str.slice(idx + q.length);
+}
+
+function esc(s) {
+  return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function onSearchFocus() {
+  const q = document.getElementById('leaseSearch').value.trim();
+  if (q.length > 0) doFilter(q);
+}
+
+function selectLease(id, address, tenant) {
+  selectedLeaseId = id;
+  document.getElementById('leaseIdHidden').value = id;
+  document.getElementById('leaseSearch').value = address + (tenant ? ' — ' + tenant : '');
+  document.getElementById('leaseDropdown').style.display = 'none';
+  document.getElementById('leaseStatus').textContent = '';
+
+  const badge = document.getElementById('selectedBadge');
+  document.getElementById('selectedBadgeText').textContent = 'Lease #' + id + ' · ' + (tenant || address);
+  badge.classList.remove('hidden');
+
+  checkReady();
+}
+
+// ── Enable generate button when both lease + template selected ────────────
+function checkReady() {
+  const hasLease = !!selectedLeaseId;
+  const hasTemplate = !!document.getElementById('templateSelect').value;
+  document.getElementById('generateBtn').disabled = !(hasLease && hasTemplate);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('templateSelect').addEventListener('change', checkReady);
+});
+
+// ── Close dropdown on outside click ──────────────────────────────────────
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#leaseSearch') && !e.target.closest('#leaseDropdown')) {
+    document.getElementById('leaseDropdown').style.display = 'none';
+  }
+});
+
+// ── Generate PDF ──────────────────────────────────────────────────────────
+async function generatePDF() {
+  const leaseId = selectedLeaseId;
+  const template = document.getElementById('templateSelect').value;
+  const overrideRaw = document.getElementById('overrideJson').value.trim();
+  const statusEl = document.getElementById('statusMsg');
+  const btn = document.getElementById('generateBtn');
+
+  if (!leaseId || !template) {
+    showStatus('Please select a property and HOA template.', 'error');
+    return;
+  }
+
+  let overrides = {};
+  if (overrideRaw) {
+    try { overrides = JSON.parse(overrideRaw); }
+    catch(e) { showStatus('Invalid JSON in overrides field: ' + e.message, 'error'); return; }
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating…';
+  showStatus('<div class="spinner"></div> Pulling Rentvine data and filling form…', 'loading');
+
+  // Update preview panel
+  const panel = document.getElementById('previewPanel');
+  panel.innerHTML = `
+    <div class="preview-icon">⏳</div>
+    <div class="preview-title">Generating PDF…</div>
+    <div class="preview-sub">Pulling lease data from Rentvine and filling the HOA form</div>
+  `;
+
+  try {
+    const res = await fetch('/api/hoa/fill', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ leaseId, template, overrides })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Server error');
+    }
+
+    // data.pdf = base64 encoded PDF
+    const pdfBytes = atob(data.pdf);
+    const arr = new Uint8Array(pdfBytes.length);
+    for (let i = 0; i < pdfBytes.length; i++) arr[i] = pdfBytes.charCodeAt(i);
+    const blob = new Blob([arr], {type:'application/pdf'});
+    const url = URL.createObjectURL(blob);
+
+    const filename = (data.filename || template + '_filled.pdf');
+
+    // Show preview + download
+    panel.innerHTML = `
+      <div class="preview-icon">✅</div>
+      <div class="preview-title">PDF Ready!</div>
+      <div class="preview-sub">${filename}</div>
+      <a href="${url}" download="${filename}" class="download-btn" style="display:inline-block;margin-top:16px">⬇ Download PDF</a>
+      <div style="margin-top:12px">
+        <iframe src="${url}" style="width:100%;height:500px;border:1px solid var(--border);border-radius:10px;margin-top:12px"></iframe>
       </div>
-      <button class="btn btn-primary btn-sm" style="width:auto;display:inline-block" onclick="downloadPDF('${data.pdf_base64}','${data.filename || 'HOA_Form.pdf'}')">
-        ⬇ Download PDF
-      </button>
-    </div>
+    `;
 
-    <div class="data-card">
-      <div class="data-title">Fields Filled (${fieldsCount})</div>
-      ${Object.entries(data.fields_used || {}).slice(0, 20).map(([k, v]) =>
-        `<div class="data-row"><span class="data-label" style="font-family:var(--mono);font-size:11px">${k}</span><span class="data-val">${v}</span></div>`
-      ).join('')}
-      ${fieldsCount > 20 ? `<div style="font-size:11px;color:var(--text3);margin-top:6px">…and ${fieldsCount-20} more fields</div>` : ''}
-    </div>
-  `);
+    showStatus('✅ PDF generated successfully — ' + filename, 'success');
+
+  } catch(e) {
+    showStatus('Error: ' + e.message, 'error');
+    panel.innerHTML = `
+      <div class="preview-icon">❌</div>
+      <div class="preview-title">Generation failed</div>
+      <div class="preview-sub" style="color:#dc2626">${e.message}</div>
+    `;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✨ Generate Filled PDF';
+  checkReady();
 }
 
-function downloadPDF(b64, filename) {
-  const bytes = atob(b64);
-  const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  const blob = new Blob([arr], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+function showStatus(html, type) {
+  const el = document.getElementById('statusMsg');
+  el.innerHTML = html;
+  el.className = 'status-msg ' + type;
 }
 
-// ── File upload ───────────────────────────────────────────────────────────────
-function handleFileSelect(file) {
-  if (!file || !file.name.endsWith('.pdf')) { alert('Please select a PDF file.'); return; }
-  const reader = new FileReader();
-  reader.onload = e => {
-    uploadedPdfB64 = e.target.result.split(',')[1];
-    document.getElementById('upload-filename').textContent = `✅ ${file.name} (${(file.size/1024).toFixed(0)} KB)`;
-  };
-  reader.readAsDataURL(file);
+function resetForm() {
+  selectedLeaseId = null;
+  document.getElementById('leaseIdHidden').value = '';
+  document.getElementById('leaseSearch').value = '';
+  document.getElementById('leaseDropdown').style.display = 'none';
+  document.getElementById('selectedBadge').classList.add('hidden');
+  document.getElementById('templateSelect').value = '';
+  document.getElementById('overrideJson').value = '';
+  document.getElementById('statusMsg').className = 'status-msg';
+  document.getElementById('statusMsg').innerHTML = '';
+  document.getElementById('leaseStatus').textContent = ALL_LEASES.length + ' leases loaded — type to search';
+  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('generateBtn').textContent = '✨ Generate Filled PDF';
+  document.getElementById('previewPanel').innerHTML = `
+    <div class="preview-icon">📋</div>
+    <div class="preview-title">Select a property to get started</div>
+    <div class="preview-sub">Choose a lease and HOA template, then click Generate</div>
+  `;
 }
 
-function handleDrop(e) {
-  e.preventDefault();
-  document.getElementById('upload-zone').classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) handleFileSelect(file);
-}
-
-// ── Utils ─────────────────────────────────────────────────────────────────────
-function showRight(html) {
-  document.getElementById('right-panel').innerHTML = html;
-}
-
-function resetAll() {
-  selectedLeaseId = null; selectedTemplate = null; uploadedPdfB64 = null; previewedData = null;
-  document.getElementById('sel-lease').value = '';
-  document.getElementById('sel-template').value = '';
-  document.getElementById('overrides-json').value = '';
-  document.getElementById('upload-filename').textContent = '';
-  document.getElementById('upload-zone-wrap').style.display = 'none';
-  document.getElementById('lease-preview').style.display = 'none';
-  showRight('<div class="empty"><div style="font-size:40px;margin-bottom:12px">📋</div><div style="font-weight:600;color:var(--text2);margin-bottom:4px">Select a property to get started</div><div>Choose a lease and HOA template, then click Generate</div></div>');
-}
-
-init();
+// ── Init ──────────────────────────────────────────────────────────────────
+loadLeases();
+loadTemplates();
 </script>
 </body>
 </html>
