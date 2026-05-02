@@ -50,7 +50,7 @@ app.get('/api/hoa/leases', async (req, res) => {
     let allLeases = [];
     let page = 1;
     while (page <= 20) {
-const data = await rvFetch('/leases/export', { pageSize: 200, page });
+const data = await rvFetch('/leases/export', { pageSize: 200, page, 'primaryLeaseStatusIDs[]': 1 });
       const batch = Array.isArray(data) ? data : [];
       if (batch.length === 0) break;
       allLeases = allLeases.concat(batch);
