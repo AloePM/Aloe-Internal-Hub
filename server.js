@@ -50,19 +50,26 @@ app.get('/api/hoa/leases', async (req, res) => {
     let allLeases = [];
     let page = 1;
     while (page <= 20) {
-const data = await rvFetch('/leases/export', { pageSize: 200, page, 'primaryLeaseStatusIDs[]': 1 });
       const batch = Array.isArray(data) ? data : [];
       if (batch.length === 0) break;
       allLeases = allLeases.concat(batch);
       if (batch.length < 200) break;
       page++;
     }
-    const leases = allLeases.map(d => ({
-      leaseID: d.lease?.leaseID,
-      tenant: d.lease?.tenants?.[0]?.name || '—',
-      address: d.unit?.address || d.property?.address || '—',
-      city: d.unit?.city || d.property?.city || '',
-    })).sort((a,b) => (a.address||'').localeCompare(b.address||''));
+    const now = new Date();
+    const leases = allLeases
+      .filter(d => {
+        const end = d.lease?.endDate;
+        // Keep if no end date (month-to-month) OR end date is in the future
+        return !end || new Date(end) >= now;
+      })
+      .map(d => ({
+        leaseID: d.lease?.leaseID,
+        tenant: d.lease?.tenants?.[0]?.name || '—',
+        address: d.unit?.address || d.property?.address || '—',
+        city: d.unit?.city || d.property?.city || '',
+      }))
+      .sort((a,b) => (a.address||'').localeCompare(b.address||''));
     res.json({ leases });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
