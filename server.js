@@ -25,7 +25,50 @@ app.get('/vacancy', (req, res) => {
 app.get('/vacancy-risk', (req, res) => {
   res.sendFile(new URL('./vacancy-risk.html', import.meta.url).pathname);
 });
+// Route to serve the HOA filler UI
+app.get('/hoa', (req, res) =>
+  res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
 
+// API route — spawns Python to fill PDFs
+import { spawn } from 'child_process';
+
+app.post('/api/hoa/fill', async (req, res) => {
+  const input = JSON.stringify(req.body);
+  const py = spawn('python3', ['hoa_filler.py']);
+  let out = '', err = '';
+  py.stdin.write(input);
+  py.stdin.end();
+  py.stdout.on('data', d => out += d);
+  py.stderr.on('data', d => err += d);
+  py.on('close', code => {
+    if (code !== 0) return res.status(500).json({ error: err });
+    try { res.json(JSON.parse(out)); }
+    catch(e) { res.status(500).json({ error: 'Parse error: ' + out.slice(0,200) }); }
+  });
+});
+
+app.get('/api/hoa/leases', async (req, res) => {
+  // Reuse existing rvFetch
+  try {
+    const data = await rvFetch('/leases/export', { pageSize: 200, 'primaryLeaseStatusIDs[]': 1 });
+    const leases = (Array.isArray(data) ? data : []).map(d => ({
+      leaseID: d.lease?.leaseID,
+      tenant: d.lease?.tenants?.[0]?.name || '—',
+      address: d.unit?.address || d.property?.address || '—',
+      city: d.unit?.city || d.property?.city || '',
+    })).sort((a,b) => a.address.localeCompare(b.address));
+    res.json({ leases });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/hoa/templates', (req, res) => {
+  const fs = await import('fs');
+  const dir = new URL('./templates', import.meta.url).pathname;
+  try {
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.pdf'));
+    res.json({ templates: files.map(f => ({ id: f.replace('.pdf',''), name: f.replace('.pdf','').replace(/_/g,' ') })) });
+  } catch { res.json({ templates: [] }); }
+});
 app.get('/vendors', (req, res) => {
      res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
 });
