@@ -61,8 +61,8 @@ app.get('/api/hoa/leases', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/hoa/templates', (req, res) => {
-  const fs = await import('fs');
+app.get('/api/hoa/templates', async (req, res) => {
+  const { default: fs } = await import('fs');
   const dir = new URL('./templates', import.meta.url).pathname;
   try {
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.pdf'));
