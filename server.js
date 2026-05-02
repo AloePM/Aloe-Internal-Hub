@@ -3203,6 +3203,7 @@ app.get('/sale-analysis', (req, res) =>
 app.get('/owner-report', (req, res) =>
   res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 // HOA Form Filler routes
+import { spawn } from 'child_process';
 
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
@@ -3467,8 +3468,12 @@ app.get('*', function(req, res) {
   <div class="tool-name">HOA Form Filler</div>
   <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
 </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             <div class="section-label" id="operations">Operations</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
+</a>
+          </div>
+        </div>
+
+    <div class="section">
+        <div class="section-label" id="operations">Operations</div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
   <span class="tool-badge badge-live">LIVE</span>
   <div class="tool-icon icon-teal">🏠</div>
   <div class="tool-name">Vacancy Risk & Market Intelligence</div>
