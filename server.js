@@ -3493,7 +3493,12 @@ app.get('*', function(req, res) {
   <div class="tool-icon icon-purple">🏡</div>
   <div class="tool-name">Sale Analysis</div>
   <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
-</a>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+</a>
+          </div>
+        </div>
+
+    <div class="section">
+        <div class="section-label" id="operations">Operations</div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
     <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
   <span class="tool-badge badge-live">LIVE</span>
   <div class="tool-icon icon-teal">🔄</div>
