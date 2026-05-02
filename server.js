@@ -223,8 +223,6 @@ app.get('/api/aptly/leads-rich', async function(req, res) {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/aptly/units', async function(req, res) {
- app.get('/rent-analysis', (req, res) => res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
-app.get('/sale-analysis', (req, res) => res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
  try {
     const token = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
     let allCards = [];
@@ -3201,16 +3199,10 @@ app.get('/rent-analysis', (req, res) =>
   res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
 app.get('/sale-analysis', (req, res) =>
   res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
-app.get('/rent-analysis', (req, res) =>
-  res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
-
-app.get('/sale-analysis', (req, res) =>
-  res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
 
 app.get('/owner-report', (req, res) =>
   res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 // HOA Form Filler routes
-import { spawn } from 'child_process';
 
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
@@ -3248,8 +3240,6 @@ app.get('/rent-analysis', (req, res) =>
   res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
 app.get('/sale-analysis', (req, res) =>
   res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
-app.get('/owner-report', (req, res) =>
-  res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
