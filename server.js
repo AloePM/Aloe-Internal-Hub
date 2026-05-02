@@ -60,8 +60,10 @@ app.get('/api/hoa/leases', async (req, res) => {
     const now = new Date();
     const leases = allLeases
       .filter(d => {
+       const now = new Date();
+    const mapped = allLeases
+      .filter(d => {
         const end = d.lease?.endDate;
-        // Keep if no end date (month-to-month) OR end date is in the future
         return !end || new Date(end) >= now;
       })
       .map(d => ({
@@ -69,8 +71,15 @@ app.get('/api/hoa/leases', async (req, res) => {
         tenant: d.lease?.tenants?.[0]?.name || '—',
         address: d.unit?.address || d.property?.address || '—',
         city: d.unit?.city || d.property?.city || '',
-      }))
-      .sort((a,b) => (a.address||'').localeCompare(b.address||''));
+      }));
+    // Keep only the highest leaseID (most current) per address
+    const byAddress = {};
+    mapped.forEach(l => {
+      if (!byAddress[l.address] || l.leaseID > byAddress[l.address].leaseID) {
+        byAddress[l.address] = l;
+      }
+    });
+    const leases = Object.values(byAddress).sort((a,b) => (a.address||'').localeCompare(b.address||''));
     res.json({ leases });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
