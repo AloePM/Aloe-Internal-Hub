@@ -3235,12 +3235,6 @@ app.post('/api/hoa/fill', (req, res) => {
   });
 });
 
-app.get('/renewals', (req, res) =>
-  res.sendFile(new URL('./renewals.html', import.meta.url).pathname));
-app.get('/rent-analysis', (req, res) =>
-  res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
-app.get('/sale-analysis', (req, res) =>
-  res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
