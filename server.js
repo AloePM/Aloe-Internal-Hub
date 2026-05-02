@@ -49,7 +49,7 @@ app.get('/api/hoa/leases', async (req, res) => {
   try {
     let allLeases = [];
     let page = 1;
-   while (page <= 20) {
+    while (page <= 20) {
       const data = await rvFetch('/leases/export', { pageSize: 200, page });
       const batch = Array.isArray(data) ? data : [];
       if (batch.length === 0) break;
@@ -58,9 +58,6 @@ app.get('/api/hoa/leases', async (req, res) => {
       page++;
     }
     const now = new Date();
-    const leases = allLeases
-      .filter(d => {
-       const now = new Date();
     const mapped = allLeases
       .filter(d => {
         const end = d.lease?.endDate;
@@ -72,7 +69,6 @@ app.get('/api/hoa/leases', async (req, res) => {
         address: d.unit?.address || d.property?.address || '—',
         city: d.unit?.city || d.property?.city || '',
       }));
-    // Keep only the highest leaseID (most current) per address
     const byAddress = {};
     mapped.forEach(l => {
       if (!byAddress[l.address] || l.leaseID > byAddress[l.address].leaseID) {
