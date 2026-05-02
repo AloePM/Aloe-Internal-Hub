@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aloe PM — Lease Renewals</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --teal:#3CC3E1;--teal-d:#2aa8c4;--teal-dim:rgba(60,195,225,0.1);
+  --green:#16a34a;--red:#dc2626;--amber:#d97706;--purple:#7c3aed;--blue:#2563eb;
+  --bg:#F8FAFC;--bg2:#fff;--bg3:#f1f5f9;
+  --border:#e2e8f0;--text:#1a2b2b;--text2:#4a6060;--text3:#94a3b8;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:20;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo-dot{width:30px;height:30px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}
+.logo-text{font-weight:700;font-size:15px;color:var(--text)}
+.logo-sub{font-size:11px;color:var(--text3)}
+.main{max-width:1200px;margin:0 auto;padding:28px 24px}
+h1{font-size:24px;font-weight:700;letter-spacing:-0.02em;margin-bottom:4px}
+.subtitle{font-size:14px;color:var(--text3);margin-bottom:24px}
+
+/* KPI strip */
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.kpi-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px}
+.kpi-value{font-size:24px;font-weight:700;letter-spacing:-0.02em}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+.filter-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font);transition:all .15s}
+.filter-btn.active{background:var(--teal);color:#fff;border-color:var(--teal)}
+.search-box{padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);font-size:13px;font-family:var(--font);outline:none;color:var(--text);margin-left:auto}
+.search-box:focus{border-color:var(--teal)}
+
+/* Renewal cards */
+.renewal-grid{display:flex;flex-direction:column;gap:10px}
+.renewal-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:start;cursor:pointer;transition:all .15s;border-left:4px solid transparent}
+.renewal-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.06)}
+.renewal-card.urgent{border-left-color:var(--red)}
+.renewal-card.soon{border-left-color:var(--amber)}
+.renewal-card.normal{border-left-color:var(--green)}
+.renewal-card.mtm{border-left-color:var(--purple)}
+
+/* Timeline bar */
+.timeline-col{display:flex;flex-direction:column;align-items:center;padding-top:2px}
+.days-badge{width:52px;height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+.days-num{font-size:18px;font-weight:700;line-height:1}
+.days-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+.badge-urgent{background:#fee2e2;color:var(--red)}
+.badge-soon{background:#fef3c7;color:var(--amber)}
+.badge-normal{background:#dcfce7;color:var(--green)}
+.badge-mtm{background:#ede9fe;color:var(--purple)}
+.badge-unknown{background:var(--bg3);color:var(--text3)}
+
+/* Card body */
+.card-body{min-width:0}
+.tenant-name{font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px}
+.unit-addr{font-size:12px;color:var(--text2);margin-bottom:8px}
+.meta-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.meta-item{font-size:12px;color:var(--text3)}
+.meta-item strong{color:var(--text2);font-weight:600}
+.stage-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.pill-offer-sent{background:#dbeafe;color:var(--blue)}
+.pill-negotiating{background:#fef3c7;color:var(--amber)}
+.pill-signed{background:#dcfce7;color:var(--green)}
+.pill-not-renewing{background:#fee2e2;color:var(--red)}
+.pill-pending{background:var(--bg3);color:var(--text3)}
+.pill-mtm{background:#ede9fe;color:var(--purple)}
+
+/* Right column actions */
+.card-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0}
+.rent-tag{font-size:18px;font-weight:700;color:var(--text);font-family:var(--mono);letter-spacing:-0.03em}
+.rent-sub{font-size:10px;color:var(--text3);text-align:right;margin-top:1px}
+.action-btn{padding:5px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);white-space:nowrap;transition:all .15s}
+.btn-teal{background:var(--teal);color:#fff}
+.btn-teal:hover{background:var(--teal-d)}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{background:var(--border)}
+
+/* Expanded details */
+.expand-panel{display:none;background:var(--bg3);border-radius:8px;padding:14px 16px;margin-top:10px;font-size:13px}
+.expand-panel.open{display:block}
+.expand-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.expand-section label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px}
+.expand-section .val{font-size:13px;color:var(--text);font-weight:500}
+.action-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.full-action-btn{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);transition:all .15s}
+.btn-full-teal{background:var(--teal);color:#fff}
+.btn-full-green{background:var(--green);color:#fff}
+.btn-full-amber{background:var(--amber);color:#fff}
+.btn-full-red{background:#fef2f2;color:var(--red);border:1px solid #fecaca}
+.btn-full-ghost{background:var(--bg2);color:var(--text2);border:1px solid var(--border)}
+
+/* Stage selector */
+.stage-select{padding:5px 10px;border-radius:7px;border:1px solid var(--border);font-family:var(--font);font-size:12px;color:var(--text);background:var(--bg2);cursor:pointer;outline:none}
+.stage-select:focus{border-color:var(--teal)}
+
+/* Status */
+.status-banner{padding:12px 16px;border-radius:10px;margin-bottom:20px;font-size:13px;display:flex;align-items:center;gap:10px}
+.status-loading{background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8}
+.status-error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.spinner{width:16px;height:16px;border:2px solid rgba(29,78,216,.3);border-top-color:#1d4ed8;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Empty */
+.empty{text-align:center;padding:60px 20px;color:var(--text3);font-size:14px}
+
+/* Progress bar — days to expiry */
+.progress-wrap{margin-top:8px}
+.progress-track{height:4px;background:var(--bg3);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;transition:width .4s}
+
+/* Renewal offer calculator */
+.calc-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-top:10px}
+.calc-title{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.calc-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.calc-input{padding:5px 10px;border-radius:6px;border:1px solid #bbf7d0;font-family:var(--mono);font-size:13px;width:100px;outline:none;background:#fff}
+.calc-result{font-size:13px;color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" class="logo">
+    <div class="logo-dot">A</div>
+    <div>
+      <div class="logo-text">Aloe PM</div>
+      <div class="logo-sub">Lease Renewals — Persia</div>
+    </div>
+  </a>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span style="font-size:11px;color:var(--text3)" id="last-refresh"></span>
+    <button onclick="loadLeases()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--bg2);font-family:var(--font);font-size:12px;cursor:pointer;color:var(--text2)">↻ Refresh</button>
+    <a href="/" style="font-size:12px;color:var(--text3);text-decoration:none;margin-left:4px">← Hub</a>
+  </div>
+</div>
+
+<div class="main">
+  <h1>🔄 Lease Renewal Dashboard</h1>
+  <p class="subtitle">Active leases sorted by urgency — track renewal status, offers, and next steps</p>
+
+  <div id="status-area"></div>
+
+  <div class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="kpi-label">Active Leases</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">total portfolio</div></div>
+    <div class="kpi" style="border-top:3px solid var(--red)"><div class="kpi-label">Expires &lt;90 Days</div><div class="kpi-value" id="kpi-urgent" style="color:var(--red)">—</div><div class="kpi-sub">urgent action needed</div></div>
+    <div class="kpi" style="border-top:3px solid var(--amber)"><div class="kpi-label">Expires 90–180 Days</div><div class="kpi-value" id="kpi-soon" style="color:var(--amber)">—</div><div class="kpi-sub">start outreach now</div></div>
+    <div class="kpi" style="border-top:3px solid var(--green)"><div class="kpi-label">Expires 180+ Days</div><div class="kpi-value" id="kpi-normal" style="color:var(--green)">—</div><div class="kpi-sub">monitor</div></div>
+    <div class="kpi" style="border-top:3px solid var(--purple)"><div class="kpi-label">Month-to-Month</div><div class="kpi-value" id="kpi-mtm" style="color:var(--purple)">—</div><div class="kpi-sub">no fixed end date</div></div>
+  </div>
+
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+    <button class="filter-btn" onclick="setFilter('urgent',this)">🔴 Urgent</button>
+    <button class="filter-btn" onclick="setFilter('soon',this)">🟡 Soon</button>
+    <button class="filter-btn" onclick="setFilter('normal',this)">🟢 On Track</button>
+    <button class="filter-btn" onclick="setFilter('mtm',this)">🟣 Month-to-Month</button>
+    <input class="search-box" id="search-box" placeholder="Search tenant or address…" oninput="renderCards()"/>
+  </div>
+
+  <div class="renewal-grid" id="renewal-grid">
+    <div class="empty">Loading leases…</div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let allLeases = [];
+let currentFilter = 'all';
+// Local stage overrides — persisted in localStorage
+let stageOverrides = JSON.parse(localStorage.getItem('renewal_stages') || '{}');
+const STAGES = ['Pending Contact', 'Offer Sent', 'Negotiating', 'Signed — Renewing', 'Not Renewing', 'Month-to-Month'];
+
+const fmt$ = v => v ? '$' + Number(parseFloat(v)).toLocaleString() : '—';
+
+function getDaysToExpiry(endDate) {
+  if (!endDate) return null;
+  return Math.ceil((new Date(endDate) - new Date()) / 86400000);
+}
+
+function getUrgencyClass(days) {
+  if (days === null) return 'mtm';
+  if (days < 0) return 'mtm'; // already expired = MTM
+  if (days <= 90) return 'urgent';
+  if (days <= 180) return 'soon';
+  return 'normal';
+}
+
+function getBadgeClass(urgency) {
+  return { urgent:'badge-urgent', soon:'badge-soon', normal:'badge-normal', mtm:'badge-mtm' }[urgency] || 'badge-unknown';
+}
+
+function getStagePillClass(stage) {
+  const map = {
+    'Offer Sent': 'pill-offer-sent',
+    'Negotiating': 'pill-negotiating',
+    'Signed — Renewing': 'pill-signed',
+    'Not Renewing': 'pill-not-renewing',
+    'Month-to-Month': 'pill-mtm',
+    'Pending Contact': 'pill-pending',
+  };
+  return map[stage] || 'pill-pending';
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function calcRenewalOffer(currentRent, pct) {
+  const r = parseFloat(currentRent) || 0;
+  const p = parseFloat(pct) || 0;
+  return Math.round(r * (1 + p/100) / 5) * 5; // round to nearest $5
+}
+
+async function loadLeases() {
+  document.getElementById('status-area').innerHTML = `<div class="status-banner status-loading"><div class="spinner"></div>Loading active leases from Rentvine…</div>`;
+  try {
+    const r = await fetch(`${API}/api/rentvine/leases/export?pageSize=200&primaryLeaseStatusIDs[]=1`);
+    const data = await r.json();
+
+    allLeases = (Array.isArray(data) ? data : []).map(d => {
+      const leaseID = d.lease?.leaseID;
+      const tenant = d.lease?.tenants?.[0]?.name || '—';
+      const tenantEmail = d.lease?.tenants?.[0]?.email || '';
+      const tenantPhone = d.lease?.tenants?.[0]?.phone || '';
+      const unit = d.unit?.address || d.unit?.name || '—';
+      const city = d.property?.city || d.unit?.city || '';
+      const beds = d.unit?.beds;
+      const baths = d.unit?.fullBaths;
+      const sqft = d.unit?.size;
+      const rent = d.unit?.rent;
+      const deposit = d.unit?.deposit;
+      const startDate = d.lease?.startDate;
+      const endDate = d.lease?.endDate;
+      const moveInDate = d.lease?.moveInDate;
+      const increaseEligibilityDate = d.lease?.increaseEligibilityDate;
+      const days = getDaysToExpiry(endDate);
+      const urgency = getUrgencyClass(days);
+      const stage = stageOverrides[leaseID] || (days !== null && days < 0 ? 'Month-to-Month' : 'Pending Contact');
+      const balance = d.balances?.unpaidTotalAmount || 0;
+      const pastDue = parseFloat(d.balances?.pastDueRentAmount || 0) > 0;
+      return { leaseID, tenant, tenantEmail, tenantPhone, unit, city, beds, baths, sqft, rent, deposit, startDate, endDate, moveInDate, increaseEligibilityDate, days, urgency, stage, balance, pastDue };
+    }).sort((a,b) => {
+      // Sort: urgent first, then by days ascending
+      const orderMap = { urgent:0, soon:1, normal:2, mtm:3 };
+      const ao = orderMap[a.urgency] ?? 4, bo = orderMap[b.urgency] ?? 4;
+      if (ao !== bo) return ao - bo;
+      return (a.days ?? 9999) - (b.days ?? 9999);
+    });
+
+    updateKPIs();
+    renderCards();
+    document.getElementById('status-area').innerHTML = '';
+    document.getElementById('last-refresh').textContent = 'Refreshed ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+  } catch(e) {
+    document.getElementById('status-area').innerHTML = `<div class="status-banner status-error">❌ ${e.message}</div>`;
+  }
+}
+
+function updateKPIs() {
+  document.getElementById('kpi-total').textContent = allLeases.length;
+  document.getElementById('kpi-urgent').textContent = allLeases.filter(l=>l.urgency==='urgent').length;
+  document.getElementById('kpi-soon').textContent = allLeases.filter(l=>l.urgency==='soon').length;
+  document.getElementById('kpi-normal').textContent = allLeases.filter(l=>l.urgency==='normal').length;
+  document.getElementById('kpi-mtm').textContent = allLeases.filter(l=>l.urgency==='mtm').length;
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCards();
+}
+
+function renderCards() {
+  const q = (document.getElementById('search-box').value || '').toLowerCase();
+  let leases = allLeases;
+  if (currentFilter !== 'all') leases = leases.filter(l => l.urgency === currentFilter);
+  if (q) leases = leases.filter(l => l.tenant.toLowerCase().includes(q) || l.unit.toLowerCase().includes(q) || (l.city||'').toLowerCase().includes(q));
+
+  const grid = document.getElementById('renewal-grid');
+  if (!leases.length) {
+    grid.innerHTML = `<div class="empty">No leases match this filter.</div>`;
+    return;
+  }
+
+  grid.innerHTML = leases.map(l => {
+    const urgClass = l.urgency;
+    const badgeClass = getBadgeClass(urgClass);
+    const stageClass = getStagePillClass(l.stage);
+    const daysLabel = l.days === null ? '—' : l.days < 0 ? Math.abs(l.days) + ' past' : l.days + ' days';
+    const urgIcon = { urgent:'🔴', soon:'🟡', normal:'🟢', mtm:'🟣' }[urgClass] || '⚪';
+
+    // Progress bar — percentage through lease term
+    let progressPct = 0;
+    if (l.startDate && l.endDate) {
+      const total = new Date(l.endDate) - new Date(l.startDate);
+      const elapsed = new Date() - new Date(l.startDate);
+      progressPct = Math.min(100, Math.max(0, Math.round(elapsed/total*100)));
+    }
+    const progressColor = urgClass === 'urgent' ? 'var(--red)' : urgClass === 'soon' ? 'var(--amber)' : 'var(--green)';
+
+    const stageOptions = STAGES.map(s => `<option value="${s}" ${l.stage===s?'selected':''}>${s}</option>`).join('');
+
+    const increaseDate = l.increaseEligibilityDate ? formatDate(l.increaseEligibilityDate) : '—';
+
+    return `
+    <div class="renewal-card ${urgClass}" id="card-${l.leaseID}" onclick="toggleExpand('${l.leaseID}')">
+      <div class="timeline-col">
+        <div class="days-badge ${badgeClass}">
+          <div class="days-num">${l.days !== null ? (l.days < 0 ? 'MTM' : (l.days > 365 ? Math.round(l.days/30)+'m' : l.days)) : '—'}</div>
+          <div class="days-label">${l.days !== null && l.days >= 0 && l.days <= 365 ? 'days' : l.days > 365 ? 'months' : ''}</div>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="tenant-name">${l.tenant} ${l.pastDue ? '<span style="font-size:10px;background:#fee2e2;color:var(--red);padding:2px 6px;border-radius:10px;font-weight:600;margin-left:4px">PAST DUE</span>' : ''}</div>
+        <div class="unit-addr">${l.unit}${l.city ? ', ' + l.city : ''}</div>
+        <div class="meta-row">
+          ${l.beds ? `<span class="meta-item"><strong>${l.beds}bd/${l.baths||'?'}ba</strong></span>` : ''}
+          <span class="meta-item">Lease ends <strong>${formatDate(l.endDate)}</strong></span>
+          <span class="meta-item">Eligible for increase <strong>${increaseDate}</strong></span>
+          <span class="meta-item ${l.stage === 'Not Renewing' ? 'stage-pill pill-not-renewing' : ''}">${urgIcon}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="stage-pill ${stageClass}">${l.stage}</span>
+          ${l.tenantEmail ? `<span style="font-size:11px;color:var(--text3)">${l.tenantEmail}</span>` : ''}
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-track" style="margin-top:8px">
+            <div class="progress-fill" style="width:${progressPct}%;background:${progressColor}"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px">${progressPct}% through lease term · ${formatDate(l.startDate)} → ${formatDate(l.endDate)}</div>
+        </div>
+      </div>
+
+      <div class="card-actions" onclick="event.stopPropagation()">
+        <div>
+          <div class="rent-tag">${fmt$(l.rent)}</div>
+          <div class="rent-sub">current rent/mo</div>
+        </div>
+        <select class="stage-select" onchange="updateStage('${l.leaseID}', this.value)">
+          ${stageOptions}
+        </select>
+        ${l.tenantEmail ? `<a href="mailto:${l.tenantEmail}?subject=Your Lease Renewal at ${encodeURIComponent(l.unit)}" class="action-btn btn-teal">✉ Email</a>` : ''}
+      </div>
+    </div>
+
+    <div class="expand-panel" id="expand-${l.leaseID}" onclick="event.stopPropagation()">
+      <div class="expand-grid">
+        <div class="expand-section">
+          <label>Tenant Contact</label>
+          <div class="val">${l.tenant}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${l.tenantEmail || '—'}</div>
+          <div style="font-size:12px;color:var(--text3)">${l.tenantPhone || '—'}</div>
+        </div>
+        <div class="expand-section">
+          <label>Lease Details</label>
+          <div class="val">${formatDate(l.startDate)} – ${formatDate(l.endDate)}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Move-in: ${formatDate(l.moveInDate)}</div>
+          <div style="font-size:12px;color:var(--text3)">Deposit on file: ${fmt$(l.deposit)}</div>
+        </div>
+        <div class="expand-section">
+          <label>Financials</label>
+          <div class="val">${fmt$(l.rent)}/mo current</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Balance: ${l.balance > 0 ? '<span style="color:var(--red)">' + fmt$(l.balance) + '</span>' : '<span style="color:var(--green)">Current</span>'}</div>
+          <div style="font-size:12px;color:var(--text3)">Increase eligible: ${increaseDate}</div>
+        </div>
+      </div>
+
+      <!-- Renewal offer calculator -->
+      <div class="calc-box">
+        <div class="calc-title">💡 Renewal Offer Calculator</div>
+        <div class="calc-row">
+          <span style="font-size:12px;color:var(--text2)">Current: <strong>${fmt$(l.rent)}/mo</strong></span>
+          <span style="font-size:12px;color:var(--text2)">Increase:</span>
+          <input class="calc-input" id="pct-${l.leaseID}" type="number" value="3" min="0" max="20" step="0.5" oninput="calcOffer('${l.leaseID}','${l.rent}')"/> %
+          <span class="calc-result" id="offer-${l.leaseID}">→ ${fmt$(calcRenewalOffer(l.rent, 3))}/mo</span>
+          <button class="action-btn btn-teal" onclick="copyOffer('${l.leaseID}','${l.tenant}','${l.unit}','${l.rent}')">📋 Copy Offer Draft</button>
+        </div>
+      </div>
+
+      <div class="action-row">
+        ${l.tenantEmail ? `<a href="mailto:${l.tenantEmail}?subject=Your Lease Renewal — ${encodeURIComponent(l.unit)}&body=Hi ${encodeURIComponent(l.tenant.split(' ')[0])},%0D%0A%0D%0AYour lease at ${encodeURIComponent(l.unit)} is set to expire on ${encodeURIComponent(formatDate(l.endDate))}. We'd love to have you continue!%0D%0A%0D%0APlease let us know if you'd like to discuss renewal options.%0D%0A%0D%0ABest,%0D%0APersia%0D%0AAloe Property Management" class="full-action-btn btn-full-teal">✉ Draft Renewal Email</a>` : ''}
+        ${l.tenantPhone ? `<a href="tel:${l.tenantPhone}" class="full-action-btn btn-full-ghost">📞 Call ${l.tenantPhone}</a>` : ''}
+        <button class="full-action-btn btn-full-ghost" onclick="addNote('${l.leaseID}')">📝 Add Note</button>
+        <button class="full-action-btn btn-full-green" onclick="updateStage('${l.leaseID}','Signed — Renewing')">✅ Mark Signed</button>
+        <button class="full-action-btn btn-full-red" onclick="updateStage('${l.leaseID}','Not Renewing')">❌ Not Renewing</button>
+      </div>
+
+      <!-- Notes -->
+      <div id="notes-${l.leaseID}" style="margin-top:10px"></div>
+    </div>
+    `;
+  }).join('');
+}
+
+function toggleExpand(leaseID) {
+  const panel = document.getElementById('expand-' + leaseID);
+  panel.classList.toggle('open');
+}
+
+function updateStage(leaseID, stage) {
+  stageOverrides[leaseID] = stage;
+  localStorage.setItem('renewal_stages', JSON.stringify(stageOverrides));
+  // Update the lease in memory
+  const lease = allLeases.find(l => l.leaseID === leaseID);
+  if (lease) lease.stage = stage;
+  renderCards();
+  // Re-open the expanded panel if it was open
+  setTimeout(() => {
+    const panel = document.getElementById('expand-' + leaseID);
+    if (panel) panel.classList.add('open');
+  }, 10);
+}
+
+function calcOffer(leaseID, currentRent) {
+  const pct = parseFloat(document.getElementById('pct-' + leaseID)?.value) || 0;
+  const offer = calcRenewalOffer(currentRent, pct);
+  const el = document.getElementById('offer-' + leaseID);
+  if (el) el.textContent = '→ ' + fmt$(offer) + '/mo';
+}
+
+function copyOffer(leaseID, tenant, unit, currentRent) {
+  const pct = parseFloat(document.getElementById('pct-' + leaseID)?.value) || 3;
+  const offer = calcRenewalOffer(currentRent, pct);
+  const firstName = tenant.split(' ')[0];
+  const lease = allLeases.find(l => l.leaseID === leaseID);
+  const endDate = lease ? formatDate(lease.endDate) : '';
+  const text = `Hi ${firstName},
+
+I hope you're doing well! I wanted to reach out regarding your lease at ${unit}, which is set to expire on ${endDate}.
+
+We'd love to have you continue as a resident! We're happy to offer a lease renewal at $${offer.toLocaleString()}/month (a ${pct}% adjustment reflecting current market conditions).
+
+Please let me know if you'd like to move forward, have any questions, or if you'd prefer to discuss your options. We're happy to work with you!
+
+Warm regards,
+Persia
+Aloe Property Management
+(602) 854-9884`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
+}
+
+function addNote(leaseID) {
+  const notesArea = document.getElementById('notes-' + leaseID);
+  if (!notesArea) return;
+  const existing = localStorage.getItem('renewal_note_' + leaseID) || '';
+  notesArea.innerHTML = `
+    <div style="margin-top:8px">
+      <label style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px">Notes</label>
+      <textarea id="note-input-${leaseID}" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border);font-family:var(--font);font-size:12px;resize:vertical;min-height:60px;outline:none;color:var(--text)">${existing}</textarea>
+      <button onclick="saveNote('${leaseID}')" style="margin-top:6px;padding:5px 14px;border-radius:7px;background:var(--teal);color:#fff;border:none;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer">Save Note</button>
+    </div>`;
+  notesArea.querySelector('textarea').focus();
+}
+
+function saveNote(leaseID) {
+  const val = document.getElementById('note-input-' + leaseID)?.value || '';
+  localStorage.setItem('renewal_note_' + leaseID, val);
+  const notesArea = document.getElementById('notes-' + leaseID);
+  if (val) {
+    notesArea.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:var(--bg2);border-radius:7px;border:1px solid var(--border);font-size:12px;color:var(--text2)">${val.replace(/\n/g,'<br>')} <button onclick="addNote('${leaseID}')" style="font-size:10px;color:var(--teal-d);background:none;border:none;cursor:pointer;font-family:var(--font)">edit</button></div>`;
+  } else {
+    notesArea.innerHTML = '';
+  }
+}
+
+// On load, render existing notes from localStorage
+function renderSavedNotes() {
+  allLeases.forEach(l => {
+    const note = localStorage.getItem('renewal_note_' + l.leaseID);
+    const notesArea = document.getElementById('notes-' + l.leaseID);
+    if (note && notesArea) {
+      notesArea.innerHTML = `<div style="margin-top:8px;padding:8px 10px;background:var(--bg2);border-radius:7px;border:1px solid var(--border);font-size:12px;color:var(--text2)">${note.replace(/\n/g,'<br>')} <button onclick="addNote('${l.leaseID}')" style="font-size:10px;color:var(--teal-d);background:none;border:none;cursor:pointer;font-family:var(--font)">edit</button></div>`;
+    }
+  });
+}
+
+loadLeases();
+</script>
+</body>
+</html>
