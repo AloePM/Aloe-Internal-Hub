@@ -117,16 +117,17 @@ def fill_fillable_pdf(pdf_path, data):
     writer.append(reader)
 
     fields = reader.get_fields() or {}
+    sys.stderr.write(f"PDF fields found: {list(fields.keys())}\n")
+    sys.stderr.write(f"Data available: {list(data.keys())}\n")
 
-    # Build a flexible field mapping — try fuzzy matching
+    if not fields:
+        # Not actually fillable — fall through to overlay
+        return fill_overlay_pdf(pdf_path, data)
+
     field_map = build_field_map(data, list(fields.keys()))
+    sys.stderr.write(f"Field map: {field_map}\n")
 
-    writer.update_page_form_field_values(
-        writer.pages[0] if len(writer.pages) == 1 else None,
-        field_map,
-        auto_regenerate=False
-    )
-    # Apply to all pages
+    # Apply to ALL pages (correct pypdf usage)
     for page in writer.pages:
         writer.update_page_form_field_values(page, field_map, auto_regenerate=False)
 
