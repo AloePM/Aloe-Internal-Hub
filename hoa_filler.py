@@ -59,8 +59,8 @@ def get_lease_data(lease_id):
         leases = fetch_rentvine("/leases/export", {"pageSize": 200, "page": 1})
         if isinstance(leases, list):
             for item in leases:
-                if item.get("lease", {}).get("leaseID") == int(lease_id):
-                    lease = item.get("lease", {})
+if str(item.get("lease", {}).get("leaseID", "")) == str(lease_id):
+              lease = item.get("lease", {})
                     unit  = item.get("unit", {})
                     prop  = item.get("property", {})
                     tenants = lease.get("tenants", [])
