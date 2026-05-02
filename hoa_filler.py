@@ -263,8 +263,9 @@ def main():
             return
 
         inp = json.loads(raw)
-        lease_id    = inp.get("leaseID") or inp.get("lease_id")
-        template_id = inp.get("templateId") or inp.get("template_id", "")
+        lease_id    = inp.get("leaseID") or inp.get("lease_id") or inp.get("leaseId")
+        template_id = (inp.get("templateId") or inp.get("template_id") or 
+                       inp.get("template") or inp.get("templateID") or "")
         overrides   = inp.get("overrides") or {}
         if isinstance(overrides, str):
             try:
