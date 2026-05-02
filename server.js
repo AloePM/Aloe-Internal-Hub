@@ -1,8 +1,8 @@
- import express from 'express';
+import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import Anthropic from '@anthropic-ai/sdk';
-
+import { spawn } from 'child_process';
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -29,8 +29,6 @@ app.get('/vacancy-risk', (req, res) => {
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
 
-// API route — spawns Python to fill PDFs
-import { spawn } from 'child_process';
 
 app.post('/api/hoa/fill', async (req, res) => {
   const input = JSON.stringify(req.body);
@@ -3202,8 +3200,7 @@ app.get('/sale-analysis', (req, res) =>
 
 app.get('/owner-report', (req, res) =>
   res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
-// HOA Form Filler routes
-import { spawn } from 'child_process';
+
 
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
