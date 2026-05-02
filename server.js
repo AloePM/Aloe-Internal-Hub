@@ -46,15 +46,23 @@ app.post('/api/hoa/fill', async (req, res) => {
 });
 
 app.get('/api/hoa/leases', async (req, res) => {
-  // Reuse existing rvFetch
   try {
-    const data = await rvFetch('/leases/export', { pageSize: 200, 'primaryLeaseStatusIDs[]': 1 });
-    const leases = (Array.isArray(data) ? data : []).map(d => ({
+    let allLeases = [];
+    let page = 1;
+    while (page <= 20) {
+      const data = await rvFetch('/leases/export', { pageSize: 200, page, 'primaryLeaseStatusIDs[]': 1 });
+      const batch = Array.isArray(data) ? data : [];
+      if (batch.length === 0) break;
+      allLeases = allLeases.concat(batch);
+      if (batch.length < 200) break;
+      page++;
+    }
+    const leases = allLeases.map(d => ({
       leaseID: d.lease?.leaseID,
       tenant: d.lease?.tenants?.[0]?.name || '—',
       address: d.unit?.address || d.property?.address || '—',
       city: d.unit?.city || d.property?.city || '',
-    })).sort((a,b) => a.address.localeCompare(b.address));
+    })).sort((a,b) => (a.address||'').localeCompare(b.address||''));
     res.json({ leases });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -3204,19 +3212,6 @@ app.get('/owner-report', (req, res) =>
 
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
-
-app.get('/api/hoa/leases', async (req, res) => {
-  try {
-    const data = await rvFetch('/leases/export', { pageSize: 200, 'primaryLeaseStatusIDs[]': 1 });
-    const leases = (Array.isArray(data) ? data : []).map(d => ({
-      leaseID: d.lease?.leaseID,
-      tenant: d.lease?.tenants?.[0]?.name || '—',
-      address: d.unit?.address || d.property?.address || '—',
-      city: d.unit?.city || d.property?.city || '',
-    })).sort((a,b) => (a.address||'').localeCompare(b.address||''));
-    res.json({ leases });
-  } catch(e) { res.status(500).json({ error: e.message }); }
-});
 
 app.post('/api/hoa/fill', (req, res) => {
   const py = spawn('python3', ['hoa_filler.py']);
