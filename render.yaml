@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: aloe-hoa-form-filler
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python setup_fonts.py
+    startCommand: gunicorn main:app --workers 2 --timeout 120 --bind 0.0.0.0:$PORT
+    plan: free
+    envVars:
+      - key: RENTVINE_API_KEY
+        sync: false
+      - key: RENTVINE_API_SECRET
+        sync: false
+      - key: RENTVINE_ACCOUNT
+        value: aloepm
+      - key: MGMT_COMPANY_NAME
+        value: Aloe Property Management
+      - key: MGMT_PHONE
+        value: "(602) 854-9884"
+      - key: MGMT_EMAIL
+        value: info@aloepm.com
