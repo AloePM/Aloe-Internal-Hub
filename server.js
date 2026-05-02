@@ -91,9 +91,9 @@ app.get('/api/hoa/templates', async (req, res) => {
   try {
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.pdf'));
     res.json({ templates: files.map(f => ({ id: f.replace('.pdf',''), name: f.replace('.pdf','').replace(/_/g,' ') })) });
-  } catch(e) { 
+  } catch(e) {
     console.error('Templates dir error:', e.message, 'cwd:', process.cwd(), 'dir:', dir);
-    res.json({ templates: [], debug: e.message }); 
+    res.json({ templates: [], debug: e.message });
   }
 });
 app.get('/vendors', (req, res) => {
