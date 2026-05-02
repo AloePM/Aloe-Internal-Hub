@@ -3411,7 +3411,7 @@ app.get('*', function(req, res) {
                                                                                                                                                     <div class="tool-desc">Train and coach AI agents before going live</div>
                                                                                                                                                               </a>
                                                                                                                                                               
-                                                                                                                                                                        <a href="/owner-report" class="tool-card primary" data-name="owner report dashboard leads marketing">
+                                                                                                                                                                        <a href="/owner-dashboard" class="tool-card primary" data-name="owner report dashboard leads marketing">
                                                                                                                                                                                     <span class="tool-badge badge-soon">SOON</span>
                                                                                                                                                                                                 <div class="tool-icon icon-purple">📈</div>
                                                                                                                                                                                                             <div class="tool-name">Owner Dashboard</div>
@@ -3464,7 +3464,7 @@ app.get('*', function(req, res) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         <div class="tool-name">KPI Metrics</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
   <span class="tool-badge badge-live">LIVE</span>
   <div class="tool-icon icon-teal">🔄</div>
   <div class="tool-name">Lease Renewals</div>
@@ -3504,7 +3504,12 @@ app.get('*', function(req, res) {
   <div class="tool-name">Sale Analysis</div>
   <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
 </a>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          </div>
+    <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
+  <span class="tool-badge badge-live">LIVE</span>
+  <div class="tool-icon icon-teal">🔄</div>
+  <div class="tool-name">Lease Renewals</div>
+  <div class="tool-desc">Renewal pipeline, offers, calculator — Persia's dashboard</div>
+</a>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      </div>
                                                                                                     
                                                                                                                                                                                                                                                                                                                         </div>
     <div class="section">
@@ -3535,11 +3540,12 @@ app.get('*', function(req, res) {
       <div class="tool-desc">Owner reporting and portfolio updates </div>
     </a>
 
-    <a href="/hoa" class="tool-card silver-top" data-name="hoa compliance violations juan">
-      <div class="tool-icon icon-silver">📋</div>
-      <div class="tool-name">HOA Compliance</div>
-      <div class="tool-desc">Violations, registrations, compliance </div>
-    </a>
+    <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration auto-fill juan">
+  <span class="tool-badge badge-live">LIVE</span>
+  <div class="tool-icon icon-teal">📋</div>
+  <div class="tool-name">HOA Form Filler</div>
+  <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
+</a>
 
 
   </div>
