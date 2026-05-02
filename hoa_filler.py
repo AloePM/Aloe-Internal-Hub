@@ -55,41 +55,44 @@ def get_lease_data(lease_id):
     """Fetch lease + tenant + property data from Rentvine."""
     data = {}
     try:
-        # Get lease details
-        leases = fetch_rentvine("/leases/export", {"pageSize": 200, "page": 1})
-        if isinstance(leases, list):
+        page = 1
+        while page <= 20:
+            leases = fetch_rentvine("/leases/export", {"pageSize": 200, "page": page})
+            if not isinstance(leases, list) or len(leases) == 0:
+                break
             for item in leases:
-if str(item.get("lease", {}).get("leaseID", "")) == str(lease_id):
-              lease = item.get("lease", {})
-                    unit  = item.get("unit", {})
-                    prop  = item.get("property", {})
+                if str(item.get("lease", {}).get("leaseID", "")) == str(lease_id):
+                    lease   = item.get("lease", {})
+                    unit    = item.get("unit", {})
+                    prop    = item.get("property", {})
                     tenants = lease.get("tenants", [])
                     primary = tenants[0] if tenants else {}
                     all_names = " & ".join(t.get("name", "") for t in tenants if t.get("name"))
-
                     data["tenant_name"]   = all_names or primary.get("name", "")
                     data["tenant_email"]  = primary.get("email", "")
                     data["tenant_phone"]  = primary.get("phone", "") or primary.get("cellPhone", "")
                     data["lease_id"]      = str(lease_id)
                     data["lease_start"]   = lease.get("startDate", "")
                     data["lease_end"]     = lease.get("endDate", "")
-                    data["rent_amount"]   = str(lease.get("rentAmount", {}).get("amount", "")) if isinstance(lease.get("rentAmount"), dict) else str(lease.get("rentAmount", ""))
+                    rent = lease.get("rentAmount", {})
+                    data["rent_amount"]   = str(rent.get("amount", "")) if isinstance(rent, dict) else str(rent or "")
                     data["address"]       = unit.get("address", "") or prop.get("address", "")
                     data["city"]          = unit.get("city", "") or prop.get("city", "")
                     data["state"]         = unit.get("state", "") or prop.get("state", "AZ")
                     data["zip"]           = unit.get("zip", "") or prop.get("zip", "")
                     data["full_address"]  = f"{data['address']}, {data['city']}, {data['state']} {data['zip']}".strip(", ")
-                    # Community name from property groups
                     groups = prop.get("groups", [])
                     data["community"]     = groups[0].get("name", "") if groups else prop.get("name", "")
                     data["management_company"] = MGMT_COMPANY
                     data["management_phone"]   = MGMT_PHONE
                     data["management_email"]   = MGMT_EMAIL
-                    break
+                    return data  # found it, stop paging
+            if len(leases) < 200:
+                break
+            page += 1
     except Exception as e:
         sys.stderr.write(f"Rentvine fetch error: {e}\n")
     return data
-
 
 # ── PDF detection ─────────────────────────────────────────────────────────────
 def is_fillable_pdf(pdf_path):
