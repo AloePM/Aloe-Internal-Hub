@@ -86,11 +86,15 @@ app.get('/api/hoa/leases', async (req, res) => {
 
 app.get('/api/hoa/templates', async (req, res) => {
   const { default: fs } = await import('fs');
-  const dir = new URL('./templates', import.meta.url).pathname;
+  const { default: path } = await import('path');
+  const dir = path.join(process.cwd(), 'templates');
   try {
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.pdf'));
     res.json({ templates: files.map(f => ({ id: f.replace('.pdf',''), name: f.replace('.pdf','').replace(/_/g,' ') })) });
-  } catch { res.json({ templates: [] }); }
+  } catch(e) { 
+    console.error('Templates dir error:', e.message, 'cwd:', process.cwd(), 'dir:', dir);
+    res.json({ templates: [], debug: e.message }); 
+  }
 });
 app.get('/vendors', (req, res) => {
      res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
