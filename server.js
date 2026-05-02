@@ -63,6 +63,8 @@ app.get('/api/vendors', async (req, res) => {
         res.status(500).json({ error: err.message, vendors: [] });
    }
 });
+app.get('/renewals', (req, res) =>
+  res.sendFile(new URL('./renewals.html', import.meta.url).pathname));
 app.get('/api/pet-policy', async function(req, res) {
   const addr = (req.query.address || '').toLowerCase().trim();
   if (!addr) return res.json({ error: 'address param required' });
