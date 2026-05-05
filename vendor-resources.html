@@ -459,7 +459,7 @@ a:hover{text-decoration:underline;}
 
   if(!wasOpen)item.classList.add('open');
   }
-function submitForm(){
+async function submitForm(){
   var b=document.getElementById('f-business').value.trim();
   var n=document.getElementById('f-name').value.trim();
   var p=document.getElementById('f-phone').value.trim();
@@ -467,9 +467,29 @@ function submitForm(){
   var t=document.getElementById('f-trade').value;
   var ins=document.getElementById('f-insurance').value;
   if(!b||!n||!p||!e||!t||!ins){alert('Please fill out all required fields.');return;}
-      var body=encodeURIComponent('Business: '+b+'\nContact: '+n+'\nPhone: '+p+'\nEmail: '+e+'\nTrade: '+t+'\nLicense: '+document.getElementById('f-license').value+'\nArea: '+document.getElementById('f-area').value+'\nInsurance: '+ins+'\n\nAbout: '+document.getElementById('f-about').value);
-  window.location.href='mailto:maintenance@aloepm.com?subject='+encodeURIComponent('Vendor Application - '+b)+'&body='+body;
-  document.getElementById('success-msg').style.display='block';
+  var btn=document.querySelector('.btn-primary[onclick]');
+  btn.disabled=true; btn.textContent='Submitting...';
+  try {
+    var res=await fetch('/api/vendor-apply',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        business:b, name:n, phone:p, email:e, trade:t,
+        license:document.getElementById('f-license').value,
+        area:document.getElementById('f-area').value,
+        insurance:ins,
+        about:document.getElementById('f-about').value
+      })
+    });
+    if(!res.ok) throw new Error('Server error');
+    document.getElementById('success-msg').style.display='block';
+    document.querySelector('.form-grid').style.opacity='0.4';
+    document.querySelector('.form-grid').style.pointerEvents='none';
+    btn.style.display='none';
+  } catch(err) {
+    alert('Submission failed. Please email info@aloepm.com directly.');
+    btn.disabled=false; btn.textContent='Submit Application';
+  }
 }
 document.querySelectorAll('a[href^="#"]').forEach(function(a){
     a.addEventListener('click',function(e){
