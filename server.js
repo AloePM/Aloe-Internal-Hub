@@ -3482,7 +3482,6 @@ app.get('*', function(req, res) {
 
   </div>
 </div>
-</a>
           </div>
         </div>
 
@@ -3554,13 +3553,19 @@ app.get('*', function(req, res) {
       <div class="tool-desc">Owner reporting and portfolio updates </div>
     </a>
 
-    <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration auto-fill juan">
+  <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration auto-fill juan">
   <span class="tool-badge badge-live">LIVE</span>
   <div class="tool-icon icon-teal">📋</div>
   <div class="tool-name">HOA Form Filler</div>
   <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
 </a>
 
+<a href="/resources/vendors" class="tool-card primary" data-name="vendor resources partner apply vendor program">
+  <span class="tool-badge badge-live">LIVE</span>
+  <div class="tool-icon icon-silver">🔨</div>
+  <div class="tool-name">Vendor Resources</div>
+  <div class="tool-desc">Vendor partnership page — standards, requirements, and application</div>
+</a>
 
   </div>
 </div>
@@ -3644,36 +3649,6 @@ function filterTools(q) {
 app.get('/metrics', (req, res) => {
     res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
 });
-// Vendor application — sends email + Slack notification
-app.post('/api/vendor-apply', async (req, res) => {
-  try {
-    const { business, name, phone, email, trade, license, area, insurance, about } = req.body;
-
-    // Send email via nodemailer (or your existing email setup)
-    const emailBody = `
-New Vendor Application
-
-Business: ${business}
-Contact: ${name}
-Phone: ${phone}
-Email: ${email}
-Trade: ${trade}
-License/ROC: ${license || 'N/A'}
-Service Area: ${area || 'N/A'}
-Insurance: ${insurance}
-
-About:
-${about || 'N/A'}
-    `.trim();
-
-    // Use your existing nodemailer transporter or sendgrid — adjust as needed
-    await transporter.sendMail({
-      from: '"Aloe PM Vendor Form" <noreply@aloepm.com>',
-      to: 'info@aloepm.com',
-      replyTo: email,
-      subject: `Vendor Application — ${business}`,
-      text: emailBody
-    });
 
     // Slack notification to #vendors
     const slackWebhook = process.env.SLACK_VENDOR_WEBHOOK || process.env.SLACK_WEBHOOK_URL;
