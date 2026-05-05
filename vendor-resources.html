@@ -303,6 +303,22 @@ a:hover{text-decoration:underline;}
   </div>
 
   <!-- HOW IT WORKS -->
+  function toggleFaq(el){
+  var item=el.parentElement;
+  var wasOpen=item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(function(i){i.classList.remove('open');});
+  if(!wasOpen)item.classList.add('open');
+}
+      /* FAQ */
+.faq{display:flex;flex-direction:column;gap:0;}
+.faq-item{border:1px solid #E2E5EC;border-radius:10px;margin-bottom:8px;overflow:hidden;background:#fff;}
+.faq-q{padding:16px 20px;font-size:14px;font-weight:600;color:#0F172A;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;}
+.faq-q:hover{background:#F8FAFC;}
+.faq-arrow{font-size:12px;color:#94A3B8;transition:transform 0.2s;}
+.faq-a{display:none;padding:0 20px 16px;font-size:13px;color:#475569;line-height:1.6;}
+.faq-item.open .faq-a{display:block;}
+.faq-item.open .faq-arrow{transform:rotate(180deg);}
+      
       <div class="section">
         <div class="section-label">The Process</div>
         <h2>How work orders work</h2>
@@ -514,11 +530,7 @@ a:hover{text-decoration:underline;}
     </div>
 
     <script>
-    function toggleFaq(el){
-  var item=el.parentElement;
-
-  if(!wasOpen)item.classList.add('open');
-  }
+   
 async function submitForm(){
   var b=document.getElementById('f-business').value.trim();
   var n=document.getElementById('f-name').value.trim();
