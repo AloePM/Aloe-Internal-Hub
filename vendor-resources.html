@@ -379,7 +379,7 @@ a:hover{text-decoration:underline;}
     <p>Fill out the form below and our maintenance team will be in touch. Please have your license and insurance info ready.</p>
         <div class="contact-box">
           <h3>Vendor Application</h3>
-          <p>All fields are required. We'll review your application and reach out within 2–5 business days.</p>
+          <p>We'll review your application and reach out within 2–5 business days.</p>
           <div class="form-grid">
             <div class="form-group">
               <label>Business Name</label>
@@ -425,9 +425,63 @@ a:hover{text-decoration:underline;}
           <input type="text" id="f-area" placeholder="e.g. Phoenix, Scottsdale, Chandler, Gilbert" />
             </div>
             <div class="form-group full">
-              <label>Tell Us About Your Business</label>
-          <textarea id="f-about" placeholder="Years in business, what sets you apart, any property management experience?"></textarea>
-        </div>
+                <label for="f-about">Tell us about your business</label>
+                <textarea id="f-about" name="about" rows="3" placeholder="Years in business, specialties, anything else we should know..."></textarea>
+              </div>
+
+              <div class="form-group full">
+                <label for="f-why">Why do you want to partner with Aloe PM?</label>
+                <textarea id="f-why" name="why" rows="3" placeholder="What makes you a great fit for our vendor network?"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="f-hourly">Hourly rate</label>
+                <input type="text" id="f-hourly" placeholder="e.g. $75/hr or varies by job"/>
+              </div>
+
+              <div class="form-group">
+                <label for="f-employees">Number of employees</label>
+                <select id="f-employees">
+                  <option value="">Select...</option>
+                  <option>Just me (solo)</option>
+                  <option>2–5</option>
+                  <option>6–10</option>
+                  <option>11–25</option>
+                  <option>25+</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Do you own a vehicle?</label>
+                <div style="display:flex;gap:20px;margin-top:6px;">
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;"><input type="radio" name="hasVehicle" value="Yes"> Yes</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;"><input type="radio" name="hasVehicle" value="No"> No</label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Do you own your own tools?</label>
+                <div style="display:flex;gap:20px;margin-top:6px;">
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;"><input type="radio" name="hasTools" value="Yes"> Yes</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;"><input type="radio" name="hasTools" value="No"> No</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;"><input type="radio" name="hasTools" value="Some"> Some</label>
+                </div>
+              </div>
+
+              <div class="form-group full">
+                <label for="f-social">Social media / website</label>
+                <input type="text" id="f-social" placeholder="Instagram, Facebook, website URL, Google Business, etc."/>
+              </div>
+
+              <div class="form-group full">
+                <label for="f-refs">References</label>
+                <textarea id="f-refs" rows="3" placeholder="Name, company, phone or email — list 1–3 professional references if available"></textarea>
+              </div>
+
+              <div class="form-group full">
+                <label for="f-additional">Additional information</label>
+                <textarea id="f-additional" rows="3" placeholder="Certifications, specializations, equipment, anything else you'd like us to know..."></textarea>
+              </div>
         <div class="form-group full">
           <label>Do you have General Liability Insurance? (Min $1M)</label>
               <select id="f-insurance">
@@ -466,29 +520,37 @@ async function submitForm(){
   var e=document.getElementById('f-email').value.trim();
   var t=document.getElementById('f-trade').value;
   var ins=document.getElementById('f-insurance').value;
-  if(!b||!n||!p||!e||!t||!ins){alert('Please fill out all required fields.');return;}
+  if(!b||!n||!p||!e||!t||!ins){alert('Please fill in the required fields: Business Name, Contact Name, Phone, Email, Trade, and Insurance status.');return;}
   var btn=document.querySelector('.btn-primary[onclick]');
-  btn.disabled=true; btn.textContent='Submitting...';
+  btn.disabled=true;btn.textContent='Submitting...';
   try {
     var res=await fetch('/api/vendor-apply',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        business:b, name:n, phone:p, email:e, trade:t,
+        business:b,name:n,phone:p,email:e,trade:t,
         license:document.getElementById('f-license').value,
         area:document.getElementById('f-area').value,
         insurance:ins,
-        about:document.getElementById('f-about').value
+        about:document.getElementById('f-about').value,
+        why:document.getElementById('f-why').value,
+        hourlyRate:document.getElementById('f-hourly').value,
+        employees:document.getElementById('f-employees').value,
+        hasVehicle:(document.querySelector('input[name="hasVehicle"]:checked')||{}).value||'',
+        hasTools:(document.querySelector('input[name="hasTools"]:checked')||{}).value||'',
+        social:document.getElementById('f-social').value,
+        refs:document.getElementById('f-refs').value,
+        additional:document.getElementById('f-additional').value
       })
     });
-    if(!res.ok) throw new Error('Server error');
+    if(!res.ok)throw new Error('Server error');
     document.getElementById('success-msg').style.display='block';
     document.querySelector('.form-grid').style.opacity='0.4';
     document.querySelector('.form-grid').style.pointerEvents='none';
     btn.style.display='none';
-  } catch(err) {
+  } catch(err){
     alert('Submission failed. Please email info@aloepm.com directly.');
-    btn.disabled=false; btn.textContent='Submit Application';
+    btn.disabled=false;btn.textContent='Submit Application';
   }
 }
 document.querySelectorAll('a[href^="#"]').forEach(function(a){
