@@ -3669,34 +3669,61 @@ Insurance: ${insurance}
 About:
 ${about || 'N/A'}`;
 
-    // Send email via Resend
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: 'Vendor Applications <noreply@aloepm.com>',
-        to: ['info@aloepm.com'],
-        reply_to: email,
-        subject: `Vendor Application — ${business}`,
-        text: emailBody
-      })
-    });
+    const slackText = `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade}\n*Insurance:* ${insurance}\n*Area:* ${area || 'N/A'}\n\n${about ? '*About:* ' + about : ''}`;
 
-    // Slack notification to #vendors
+    let slackOk = false;
+    let emailOk = false;
+
+    // Try Slack first (most reliable — no API key setup needed beyond the webhook)
     if (process.env.SLACK_VENDOR_WEBHOOK) {
-      await fetch(process.env.SLACK_VENDOR_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade}\n*Insurance:* ${insurance}\n*Area:* ${area || 'N/A'}`
-        })
-      });
+      try {
+        const slackResp = await fetch(process.env.SLACK_VENDOR_WEBHOOK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: slackText })
+        });
+        slackOk = slackResp.ok;
+      } catch(e) {
+        console.error('Slack vendor webhook error:', e.message);
+      }
     }
 
-    res.json({ ok: true });
+    // Try Resend email (requires RESEND_API_KEY)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const emailResp = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: 'Vendor Applications <noreply@aloepm.com>',
+            to: ['info@aloepm.com'],
+            reply_to: email,
+            subject: `Vendor Application — ${business}`,
+            text: emailBody
+          })
+        });
+        emailOk = emailResp.ok;
+        if (!emailResp.ok) {
+          const errText = await emailResp.text();
+          console.error('Resend error:', errText);
+        }
+      } catch(e) {
+        console.error('Resend vendor email error:', e.message);
+      }
+    }
+
+    // Succeed if at least one channel worked
+    if (slackOk || emailOk) {
+      return res.json({ ok: true });
+    }
+
+    // Both failed — log and return error
+    console.error('Vendor apply: both Slack and Resend failed. slackWebhook set:', !!process.env.SLACK_VENDOR_WEBHOOK, 'resendKey set:', !!process.env.RESEND_API_KEY);
+    res.status(500).json({ error: 'Failed to deliver application' });
+
   } catch (err) {
     console.error('Vendor apply error:', err);
     res.status(500).json({ error: 'Failed' });
