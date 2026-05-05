@@ -3653,8 +3653,7 @@ app.get('/metrics', (req, res) => {
 // Vendor application form submission
 app.post('/api/vendor-apply', async (req, res) => {
   try {
-    const { business, name, phone, email, trade, license, area, insurance, about } = req.body;
-
+const { business, name, phone, email, trade, license, area, insurance, about, why, hourlyRate, employees, hasVehicle, hasTools, social, refs, additional } = req.body;
     const emailBody = `New Vendor Application
 
 Business: ${business}
@@ -3665,12 +3664,18 @@ Trade: ${trade}
 License/ROC: ${license || 'N/A'}
 Service Area: ${area || 'N/A'}
 Insurance: ${insurance}
-
+Why Partner With Us: ${why || 'N/A'}
+Hourly Rate: ${hourlyRate || 'N/A'}
+Employees: ${employees || 'N/A'}
+Owns Vehicle: ${hasVehicle || 'N/A'}
+Owns Tools: ${hasTools || 'N/A'}
+Social/Website: ${social || 'N/A'}
+References: ${refs || 'N/A'}
+Additional Info: ${additional || 'N/A'}
 About:
 ${about || 'N/A'}`;
 
-    const slackText = `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade}\n*Insurance:* ${insurance}\n*Area:* ${area || 'N/A'}\n\n${about ? '*About:* ' + about : ''}`;
-
+const slackText = `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade} · *Rate:* ${hourlyRate||'N/A'} · *Employees:* ${employees||'N/A'}\n*Vehicle:* ${hasVehicle||'N/A'} · *Tools:* ${hasTools||'N/A'}\n*Insurance:* ${insurance} · *Area:* ${area||'N/A'}\n*Social:* ${social||'N/A'}\n*Why us:* ${why||'N/A'}\n*Refs:* ${refs||'N/A'}\n*Additional:* ${additional||'N/A'}\n*About:* ${about||'N/A'}`;
     let slackOk = false;
     let emailOk = false;
 
