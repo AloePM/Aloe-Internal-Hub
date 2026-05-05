@@ -2592,8 +2592,7 @@ app.get('*', function(req, res) {
       <div class="tool-desc">CRM, workflow boards, leads, move-ins, HOA</div>
     </a>
 
-    <a href="https://app.quophone.com" target="_blank" class="tool-card primary" data-name="quo openphone sms messaging calls inbox">
-      <div class="tool-icon icon-silver">📱</div>
+<a href="https://my.quo.com/inbox/PNRRARIpQO" target="_blank" class="tool-card primary" data-name="quo openphone sms messaging calls inbox">      <div class="tool-icon icon-silver">📱</div>
       <div class="tool-name">Quo / OpenPhone</div>
       <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
     </a>
