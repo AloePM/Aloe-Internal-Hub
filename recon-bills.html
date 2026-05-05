@@ -565,8 +565,39 @@ function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 // ─────────────────────────────────────────────────────────────────────────────
 // RUN
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// FETCH RV BILLS FROM API
+// ─────────────────────────────────────────────────────────────────────────────
+async function fetchRVBills(){
+  const VENDOR=/aloe property management.*reimburs/i;
+  let all=[], page=1;
+  while(true){
+    const r=await fetch(`/api/rentvine/accounting/bills?page=${page}&pageSize=200`);
+    if(!r.ok) throw new Error(`Rentvine bills API returned ${r.status}`);
+    const d=await r.json();
+    const rows=Array.isArray(d)?d:(d?.data??[]);
+    if(!rows.length) break;
+    rows.forEach(row=>{
+      const b=row.bill, name=row.contact?.name||'';
+      if(!b||!VENDOR.test(name)) return;
+      all.push({
+        billID:    b.billID,
+        date:      (b.billDate||b.dateDue||'').slice(0,10),
+        reference: (b.reference||'').trim(),
+        memo:      (b.paymentMemo||b.description||'').trim(),
+        vendor:    name,
+        workOrderID: b.workOrderID||'',
+        matched:   false,
+      });
+    });
+    if(rows.length<200) break;
+    page++;
+  }
+  return all;
+}
+
 async function run(){
-  if(!ST.chaseText||!ST.rvText){set({error:'Upload both files first.'});return;}
+  // Chase required (Plaid or CSV)
   try{
     // Get Chase transactions — Plaid preferred, CSV fallback
     let chaseRows=[];
@@ -589,7 +620,10 @@ async function run(){
       chaseRows=chaseAll.filter(r=>r.date>=cutoff);
     }
 
-    const rvRows=parseRVPayables(ST.rvText);
+    // Fetch RV bills from API automatically
+    set({loadMsg:'Fetching Rentvine Aloe PM Reimbursement bills…'});
+    const rvRows = await fetchRVBills();
+    if(!rvRows.length) throw new Error('No Aloe PM Reimbursement bills found in Rentvine. Check that bills exist with vendor "Aloe Property Management - REIMBURSEMENTS".');
     const {links,linksRev,linkTypes}=autoMatch(rvRows,chaseRows);
 
     set({
@@ -731,11 +765,10 @@ function renderConfig(){
   <div class="config-screen">
     ${error?`<div style="background:#FEE2E2;border:1px solid #FCA5A5;border-radius:7px;padding:8px 14px;font-size:11px;color:#DC2626;width:100%;max-width:680px">⚠ ${esc(error)}</div>`:''}
     <div class="config-info">
-      <strong>How this works:</strong> Upload your Chase card CSV and the Rentvine Payables CSV export.<br>
-      The tool displays them <strong>side by side like two spreadsheets</strong> — auto-matches by amount ±$0.02 within 45 days,
-      then lets you <strong>manually link</strong> any row by clicking it and clicking its partner.<br><br>
-      💳 <strong>Chase:</strong> Account Activity → Download → CSV &nbsp;·&nbsp;
-      📋 <strong>Rentvine:</strong> Reports → Payables → filter Payee = Aloe PM Reimbursements → Export CSV
+      💳 <strong>Chase</strong> — connect via Plaid (auto) or upload CSV<br>
+      📋 <strong>Rentvine bills</strong> — pulled automatically from the API, no export needed<br><br>
+      Matches by amount ±$0.02 within 45 days · side-by-side view · manual linking available<br>
+      <em style="color:var(--muted)">API pulls ~163 of 236 bills — upload Rentvine Payables CSV if you need all 236</em>
     </div>
     <div class="config-card">
       <div class="config-title">Upload both files</div>
@@ -751,16 +784,18 @@ function renderConfig(){
           </div>
         </div>
         <div>
-          <div class="drop-label">📋 Rentvine Payables CSV</div>
-          <div class="drop-box ${rvFile?'filled':''}" id="drop-rv">
-            <input type="file" id="fi-rv" accept=".csv" style="display:none"/>
-            ${rvFile
-              ?`<div class="drop-icon">✓</div><div class="drop-name" style="color:var(--teal)">${esc(rvFile.name)}</div><div class="drop-sub">Click to replace</div>`
-              :`<div class="drop-icon">📋</div><div class="drop-name">Drop Rentvine CSV</div><div class="drop-sub">Reports → Payables → Export</div>`}
+          <div class="drop-label">📋 Rentvine Payables</div>
+          <div style="background:var(--teal-light);border:1px solid var(--teal-border);border-radius:8px;padding:14px 13px;display:flex;flex-direction:column;gap:5px;min-height:70px;justify-content:center">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
+              <span style="font-size:12px;font-weight:600;color:var(--teal)">Auto-loaded from Rentvine API</span>
+            </div>
+            <div style="font-size:10px;color:var(--teal-dk);padding-left:15px">Pulls Aloe PM Reimbursement bills automatically — no export needed.</div>
+            <div style="font-size:10px;color:var(--muted);padding-left:15px">~163 of 236 bills via API · retroactive entries may be missing</div>
           </div>
         </div>
       </div>
-      <button class="run-btn" id="run-btn" ${(!chaseFile&&!ST.plaidChase?.connected)||!rvFile?'disabled':''}>Open side-by-side →</button>
+      <button class="run-btn" id="run-btn" ${!chaseFile&&!ST.plaidChase?.connected?'disabled':''}>Open side-by-side →</button>
     </div>
   </div>`;
 }
@@ -992,7 +1027,7 @@ function bindAll(){
     bindDrop('drop-chase','fi-chase',(f,t)=>set({chaseFile:f,chaseText:t}));
     loadPlaidChase();
     loadPlaidChase();
-    bindDrop('drop-rv','fi-rv',(f,t)=>set({rvFile:f,rvText:t}));
+    // Rentvine pulled automatically — no CSV bind needed
     document.getElementById('run-btn')?.addEventListener('click',run);
     return;
   }
