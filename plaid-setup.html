@@ -92,8 +92,13 @@ function renderAccounts(balances) {
     const s = status[acct.key] || {};
     const b = balances[acct.key] || {};
     const connected = s.connected;
-    const bal = b.accounts?.[0];
-    const balStr = bal ? `$${Number(bal.available ?? bal.current).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})} available` : '';
+    const bal = b.accounts?.find(a => a.isTarget) || b.accounts?.[0];
+    const balAmt = b.available ?? b.current ?? bal?.available ?? bal?.current;
+    const balName = b.accountName || bal?.name || '';
+    const balMask = b.mask || bal?.mask || '';
+    const balStr = balAmt != null
+      ? `$${Number(balAmt).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})} available${balName ? ' · ' + balName + ' ···' + balMask : ''}`
+      : '';
     return `<div class="acct-card">
       <div class="acct-info">
         <div class="acct-num">${acct.number}</div>
