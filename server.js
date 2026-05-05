@@ -3472,6 +3472,16 @@ app.get('*', function(req, res) {
   <div class="tool-name">HOA Form Filler</div>
   <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
 </a>
+
+<a href="/resources/vendors" class="tool-card primary" data-name="vendor resources partner apply vendor program">
+  <span class="tool-badge badge-live">LIVE</span>
+  <div class="tool-icon icon-silver">🔨</div>
+  <div class="tool-name">Vendor Resources</div>
+  <div class="tool-desc">Vendor partnership page — standards, requirements, and application</div>
+</a>
+
+  </div>
+</div>
 </a>
           </div>
         </div>
