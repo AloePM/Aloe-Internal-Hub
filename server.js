@@ -6,11 +6,6 @@ import { spawn } from 'child_process';
 
 import { initPlaidRoutes } from './plaid-integration.js';
 
-initPlaidRoutes(app);
-
-app.get('/bank-setup', (req, res) => 
-  res.sendFile(new URL('plaid-setup.html', import.meta.url).pathname)
-);
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -2227,6 +2222,11 @@ app.get('/recon', function(req, res) {
 app.get('/recon-bills', (req, res) =>
    res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
 );
+// Plaid
+initPlaidRoutes(app);
+app.get('/bank-setup', function(req, res) {
+  res.sendFile(new URL('plaid-setup.html', import.meta.url).pathname);
+});
 app.get('/debug/pet-test', async function(req, res) {
   try {
     const cards = await getUnitsCards();
