@@ -3674,19 +3674,27 @@ ${about || 'N/A'}`;
     let slackOk = false;
     let emailOk = false;
 
-    // Try Slack first (most reliable — no API key setup needed beyond the webhook)
-    if (process.env.SLACK_VENDOR_WEBHOOK) {
-      try {
-        const slackResp = await fetch(process.env.SLACK_VENDOR_WEBHOOK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: slackText })
-        });
-        slackOk = slackResp.ok;
-      } catch(e) {
-        console.error('Slack vendor webhook error:', e.message);
-      }
-    }
+    // Try Slack via API (uses existing SLACK_TOKEN — no webhook needed)
+if (process.env.SLACK_TOKEN) {
+  try {
+    const slackResp = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.SLACK_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channel: 'C07CY9SSF7D',  // #vendors
+        text: slackText
+      })
+    });
+    const slackData = await slackResp.json();
+    slackOk = slackData.ok;
+    if (!slackData.ok) console.error('Slack postMessage error:', slackData.error);
+  } catch(e) {
+    console.error('Slack vendor error:', e.message);
+  }
+}
 
     // Try Resend email (requires RESEND_API_KEY)
     if (process.env.RESEND_API_KEY) {
@@ -3698,7 +3706,7 @@ ${about || 'N/A'}`;
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            from: 'Vendor Applications <noreply@aloepm.com>',
+            from: 'Vendor Applications <onboarding@resend.dev>',
             to: ['info@aloepm.com'],
             reply_to: email,
             subject: `Vendor Application — ${business}`,
