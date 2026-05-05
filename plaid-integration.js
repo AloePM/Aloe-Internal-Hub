@@ -34,9 +34,9 @@ const ACCESS_TOKENS = {
 };
 
 const ACCOUNT_MAP = {
-  trust:    { name: 'Rental Trust Account',    rvId: '129', number: '1000' },
-  security: { name: 'Security Deposit Account', rvId: '130', number: '1100' },
-  employee: { name: 'Employee Trust',           rvId: '149', number: '3100' },
+  trust:    { name: 'Rental Trust Account',    rvId: '129', number: '1000', mask: '3221' },
+  security: { name: 'Security Deposit Account', rvId: '130', number: '1100', mask: '3248' },
+  employee: { name: 'Employee Trust',           rvId: '149', number: '3100', mask: '0327' },
 };
 
 async function plaidPost(endpoint, body) {
@@ -112,8 +112,20 @@ export function initPlaidRoutes(app) {
         options: { count: 500, offset: 0, include_personal_finance_category: true },
       });
 
+      // Find the specific account_id matching our mask for this account slot
+      const targetMask = ACCOUNT_MAP[account_key]?.mask;
+      const matchedAccount = targetMask
+        ? data.accounts?.find(a => a.mask === targetMask)
+        : data.accounts?.[0];
+      const targetAccountId = matchedAccount?.account_id;
+
+      // Filter to only transactions from the matching account
+      const filtered = targetAccountId
+        ? data.transactions.filter(t => t.account_id === targetAccountId)
+        : data.transactions;
+
       // Normalize to the same shape the recon tool expects
-      const normalized = data.transactions.map(t => ({
+      const normalized = filtered.map(t => ({
         date: t.date,
         description: t.name || t.merchant_name || '',
         amount: Math.abs(t.amount),
@@ -122,6 +134,7 @@ export function initPlaidRoutes(app) {
         pending: t.pending,
         category: t.personal_finance_category?.primary || '',
         transactionId: t.transaction_id,
+        accountMask: matchedAccount?.mask || '',
       }));
 
       res.json({
@@ -143,9 +156,20 @@ export function initPlaidRoutes(app) {
       if (!token) { results[key] = { connected: false }; continue; }
       try {
         const data = await plaidPost('/accounts/balance/get', { access_token: token });
+        // Find the specific sub-account matching our mask
+        const targetMask = ACCOUNT_MAP[key]?.mask;
+        const matched = targetMask
+          ? data.accounts?.find(a => a.mask === targetMask)
+          : data.accounts?.[0];
         results[key] = {
           connected: true,
           name: ACCOUNT_MAP[key].name,
+          // Primary balance — the correct sub-account
+          available: matched?.balances?.available ?? null,
+          current: matched?.balances?.current ?? null,
+          accountName: matched?.name || null,
+          mask: matched?.mask || null,
+          // All accounts on this token for reference
           accounts: data.accounts.map(a => ({
             name: a.name,
             mask: a.mask,
@@ -153,6 +177,7 @@ export function initPlaidRoutes(app) {
             current: a.balances.current,
             type: a.type,
             subtype: a.subtype,
+            isTarget: a.mask === targetMask,
           })),
         };
       } catch (e) {
