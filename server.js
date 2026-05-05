@@ -3683,5 +3683,57 @@ ${about || 'N/A'}
     res.status(500).json({ error: 'Failed to submit application' });
   }
 });
+// Vendor application form submission
+app.post('/api/vendor-apply', async (req, res) => {
+  try {
+    const { business, name, phone, email, trade, license, area, insurance, about } = req.body;
+
+    const emailBody = `New Vendor Application
+
+Business: ${business}
+Contact: ${name}
+Phone: ${phone}
+Email: ${email}
+Trade: ${trade}
+License/ROC: ${license || 'N/A'}
+Service Area: ${area || 'N/A'}
+Insurance: ${insurance}
+
+About:
+${about || 'N/A'}`;
+
+    // Send email via Resend
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'Vendor Applications <noreply@aloepm.com>',
+        to: ['info@aloepm.com'],
+        reply_to: email,
+        subject: `Vendor Application — ${business}`,
+        text: emailBody
+      })
+    });
+
+    // Slack notification to #vendors
+    if (process.env.SLACK_VENDOR_WEBHOOK) {
+      await fetch(process.env.SLACK_VENDOR_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade}\n*Insurance:* ${insurance}\n*Area:* ${area || 'N/A'}`
+        })
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Vendor apply error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
