@@ -3,6 +3,7 @@ import cors from 'cors';
 import fetch from 'node-fetch';
 import Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'child_process';
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -12,7 +13,6 @@ app.use('/api/chat', (req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
-
 
 app.get('/metrics', (req, res) => {
     res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
@@ -28,7 +28,6 @@ app.get('/vacancy-risk', (req, res) => {
 // Route to serve the HOA filler UI
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
-
 
 app.post('/api/hoa/fill', async (req, res) => {
   const input = JSON.stringify(req.body);
@@ -1683,8 +1682,8 @@ function getRelevantTools(msg) {
 
   if (msg.match(/tenant|owe|balance|ledger|payment|charge|rent|deposit|past.?due|unpaid|how much/)) {
     ['rv_get_leases', 'rv_get_ledger', 'rv_get_transactions'].forEach(function(t) { tools.add(t); });
-  }
-if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready|pet|dog|cat|animal/)) {    if (msg.match(/\d{3,6}/)) {
+  } if (msg.match(/availab|unit|vacant|propert|homes?|house|bed|bath|address|\d{4,5}|tour|showing|work.?done|inspect|ready|make.?ready|pet|dog|cat|animal/)) {
+   if (msg.match(/\d{3,6}/)) {
       ['rv_get_properties', 'rv_get_units'].forEach(function(t) { tools.add(t); });
     }
     ['aptly_get_board_cards', 'aptly_search_cards'].forEach(function(t) { tools.add(t); });
@@ -1807,8 +1806,7 @@ app.post('/api/chat', async function(req, res) {
             body: JSON.stringify({
               model: 'claude-sonnet-4-20250514',
               max_tokens: 600,
-              system: `You are a maintenance cost advisor for Aloe Property Management in Phoenix, AZ.
-Use the benchmark data below to evaluate vendor quotes. Always give a clear verdict:
+              system: `You are a maintenance cost advisor for Aloe Property Management in Phoenix, AZ. Use the benchmark data below to evaluate vendor quotes. Always give a clear verdict:
 ✅ APPROVE — price is within typical range
 ⚠️ HIGH BUT ACCEPTABLE — above typical but still reasonable, use judgment
 ❌ GET ANOTHER QUOTE — price is too high, request additional bids
@@ -2051,966 +2049,6 @@ BENCHMARK DATA:
       }
     }
 
-    // Server-side shortcut for new/recently onboarded properties
-    const isOnboardQ = lowerMsg.match(/onboard|new prop|recently add|new.*unit|unit.*new|propert.*add|add.*propert|when.*add|portfolio.*grow|grow.*portfolio/);
-    if (isOnboardQ) {
-      try {
-        const daysMatch = lowerMsg.match(/(\d+)\s*(?:day|week|month)/);
-        let daysBack = 90;
-        if (daysMatch) {
-          const n = parseInt(daysMatch[1]);
-          if (lowerMsg.includes('week')) daysBack = n * 7;
-          else if (lowerMsg.includes('month')) daysBack = n * 30;
-          else daysBack = n;
-        }
-        const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        const locSchema = await unitsFetch('/api/schema/location');
-        const locMap = {};
-        if (Array.isArray(locSchema)) locSchema.forEach(function(f) { locMap[f.key] = f.label; });
-        let allLocations = [];
-        let page = 0;
-        while (true) {
-          const data = await unitsFetch('/api/board/location', { page, pageSize: 100 });
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          allLocations = allLocations.concat(batch);
-          if (batch.length < 100) break;
-          page++;
-        }
-        const mapped = allLocations.map(function(card) {
-          const m = {};
-          Object.keys(card).forEach(function(k) { m[locMap[k] || k] = card[k]; });
-          return m;
-        });
-        const parseDate = function(raw) {
-          if (!raw) return null;
-          const mmdd = String(raw).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          if (mmdd) { try { return new Date(mmdd[3]+'-'+mmdd[1].padStart(2,'0')+'-'+mmdd[2].padStart(2,'0')).getTime(); } catch(e) {} }
-          try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
-        };
-        const getOnboardMs = function(c) {
-          return parseDate(c['Date Contract Begins'] || '') || parseDate(c['Created At'] || '') || null;
-        };
-        const newProps = mapped.filter(function(c) {
-          const ms = getOnboardMs(c);
-          return ms !== null && ms > cutoffMs;
-        }).sort(function(a, b) { return (getOnboardMs(b) || 0) - (getOnboardMs(a) || 0); });
-        const extractOwner = function(c) {
-          const raw = c['Owner'] || c['Portfolio'] || '';
-          if (Array.isArray(raw)) return raw.map(function(o) { return typeof o === 'object' ? (o.name || '') : String(o); }).filter(Boolean).join(', ');
-          if (typeof raw === 'object') return raw.name || '';
-          return String(raw || '');
-        };
-        const fmt = function(c) {
-          const addr = c['Street'] || c.name || '?';
-          const city = c['City'] || '';
-          const type = c['Property Type'] || '';
-          const owner = extractOwner(c);
-          const onboardMs = getOnboardMs(c);
-          const onboardDate = onboardMs ? new Date(onboardMs).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
-          const contractDate = parseDate(c['Date Contract Begins'] || '') ? new Date(parseDate(c['Date Contract Begins'])).toLocaleDateString('en-US', {month:'numeric',day:'numeric',year:'numeric'}) : '';
-          return addr + (city ? ', ' + city : '') + (type ? ' (' + type + ')' : '') +
-            (owner ? '\n  Owner: ' + owner : '') +
-            (onboardDate ? '\n  Added: ' + onboardDate : '') +
-            (contractDate ? '\n  Contract started: ' + contractDate : '');
-        };
-        if (newProps.length > 0) {
-          return res.json({ content: [{ type: 'text', text: 'Properties onboarded in the last ' + daysBack + ' days (' + newProps.length + '):\n\n' + newProps.map(fmt).join('\n\n') }] });
-        } else {
-          const withContract = mapped.filter(function(c) { return getOnboardMs(c) !== null; })
-            .sort(function(a, b) { return (getOnboardMs(b) || 0) - (getOnboardMs(a) || 0); });
-          const top = withContract.slice(0, 10);
-          return res.json({ content: [{ type: 'text', text: 'No new properties in last ' + daysBack + ' days. Most recently onboarded by contract date (total: ' + withContract.length + '):\n\n' + top.map(fmt).join('\n\n') }] });
-        }
-      } catch(e) {
-        console.error('Onboard shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for move-ins questions
-    const isMoveInQ = lowerMsg.match(/move.?in|moving in|move ins|movein/) && lowerMsg.match(/upcoming|next week|this week|today|scheduled|coming up|when|what|list|show/);
-    if (isMoveInQ) {
-      try {
-        const schemaData = await unitsFetch('/api/schema/K9mMGGjKgQPqDykaa');
-        const schemaMap = {};
-        if (Array.isArray(schemaData)) schemaData.forEach(function(f) { schemaMap[f.key] = f.label; });
-        let allCards = [];
-        let pg = 0;
-        while (true) {
-          const data = await unitsFetch('/api/board/K9mMGGjKgQPqDykaa', { page: pg, pageSize: 50 });
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          const mapped = batch.map(function(card) {
-            const m = { _stage: card.stage, _cardId: card.cardId };
-            Object.keys(card).forEach(function(k) { m[schemaMap[k] || k] = card[k]; });
-            return m;
-          });
-          allCards = allCards.concat(mapped);
-          if (batch.length < 50) break;
-          pg++;
-          if (pg > 5) break;
-        }
-        const azNow = new Date(Date.now() - 7 * 60 * 60 * 1000);
-        const azToday = new Date(azNow); azToday.setHours(0,0,0,0);
-        const strField = function(v) {
-          if (!v) return '';
-          if (typeof v === 'string') return v;
-          if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || i.label || i.value || '') : String(i); }).filter(Boolean).join(', ');
-          if (typeof v === 'object') return v.name || v.label || v.value || v.amount || '';
-          return String(v);
-        };
-        const parseMoveinDate = function(c) {
-          const raw = strField(c['Mirror Move-In Date'] || c['Mirror Offer Move In'] || '');
-          if (!raw) return null;
-          const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          if (m) { try { return new Date(m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0')).getTime(); } catch(e) {} }
-          try { const ms = new Date(raw).getTime(); return isNaN(ms) ? null : ms; } catch(e) { return null; }
-        };
-        const todayMs = azToday.getTime();
-        let windowStart = todayMs;
-        let windowEnd = todayMs + 14 * 24 * 60 * 60 * 1000;
-        let windowLabel = 'upcoming (next 14 days)';
-        if (lowerMsg.includes('next week')) {
-          const dow = azToday.getDay();
-          const daysToNextMon = dow === 0 ? 1 : 8 - dow;
-          windowStart = todayMs + daysToNextMon * 24 * 60 * 60 * 1000;
-          windowEnd = windowStart + 7 * 24 * 60 * 60 * 1000;
-          windowLabel = 'next week';
-        } else if (lowerMsg.includes('this week')) {
-          const dow = azToday.getDay();
-          windowStart = todayMs - dow * 24 * 60 * 60 * 1000;
-          windowEnd = windowStart + 7 * 24 * 60 * 60 * 1000;
-          windowLabel = 'this week';
-        } else if (lowerMsg.includes('today')) {
-          windowEnd = todayMs + 24 * 60 * 60 * 1000;
-          windowLabel = 'today';
-        }
-        const excluded = /abandoned|moved in/i;
-        const filtered = allCards.filter(function(c) {
-          if (excluded.test(c._stage || '')) return false;
-          const ms = parseMoveinDate(c);
-          return ms !== null && ms >= windowStart && ms < windowEnd;
-        }).sort(function(a, b) { return (parseMoveinDate(a) || 0) - (parseMoveinDate(b) || 0); });
-        const fmt = function(c) {
-          const title = strField(c['Title'] || c.name || '');
-          const titleMatch = title.match(/^\d{2}\/\d{2}\/\d{4}\s+(.+?)\s+\d+\s+[A-Z]/);
-          const residents = titleMatch ? titleMatch[1].replace(/;/g, ' &') : (strField(c['Mirror Residents']) || title);
-          const addr = strField(c['Mirror Address']) || strField(c['Buildings']) || strField(c['Unit']) || '';
-          const date = strField(c['Mirror Move-In Date']) || '';
-          const rentRaw = c['Mirror Rent Amount'];
-          const rent_str = typeof rentRaw === 'object' && rentRaw ? '$' + Number(rentRaw.amount).toLocaleString() : strField(rentRaw).replace('$ ', '$');
-          const stage = c._stage || '';
-          return '• ' + residents + (addr ? '\n  ' + addr : '') +
-            (date ? '\n  Move-in: ' + date : '') +
-            (rent_str ? ' — ' + rent_str + '/mo' : '') +
-            (stage ? ' [' + stage + ']' : '');
-        };
-        const text = filtered.length > 0
-          ? 'Move-ins ' + windowLabel + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n\n')
-          : 'No move-ins found for ' + windowLabel + '. Total active cards: ' + allCards.filter(function(c) { return !excluded.test(c._stage || ''); }).length;
-        return res.json({ content: [{ type: 'text', text }] });
-      } catch(e) {
-        console.error('Move-in shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for recurring category issues across all work orders
-    const isRecurringQ = lowerMsg.match(/recurring|came back|again|multiple.*time|more than once|history.*issue|issue.*history|closed.*work.*order|billed.*work.*order|past.*year|within.*year|how many times|repeat.*hvac|hvac.*repeat|same.*hvac|hvac.*same|hvac.*issue|plumb.*repeat|repeat.*plumb|repeat.*appliance|appliance.*repeat|repeat.*electric|same.*issue.*before|previous.*issue|pattern|trend/);
-    if (isRecurringQ) {
-      try {
-        let catFilter = '';
-        if (lowerMsg.match(/hvac|ac\b|air.?condition|heat/)) catFilter = 'HVAC';
-        else if (lowerMsg.match(/plumb|toilet|drain|leak|pipe/)) catFilter = 'Plumbing';
-        else if (lowerMsg.match(/electric|outlet|light/)) catFilter = 'Electrical';
-        else if (lowerMsg.match(/appliance|fridge|dishwasher|washer|dryer|microwave/)) catFilter = 'Appliance';
-        else if (lowerMsg.match(/roof/)) catFilter = 'Roofing';
-        const daysMatch = lowerMsg.match(/(\d+)\s*(?:day|month|year)/);
-        let daysBack = 730;
-        if (daysMatch) {
-          const n = parseInt(daysMatch[1]);
-          if (lowerMsg.includes('month')) daysBack = n * 30;
-          else if (lowerMsg.includes('year')) daysBack = n * 365;
-          else daysBack = n;
-        }
-        const cutoffMs = Date.now() - daysBack * 24 * 60 * 60 * 1000;
-        const categorizeRV = function(desc) {
-          const d = (desc || '').toLowerCase();
-          if (/ac|hvac|heat|cool|air.?condition|furnace|duct|compressor/i.test(d)) return 'HVAC';
-          if (/roof|shingle|tile.*roof/i.test(d)) return 'Roofing';
-          if (/plumb|toilet|drain|faucet|water.*heat|pipe|sewage|clog|leak/i.test(d)) return 'Plumbing';
-          if (/electric|outlet|light|breaker|switch|wir/i.test(d)) return 'Electrical';
-          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/i.test(d)) return 'Appliance';
-          if (/pest|bug|termite|rodent/i.test(d)) return 'Pest Control';
-          if (/landscap|lawn|yard|tree|palm|sprinkler/i.test(d)) return 'Landscaping';
-          if (/pool|spa/i.test(d)) return 'Pool';
-          return 'General';
-        };
-        const propIdToAddr = {};
-        try {
-          let propPage = 1;
-          while (true) {
-            const propData = await rvFetch('/properties/export', { pageSize: 200, page: propPage });
-            const propBatch = Array.isArray(propData) ? propData : (propData && propData.data) || [];
-            propBatch.forEach(function(p) {
-              const prop = p.property || p;
-              if (prop.propertyID && prop.address) propIdToAddr[String(prop.propertyID)] = prop.address;
-            });
-            if (propBatch.length < 200) break;
-            propPage++;
-          }
-        } catch(e) {}
-        let allWOs = [];
-        for (let pg = 1; pg <= 25; pg++) {
-          const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
-          const batch = Array.isArray(d) ? d : (d && d.data) || [];
-          if (batch.length === 0) break;
-          allWOs = allWOs.concat(batch);
-          if (batch.length < 100) break;
-          const lastRec = batch[batch.length - 1];
-          const lastCreated = ((lastRec.workOrder || lastRec).dateTimeCreated || '');
-          if (lastCreated && new Date(lastCreated).getTime() < cutoffMs) break;
-        }
-        const normalizeAddr2 = function(s) {
-          return (s || '').toLowerCase()
-            .replace(/\s+/g, ' ')
-            .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr').replace(/\bavenue\b/g, 'ave')
-            .replace(/\blane\b/g, 'ln').replace(/\broad\b/g, 'rd').replace(/\bcourt\b/g, 'ct')
-            .replace(/\bplace\b/g, 'pl').replace(/\bway\b/g, 'wy').replace(/\bcircle\b/g, 'cir')
-            .replace(/\bnorth\b/g, 'n').replace(/\bsouth\b/g, 's').replace(/\beast\b/g, 'e').replace(/\bwest\b/g, 'w')
-            .replace(/[,#]/g, '').trim();
-        };
-        const byAddrCat = {};
-        allWOs.forEach(function(rec) {
-          const rawAddr = (rec.unit && (rec.unit.address || rec.unit.name)) ||
-                          (rec.property && (rec.property.address || rec.property.name)) || '';
-          const wo = rec.workOrder || rec;
-          const propId = String(wo.propertyID || wo.unitID || '');
-          const resolvedAddr = rawAddr || (propId && propIdToAddr[propId]) || '';
-          const groupKey = resolvedAddr || (propId ? 'propID:' + propId : '');
-          if (!groupKey) return;
-          const displayAddr = resolvedAddr || ('Property #' + propId);
-          const addrKey = rawAddr ? normalizeAddr2(rawAddr) : groupKey;
-          const created = wo.dateTimeCreated ? new Date(wo.dateTimeCreated).getTime() : 0;
-          if (created < cutoffMs) return;
-          const desc = (wo.description || '').replace(/<[^>]+>/g, ' ');
-          const cat = categorizeRV(desc);
-          if (catFilter && cat !== catFilter) return;
-          const key = addrKey + '||' + cat;
-          if (!byAddrCat[key]) byAddrCat[key] = { addr: displayAddr, cat, wos: [] };
-          const statusMap = { '1': 'New', '2': 'In Progress', '3': 'On Hold', '4': 'Completed', '5': 'Cancelled' };
-          byAddrCat[key].wos.push({
-            num: wo.workOrderNumber,
-            desc: desc.replace(/\s+/g, ' ').trim().slice(0, 60),
-            status: statusMap[String(wo.primaryWorkOrderStatusID)] || 'Unknown',
-            date: (wo.dateTimeCreated || '').slice(0, 10),
-            vendor: (rec.contact && rec.contact.name) || 'Unassigned',
-          });
-        });
-        const flagged = Object.values(byAddrCat)
-          .filter(function(e) { return e.wos.length >= 2; })
-          .sort(function(a, b) { return b.wos.length - a.wos.length; });
-        if (flagged.length === 0) {
-          return res.json({ content: [{ type: 'text', text: 'No properties found with recurring ' + (catFilter || '') + ' work orders in the last ' + daysBack + ' days.' }] });
-        }
-        const label = catFilter ? catFilter + ' recurring issues' : 'Recurring issue patterns';
-        const lines = flagged.map(function(e) {
-          const woLines = e.wos.sort(function(a,b){ return b.date.localeCompare(a.date); })
-            .map(function(w) { return '  #' + w.num + ' ' + w.date + ' | ' + w.desc + ' | ' + w.status + ' | ' + w.vendor; }).join('\n');
-          return e.addr + ' — ' + e.wos.length + ' ' + e.cat + ' WOs:\n' + woLines;
-        });
-        return res.json({ content: [{ type: 'text', text: label + ' in the last ' + daysBack + ' days (' + flagged.length + ' properties):\n\n' + lines.join('\n\n') }] });
-      } catch(e) {
-        console.error('Recurring shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for repeat issues / cross-property patterns (open WOs only)
-    const isRepeatQ = lowerMsg.match(/repeat.*issue|issue.*repeat|same.*issue|same.*problem|multiple.*work.*order|same.*type|issue.*type|category|any.*propert.*same/);
-    if (isRepeatQ) {
-      try {
-        let allWOs = [];
-        let page = 0;
-        while (true) {
-          const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100 });
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          allWOs = allWOs.concat(batch);
-          if (batch.length < 100) break;
-          if (page >= 2) break;
-          page++;
-        }
-        const categorize = function(c) {
-          const trade = (c.vendorTrade || '').toLowerCase();
-          const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').toLowerCase();
-          if (/ac|hvac|heat|cool|air.?condition|furnace|duct/i.test(desc + trade)) return 'HVAC';
-          if (/roof|leak.*roof|roof.*leak|shingle|tile.*roof/i.test(desc + trade)) return 'Roofing';
-          if (/plumb|toilet|drain|faucet|water.*heat|pipe|sewage|clog|leak/i.test(desc + trade)) return 'Plumbing';
-          if (/electric|outlet|light|breaker|switch|wir/i.test(desc + trade)) return 'Electrical';
-          if (/appliance|dishwasher|washer|dryer|refrig|microwave|oven|stove|ice.?mak/i.test(desc + trade)) return 'Appliance';
-          if (/pest|bug|termite|rodent|insect|cockroach/i.test(desc + trade)) return 'Pest Control';
-          if (/landscap|lawn|yard|tree|bush|palm|sprinkler|irrigation/i.test(desc + trade)) return 'Landscaping';
-          if (/pool|spa/i.test(desc + trade)) return 'Pool';
-          if (/clean|carpet|paint|patch|drywall/i.test(desc + trade)) return 'Cleaning/Turnover';
-          if (/door|lock|window|blind|screen|garage/i.test(desc + trade)) return 'Door/Window/Lock';
-          if (/fence|gate|patio|deck|exterior/i.test(desc + trade)) return 'Exterior';
-          if (/inspect|walkthrough|walk.?through/i.test(desc)) return 'Inspection';
-          return 'General';
-        };
-        const byAddress = {};
-        allWOs.forEach(function(c) {
-          const locArr = Array.isArray(c.location) ? c.location : [];
-          const unitArr = Array.isArray(c.unit) ? c.unit : [];
-          const addr = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '';
-          if (!addr) return;
-          if (!byAddress[addr]) byAddress[addr] = [];
-          const desc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          byAddress[addr].push({ num: c.workOrderNumber, desc: desc.slice(0, 55), stage: c.stage || '', category: categorize(c) });
-        });
-        const isSameTypeQ = lowerMsg.match(/same.*type|type.*same|category|same.*issue|issue.*type|any.*propert.*same/);
-        if (isSameTypeQ) {
-          const categoryAddresses = {};
-          Object.entries(byAddress).forEach(function(e) {
-            e[1].forEach(function(w) {
-              if (!categoryAddresses[w.category]) categoryAddresses[w.category] = {};
-              if (!categoryAddresses[w.category][e[0]]) categoryAddresses[w.category][e[0]] = 0;
-              categoryAddresses[w.category][e[0]]++;
-            });
-          });
-          const multiProp = Object.entries(categoryAddresses)
-            .filter(function(e) { return Object.keys(e[1]).length >= 2; })
-            .sort(function(a, b) { return Object.keys(b[1]).length - Object.keys(a[1]).length; });
-          if (multiProp.length === 0) {
-            return res.json({ content: [{ type: 'text', text: 'No issue categories currently appear across multiple properties.' }] });
-          }
-          const lines = multiProp.map(function(e) {
-            const cat = e[0], addrs = e[1];
-            const addrLines = Object.entries(addrs).map(function(a) { return '  ' + a[0] + ' (' + a[1] + ' WO' + (a[1] > 1 ? 's' : '') + ')'; }).join('\n');
-            return cat + ' — ' + Object.keys(addrs).length + ' properties:\n' + addrLines;
-          });
-          return res.json({ content: [{ type: 'text', text: 'Issue categories affecting multiple properties:\n\n' + lines.join('\n\n') }] });
-        }
-        const repeats = Object.entries(byAddress)
-          .filter(function(e) { return e[1].length >= 2; })
-          .sort(function(a, b) { return b[1].length - a[1].length; });
-        if (repeats.length === 0) {
-          return res.json({ content: [{ type: 'text', text: 'No properties have multiple open work orders currently.' }] });
-        }
-        const lines = repeats.map(function(e) {
-          const addr = e[0], wos = e[1];
-          const woList = wos.map(function(w) { return '  #' + w.num + ' [' + w.category + '] ' + w.desc + ' (' + w.stage + ')'; }).join('\n');
-          return addr + ' (' + wos.length + ' open WOs):\n' + woList;
-        });
-        return res.json({ content: [{ type: 'text', text: 'Properties with multiple open work orders (' + repeats.length + ' properties):\n\n' + lines.join('\n\n') }] });
-      } catch(e) {
-        console.error('Repeat issues shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for work order comment intelligence
-    const isWOCommentQ = lowerMsg.match(/comment|no comment|no note|follow.?up|without comment|has comment|have comment|vendor.*said|vendor.*update|waiting|blocked|overdue.*comment|need.*follow/) &&
-      (lowerMsg.match(/work.?order/) || lowerMsg.match(/[0-9]{3,5}\s+\w+.*(?:drive|street|ave|lane|road|way|court|place|blvd|trail|circle)/i));
-    if (isWOCommentQ) {
-      try {
-        const wantNoComments = lowerMsg.match(/no comment|no note|without comment|haven.t|not have|lacking|no follow/);
-        const wantFollowUp = lowerMsg.match(/follow.?up|overdue|need.*action|past.*date|need.*response/);
-        const wantVendorUpdates = lowerMsg.match(/vendor.*said|vendor.*update|vendor.*note|what.*vendor|vendor.*comment/);
-        const wantWaiting = lowerMsg.match(/waiting|blocked|on hold|waiting for|pending/);
-        const addrMatch = lowerMsg.match(/(?:for|at|on)\s+([0-9]+\s+[a-z].{5,40}?)(?:\?|$)/i) ||
-                          lowerMsg.match(/([0-9]{3,5}\s+(?:west|east|north|south|w\.|e\.|n\.|s\.)?.{5,35}?)(?:\?|$)/i);
-        let allWOs = [];
-        let pg = 0;
-        while (true) {
-          const data = await unitsFetch('/api/board/workOrder', { page: pg, pageSize: 100, includeArchived: false });
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
-          allWOs = allWOs.concat(active);
-          if (batch.length < 100) break;
-          if (pg >= 1) break;
-          pg++;
-        }
-        if (addrMatch) {
-          const q = addrMatch[1].toLowerCase().trim().split(' ').slice(0,3).join(' ');
-          const filtered = allWOs.filter(function(c) {
-            const locArr = Array.isArray(c.location) ? c.location : [];
-            const unitArr = Array.isArray(c.unit) ? c.unit : [];
-            const addr = ((locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '').toLowerCase();
-            return addr.includes(q);
-          });
-          if (filtered.length > 0) allWOs = filtered;
-        }
-        const cardsToCheck = allWOs;
-        const commentResults = await Promise.all(cardsToCheck.map(async function(c) {
-          try {
-            const data = await unitsFetch('/api/board/workOrder/' + c.cardId + '/comments');
-            return { cardId: c.cardId, comments: Array.isArray(data) ? data : (data && data.data) || [] };
-          } catch(e) { return { cardId: c.cardId, comments: [] }; }
-        }));
-        const commentsMap = {};
-        commentResults.forEach(function(r) { commentsMap[r.cardId] = r.comments; });
-        const todayMs = Date.now();
-        const todayStr = new Date(todayMs - 7*60*60*1000).toISOString().slice(0,10);
-        const getAddr = function(c) {
-          const l = Array.isArray(c.location) ? c.location : []; const u = Array.isArray(c.unit) ? c.unit : [];
-          return (l[0] && l[0].name) || (u[0] && u[0].name) || '?';
-        };
-        const getVendor = function(c) {
-          const v = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
-          return (v[0] && v[0].name) || 'Unassigned';
-        };
-        const getDesc = function(c) {
-          return (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g,' ').trim().split(/\s+/).slice(0,5).join(' ');
-        };
-        const getSchedDate = function(c) {
-          const key = 'appointmentWindowStartDateTime';
-          const raw = c[key] || '';
-          return raw ? String(raw).slice(0,10) : '';
-        };
-        const isAddressSpecific = !!(addrMatch && addrMatch[1].length > 5);
-        if (isAddressSpecific) {
-          const lines = allWOs.map(function(s) {
-            const addr = getAddr(s);
-            const comments = commentsMap[s.cardId] || [];
-            const desc = getDesc(s);
-            const vendor = getVendor(s);
-            const header = addr + ' — WO #' + (s.workOrderNumber||'') + ' | ' + desc + ' | ' + (s.stage||'') + ' | ' + vendor;
-            const commentLines = comments.length > 0
-              ? comments.map(function(cm) { return '  → ' + (cm.userName||'Unknown') + ' (' + (cm.createdAt||'').slice(0,10) + '): ' + (cm.content||'').slice(0,150); }).join('\n')
-              : '  (no comments yet)';
-            return header + '\n' + commentLines;
-          });
-          return res.json({ content: [{ type: 'text', text: 'Work order comments for ' + (addrMatch[1]||'property') + ':\n\n' + lines.join('\n\n') }] });
-        }
-        const scored = allWOs.map(function(c) {
-          const comments = commentsMap[c.cardId] || [];
-          const commentCount = comments.length;
-          const lastComment = comments.length > 0 ? comments[comments.length-1] : null;
-          const lastCommentDate = lastComment ? (lastComment.createdAt || '').slice(0,10) : '';
-          const lastCommentText = lastComment ? (lastComment.content || '').slice(0,120) : '';
-          const lastCommentUser = lastComment ? (lastComment.userName || 'Unknown') : '';
-          const daysSinceComment = lastCommentDate ? Math.floor((todayMs - new Date(lastCommentDate).getTime()) / 86400000) : null;
-          const schedDate = getSchedDate(c);
-          const isPastSched = schedDate && schedDate < todayStr;
-          const created = c.createdAt ? new Date(c.createdAt).getTime() : 0;
-          const daysOpen = created ? Math.floor((todayMs - created) / 86400000) : 0;
-          const allCommentText = comments.map(function(cm) { return (cm.content||'').toLowerCase(); }).join(' ');
-          const isWaiting = /waiting|wait for|on hold|parts.*order|parts.*coming|order.*part|approval|awaiting/.test(allCommentText);
-          const vendorComments = comments.filter(function(cm) {
-            return !(cm.userName||'').match(/dhyana|roberto|persia|randi|alexes|teri|juan/i);
-          });
-          return {
-            c, addr: getAddr(c), vendor: getVendor(c), desc: getDesc(c),
-            commentCount, lastCommentDate, lastCommentText, lastCommentUser,
-            daysSinceComment, schedDate, isPastSched, daysOpen, isWaiting,
-            vendorComments, allCommentText,
-          };
-        });
-        let results = [];
-        let label = '';
-        if (wantNoComments) {
-          results = scored.filter(function(s) { return s.commentCount === 0; });
-          label = 'Work orders with NO comments (' + results.length + ' of ' + scored.length + ')';
-        } else if (wantFollowUp) {
-          results = scored.filter(function(s) {
-            return s.isPastSched || (s.daysOpen >= 7 && (s.daysSinceComment === null || s.daysSinceComment >= 3));
-          }).sort(function(a,b) { return (b.daysOpen||0) - (a.daysOpen||0); });
-          label = 'Work orders needing follow-up (' + results.length + ' of ' + scored.length + ')';
-        } else if (wantWaiting) {
-          results = scored.filter(function(s) { return s.isWaiting || /waiting|wait.*for|on hold/i.test(s.c.stage||''); });
-          label = 'Work orders waiting/blocked (' + results.length + ' of ' + scored.length + ')';
-        } else if (wantVendorUpdates) {
-          results = scored.filter(function(s) { return s.vendorComments.length > 0; });
-          label = 'Work orders with vendor comments (' + results.length + ' of ' + scored.length + ')';
-        } else {
-          results = scored.filter(function(s) { return s.commentCount > 0; });
-          label = 'Work orders with comments (' + results.length + ' of ' + scored.length + ')';
-        }
-        const lines = results.map(function(s) {
-          const header = s.addr + ' — WO #' + (s.c.workOrderNumber||'') + ' | ' + s.desc + ' | ' + (s.c.stage||'') + ' | ' + s.vendor;
-          const meta = [];
-          if (s.daysOpen) meta.push(s.daysOpen + ' days open');
-          if (s.schedDate) meta.push('Sched: ' + s.schedDate + (s.isPastSched ? ' ⚠️ PAST' : ''));
-          if (s.daysSinceComment !== null) meta.push('Last comment: ' + s.daysSinceComment + ' days ago');
-          if (s.isWaiting) meta.push('⏳ Waiting');
-          const metaLine = meta.length > 0 ? '  [' + meta.join(' | ') + ']' : '';
-          let commentLine = '';
-          if (s.lastCommentText) {
-            commentLine = '  → ' + s.lastCommentUser + ' (' + s.lastCommentDate + '): ' + s.lastCommentText;
-          }
-          return header + (metaLine ? '\n' + metaLine : '') + (commentLine ? '\n' + commentLine : '');
-        });
-        return res.json({ content: [{ type: 'text', text: label + ':\n\n' + lines.join('\n\n') }] });
-      } catch(e) {
-        console.error('WO comment shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for work order questions — formats output directly
-    const isWOQ = !lowerMsg.match(/comment|note|follow.?up/) &&
-      lowerMsg.match(/work.?order|work order/) && lowerMsg.match(/open|list|show|what|which|over|past|days|unassign|vendor|address|all|scheduled|start|most|property|home|propert/);
-    if (isWOQ) {
-      try {
-        let schedKey = null;
-        try {
-          const woSchema = await unitsFetch('/api/schema/workOrder');
-          const woMap = {};
-          if (Array.isArray(woSchema)) woSchema.forEach(function(f) { if (f && f.label) woMap[f.label] = f.key; });
-          schedKey = woMap['Appointment Window Start'] || woMap['Scheduled Start Date'] || woMap['Start Date'] || woMap['Scheduled Date'] || null;
-        } catch(schemaErr) {}
-        let allWOs = [];
-        let page = 0;
-        while (true) {
-          const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
-          allWOs = allWOs.concat(active);
-          if (batch.length < 100) break;
-          if (page >= 1) break;
-          page++;
-        }
-        const now = Date.now();
-        const todayStr = new Date(now - 7*60*60*1000).toISOString().slice(0, 10);
-        const wos = allWOs.map(function(c) {
-          const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
-          const daysOpen = created ? Math.floor((now - created) / 86400000) : 0;
-          const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
-          const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
-          const address = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '?';
-          const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
-          const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
-          const rawDesc = c.description || c.name || '?';
-          const cleanDesc = rawDesc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-          const schedRaw = schedKey ? (c[schedKey] || '') : '';
-          const schedDate = schedRaw ? String(schedRaw).slice(0, 10) : '';
-          const isPastScheduled = schedDate ? schedDate < todayStr : false;
-          return {
-            address, num: c.workOrderNumber || '',
-            issue: cleanDesc.split(/\s+/).slice(0, 6).join(' '),
-            fullDesc: cleanDesc,
-            status: c.stage || '', daysOpen, vendor,
-            trade: (Array.isArray(c.vendorTrade) ? (c.vendorTrade[0]||'') : (c.vendorTrade||'')),
-            schedDate, isPastScheduled,
-          };
-        });
-
-        const daysMatch = lowerMsg.match(/over\s+(\d+)\s*day|(\d+)\s*day/);
-        const daysFilter = daysMatch ? parseInt(daysMatch[1] || daysMatch[2]) : null;
-        const unassignedOnly = lowerMsg.match(/unassign/);
-        const unscheduledOnly = lowerMsg.match(/not.*schedul|no.*schedul|without.*schedul|haven.t.*schedul|no.*appoint|no.*start.*date|missing.*schedul|need.*schedul/);
-        const pastScheduled = lowerMsg.match(/past.*sched|sched.*past|past.*start|overdue|past their/) && !unscheduledOnly;
-        const vendorSummary = lowerMsg.match(/vendor.*most|most.*vendor|vendor.*count|how many.*vendor|vendor.*how many|vendor.*list|which vendor|per vendor|by vendor|vendor.*amount|amount.*vendor|vendor.*breakdown|breakdown.*vendor/);
-        const propertySummary = lowerMsg.match(/most.*work.*order|work.*order.*most|most.*submit|submit.*most|most.*open|propert.*most|home.*most|which.*home|which.*propert|by.*property|per.*property|property.*count|address.*most/);
-        const categorize = function(issue, vendor, trade) {
-          const t = ((issue||'') + ' ' + (vendor||'') + ' ' + (trade||'')).toLowerCase();
-          if (/pest|termite|rodent|insect|cockroach|t2 pest|bug.*infestation/.test(t)) return 'Pest Control';
-          if (/\bpool\b|\bspa\b/.test(t)) return 'Pool';
-          if (/\bac\b|hvac|air.?condition|heat pump|furnace|ductwork|compressor|coolant|freon|ac unit|ac not work|air.*not.*cool/.test(t)) return 'HVAC';
-          if (/tune.?up.*owner|tune.?up.*unit|mac.?s air|air cooling/.test(t)) return 'HVAC';
-          if (/dishwasher|washing machine|washer|dryer|refriger|fridge|microwave|oven|stove|ice.?mak|appliance|freezer/.test(t)) return 'Appliance';
-          if (/roof|shingle|tile.*roof|roofing|roof.*damage/.test(t)) return 'Roofing';
-          if (/plumb|toilet|drain|faucet|water.?heat|pipe|sewage|clog|leak|sprinkler|irrigation|water.*not.*work|running water/.test(t)) return 'Plumbing';
-          if (/electric|outlet|\blight\b|\blights\b|breaker|switch|wiring|ceiling fan/.test(t)) return 'Electrical';
-          if (/landscap|lawn|\byard\b|\btree\b|\bpalm\b|trim.*branch|weed|sunrise landscape|rain or shine/.test(t)) return 'Landscaping';
-          if (/clean|carpet|paint|drywall|patch|power.?wash/.test(t)) return 'Cleaning';
-          if (/\bdoor\b|lock|window|blind|screen|garage.*door|garage.*opener|sliding.*door/.test(t)) return 'Door/Window/Lock';
-          if (/fence|gate|patio|deck|exterior|siding/.test(t)) return 'Exterior';
-          if (/inspect|walkthrough|walk.?through/.test(t)) return 'Inspection';
-          return 'General';
-        };
-        const isEmergencyQ = lowerMsg.match(/emergency|urgent|flood|critical|disaster|no heat|no hot water|lock.?out/);
-        let catFilter = null;
-        if (/pest|termite|rodent|insect/.test(lowerMsg)) catFilter = 'Pest Control';
-        else if (/\bhvac\b|\bac\b|air.?condition|furnace|heat pump/.test(lowerMsg)) catFilter = 'HVAC';
-        else if (/plumb|toilet|drain|water.*heat|clog/.test(lowerMsg)) catFilter = 'Plumbing';
-        else if (/electric|outlet|\blight\b|breaker/.test(lowerMsg)) catFilter = 'Electrical';
-        else if (/appliance|dishwasher|fridge|refriger|microwave|washer|dryer|ice.?mak|freezer/.test(lowerMsg)) catFilter = 'Appliance';
-        else if (/\broof\b/.test(lowerMsg)) catFilter = 'Roofing';
-        else if (/landscap|lawn|\byard\b|sprinkler|\btree\b|\bpalm\b/.test(lowerMsg)) catFilter = 'Landscaping';
-        else if (/\bpool\b|\bspa\b/.test(lowerMsg)) catFilter = 'Pool';
-        else if (/\bgarage\b|window|blind|screen/.test(lowerMsg) && !/work order/.test(lowerMsg)) catFilter = 'Door/Window/Lock';
-        else if (/inspect|walkthrough/.test(lowerMsg)) catFilter = 'Inspection';
-        let filtered = wos;
-        if (isEmergencyQ) {
-          const emergencyPatterns = /leak|flood|burst|no heat|no hot water|no cool|no ac|lock.*out|can.t.*lock|can.t.*enter|gas.*leak|gas.*smell|no power|sewage|overflow|water.*damage|emergency|urgent/i;
-          filtered = wos.filter(function(w) { return emergencyPatterns.test(w.fullDesc); });
-          if (filtered.length === 0) {
-            filtered = wos.filter(function(w) {
-              const cat = categorize(w.fullDesc, w.vendor, w.trade);
-              return (cat === 'HVAC' || cat === 'Plumbing') && w.daysOpen <= 3;
-            });
-          }
-        } else if (unscheduledOnly) {
-          filtered = wos.filter(function(w) { return !w.schedDate; });
-        } else if (catFilter) {
-          filtered = wos.filter(function(w) { return categorize(w.fullDesc, w.vendor, w.trade) === catFilter; });
-        } else if (pastScheduled) {
-          filtered = wos.filter(function(w) { return w.isPastScheduled; });
-          if (filtered.length === 0 && !schedKey) filtered = wos.filter(function(w) { return /scheduled/i.test(w.status); });
-        } else if (daysFilter) {
-          filtered = wos.filter(function(w) { return w.daysOpen > daysFilter; });
-        } else if (unassignedOnly) {
-          filtered = wos.filter(function(w) { return w.vendor === 'Unassigned'; });
-        }
-        filtered.sort(function(a, b) { return b.daysOpen - a.daysOpen; });
-        if (propertySummary) {
-          const propCounts = {};
-          wos.forEach(function(w) { if (w.address && w.address !== '?') propCounts[w.address] = (propCounts[w.address] || 0) + 1; });
-          const sorted = Object.entries(propCounts).sort(function(a, b) { return b[1] - a[1]; });
-          const lines = sorted.map(function(e) { return e[0] + ': ' + e[1] + ' work order' + (e[1] !== 1 ? 's' : ''); });
-          return res.json({ content: [{ type: 'text', text: 'Open work orders by property (' + wos.length + ' total):\n\n' + lines.join('\n') }] });
-        }
-        if (vendorSummary) {
-          const vendorCounts = {};
-          wos.forEach(function(w) { vendorCounts[w.vendor] = (vendorCounts[w.vendor] || 0) + 1; });
-          const sorted = Object.entries(vendorCounts).sort(function(a, b) { return b[1] - a[1]; });
-          const lines = sorted.map(function(e) { return e[0] + ': ' + e[1] + ' work order' + (e[1] !== 1 ? 's' : ''); });
-          return res.json({ content: [{ type: 'text', text: 'Open work orders by vendor (' + wos.length + ' total):\n\n' + lines.join('\n') }] });
-        }
-        const lines = filtered.map(function(w) {
-          const schedInfo = w.schedDate ? ' | Sched: ' + w.schedDate : '';
-          return w.address + ' — WO #' + w.num + ' | ' + w.issue + ' | ' + w.status + ' | ' + w.daysOpen + ' days' + schedInfo + ' | ' + w.vendor;
-        });
-        const header = isEmergencyQ ? '🚨 Emergency/urgent work orders (' + filtered.length + ' of ' + wos.length + ' total):'
-          : unscheduledOnly ? 'Work orders with no scheduled date (' + filtered.length + ' of ' + wos.length + ' total):'
-          : catFilter ? catFilter + ' work orders (' + filtered.length + ' of ' + wos.length + ' total):'
-          : pastScheduled ? 'Work orders past scheduled start date (' + filtered.length + ' of ' + wos.length + '):'
-          : daysFilter ? 'Work orders open over ' + daysFilter + ' days (' + filtered.length + ' of ' + wos.length + ' total):'
-          : unassignedOnly ? 'Unassigned work orders (' + filtered.length + '):'
-          : 'Open work orders (' + filtered.length + '):';
-        return res.json({ content: [{ type: 'text', text: header + '\n\n' + lines.join('\n') }] });
-      } catch(e) {
-        console.error('WO shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for leasing reports
-    const isLeasingReportQ = lowerMsg.match(/leasing report|leasing update|leasing activity|vacancy report|vacant.*report|report.*vacant|owner.*update.*leas|leas.*update.*owner|days on market|how long.*vacant|how long.*listed|listing.*activity|leas.*last.*week|leas.*last.*month|leas.*this.*week|leas.*this.*month|what.*happening.*leas|showings.*report|leads.*report|update.*owner.*property|property.*update.*owner/);
-    if (isLeasingReportQ) {
-      try {
-        const now = Date.now();
-        const azNow = new Date(now - 7 * 60 * 60 * 1000);
-        let daysBack = 30;
-        if (lowerMsg.match(/last week|this week|past week|7 day/)) daysBack = 7;
-        else if (lowerMsg.match(/last month|this month|past month|30 day/)) daysBack = 30;
-        else if (lowerMsg.match(/last 2 week|14 day/)) daysBack = 14;
-        const cutoffMs = now - daysBack * 24 * 60 * 60 * 1000;
-        const propMatch = lowerMsg.match(/(?:for|at|on)\s+([0-9]+\s+\w.{5,40}?)(?:\?|$)/i) ||
-                          lowerMsg.match(/([0-9]{3,5}\s+(?:west|east|north|south|w |e |n |s ).{5,35}?)(?:\?|$)/i);
-        const propFilter = propMatch ? propMatch[1].toLowerCase().trim() : null;
-        const unitsData = await unitsFetch('/api/board/unit', { page: 0, pageSize: 200, includeArchived: false });
-        let units = Array.isArray(unitsData) ? unitsData : (unitsData && unitsData.data) || [];
-        if (propFilter) {
-          const q = propFilter.split(' ').slice(0, 3).join(' ');
-          units = units.filter(function(u) {
-            return ((u['Address'] || '') + ' ' + (u['Street'] || '') + ' ' + (u.Title || '')).toLowerCase().includes(q);
-          });
-        }
-        const schemaRaw = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
-        const schemaMap = {};
-        if (Array.isArray(schemaRaw)) schemaRaw.forEach(function(f) { schemaMap[f.key] = f.label; });
-        const leadsData = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 200, includeArchived: false });
-        const allLeads = Array.isArray(leadsData) ? leadsData : (leadsData && leadsData.data) || [];
-        const mapLead = function(c) {
-          const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt };
-          Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
-          return m;
-        };
-        const leads = allLeads.map(mapLead).filter(function(l) {
-          return !l.createdAt || new Date(l.createdAt).getTime() > cutoffMs;
-        });
-        const strVal = function(v) {
-          if (!v) return '';
-          if (typeof v === 'string') return v;
-          if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || i.value || '') : i; }).join(', ');
-          if (typeof v === 'object') return v.name || v.value || '';
-          return String(v);
-        };
-        const todayStr = azNow.toISOString().slice(0, 10);
-        const vacantUnits = units.filter(function(u) { return /vacant|available/i.test(u.Stage || ''); });
-        const occupiedUnits = units.filter(function(u) { return /occupied/i.test(u.Stage || ''); });
-        const lines = [];
-        const period = daysBack === 7 ? 'Last 7 days' : daysBack === 14 ? 'Last 14 days' : 'Last 30 days';
-        lines.push('📊 LEASING REPORT — ' + period.toUpperCase() + (propFilter ? ' — ' + propFilter.toUpperCase() : ''));
-        lines.push('Generated: ' + todayStr);
-        lines.push('');
-        if (vacantUnits.length > 0) {
-          lines.push('🏠 VACANT / ACTIVE LISTINGS (' + vacantUnits.length + ')');
-          lines.push('─────────────────────────────────');
-          vacantUnits.forEach(function(u) {
-            const addr = u.Address || u.Street || u.Title || '?';
-            const rent = u['Market Rent'] || '?';
-            const beds = u.Beds || '?';
-            const baths = u.Baths || '?';
-            const availDate = u['Available Date'] || '';
-            const daysOnMarket = availDate ? Math.floor((now - new Date(availDate).getTime()) / 86400000) : null;
-            const owner = u.Owners || u.Portfolio || '';
-            const propLeads = leads.filter(function(l) {
-              const pref = strVal(l['Preferred Rental'] || l['Unit'] || '');
-              return addr && pref && (pref.toLowerCase().includes((u.Street || '').toLowerCase().slice(0, 10)) ||
-                     (u.Street || '').toLowerCase().includes(pref.toLowerCase().slice(0, 10)));
-            });
-            const showings = propLeads.filter(function(l) { return /scheduled tour|tour completed/i.test(l.stage || ''); });
-            const applications = propLeads.filter(function(l) { return /applied|applicant/i.test(l.stage || ''); });
-            const newLeads = propLeads.filter(function(l) { return /nurturing/i.test(l.stage || ''); });
-            lines.push('📍 ' + addr);
-            lines.push('   Rent: ' + rent + ' | ' + beds + 'bd/' + baths + 'ba | Owner: ' + owner);
-            if (availDate) lines.push('   Available: ' + availDate + (daysOnMarket !== null ? ' (' + daysOnMarket + ' days on market)' : ''));
-            lines.push('   Activity (' + period + '): ' + propLeads.length + ' total leads | ' + showings.length + ' showings | ' + applications.length + ' applications | ' + newLeads.length + ' new inquiries');
-            if (showings.length > 0) {
-              showings.slice(0, 3).forEach(function(l) {
-                const name = strVal(l['Primary Contact'] || l['Name']);
-                const info = strVal(l['Requested Showing Information'] || l['Tour Date/Time']);
-                if (name) lines.push('   ↳ Showing: ' + name + (info ? ' — ' + String(info).slice(0, 60) : ''));
-              });
-            }
-            if (applications.length > 0) {
-              applications.slice(0, 3).forEach(function(l) {
-                const name = strVal(l['Primary Contact'] || l['Name']);
-                if (name) lines.push('   ↳ Application: ' + name + ' [' + (l.stage || '') + ']');
-              });
-            }
-            lines.push('');
-          });
-        }
-        const recentlyOccupied = occupiedUnits.filter(function(u) {
-          const stageChanged = u['Stage Changed'] || '';
-          return stageChanged && new Date(stageChanged).getTime() > cutoffMs;
-        });
-        if (recentlyOccupied.length > 0) {
-          lines.push('✅ LEASED IN THIS PERIOD (' + recentlyOccupied.length + ')');
-          lines.push('─────────────────────────────────');
-          recentlyOccupied.forEach(function(u) {
-            const addr = u.Address || u.Street || u.Title || '?';
-            const rent = u['Market Rent'] || '?';
-            const resident = u.Residents || '';
-            const leased = (u['Stage Changed'] || '').slice(0, 10);
-            lines.push('✅ ' + addr + ' — Leased ' + leased + ' @ ' + rent + (resident ? ' — ' + resident : ''));
-          });
-          lines.push('');
-        }
-        lines.push('📈 SUMMARY');
-        lines.push('─────────────────────────────────');
-        lines.push('Total properties tracked: ' + units.length);
-        lines.push('Currently vacant: ' + vacantUnits.length);
-        lines.push('Currently occupied: ' + occupiedUnits.length);
-        lines.push('Leased this period: ' + recentlyOccupied.length);
-        lines.push('New leads this period: ' + leads.length);
-        const totalShowings = leads.filter(function(l) { return /scheduled tour|tour completed/i.test(l.stage || ''); }).length;
-        const totalApps = leads.filter(function(l) { return /applied/i.test(l.stage || ''); }).length;
-        lines.push('Showings this period: ' + totalShowings);
-        lines.push('Applications this period: ' + totalApps);
-        return res.json({ content: [{ type: 'text', text: lines.join('\n') }] });
-      } catch(e) {
-        console.error('Leasing report shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for new leads questions
-    const isLeadsQ = lowerMsg.match(/lead|prospect/) && lowerMsg.match(/new|this week|today|came|recent|incoming|how many|come in|what.*lead|lead.*what/);
-    if (isLeadsQ) {
-      try {
-        const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
-        const schemaMap = {};
-        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
-        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100, updatedAtMin: weekAgo });
-        const raw = Array.isArray(data) ? data : (data && data.data) || [];
-        const extractVal = function(v) {
-          if (!v) return '';
-          if (typeof v === 'string') return v;
-          if (Array.isArray(v)) return v.map(function(x) { return x.name || x; }).join(', ');
-          if (typeof v === 'object') return v.amount ? '$' + v.amount : (v.name || v.value || '');
-          return String(v);
-        };
-        const cards = raw.map(function(card) {
-          const m = { _cardId: card.cardId, name: card.name, stage: card.stage, createdAt: card.createdAt };
-          Object.keys(card).forEach(function(k) {
-            if (schemaMap[k]) m[schemaMap[k]] = extractVal(card[k]);
-          });
-          return m;
-        });
-        const weekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        const newLeads = cards.filter(function(c) {
-          return c.createdAt && new Date(c.createdAt).getTime() > weekAgoMs;
-        });
-        const toShow = newLeads.length > 0 ? newLeads : cards;
-        const fmt = function(c) {
-          const name = (c['Primary Contact'] || c.name || '?').replace(/^Application: /, '');
-          const property = c['Preferred Rental'] || c['Unit'] || '';
-          const source = c['Source'] || c['Lead Type'] || '';
-          const stage = c.stage || c['Stage'] || '';
-          const created = (c.createdAt || '').slice(0, 10);
-          return name + (property ? ' — ' + property : '') + (source ? ' (' + source + ')' : '') + (stage ? ' [' + stage + ']' : '') + (created ? ' ' + created : '');
-        };
-        const label = newLeads.length > 0 ? 'New leads this week (' + newLeads.length + ')' : 'No new leads found this week. Recent leads (' + toShow.length + ')';
-        return res.json({ content: [{ type: 'text', text: label + ':\n\n' + toShow.map(fmt).join('\n') }] });
-      } catch(e) {
-        console.error('Leads shortcut error:', e.message);
-      }
-    }
-
-    // Server-side shortcut for showing schedule questions
-    const isShowingQ = lowerMsg.match(/showing|scheduled tour|who.*tour|tour.*today|showing.*today|today.*showing|past.*tour|recent.*tour|tour.*week|week.*tour|showing.*week|week.*showing/);
-    if (isShowingQ) {
-      try {
-        const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
-        const schemaMap = {};
-        if (Array.isArray(schema)) schema.forEach(function(f) { schemaMap[f.key] = f.label; });
-        const data = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: 0, pageSize: 100 });
-        const allCards = Array.isArray(data) ? data : (data && data.data) || [];
-        const mapCard = function(c) {
-          const m = { _id: c.cardId, stage: c.stage, createdAt: c.createdAt, comments: c.comments };
-          Object.keys(c).forEach(function(k) { if (schemaMap[k]) m[schemaMap[k]] = c[k]; });
-          return m;
-        };
-        const mapped = allCards.map(mapCard);
-        const showingCards = mapped.filter(function(c) {
-          return c['Requested Showing Information'] || c['Tour Date/Time'] ||
-                 /scheduled tour|tour completed|tour canceled/i.test(c.stage || '');
-        });
-        const parseShowingDate = function(c) {
-          const raw = c['Requested Showing Information'];
-          const info = typeof raw === 'string' ? raw : (raw && (raw.value || raw.name || JSON.stringify(raw))) || '';
-          const m = info.match(/\((\d{2}\/\d{2}\/\d{4})/);
-          if (m) return m[1];
-          const td = String(c['Tour Date/Time'] || '').slice(0, 10);
-          return td;
-        };
-        const nowUtc = Date.now();
-        const azOffset = -7 * 60 * 60 * 1000;
-        const nowAz = new Date(nowUtc + azOffset);
-        const todayAz = new Date(nowAz); todayAz.setHours(0,0,0,0);
-        const weekStart = new Date(todayAz); weekStart.setDate(todayAz.getDate() - todayAz.getDay());
-        const strVal = function(v) {
-          if (!v) return '';
-          if (typeof v === 'string') return v;
-          if (Array.isArray(v)) return v.map(function(i) { return typeof i === 'object' ? (i.name || i.value || JSON.stringify(i)) : i; }).join(', ');
-          if (typeof v === 'object') return v.name || v.value || v.address || JSON.stringify(v);
-          return String(v);
-        };
-        const fmt = function(c) {
-          const contact = strVal(c['Primary Contact'] || c['Name']) || '?';
-          const unit = strVal(c['Preferred Rental'] || c['Unit']) || '?';
-          const raw = c['Requested Showing Information'];
-          const info = typeof raw === 'string' ? raw : (raw && (raw.value || raw.name || '')) || '';
-          const timeMatch = info.match(/\(([^)]+)\)/);
-          const time = timeMatch ? timeMatch[1] : String(c['Tour Date/Time'] || '');
-          const stage = c.stage || '';
-          const status = c['Requested Showing Status'] || '';
-          const source = c['Source'] || '';
-          return '• ' + contact + ' @ ' + unit + (time ? '\n  ' + time : '') +
-                 (stage ? ' [' + stage + ']' : '') + (status ? ' (' + status + ')' : '') +
-                 (source ? ' — ' + source : '');
-        };
-        const parseDateMs = function(c) {
-          const ds = parseShowingDate(c);
-          if (!ds) return null;
-          try { return new Date(ds).getTime(); } catch(e) { return null; }
-        };
-        let filtered, label;
-        const todayStr = String(todayAz.getMonth()+1).padStart(2,'0') + '/' + String(todayAz.getDate()).padStart(2,'0') + '/' + todayAz.getFullYear();
-        if (lowerMsg.match(/today/)) {
-          filtered = showingCards.filter(function(c) { return parseShowingDate(c) === todayStr; });
-          label = 'Showings today (' + todayStr + ')';
-          if (filtered.length === 0) {
-            const upcoming = showingCards.filter(function(c) {
-              const ms = parseDateMs(c); return ms !== null && ms > todayAz.getTime();
-            }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
-            const text = 'No showings found for today (' + todayStr + ').' +
-              (upcoming.length > 0 ? '\n\nUpcoming showings (' + upcoming.length + '):\n\n' + upcoming.map(fmt).join('\n') : '\n\nNo upcoming showings scheduled either.');
-            return res.json({ content: [{ type: 'text', text }] });
-          }
-        } else if (lowerMsg.match(/this week|week/)) {
-          const weekStartMs = weekStart.getTime();
-          const weekEndMs = weekStartMs + 7 * 24 * 60 * 60 * 1000;
-          filtered = showingCards.filter(function(c) {
-            const ms = parseDateMs(c);
-            return ms !== null && ms >= weekStartMs && ms < weekEndMs;
-          }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
-          label = 'Showings this week';
-        } else if (lowerMsg.match(/happened|completed|did.*happen|took place|past|yesterday/)) {
-          const threeDaysAgo = new Date(todayAz); threeDaysAgo.setDate(todayAz.getDate() - 3);
-          filtered = showingCards.filter(function(c) {
-            const ms = parseDateMs(c);
-            return ms !== null && ms >= threeDaysAgo.getTime() && ms <= nowAz.getTime();
-          }).sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
-          label = 'Showings in the past 3 days';
-        } else {
-          filtered = showingCards.sort(function(a,b) { return (parseDateMs(a)||0) - (parseDateMs(b)||0); });
-          label = 'All showing activity';
-        }
-        const text = filtered.length > 0
-          ? label + ' (' + filtered.length + '):\n\n' + filtered.map(fmt).join('\n\n')
-          : label + ': None found.\n\nTotal leads with showing info: ' + showingCards.length;
-        return res.json({ content: [{ type: 'text', text }] });
-      } catch(e) {
-        console.error('Showing shortcut error:', e.message);
-      }
-    }
-// Pet policy shortcut — calls /api/pet-policy logic directly
-var isPetQ2 = lowerMsg.match(/pet|dog|cat|animal|fur/);
-var addrInMsg2 = userMsg.match(/\d+\s+[\w\s]{5,50}/i);
-   if (isPetQ2 && addrInMsg2) {
-  try {
-    const petLookup = await (async function() {
-      const addr = addrInMsg2[0].toLowerCase().trim();
-      const numMatch2 = addr.match(/\d+/) ? addr.match(/\d+/)[0] : null;
-      const words2 = addr.replace(/\d+/g,'').replace(/\b(court|ct|drive|dr|street|st|avenue|ave|lane|ln|way|road|rd|place|pl|blvd|circle|cir|trail|trl)\b/gi,'').trim().split(/\s+/).filter(function(w){ return w.length > 2; });
-      let allCards2 = [];
-      let pg2 = 0;
-      while (pg2 < 10) {
-        const d2 = await unitsFetch('/api/board/unit', { page: pg2, pageSize: 100 });
-        const batch2 = Array.isArray(d2) ? d2 : (d2 && d2.data) || [];
-        if (batch2.length === 0) break;
-        allCards2 = allCards2.concat(batch2);
-        if (batch2.length < 100) break;
-        pg2++;
-      }
-      const found2 = allCards2.find(function(c) {
-        const s = (c.street || '').toLowerCase();
-        const hasNum2 = numMatch2 && s.includes(numMatch2);
-        const hasWord2 = words2.some(function(w){ return s.includes(w); });
-        return hasNum2 && hasWord2;
-      });
-      if (!found2) {
-        const partial2 = allCards2.filter(function(c){ return numMatch2 && (c.street||'').toLowerCase().includes(numMatch2); }).slice(0,5).map(function(c){ return c.street||'?'; });
-        return { found: false, partial: partial2 };
-      }
-      const restr2 = Array.isArray(found2.petRestrictions) ? found2.petRestrictions : [];
-      const pa2 = found2.petsAllowed;
-      const noDogs2 = restr2.some(function(r){ return /no dog/i.test(r); });
-      const noCats2 = restr2.some(function(r){ return /no cat/i.test(r); });
-      const dogsOk2 = restr2.some(function(r){ return /dog.*allow/i.test(r); });
-      const catsOk2 = restr2.some(function(r){ return /cat.*allow/i.test(r); });
-      const noPets2 = pa2 === false || (noDogs2 && noCats2);
-      const fullyOk2 = (pa2 === true || dogsOk2 || catsOk2) && !noDogs2 && !noCats2;
-      var verdict2;
-      if (noPets2) verdict2 = '🚫 No pets allowed at this property.';
-      else if (noDogs2 && !noCats2) verdict2 = '⚠️ Cats allowed, but NO DOGS at this property.';
-      else if (noCats2 && !noDogs2) verdict2 = '⚠️ Dogs allowed, but NO CATS at this property.';
-      else if (fullyOk2) verdict2 = '✅ Pets allowed (dogs and cats).';
-      else verdict2 = '⚠️ No specific pet restriction on file — standard Aloe policy applies.';
-      const owners2 = Array.isArray(found2.owners) ? found2.owners.map(function(o){ return o.name||''; }).join(', ') : '';
-      const deposit2 = found2.animalDeposit ? found2.animalDeposit.amount : null;
-      return { found: true, address: found2.street||'?', stage: found2.stage||'', beds: found2.beds||'', baths: found2.baths||'', rent: found2.marketRent ? (found2.marketRent.amount||'') : '', owner: owners2, verdict: verdict2, petRestrictions: restr2, deposit: deposit2 };
-    })();
-    if (petLookup.found) {
-      var petText2 = 'Found ' + petLookup.address + ' in Aptly.';
-      petText2 += '\nStatus: ' + petLookup.stage + (petLookup.beds ? ' | ' + petLookup.beds + 'bd/' + petLookup.baths + 'ba' : '') + (petLookup.rent ? ' | $' + petLookup.rent + '/mo' : '') + (petLookup.owner ? ' | Owner: ' + petLookup.owner : '');
-      petText2 += '\n\n' + petLookup.verdict;
-      if (petLookup.petRestrictions && petLookup.petRestrictions.length > 0) petText2 += '\nRestrictions: ' + petLookup.petRestrictions.join(', ');
-      if (petLookup.deposit) petText2 += '\nPet deposit: $' + petLookup.deposit;
-      petText2 += '\n\nStandard Aloe pet policy: $250/pet fee (one-time), max 4 pets, no breed restrictions unless owner requests. All pets require screening.';
-      return res.json({ content: [{ type: 'text', text: petText2 }] });
-    } else if (petLookup.partial && petLookup.partial.length > 0) {
-      return res.json({ content: [{ type: 'text', text: 'Couldn\'t find "' + addrInMsg2[0] + '" in Aptly. Similar addresses:\n\n' + petLookup.partial.join('\n') + '\n\nDid you mean one of these?' }] });
-    }
-  } catch(e) {
-    console.error('Pet shortcut error:', e.message);
-  }
-}
-
     // ─── Main Claude tool-loop ───────────────────────────────────────────────
     let current = messages.slice();
     for (let i = 0; i < 10; i++) {
@@ -3179,8 +2217,8 @@ app.get('/recon', function(req, res) {
     if (err) console.error('recon.html sendFile error:', err.message, 'path:', filePath);
   });
 });
-app.get('/recon-bills', (req, res) => 
-  res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
+app.get('/recon-bills', (req, res) =>
+   res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
 );
 app.get('/debug/pet-test', async function(req, res) {
   try {
@@ -3307,7 +2345,7 @@ app.get('*', function(req, res) {
     .tool-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all 0.18s;text-decoration:none;color:inherit;display:block;position:relative;overflow:hidden}
     .tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;opacity:0;transition:opacity 0.18s}
     .tool-card:hover{border-color:var(--teal);transform:translateY(-2px);box-shadow:0 6px 20px rgba(60,195,225,0.1)}
-.stats-row{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:32px}   .tool-card:hover::before{opacity:1}
+    .tool-card:hover::before{opacity:1}
     .tool-card.primary::before{background:var(--teal)}
     .tool-card.silver-top::before{background:var(--silver)}
     .tool-card.amber-top::before{background:#f5a623}
@@ -3328,15 +2366,6 @@ app.get('*', function(req, res) {
     .badge-new{background:var(--teal-dim);color:var(--teal-dark);border:1px solid var(--border2)}
     .badge-soon{background:var(--silver-dim);color:var(--text3);border:1px solid var(--border)}
 
-    /* QUICK STATS */
-    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:32px}
-    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px}
-    .stat-label{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
-    .stat-value{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.5px}
-    .stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
-    .stat-sub .up{color:#16a34a}
-    .stat-sub .teal{color:var(--teal-dark)}
-
     /* FOOTER */
     .footer{max-width:900px;margin:0 auto;padding:0 32px 40px}
     .footer-inner{border-top:1px solid var(--border);padding-top:20px;display:flex;align-items:center;justify-content:space-between}
@@ -3346,7 +2375,6 @@ app.get('*', function(req, res) {
 
     @media(max-width:640px){
       .tool-grid{grid-template-columns:1fr 1fr}
-      .stats-row{grid-template-columns:1fr 1fr}
       .hero{padding:32px 20px 20px}
       .section{padding:0 20px 32px}
       .search-wrap{padding:0 20px 24px}
@@ -3378,7 +2406,7 @@ app.get('*', function(req, res) {
 <div class="hero">
   <div class="hero-greeting">Good to see you</div>
   <div class="hero-title">Welcome back to <span>Aloe PM</span></div>
- <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
+  <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
 </div>
 
 <div class="search-wrap">
@@ -3387,241 +2415,211 @@ app.get('*', function(req, res) {
     <input type="text" placeholder="Search tools, docs, or ask a question…" id="search-input" oninput="filterTools(this.value)"/>
   </div>
 </div>
-      <div class="section">
-              <div class="section-label" id="ai-automation" id="ai-automation">AI & Automation</div>
-                      <div class="tool-grid" id="tool-grid">
-                      
-                                <a href="/chat" class="tool-card primary" data-name="aloe assistant ai chat">
-                                            <span class="tool-badge badge-live">LIVE</span>
-                                                        <div class="tool-icon icon-teal">🤖</div>
-                                                                    <div class="tool-name">Aloe Assistant</div>
-                                                                                <div class="tool-desc">AI chat — Rentvine, Aptly, Knowledge Base, Slack all connected</div>
-                                                                                          </a>
-                                                                                          
-                                                                                                    <a href="/sandbox" class="tool-card primary" data-name="sandbox agent training coaching test">
-                                                                                                                <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                            <div class="tool-icon icon-teal">✏️</div>
-                                                                                                                                        <div class="tool-name">Agent Sandbox</div>
-                                                                                                                                                    <div class="tool-desc">Train and coach AI agents before going live</div>
-                                                                                                                                                              </a>
-                                                                                                                                                              
-                                                                                                                                                                        <a href="/owner-dashboard" class="tool-card primary" data-name="owner report dashboard leads marketing">
-                                                                                                                                                                                    <span class="tool-badge badge-soon">SOON</span>
-                                                                                                                                                                                                <div class="tool-icon icon-purple">📈</div>
-                                                                                                                                                                                                            <div class="tool-name">Owner Dashboard</div>
-                                                                                                                                                                                                                        <div class="tool-desc">Live leasing activity and marketing report per owner</div>
-                                                                                                                                                                                                                                  </a>
-                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                            <a href="/sms-queue" class="tool-card primary" data-name="sms queue drafts tenant messages quo">
-                                                                                                                                                                                                                                                        <span class="tool-badge badge-new">NEW</span>
-                                                                                                                                                                                                                                                                    <div class="tool-icon icon-green">💬</div>
-                                                                                                                                                                                                                                                                                <div class="tool-name">SMS Draft Queue</div>
-                                                                                                                                                                                                                                                                                            <div class="tool-desc">Review and approve AI-drafted responses before sending</div>
-                                                                                                                                                                                                                                                                                                      </a>
-                                                                                                                                                                                                                                </div>
-                                                                                                                                                                                                                                                                                                                                                                                        </div>
-                                                                                                                                                                                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                                                                                                                                                                              <div class="section">
-                                                                                                                                                                                                                                                                                                                                                                                                      <div class="section-label" id="accounting">Accounting</div>
-                                                                                                                                                                                                                                                                                                                                                                                                              <div class="tool-grid">
-                                                                                                                                                                                                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                                                                                                                                                                        <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile vendor">
-                                                                                                                                                                                                                                                                                                                                                                                                                                    <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                <div class="tool-icon icon-teal">🧾</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div class="tool-name">Recon — Bills</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <a href="/accounting" class="tool-card primary" data-name="accounting payments ledger reconciliation randi">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <span class="tool-badge badge-soon">SOON</span>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div class="tool-icon icon-amber">💰</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div class="tool-name" id="accounting">Accounting</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div class="tool-desc">Payments, ledger, reconciliation — Randi's domain</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      </a>
-                                                                                                    
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <a href="/recon" class="tool-card primary" data-name="recon reconciliation maintenance work orders">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div class="tool-icon icon-teal">🔍</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div class="tool-name">Recon</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div class="tool-desc">Cross-reference work orders between Aptly and Rentvine</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div class="section">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div class="section-label" id="reports">Reports</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div class="tool-grid">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <a href="/metrics" class="tool-card primary" data-name="metrics kpi dashboard portfolio occupancy leases">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <span class="tool-badge badge-live">LIVE</span>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div class="tool-icon icon-teal">📊</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div class="tool-name">KPI Metrics</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
-  <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">🔄</div>
-  <div class="tool-name">Lease Renewals</div>
-  <div class="tool-desc">Renewal pipeline, offers, calculator — Persia's dashboard</div>
-</a>
 
-<a href="/hoa" class="tool-card primary" data-name="hoa form filler registration auto-fill juan">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">📋</div>
-  <div class="tool-name">HOA Form Filler</div>
-  <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
-</a>
+<!-- AI & AUTOMATION -->
+<div class="section">
+  <div class="section-label">AI & Automation</div>
+  <div class="tool-grid">
+    <a href="/chat" class="tool-card primary" data-name="aloe assistant ai chat">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🤖</div>
+      <div class="tool-name">Aloe Assistant</div>
+      <div class="tool-desc">AI chat — Rentvine, Aptly, Knowledge Base, Slack all connected</div>
+    </a>
 
-<a href="/resources/vendors" class="tool-card primary" data-name="vendor resources partner apply vendor program">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-silver">🔨</div>
-  <div class="tool-name">Vendor Resources</div>
-  <div class="tool-desc">Vendor partnership page — standards, requirements, and application</div>
-</a>
+    <a href="/sandbox" class="tool-card primary" data-name="sandbox agent training coaching test">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">✏️</div>
+      <div class="tool-name">Agent Sandbox</div>
+      <div class="tool-desc">Train and coach AI agents before going live</div>
+    </a>
 
+    <a href="/sms-queue" class="tool-card primary" data-name="sms queue drafts tenant messages quo">
+      <span class="tool-badge badge-new">NEW</span>
+      <div class="tool-icon icon-green">💬</div>
+      <div class="tool-name">SMS Draft Queue</div>
+      <div class="tool-desc">Review and approve AI-drafted responses before sending</div>
+    </a>
   </div>
 </div>
-          </div>
-        </div>
 
-    <div class="section">
-        <div class="section-label" id="operations">Operations</div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">🏠</div>
-  <div class="tool-name">Vacancy Risk & Market Intelligence</div>
-  <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
-</a>
+<!-- ACCOUNTING -->
+<div class="section">
+  <div class="section-label">Accounting</div>
+  <div class="tool-grid">
+    <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile vendor">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🧾</div>
+      <div class="tool-name">Recon — Bills</div>
+      <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
+    </a>
 
-<a href="/owner-report" class="tool-card primary" data-name="owner report email generator vacancy update">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">📬</div>
-  <div class="tool-name">Owner Report Generator</div>
-  <div class="tool-desc">AI-drafted vacancy update email per property — one click</div>
-</a>
-<a href="/rent-analysis" class="tool-card primary" data-name="rent analysis market comps zillow redfin LTR STR furnished">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">🏘️</div>
-  <div class="tool-name">Rent Analysis</div>
-  <div class="tool-desc">Live comps from Zillow, Redfin & Realtor.com · STR/Airbnb · Furnished</div>
-</a>
+    <a href="/recon" class="tool-card primary" data-name="recon reconciliation maintenance work orders">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🔍</div>
+      <div class="tool-name">Recon</div>
+      <div class="tool-desc">Cross-reference work orders between Aptly and Rentvine</div>
+    </a>
 
-<a href="/sale-analysis" class="tool-card purple-top" data-name="sale analysis comps zestimate redfin estimate owner equity">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-purple">🏡</div>
-  <div class="tool-name">Sale Analysis</div>
-  <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
-</a>
-          </div>
-        </div>
+    <a href="/accounting" class="tool-card primary" data-name="accounting payments ledger reconciliation randi">
+      <span class="tool-badge badge-soon">SOON</span>
+      <div class="tool-icon icon-amber">💰</div>
+      <div class="tool-name">Accounting</div>
+      <div class="tool-desc">Payments, ledger, reconciliation — Randi's domain</div>
+    </a>
+  </div>
+</div>
 
-    <div class="section">
-        <div class="section-label" id="operations">Operations</div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+<!-- OPERATIONS -->
+<div class="section">
+  <div class="section-label">Operations</div>
+  <div class="tool-grid">
+    <a href="/resources/vendors" class="tool-card primary" data-name="vendor resources partner apply vendor program">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-silver">🔨</div>
+      <div class="tool-name">Vendor Resources</div>
+      <div class="tool-desc">Vendor partnership page — standards, requirements, application</div>
+    </a>
+
     <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">🔄</div>
-  <div class="tool-name">Lease Renewals</div>
-  <div class="tool-desc">Renewal pipeline, offers, calculator — Persia's dashboard</div>
-</a>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      </div>
-                                                                                                    
-                                                                                                                                                                                                                                                                                                                        </div>
-    <div class="section">
-        <div class="section-label" id="operations">Operations</div>
-        <div class="tool-grid">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🔄</div>
+      <div class="tool-name">Lease Renewals</div>
+      <div class="tool-desc">Renewal pipeline, offers, calculator — Persia's dashboard</div>
+    </a>
+
+    <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration auto-fill juan">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">📋</div>
+      <div class="tool-name">HOA Form Filler</div>
+      <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
+    </a>
+
     <a href="/leasing" class="tool-card primary" data-name="leasing leads showings applications dhyana">
       <div class="tool-icon icon-teal">🏠</div>
       <div class="tool-name">Leasing</div>
-      <div class="tool-desc">Leads, showings, applications </div>
+      <div class="tool-desc">Leads, showings, applications</div>
     </a>
 
     <a href="/maintenance" class="tool-card silver-top" data-name="maintenance work orders vendors roberto">
       <div class="tool-icon icon-silver">🔧</div>
       <div class="tool-name">Maintenance</div>
-
-      <div class="tool-desc">Work orders, vendors, and scheduling </div>
+      <div class="tool-desc">Work orders, vendors, and scheduling</div>
     </a>
 
     <a href="/residents" class="tool-card primary" data-name="residents tenants lease renewals persia">
       <div class="tool-icon icon-teal">👥</div>
       <div class="tool-name">Residents</div>
-      <div class="tool-desc">Tenant comms, lease renewals, move-outs </div>
+      <div class="tool-desc">Tenant comms, lease renewals, move-outs</div>
     </a>
 
     <a href="/owners" class="tool-card purple-top" data-name="owners landlords portfolio reporting alexes">
       <div class="tool-icon icon-purple">🏢</div>
       <div class="tool-name">Owner Relations</div>
-      <div class="tool-desc">Owner reporting and portfolio updates </div>
+      <div class="tool-desc">Owner reporting and portfolio updates</div>
     </a>
-
-  <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration auto-fill juan">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-teal">📋</div>
-  <div class="tool-name">HOA Form Filler</div>
-  <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
-</a>
-
-<a href="/resources/vendors" class="tool-card primary" data-name="vendor resources partner apply vendor program">
-  <span class="tool-badge badge-live">LIVE</span>
-  <div class="tool-icon icon-silver">🔨</div>
-  <div class="tool-name">Vendor Resources</div>
-  <div class="tool-desc">Vendor partnership page — standards, requirements, and application</div>
-</a>
-
   </div>
 </div>
 
-              <div class="section">
-                        <div class="section-label" id="tools">Integrations & Tools</div>
-                                  <div class="tool-grid">
-                                  
-                                              <a href="https://aloepm.rentvine.com" target="_blank" class="tool-card primary" data-name="rentvine property management tenants leases">
-                                                            <div class="tool-icon icon-silver">🤝</div>
-                                                                          <div class="tool-name">Rentvine</div>
-                                                                                        <div class="tool-desc">Tenant data, leases, work orders, accounting</div>
-                                                                                                    </a>
-                                                                                                    
-                                                                                                                <a href="https://app.getaptly.com" target="_blank" class="tool-card primary" data-name="aptly crm workflow boards leads move-ins hoa">
-                                                                                                                              <div class="tool-icon icon-teal">📌</div>
-                                                                                                                                            <div class="tool-name">Aptly</div>
-                                                                                                                                                          <div class="tool-desc">CRM, workflow boards, leads, move-ins, HOA</div>
-                                                                                                                                                                      </a>
-                                                                                                                                                                      
-                                                                                                                                                                                  <a href="https://app.quophone.com" target="_blank" class="tool-card primary" data-name="quo openphone sms messaging calls inbox">
-                                                                                                                                                                                                <div class="tool-icon icon-silver">📱</div>
-                                                                                                                                                                                                              <div class="tool-name">Quo / OpenPhone</div>
-                                                                                                                                                                                                                            <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
-                                                                                                                                                                                                                                        </a>
-                                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                                    <a href="https://www.notion.so" target="_blank" class="tool-card primary" data-name="notion knowledge base sops policies templates">
-                                                                                                                                                                                                                                                                  <div class="tool-icon icon-silver">📓</div>
-                                                                                                                                                                                                                                                                                <div class="tool-name">Knowledge Base</div>
-                                                                                                                                                                                                                                                                                              <div class="tool-desc">SOPs, policies, knowledge base, templates</div>
-                                                                                                                                                                                                                                                                                                          </a>
-                                                                                                                                                                                                                                                                                                          
-                                                                                                                                                                                                                                                                                                                      <a href="https://drive.google.com" target="_blank" class="tool-card primary" data-name="google drive files documents leases reports">
-                                                                                                                                                                                                                                                                                                                                    <div class="tool-icon icon-silver">📁</div>
-                                                                                                                                                                                                                                                                                                                                                  <div class="tool-name">Google Drive</div>
-                                                                                                                                                                                                                                                                                                                                                                <div class="tool-desc">Signed leases, inspection reports, owner docs</div>
-                                                                                                                                                                                                                                                                                                                                                                            </a>
-                                                                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                                                                                        <a href="https://slack.com" target="_blank" class="tool-card primary" data-name="slack team communications alerts escalation">
-                                                                                                                                                                                                                                                                                                                                                                                                      <div class="tool-icon icon-silver">💼</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                    <div class="tool-name">Slack</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                  <div class="tool-desc">Team communications and escalation alerts</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                              </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                                                                                                                                                                                                          <a href="https://zinspector.com/" target="_blank" class="tool-card primary" data-name="zinspector inspections property condition">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div class="tool-icon icon-teal">🔎</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div class="tool-name">Zinspector</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    <div class="tool-desc">Property inspections and condition reports</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  class="footer-inner">
+<!-- REPORTS -->
+<div class="section">
+  <div class="section-label">Reports</div>
+  <div class="tool-grid">
+    <a href="/metrics" class="tool-card primary" data-name="metrics kpi dashboard portfolio occupancy leases">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">📊</div>
+      <div class="tool-name">KPI Metrics</div>
+      <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
+    </a>
+
+    <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence rentometer">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🏠</div>
+      <div class="tool-name">Vacancy Risk & Market Intelligence</div>
+      <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
+    </a>
+
+    <a href="/owner-report" class="tool-card primary" data-name="owner report email generator vacancy update">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">📬</div>
+      <div class="tool-name">Owner Report Generator</div>
+      <div class="tool-desc">AI-drafted vacancy update email per property — one click</div>
+    </a>
+
+    <a href="/rent-analysis" class="tool-card primary" data-name="rent analysis market comps zillow redfin LTR STR furnished">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">🏘️</div>
+      <div class="tool-name">Rent Analysis</div>
+      <div class="tool-desc">Live comps from Zillow, Redfin &amp; Realtor.com · STR/Airbnb · Furnished</div>
+    </a>
+
+    <a href="/sale-analysis" class="tool-card purple-top" data-name="sale analysis comps zestimate redfin estimate owner equity">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-purple">🏡</div>
+      <div class="tool-name">Sale Analysis</div>
+      <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
+    </a>
+
+    <a href="/owner-dashboard" class="tool-card primary" data-name="owner report dashboard leads marketing">
+      <span class="tool-badge badge-soon">SOON</span>
+      <div class="tool-icon icon-purple">📈</div>
+      <div class="tool-name">Owner Dashboard</div>
+      <div class="tool-desc">Live leasing activity and marketing report per owner</div>
+    </a>
+  </div>
+</div>
+
+<!-- INTEGRATIONS & TOOLS -->
+<div class="section">
+  <div class="section-label">Integrations & Tools</div>
+  <div class="tool-grid">
+    <a href="https://aloepm.rentvine.com" target="_blank" class="tool-card primary" data-name="rentvine property management tenants leases">
+      <div class="tool-icon icon-silver">🤝</div>
+      <div class="tool-name">Rentvine</div>
+      <div class="tool-desc">Tenant data, leases, work orders, accounting</div>
+    </a>
+
+    <a href="https://app.getaptly.com" target="_blank" class="tool-card primary" data-name="aptly crm workflow boards leads move-ins hoa">
+      <div class="tool-icon icon-teal">📌</div>
+      <div class="tool-name">Aptly</div>
+      <div class="tool-desc">CRM, workflow boards, leads, move-ins, HOA</div>
+    </a>
+
+    <a href="https://app.quophone.com" target="_blank" class="tool-card primary" data-name="quo openphone sms messaging calls inbox">
+      <div class="tool-icon icon-silver">📱</div>
+      <div class="tool-name">Quo / OpenPhone</div>
+      <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
+    </a>
+
+    <a href="https://aloe-knowledge-sync.onrender.com" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training templates resources">
+      <span class="tool-badge badge-live">LIVE</span>
+      <div class="tool-icon icon-teal">📚</div>
+      <div class="tool-name">Knowledge Base</div>
+      <div class="tool-desc">SOPs, policies, training, vendor list, cost benchmarks</div>
+    </a>
+
+    <a href="https://drive.google.com" target="_blank" class="tool-card primary" data-name="google drive files documents leases reports">
+      <div class="tool-icon icon-silver">📁</div>
+      <div class="tool-name">Google Drive</div>
+      <div class="tool-desc">Signed leases, inspection reports, owner docs</div>
+    </a>
+
+    <a href="https://slack.com" target="_blank" class="tool-card primary" data-name="slack team communications alerts escalation">
+      <div class="tool-icon icon-silver">💼</div>
+      <div class="tool-name">Slack</div>
+      <div class="tool-desc">Team communications and escalation alerts</div>
+    </a>
+
+    <a href="https://zinspector.com/" target="_blank" class="tool-card primary" data-name="zinspector inspections property condition">
+      <div class="tool-icon icon-teal">🔎</div>
+      <div class="tool-name">Zinspector</div>
+      <div class="tool-desc">Property inspections and condition reports</div>
+    </a>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-inner">
     <div class="footer-left">Aloe Property Management · Phoenix Metro · Internal use only</div>
     <div class="footer-sources">
       <span class="source-pill">Rentvine</span>
@@ -3652,8 +2650,7 @@ app.get('/metrics', (req, res) => {
 
 // Vendor application form submission
 app.post('/api/vendor-apply', async (req, res) => {
-  try {
-const { business, name, phone, email, trade, license, area, insurance, about, why, hourlyRate, employees, hasVehicle, hasTools, social, refs, additional } = req.body;
+  try { const { business, name, phone, email, trade, license, area, insurance, about, why, hourlyRate, employees, hasVehicle, hasTools, social, refs, additional } = req.body;
     const emailBody = `New Vendor Application
 
 Business: ${business}
@@ -3672,8 +2669,7 @@ Owns Tools: ${hasTools || 'N/A'}
 Social/Website: ${social || 'N/A'}
 References: ${refs || 'N/A'}
 Additional Info: ${additional || 'N/A'}
-About:
-${about || 'N/A'}`;
+About: ${about || 'N/A'}`;
 
 const slackText = `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade} · *Rate:* ${hourlyRate||'N/A'} · *Employees:* ${employees||'N/A'}\n*Vehicle:* ${hasVehicle||'N/A'} · *Tools:* ${hasTools||'N/A'}\n*Insurance:* ${insurance} · *Area:* ${area||'N/A'}\n*Social:* ${social||'N/A'}\n*Why us:* ${why||'N/A'}\n*Refs:* ${refs||'N/A'}\n*Additional:* ${additional||'N/A'}\n*About:* ${about||'N/A'}`;
     let slackOk = false;
@@ -3700,7 +2696,6 @@ if (process.env.SLACK_TOKEN) {
     console.error('Slack vendor error:', e.message);
   }
 }
-
     // Try Resend email (requires RESEND_API_KEY)
     if (process.env.RESEND_API_KEY) {
       try {
