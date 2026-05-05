@@ -3634,6 +3634,54 @@ function filterTools(q) {
 app.get('/metrics', (req, res) => {
     res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
 });
+// Vendor application — sends email + Slack notification
+app.post('/api/vendor-apply', async (req, res) => {
+  try {
+    const { business, name, phone, email, trade, license, area, insurance, about } = req.body;
 
+    // Send email via nodemailer (or your existing email setup)
+    const emailBody = `
+New Vendor Application
+
+Business: ${business}
+Contact: ${name}
+Phone: ${phone}
+Email: ${email}
+Trade: ${trade}
+License/ROC: ${license || 'N/A'}
+Service Area: ${area || 'N/A'}
+Insurance: ${insurance}
+
+About:
+${about || 'N/A'}
+    `.trim();
+
+    // Use your existing nodemailer transporter or sendgrid — adjust as needed
+    await transporter.sendMail({
+      from: '"Aloe PM Vendor Form" <noreply@aloepm.com>',
+      to: 'info@aloepm.com',
+      replyTo: email,
+      subject: `Vendor Application — ${business}`,
+      text: emailBody
+    });
+
+    // Slack notification to #vendors
+    const slackWebhook = process.env.SLACK_VENDOR_WEBHOOK || process.env.SLACK_WEBHOOK_URL;
+    if (slackWebhook) {
+      await fetch(slackWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade}\n*Insurance:* ${insurance}\n*Area:* ${area || 'N/A'}`
+        })
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Vendor apply error:', err);
+    res.status(500).json({ error: 'Failed to submit application' });
+  }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
