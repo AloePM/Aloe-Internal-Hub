@@ -3650,20 +3650,6 @@ app.get('/metrics', (req, res) => {
     res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
 });
 
-// Slack notification to #vendors
-    const slackWebhook = process.env.SLACK_VENDOR_WEBHOOK || process.env.SLACK_WEBHOOK_URL;
-    if (slackWebhook) {
-      await fetch(slackWebhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: `📋 *New Vendor Application*\n*Business:* ${business}\n*Contact:* ${name} · ${phone} · ${email}\n*Trade:* ${trade}\n*Insurance:* ${insurance}\n*Area:* ${area || 'N/A'}`
-        })
-      });
-    }
-
-    res.json({ ok: true });
-
 // Vendor application form submission
 app.post('/api/vendor-apply', async (req, res) => {
   try {
