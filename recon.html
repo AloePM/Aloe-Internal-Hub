@@ -8,623 +8,670 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#F8FAFC;--surface:#fff;--border:#E2E8F0;--border2:#CBD5E1;
-  --teal:#0891B2;--teal-light:#E0F2FE;--teal-border:#7DD3FC;
-  --green:#16A34A;--green-light:#DCFCE7;--green-border:#86EFAC;
-  --red:#DC2626;--red-light:#FEE2E2;--red-border:#FCA5A5;
-  --amber:#D97706;--amber-light:#FEF3C7;
+  --bg:#F0F4F8;--panel:#fff;--border:#E2E8F0;--border2:#CBD5E1;
+  --teal:#0891B2;--teal-lt:#E0F2FE;--teal-bd:#7DD3FC;
+  --green:#16A34A;--green-lt:#DCFCE7;--green-bd:#86EFAC;
+  --amber:#D97706;--amber-lt:#FEF3C7;--amber-bd:#FCD34D;
+  --red:#DC2626;--red-lt:#FEE2E2;--red-bd:#FCA5A5;
+  --purple:#7C3AED;--purple-lt:#EDE9FE;--purple-bd:#C4B5FD;
   --text:#0F172A;--text2:#475569;--muted:#94A3B8;
-  --header:#fff;
 }
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:13px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 
-/* ── TOP BAR ── */
-.topbar{background:#0C1929;border-bottom:2px solid var(--teal);height:48px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:100}
+/* TOP BAR */
+.topbar{height:46px;background:#0C1929;border-bottom:2px solid var(--teal);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:100}
 .topbar-title{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.1em;color:#94A3B8}
 .topbar-title span{color:var(--teal)}
-.topbar-right{margin-left:auto;display:flex;gap:8px}
-.top-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:4px 12px;color:#CBD5E1;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .12s}
-.top-btn:hover{background:rgba(255,255,255,.15);color:#fff}
-.top-btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
-.top-btn.primary:hover{background:#0e7490}
-.top-btn:disabled{opacity:.4;cursor:not-allowed}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.top-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:4px 12px;color:#CBD5E1;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .12s;white-space:nowrap}
+.top-btn:hover{background:rgba(255,255,255,.18);color:#fff}
+.top-btn.accent{background:var(--teal);border-color:var(--teal);color:#fff}
+.top-btn.accent:hover{background:#0e7490}
 
-/* ── CONFIG SCREEN ── */
-.config-wrap{max-width:680px;margin:40px auto;padding:0 20px}
-.config-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:16px}
+/* CONFIG */
+.config-screen{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:32px 20px;overflow-y:auto}
+.config-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:24px;width:100%;max-width:640px}
 .config-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
-.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 .field{display:flex;flex-direction:column;gap:4px}
 .field label{font-size:10px;font-weight:600;color:var(--text2);letter-spacing:.04em;text-transform:uppercase}
-.field select,.field input{background:#F8FAFC;border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif}
+.field select,.field input[type=date],.field input[type=number]{background:#F8FAFC;border:1px solid var(--border2);border-radius:6px;padding:8px 10px;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif}
 .field select:focus,.field input:focus{outline:1.5px solid var(--teal);border-color:var(--teal)}
-.plaid-connected{background:var(--teal-light);border:1px solid var(--teal-border);border-radius:7px;padding:9px 12px;display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.plaid-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0}
-.plaid-name{font-size:12px;font-weight:600;color:var(--teal)}
-.plaid-bal{font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);margin-left:auto}
-.drop-zone{border:1.5px dashed var(--border2);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:all .15s}
-.drop-zone:hover,.drop-zone.over,.drop-zone.filled{border-color:var(--teal);background:var(--teal-light)}
-.drop-zone .dz-icon{font-size:20px;margin-bottom:4px}
-.drop-zone .dz-label{font-size:12px;font-weight:500;color:var(--text2)}
-.drop-zone .dz-sub{font-size:10px;color:var(--muted);margin-top:2px}
-.run-btn{width:100%;background:var(--teal);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:14px;transition:background .12s}
+.plaid-banner{background:var(--teal-lt);border:1px solid var(--teal-bd);border-radius:7px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.plaid-dot{width:8px;height:8px;border-radius:50%;background:var(--teal);flex-shrink:0;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.plaid-text{font-size:12px;font-weight:600;color:var(--teal)}
+.plaid-bal{font-family:'DM Mono',monospace;font-size:12px;color:var(--teal);margin-left:auto;font-weight:500}
+.or-divider{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.drop{border:1.5px dashed var(--border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.drop:hover,.drop.over,.drop.filled{border-color:var(--teal);background:var(--teal-lt)}
+.drop-icon{font-size:18px}
+.drop-label{font-size:12px;font-weight:500;color:var(--text2)}
+.drop-sub{font-size:10px;color:var(--muted)}
+.run-btn{width:100%;background:var(--teal);border:none;border-radius:7px;padding:12px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:16px;transition:background .12s}
 .run-btn:hover{background:#0e7490}
 .run-btn:disabled{background:var(--border2);color:var(--muted);cursor:not-allowed}
-.err-box{background:var(--red-light);border:1px solid var(--red-border);border-radius:7px;padding:8px 14px;font-size:11px;color:var(--red);margin-bottom:12px}
+.err{background:var(--red-lt);border:1px solid var(--red-bd);border-radius:7px;padding:8px 13px;font-size:11px;color:var(--red);margin-bottom:12px}
+.info-box{background:var(--teal-lt);border:1px solid var(--teal-bd);border-radius:7px;padding:8px 13px;font-size:11px;color:var(--teal);margin-bottom:14px;line-height:1.6}
 
-/* ── RECON LAYOUT ── */
-.recon-wrap{display:flex;flex-direction:column;height:calc(100vh - 48px);overflow:hidden}
-
-/* ── RECON HEADER BAR ── */
-.recon-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;gap:16px;height:56px;flex-shrink:0}
-.recon-title{font-size:15px;font-weight:600;color:var(--text)}
-.recon-sub{font-size:11px;color:var(--muted)}
-.header-field{display:flex;align-items:center;gap:6px}
-.header-field label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
-.header-field input{background:#F8FAFC;border:1px solid var(--border2);border-radius:5px;padding:5px 9px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text);width:130px}
-.header-field input:focus{outline:1.5px solid var(--teal);border-color:var(--teal)}
-.beg-bal{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap}
-
-/* ── MAIN SPLIT: transactions left + summary right ── */
-.recon-body{flex:1;display:grid;grid-template-columns:1fr 280px;overflow:hidden;min-height:0}
-.txn-area{overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;min-height:0}
-.summary-panel{border-left:1px solid var(--border);background:var(--surface);overflow-y:auto;flex-shrink:0}
-
-/* ── SECTION HEADERS ── */
-.section-hdr{background:#F8FAFC;border-bottom:2px solid var(--border2);border-top:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:5;flex-shrink:0}
-.section-hdr-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text2)}
-.section-total{margin-left:auto;font-family:'DM Mono',monospace;font-size:12px;font-weight:600}
-.section-total.green{color:var(--green)}
-.section-total.red{color:var(--red)}
-.chk-all{width:16px;height:16px;cursor:pointer;accent-color:var(--teal)}
-
-/* ── TABLE ── */
-.txn-table{width:100%;border-collapse:collapse}
-.txn-table th{background:#F1F5F9;padding:6px 10px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:36px;z-index:4}
-.txn-table th.center{text-align:center}
-.txn-table th.right{text-align:right}
-.txn-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:12px}
-.txn-table tr.cleared td{background:#F0FDF4}
-.txn-table tr.cleared:hover td{background:#DCFCE7}
-.txn-table tr:not(.cleared):hover td{background:#F8FAFC}
-.txn-table .chk-cell{width:36px;text-align:center}
-.txn-table input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--teal)}
-.mono{font-family:'DM Mono',monospace}
-.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:9px;font-weight:600;white-space:nowrap}
-.tag-deposit{background:#DBEAFE;color:#1D4ED8}
-.tag-transfer{background:#F3E8FF;color:#7C3AED}
-.tag-settlement{background:#FEF3C7;color:#92400E}
-.tag-payout{background:#FEE2E2;color:#991B1B}
-.tag-plaid{background:#E0F2FE;color:#0369A1}
-.amt-in{color:var(--green);font-weight:600;font-family:'DM Mono',monospace}
-.amt-out{color:var(--red);font-weight:500;font-family:'DM Mono',monospace}
-.empty-msg{padding:32px;text-align:center;color:var(--muted);font-style:italic;font-size:12px}
-
-/* ── SUMMARY PANEL ── */
-.sum-block{padding:16px;border-bottom:1px solid var(--border)}
-.sum-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-.sum-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:12px}
-.sum-row .sk{color:var(--text2)}
-.sum-row .sv{font-family:'DM Mono',monospace;font-weight:500}
-.sum-divider{height:1px;background:var(--border);margin:8px 0}
-.sum-total{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;margin-top:4px}
-.sum-total .st{color:var(--text)}
-.sum-total .sv{font-family:'DM Mono',monospace}
-
-.balance-block{padding:16px;border-bottom:1px solid var(--border)}
-.balance-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
-.balance-amount{font-family:'DM Mono',monospace;font-size:22px;font-weight:600;line-height:1}
-.balance-sub{font-size:10px;margin-top:4px}
-.bal-green{color:var(--green)}
-.bal-red{color:var(--red)}
-.bal-ok{background:var(--green-light);border:1px solid var(--green-border)}
-.bal-off{background:var(--red-light);border:1px solid var(--red-border)}
-.diff-block{border-radius:7px;padding:10px 14px;margin:16px;display:flex;flex-direction:column;gap:4px}
-.diff-block .dl{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-.diff-block .da{font-family:'DM Mono',monospace;font-size:20px;font-weight:600}
-.diff-block .ds{font-size:10px;margin-top:2px}
-
-/* ── LOADING ── */
-.load-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+/* LOADING */
+.load-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
 .spinner{width:28px;height:28px;border:2.5px solid var(--border2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.load-msg{font-family:'DM Mono',monospace;font-size:11px;color:var(--teal)}
-.load-steps{display:flex;flex-direction:column;gap:4px;margin-top:8px}
-.load-step{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
-.load-step.done{color:var(--green)}
-.load-step.active{color:var(--teal);font-weight:500}
-.load-step::before{content:'○';font-size:10px}
-.load-step.done::before{content:'✓';color:var(--green)}
-.load-step.active::before{content:'●';color:var(--teal)}
+.load-msg{font-family:'DM Mono',monospace;font-size:11px;color:var(--teal);font-weight:500}
+.load-steps{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.step{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.step::before{content:'○';font-size:10px;flex-shrink:0}
+.step.done{color:var(--green)}.step.done::before{content:'✓';color:var(--green)}
+.step.active{color:var(--teal);font-weight:500}.step.active::before{content:'●';color:var(--teal)}
+
+/* RECON LAYOUT */
+.recon-layout{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+
+/* STATS BAR */
+.stats-bar{background:var(--panel);border-bottom:1px solid var(--border);padding:0 14px;height:42px;display:flex;align-items:center;gap:16px;flex-shrink:0;overflow-x:auto}
+.stat{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px}
+.stat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.stat-label{color:var(--muted)}
+.stat-val{font-family:'DM Mono',monospace;font-weight:500}
+.stats-bar-sep{width:1px;height:18px;background:var(--border);flex-shrink:0}
+
+/* TOOLBAR */
+.toolbar{background:var(--panel);border-bottom:1px solid var(--border);padding:0 12px;height:40px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.tb-btn{background:none;border:1px solid var(--border);border-radius:5px;padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;transition:all .12s}
+.tb-btn:hover{border-color:var(--teal);color:var(--teal)}
+.tb-btn.active{background:var(--teal-lt);border-color:var(--teal-bd);color:var(--teal);font-weight:600}
+.tb-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;margin:0 2px}
+.tb-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.link-banner{background:linear-gradient(90deg,var(--purple),#6D28D9);color:#fff;padding:5px 14px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:10px;flex-shrink:0;display:none}
+.link-banner.on{display:flex}
+.link-cancel{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:2px 9px;color:#fff;font-size:10px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:auto}
+
+/* WORKSPACE */
+.workspace{flex:1;display:grid;grid-template-columns:1fr 28px 1fr;overflow:hidden;min-height:0}
+.panel{display:flex;flex-direction:column;overflow:hidden;height:100%}
+.panel-left{border-right:1px solid var(--border)}
+.divider-col{background:#F8FAFC;border-left:1px solid var(--border);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:6px;flex-shrink:0;overflow:hidden}
+.div-label{font-size:9px;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.06em;font-weight:600;text-transform:uppercase}
+
+/* PANEL HEADER */
+.panel-hdr{height:34px;display:flex;align-items:center;padding:0 10px;border-bottom:1px solid var(--border);background:#F8FAFC;flex-shrink:0;gap:8px}
+.panel-name{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text2)}
+.panel-count{margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)}
+
+/* COL HEADERS */
+.col-hdr{display:grid;padding:0 6px;height:26px;align-items:center;background:#F1F5F9;border-bottom:2px solid var(--border2);flex-shrink:0}
+/* RV cols: date | type | desc | amount */
+.rv-grid{grid-template-columns:72px 74px 1fr 78px}
+/* Bank cols: date | desc | amount */
+.bk-grid{grid-template-columns:72px 1fr 82px}
+.col-hdr span{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;user-select:none}
+.col-hdr span:hover{color:var(--teal)}
+.col-hdr span.sa::after{content:' ↑'}.col-hdr span.sd::after{content:' ↓'}
+
+/* ROWS */
+.rows{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
+.row{display:grid;padding:0 6px;min-height:33px;align-items:center;border-bottom:1px solid var(--border);cursor:pointer;transition:background .07s;position:relative}
+.row.rv-grid{grid-template-columns:72px 74px 1fr 78px}
+.row.bk-grid{grid-template-columns:72px 1fr 82px}
+.row:hover{background:#F0F9FF}
+/* Match states */
+.row.matched{background:var(--green-lt)}
+.row.matched:hover{background:#BBF7D0}
+.row.manual-match{background:var(--purple-lt)}
+.row.manual-match:hover{background:#DDD6FE}
+.row.partial{background:var(--amber-lt)}
+.row.partial:hover{background:#FDE68A}
+.row.selected{background:#DBEAFE !important;box-shadow:inset 2px 0 0 var(--teal),inset -2px 0 0 var(--teal)}
+.row.pending{background:#FEF9C3 !important;animation:blink .8s ease-in-out infinite alternate}
+@keyframes blink{from{background:#FEF9C3}to{background:#FDE68A}}
+.row.dimmed{opacity:.3}
+/* Match dot */
+.match-dot{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-g{background:var(--green)}.dot-a{background:var(--amber)}.dot-p{background:var(--purple)}
+/* Cells */
+.c{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;padding:0 3px}
+.c.date{font-family:'DM Mono',monospace;font-size:10px;color:var(--text2)}
+.c.amt{font-family:'DM Mono',monospace;font-weight:500;text-align:right;padding-right:12px}
+.c.amt.in{color:var(--green)}.c.amt.out{color:var(--red)}
+.c.muted{color:var(--muted);font-size:10px}
+.tag{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:600;white-space:nowrap}
+.td{background:#DBEAFE;color:#1D4ED8}.tt{background:#F3E8FF;color:#6D28D9}
+.ts{background:#FEF3C7;color:#92400E}.tp{background:#FEE2E2;color:#991B1B}
+.tb{background:#E0F2FE;color:#0369A1}
+.empty{padding:28px;text-align:center;color:var(--muted);font-style:italic;font-size:11px}
+
+/* SUMMARY PANEL (right side) */
+.sum-panel{width:240px;border-left:1px solid var(--border);background:var(--panel);overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column}
+.sum-block{padding:14px;border-bottom:1px solid var(--border)}
+.sum-title{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.sum-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px}
+.sum-row .sk{color:var(--text2)}.sum-row .sv{font-family:'DM Mono',monospace;font-weight:500;font-size:11px}
+.sum-divider{height:1px;background:var(--border);margin:7px 0}
+.bal-block{margin:14px;border-radius:8px;padding:12px 14px;border:1px solid}
+.bal-block.ok{background:var(--green-lt);border-color:var(--green-bd)}.bal-block.off{background:var(--red-lt);border-color:var(--red-bd)}
+.bal-label{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.bal-label.ok{color:var(--green)}.bal-label.off{color:var(--red)}
+.bal-amt{font-family:'DM Mono',monospace;font-size:20px;font-weight:600;line-height:1}
+.bal-amt.ok{color:var(--green)}.bal-amt.off{color:var(--red)}
+.bal-sub{font-size:10px;color:var(--text2);margin-top:3px}
+.stmt-input-wrap{padding:14px;border-bottom:1px solid var(--border)}
+.stmt-input-wrap label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
+.stmt-input-wrap input{width:100%;background:#F8FAFC;border:1px solid var(--border2);border-radius:6px;padding:7px 10px;font-size:13px;font-family:'DM Mono',monospace;color:var(--text);font-weight:500}
+.stmt-input-wrap input:focus{outline:1.5px solid var(--teal);border-color:var(--teal)}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 // ─── STATE ────────────────────────────────────────────────────────────────────
-const S = {
-  screen: 'config',   // config | loading | recon
-  bankId: '129',
-  startDate: '',
-  endDate: '',
-  stmtEndBal: '',
+const ST = {
+  screen: 'config',
+  bankId: '129', startDate: '', endDate: '', stmtEndBal: '',
   bankFile: null, bankText: '',
-  plaidAcct: null,    // { key, name, balance }
+  plaidAcct: null,
   error: '',
-  loadSteps: [],      // [{label, status}]
+  loadSteps: [],
   // Recon data
-  txns: [],           // all transactions
-  checked: new Set(), // cleared transaction IDs
-  begBal: 0,
+  rvRows: [], bankRows: [],
+  // Links: rvId → bankId, reverse
+  links: {}, linksRev: {}, linkTypes: {},
+  // UI
+  filter: 'all',
+  rvSort: 'date_asc', bkSort: 'date_asc',
+  linkMode: false, linkSrc: null, linkSrcSide: null,
+  selRV: null, selBK: null,
 };
-function set(p){ Object.assign(S, p); render(); }
+const set = p => { Object.assign(ST, p); render(); };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const fmt = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0);
-function fmtDate(d){
-  if(!d) return '';
-  try{ const dt=new Date(d+'T12:00:00'); return `${dt.getMonth()+1}/${dt.getDate()}/${dt.getFullYear()}`; }
-  catch(e){ return d; }
-}
-function esc(s){ return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const fmt = n => '$'+Math.abs(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtD = d => { if(!d) return ''; try{ const dt=new Date(d+'T12:00:00'); return `${dt.getMonth()+1}/${dt.getDate()}/${String(dt.getFullYear()).slice(2)}`; }catch(e){ return d; } };
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const daysDiff = (a,b) => { try{ return Math.abs((new Date(a+'T12:00:00')-new Date(b+'T12:00:00'))/86400000); }catch(e){ return 999; } };
 
-// ─── API FETCH ────────────────────────────────────────────────────────────────
-async function apiFetch(path, params={}){
-  const url = new URL('/api/rentvine'+path, location.origin);
-  Object.entries(params).forEach(([k,v])=>{ if(v!==undefined&&v!==null) url.searchParams.set(k,v); });
-  const r = await fetch(url.toString());
-  if(!r.ok) throw new Error(`Rentvine ${path} → ${r.status}`);
-  return r.json();
-}
-
-async function fetchAllPages(path, params={}){
+// ─── FETCH ALL PAGES ──────────────────────────────────────────────────────────
+async function fetchAll(path, params={}) {
   let page=1, all=[];
-  while(page <= 20){
-    const d = await apiFetch(path, {...params, page, pageSize:200});
-    const rows = Array.isArray(d) ? d : (d?.data ?? []);
+  while(page<=20) {
+    const url = new URL('/api/rentvine'+path, location.origin);
+    Object.entries({...params,page,pageSize:200}).forEach(([k,v])=>url.searchParams.set(k,v));
+    const r = await fetch(url); if(!r.ok) break;
+    const d = await r.json();
+    const rows = Array.isArray(d)?d:(d?.data??[]);
     if(!rows.length) break;
-    all = all.concat(rows);
-    if(rows.length < 200) break;
+    all=all.concat(rows);
+    if(rows.length<200) break;
     page++;
   }
   return all;
 }
 
-// ─── DATE FILTER ──────────────────────────────────────────────────────────────
-function inRange(dateStr){
-  if(!dateStr) return false;
-  const d = dateStr.slice(0,10);
-  if(S.startDate && d < S.startDate) return false;
-  if(S.endDate   && d > S.endDate)   return false;
-  return true;
-}
+// ─── PARSE ────────────────────────────────────────────────────────────────────
+function parseLine(l){ const f=[]; let c='',q=false; for(let i=0;i<l.length;i++){ if(l[i]==='"')q=!q; else if(l[i]===','&&!q){f.push(c.trim());c='';}else c+=l[i]; } f.push(c.trim()); return f; }
+function parseDate(d){ if(!d) return ''; const s=String(d).trim().replace(/^"|"$/g,''); if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10); let m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/); if(m) return `${m[3]}-${m[1]}-${m[2]}`; m=s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/); if(m){const y=m[3].length===2?'20'+m[3]:m[3]; return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;}  return s; }
 
-// ─── LOAD DATA ────────────────────────────────────────────────────────────────
-function stepUpdate(label, status){
-  const steps = S.loadSteps.map(s => s.label===label ? {...s,status} : s);
-  set({loadSteps: steps});
-}
-
-async function loadData(){
-  const steps = [
-    {label:'Deposits',   status:'pending'},
-    {label:'Transfers',  status:'pending'},
-    {label:'Settlements',status:'pending'},
-    {label:'Bank side',  status:'pending'},
-  ];
-  set({screen:'loading', loadSteps:steps, error:''});
-
-  try{
-    // Fetch Rentvine data
-    stepUpdate('Deposits','active');
-    const deps = await fetchAllPages('/accounting/deposits',{bankAccountID:S.bankId}).catch(()=>[]);
-    stepUpdate('Deposits','done');
-
-    stepUpdate('Transfers','active');
-    const transfers = await fetchAllPages('/accounting/bank-transfers/search',{bankAccountID:S.bankId,isVoided:0}).catch(()=>[]);
-    stepUpdate('Transfers','done');
-
-    stepUpdate('Settlements','active');
-    const settlements = await fetchAllPages('/accounting/settlements',{bankAccountID:S.bankId}).catch(()=>[]);
-    stepUpdate('Settlements','done');
-
-    // Build transaction list
-    const txns = [];
-
-    // Deposits
-    deps.forEach(row=>{
-      const dep = row.deposit || row;
-      const date = (dep.dateDeposited||dep.depositDate||dep.dateTimeCreated||'').slice(0,10);
-      if(!inRange(date)) return;
-      txns.push({
-        id: 'dep-'+dep.depositID,
-        date,
-        type: 'Deposit',
-        tag: 'tag-deposit',
-        reference: dep.depositNumber||dep.reference||'',
-        description: dep.description || dep.memo || '',
-        amount: Math.abs(parseFloat(dep.amount||0)),
-        direction: 'in',
-        source: 'rv',
-      });
-    });
-
-    // Transfers
-    transfers.forEach(row=>{
-      const bt = row.bankTransfer || row;
-      const date = (bt.datePosted||bt.dateTransferred||bt.dateTimeCreated||'').slice(0,10);
-      if(!inRange(date)) return;
-      const fromId = String(bt.sourceBankAccountID||'');
-      const toId   = String(bt.destinationBankAccountID||'');
-      const myId   = String(S.bankId);
-      const dir = toId===myId ? 'in' : 'out';
-      txns.push({
-        id: 'xfr-'+bt.bankTransferID,
-        date,
-        type: 'Transfer',
-        tag: 'tag-transfer',
-        reference: bt.reference||bt.bankTransferNumber||'',
-        description: bt.description||bt.memo||`Transfer ${dir==='in'?'from':'to'} account`,
-        amount: Math.abs(parseFloat(bt.amount||0)),
-        direction: dir,
-        source: 'rv',
-      });
-    });
-
-    // Settlements
-    settlements.forEach(row=>{
-      const s = row.settlement || row;
-      const date = (s.settlementDate||s.datePosted||s.dateTimeCreated||'').slice(0,10);
-      if(!inRange(date)) return;
-      const raw = parseFloat(s.amount||0);
-      const dir = raw >= 0 ? 'in' : 'out';
-      txns.push({
-        id: 'set-'+s.settlementID,
-        date,
-        type: dir==='out' ? 'Payout' : 'Settlement',
-        tag: dir==='out' ? 'tag-payout' : 'tag-settlement',
-        reference: s.reference||'--',
-        description: s.description||s.memo||(dir==='out'?'ACH Payout':'ACH Settlement'),
-        amount: Math.abs(raw),
-        direction: dir,
-        source: 'rv',
-      });
-    });
-
-    // Bank side: Plaid or CSV
-    stepUpdate('Bank side','active');
-    let bankTxns = [];
-    if(S.plaidAcct){
-      try{
-        const pr = await fetch(`/api/plaid/transactions?account_key=${S.plaidAcct.key}&start_date=${S.startDate}&end_date=${S.endDate}`);
-        const pd = await pr.json();
-        bankTxns = (pd.transactions||[]).map(t=>({
-          id: 'plaid-'+t.transactionId,
-          date: t.date,
-          type: 'Bank',
-          tag: 'tag-plaid',
-          reference: t.transactionId.slice(-8),
-          description: t.description,
-          amount: t.amount,
-          direction: t.direction,
-          source: 'bank',
-        }));
-      }catch(e){}
-    } else if(S.bankText){
-      bankTxns = parseCSV(S.bankText).filter(t=>inRange(t.date));
-    }
-    stepUpdate('Bank side','done');
-
-    // Merge — mark each transaction with which side(s) it appears on
-    // For now show all Rentvine txns as the primary list (like Rentvine's UI)
-    // Bank txns used for matching indicator
-    const allTxns = txns.sort((a,b)=>a.date.localeCompare(b.date));
-
-    // Beginning balance from Rentvine (we'll compute or default to 0)
-    set({
-      screen:'recon',
-      txns: allTxns,
-      checked: new Set(),
-      begBal: 0,
-      stmtEndBal: S.stmtEndBal || '',
-    });
-  } catch(e){
-    set({screen:'config', error: e.message});
-  }
-}
-
-// ─── CSV PARSER ───────────────────────────────────────────────────────────────
-function parseCSV(text){
+function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   const h = parseLine(lines[0]);
   const hi = k => h.findIndex(x=>x.toLowerCase().includes(k.toLowerCase()));
-  const iDate=hi('date'), iDesc=hi('desc'), iAmt=hi('amount'), iType=hi('type');
+  const iDate=hi('date'),iDesc=hi('desc'),iAmt=hi('amount'),iType=hi('type');
   return lines.slice(1).map((l,i)=>{
-    const v = parseLine(l);
-    const rawAmt = parseFloat((v[iAmt]||'').replace(/[$,]/g,''))||0;
-    if(!rawAmt) return null;
+    const v=parseLine(l);
+    const raw=parseFloat((v[iAmt]||'').replace(/[$,]/g,''))||0;
+    if(!raw) return null;
     const type=(v[iType]||'').trim();
-    if(type!=='Sale'&&rawAmt>=0) return null;
-    return {
-      id:'csv-'+i, date: parseDate(v[iDate]),
-      description:(v[iDesc]||'').trim(), amount:Math.abs(rawAmt),
-      direction:'out', source:'bank', type:'Bank', tag:'tag-plaid', reference:'',
-    };
+    if(type!=='Sale'&&raw>=0) return null;
+    const date=parseDate(v[iDate]);
+    if(!date) return null;
+    return { id:'csv'+i, date, description:(v[iDesc]||'').trim(), amount:Math.abs(raw), direction:'out', tag:'tb', typeLabel:'Bank' };
   }).filter(Boolean);
 }
-function parseLine(line){
-  const f=[]; let c='',q=false;
-  for(let i=0;i<line.length;i++){
-    if(line[i]==='"')q=!q;
-    else if(line[i]===','&&!q){f.push(c.trim());c='';}
-    else c+=line[i];
+
+// ─── AUTO MATCH ───────────────────────────────────────────────────────────────
+function autoMatch(rvRows, bankRows) {
+  const links={}, linksRev={}, linkTypes={};
+  const usedBank = new Set();
+
+  // Pass 1: exact amount (±$0.02) + date within 5 days
+  rvRows.forEach(rv => {
+    if(links[rv.id]) return;
+    let best=null, bestDiff=999;
+    bankRows.forEach(bk => {
+      if(usedBank.has(bk.id)) return;
+      if(Math.abs(rv.amount - bk.amount) > 0.02) return;
+      const dd = daysDiff(rv.date, bk.date);
+      if(dd<=5 && dd<bestDiff){ bestDiff=dd; best=bk; }
+    });
+    if(best){ links[rv.id]=best.id; linksRev[best.id]=rv.id; linkTypes[rv.id]='matched'; usedBank.add(best.id); }
+  });
+
+  // Pass 2: exact amount + date within 45 days
+  rvRows.forEach(rv => {
+    if(links[rv.id]) return;
+    let best=null, bestDiff=999;
+    bankRows.forEach(bk => {
+      if(usedBank.has(bk.id)) return;
+      if(Math.abs(rv.amount - bk.amount) > 0.02) return;
+      const dd = daysDiff(rv.date, bk.date);
+      if(dd<=45 && dd<bestDiff){ bestDiff=dd; best=bk; }
+    });
+    if(best){ links[rv.id]=best.id; linksRev[best.id]=rv.id; linkTypes[rv.id]='matched'; usedBank.add(best.id); }
+  });
+
+  // Pass 3: amount within $5 + date within 45 days (partial)
+  rvRows.forEach(rv => {
+    if(links[rv.id]) return;
+    let best=null, bestDiff=999;
+    bankRows.forEach(bk => {
+      if(usedBank.has(bk.id)) return;
+      if(Math.abs(rv.amount - bk.amount) > 5) return;
+      const dd = daysDiff(rv.date, bk.date);
+      if(dd<=45 && dd<bestDiff){ bestDiff=dd; best=bk; }
+    });
+    if(best){ links[rv.id]=best.id; linksRev[best.id]=rv.id; linkTypes[rv.id]='partial'; usedBank.add(best.id); }
+  });
+
+  return { links, linksRev, linkTypes };
+}
+
+// ─── LOAD DATA ────────────────────────────────────────────────────────────────
+async function loadData() {
+  const steps = [
+    {label:'Rentvine deposits', status:'pending'},
+    {label:'Rentvine transfers', status:'pending'},
+    {label:'Rentvine settlements', status:'pending'},
+    {label:'Bank transactions', status:'pending'},
+    {label:'Auto-matching', status:'pending'},
+  ];
+  set({screen:'loading', loadSteps:steps, error:''});
+  const upd = (label,status) => { const s=ST.loadSteps.map(x=>x.label===label?{...x,status}:x); set({loadSteps:s}); };
+
+  try {
+    const inRange = d => { const s=d?.slice(0,10)||''; return (!ST.startDate||s>=ST.startDate)&&(!ST.endDate||s<=ST.endDate); };
+
+    upd('Rentvine deposits','active');
+    const deps = await fetchAll('/accounting/deposits',{bankAccountID:ST.bankId}).catch(()=>[]);
+    upd('Rentvine deposits','done');
+
+    upd('Rentvine transfers','active');
+    const xfrs = await fetchAll('/accounting/bank-transfers/search',{bankAccountID:ST.bankId,isVoided:0}).catch(()=>[]);
+    upd('Rentvine transfers','done');
+
+    upd('Rentvine settlements','active');
+    const setts = await fetchAll('/accounting/settlements',{bankAccountID:ST.bankId}).catch(()=>[]);
+    upd('Rentvine settlements','done');
+
+    // Build RV rows
+    const rvRows = [];
+    deps.forEach((row,i)=>{
+      const d=row.deposit||row;
+      const date=(d.dateDeposited||d.depositDate||d.dateTimeCreated||'').slice(0,10);
+      if(!inRange(date)) return;
+      rvRows.push({ id:'dep'+i, date, amount:Math.abs(parseFloat(d.amount||0)), direction:'in',
+        typeLabel:'Deposit', tag:'td', reference:d.depositNumber||d.reference||'',
+        description:d.description||d.memo||'Deposit' });
+    });
+    xfrs.forEach((row,i)=>{
+      const bt=row.bankTransfer||row;
+      const date=(bt.datePosted||bt.dateTransferred||'').slice(0,10);
+      if(!inRange(date)) return;
+      const fromId=String(bt.sourceBankAccountID||''), toId=String(bt.destinationBankAccountID||''), myId=String(ST.bankId);
+      const dir = toId===myId?'in':'out';
+      rvRows.push({ id:'xfr'+i, date, amount:Math.abs(parseFloat(bt.amount||0)), direction:dir,
+        typeLabel:'Transfer', tag:'tt', reference:bt.bankTransferNumber||bt.reference||'',
+        description:bt.description||bt.memo||`Transfer ${dir==='in'?'from':'to'} account` });
+    });
+    setts.forEach((row,i)=>{
+      const s=row.settlement||row;
+      const date=(s.settlementDate||s.datePosted||'').slice(0,10);
+      if(!inRange(date)) return;
+      const raw=parseFloat(s.amount||0), dir=raw>=0?'in':'out';
+      rvRows.push({ id:'set'+i, date, amount:Math.abs(raw), direction:dir,
+        typeLabel:dir==='out'?'Payout':'Settlement', tag:dir==='out'?'tp':'ts',
+        reference:s.reference||'--', description:s.description||s.memo||(dir==='out'?'ACH Payout':'ACH Settlement') });
+    });
+
+    // Bank rows
+    upd('Bank transactions','active');
+    let bankRows = [];
+    if(ST.plaidAcct) {
+      try {
+        const pr = await fetch(`/api/plaid/transactions?account_key=${ST.plaidAcct.key}&start_date=${ST.startDate}&end_date=${ST.endDate}`);
+        const pd = await pr.json();
+        bankRows = (pd.transactions||[]).map(t=>({
+          id:'pl'+t.transactionId, date:t.date, amount:t.amount,
+          description:t.description, direction:t.direction,
+          typeLabel:'Bank', tag:'tb', reference:t.transactionId.slice(-6),
+        }));
+      } catch(e) {}
+    } else if(ST.bankText) {
+      bankRows = parseCSV(ST.bankText).filter(t=>inRange(t.date));
+    }
+    upd('Bank transactions','done');
+
+    // Auto match
+    upd('Auto-matching','active');
+    const {links,linksRev,linkTypes} = autoMatch(rvRows, bankRows);
+    upd('Auto-matching','done');
+
+    set({ screen:'recon', rvRows, bankRows, links, linksRev, linkTypes,
+      filter:'all', rvSort:'date_asc', bkSort:'date_asc',
+      linkMode:false, linkSrc:null, linkSrcSide:null, selRV:null, selBK:null });
+  } catch(e) {
+    set({screen:'config', error:e.message});
   }
-  f.push(c.trim()); return f;
-}
-function parseDate(d){
-  if(!d) return '';
-  const s=String(d).trim().replace(/^"|"$/g,'');
-  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
-  let m=s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if(m) return `${m[3]}-${m[1]}-${m[2]}`;
-  m=s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;}
-  return s;
 }
 
-// ─── COMPUTED VALUES ──────────────────────────────────────────────────────────
-function computeSummary(){
-  const {txns, checked, begBal, stmtEndBal} = S;
-  const moneyIn  = txns.filter(t=>t.direction==='in');
-  const moneyOut = txns.filter(t=>t.direction==='out');
-  const clearedIn  = moneyIn.filter(t=>checked.has(t.id)).reduce((s,t)=>s+t.amount,0);
-  const clearedOut = moneyOut.filter(t=>checked.has(t.id)).reduce((s,t)=>s+t.amount,0);
-  const totalIn    = moneyIn.reduce((s,t)=>s+t.amount,0);
-  const totalOut   = moneyOut.reduce((s,t)=>s+t.amount,0);
-  const clearedBal = parseFloat(begBal||0) + clearedIn - clearedOut;
-  const endBal     = parseFloat(stmtEndBal||0);
-  const diff       = endBal - clearedBal;
-  return {moneyIn,moneyOut,clearedIn,clearedOut,totalIn,totalOut,clearedBal,endBal,diff};
+// ─── LINK MANAGEMENT ─────────────────────────────────────────────────────────
+function applyLink(rvId, bkId) {
+  const links={...ST.links}, linksRev={...ST.linksRev}, linkTypes={...ST.linkTypes};
+  const oldBk=links[rvId], oldRv=linksRev[bkId];
+  if(oldBk){ delete linksRev[oldBk]; }
+  if(oldRv){ delete links[oldRv]; delete linkTypes[oldRv]; }
+  links[rvId]=bkId; linksRev[bkId]=rvId; linkTypes[rvId]='manual';
+  set({links,linksRev,linkTypes,linkMode:false,linkSrc:null,linkSrcSide:null,selRV:rvId,selBK:bkId});
+}
+function removeLink(rvId) {
+  const links={...ST.links},linksRev={...ST.linksRev},linkTypes={...ST.linkTypes};
+  const bkId=links[rvId]; if(bkId) delete linksRev[bkId];
+  delete links[rvId]; delete linkTypes[rvId];
+  set({links,linksRev,linkTypes});
+}
+function clickRow(side, id) {
+  if(ST.linkMode) {
+    if(!ST.linkSrc) { set({linkSrc:id,linkSrcSide:side}); return; }
+    if(ST.linkSrcSide===side) { set({linkSrc:id,linkSrcSide:side}); return; }
+    const rvId=side==='rv'?id:ST.linkSrc, bkId=side==='bk'?id:ST.linkSrc;
+    applyLink(rvId,bkId); return;
+  }
+  if(side==='rv') {
+    const bkId=ST.links[id]||null;
+    set({selRV:id,selBK:bkId});
+    if(bkId) setTimeout(()=>scrollIntoView('bk',bkId),50);
+  } else {
+    const rvId=ST.linksRev[id]||null;
+    set({selBK:id,selRV:rvId});
+    if(rvId) setTimeout(()=>scrollIntoView('rv',rvId),50);
+  }
+}
+function scrollIntoView(side, id) {
+  const wrap = document.getElementById(side==='rv'?'rv-rows':'bk-rows');
+  const row = wrap?.querySelector(`[data-id="${id}"]`);
+  row?.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
-// ─── TOGGLE CHECK ─────────────────────────────────────────────────────────────
-function toggleCheck(id){
-  const c = new Set(S.checked);
-  if(c.has(id)) c.delete(id); else c.add(id);
-  set({checked: c});
+// ─── FILTER / SORT ────────────────────────────────────────────────────────────
+function getSortedFiltered(side) {
+  const rows = side==='rv'?[...ST.rvRows]:[...ST.bankRows];
+  const sort = side==='rv'?ST.rvSort:ST.bkSort;
+  const q = ST.filter;
+  let filtered = rows;
+  if(q==='matched') filtered=rows.filter(r=>side==='rv'?ST.links[r.id]:ST.linksRev[r.id]);
+  else if(q==='unmatched') filtered=rows.filter(r=>side==='rv'?!ST.links[r.id]:!ST.linksRev[r.id]);
+  else if(q==='partial') filtered=rows.filter(r=>side==='rv'&&ST.linkTypes[r.id]==='partial');
+  const [col,dir]=sort.split('_');
+  const d=dir==='asc'?1:-1;
+  return filtered.sort((a,b)=>{
+    if(col==='date') return d*a.date.localeCompare(b.date);
+    if(col==='amt')  return d*(a.amount-b.amount);
+    return 0;
+  });
 }
-function checkAll(ids, val){
-  const c = new Set(S.checked);
-  ids.forEach(id => val ? c.add(id) : c.delete(id));
-  set({checked: c});
+
+// ─── SUMMARY ──────────────────────────────────────────────────────────────────
+function computeSummary() {
+  const {rvRows,bankRows,links,linkTypes,stmtEndBal} = ST;
+  const rvMatched=rvRows.filter(r=>links[r.id]&&linkTypes[r.id]==='matched').length;
+  const rvPartial=rvRows.filter(r=>links[r.id]&&linkTypes[r.id]==='partial').length;
+  const rvManual=rvRows.filter(r=>links[r.id]&&linkTypes[r.id]==='manual').length;
+  const rvUnmatched=rvRows.filter(r=>!links[r.id]).length;
+  const bkUnmatched=bankRows.filter(r=>!ST.linksRev[r.id]).length;
+  const rvIn=rvRows.filter(r=>r.direction==='in').reduce((s,r)=>s+r.amount,0);
+  const rvOut=rvRows.filter(r=>r.direction==='out').reduce((s,r)=>s+r.amount,0);
+  const endBal=parseFloat(stmtEndBal||0);
+  const isBalanced=Math.abs(endBal-(rvIn-rvOut))<0.01 && endBal>0;
+  return {rvMatched,rvPartial,rvManual,rvUnmatched,bkUnmatched,rvIn,rvOut,endBal,isBalanced};
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+function exportUnmatched() {
+  const lines=[['Side','Date','Type','Description','Amount']];
+  ST.rvRows.filter(r=>!ST.links[r.id]).forEach(r=>lines.push(['RV',r.date,r.typeLabel,`"${r.description}"`,r.amount.toFixed(2)]));
+  ST.bankRows.filter(r=>!ST.linksRev[r.id]).forEach(r=>lines.push(['Bank',r.date,'Bank',`"${r.description}"`,r.amount.toFixed(2)]));
+  const a=document.createElement('a');
+  a.href='data:text/csv,'+encodeURIComponent(lines.map(r=>r.join(',')).join('\n'));
+  a.download='recon_unmatched_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
 }
 
 // ─── RENDER ───────────────────────────────────────────────────────────────────
-function render(){
+function render() {
   document.getElementById('app').innerHTML =
-    S.screen==='loading' ? renderLoading() :
-    S.screen==='recon'   ? renderRecon()   :
-    renderConfig();
+    ST.screen==='loading' ? renderLoading() :
+    ST.screen==='recon'   ? renderRecon()   : renderConfig();
   bindAll();
 }
 
-// ── CONFIG ────────────────────────────────────────────────────────────────────
-function renderConfig(){
-  const {bankFile, plaidAcct, startDate, endDate, stmtEndBal, error} = S;
-  const acctOpts = [
-    {id:'129',label:'1000 · Rental Trust Account'},
-    {id:'130',label:'1100 · Security Deposit Account'},
-    {id:'149',label:'3100 · Employee Trust'},
-  ];
-  return `
-  <div class="topbar">
-    <span class="topbar-title"><span>Aloe</span> PM · Bank Reconciliation</span>
-  </div>
-  <div class="config-wrap">
-    ${error?`<div class="err-box">⚠ ${esc(error)}</div>`:''}
-    <div class="config-card">
-      <div class="config-title">New Bank Reconciliation</div>
-      <div class="field-row">
-        <div class="field">
-          <label>Bank Account</label>
-          <select id="bankId">
-            ${acctOpts.map(a=>`<option value="${a.id}" ${S.bankId===a.id?'selected':''}>${a.label}</option>`).join('')}
-          </select>
+// CONFIG
+function renderConfig() {
+  const {bankFile,plaidAcct,startDate,endDate,stmtEndBal,error} = ST;
+  const accts=[{id:'129',l:'1000 · Rental Trust Account'},{id:'130',l:'1100 · Security Deposit'},{id:'149',l:'3100 · Employee Trust'}];
+  return `<div class="topbar"><span class="topbar-title"><span>Aloe</span> PM · Bank Reconciliation</span></div>
+  <div class="config-screen">
+    <div style="width:100%;max-width:640px">
+      ${error?`<div class="err" style="margin-bottom:12px">⚠ ${esc(error)}</div>`:''}
+      <div class="config-card">
+        <div class="config-title">New Bank Reconciliation</div>
+        <div class="info-box">Rentvine transactions are pulled and <strong>auto-matched</strong> against your bank statement by amount + date. Green = matched · Yellow = partial · White = unmatched. Manually link any row by clicking 🔗 Link rows.</div>
+        <div class="field-grid">
+          <div class="field"><label>Bank Account</label>
+            <select id="bankId">${accts.map(a=>`<option value="${a.id}" ${ST.bankId===a.id?'selected':''}>${a.l}</option>`).join('')}</select></div>
+          <div class="field"><label>Statement End Date</label><input type="date" id="endDate" value="${endDate}"/></div>
+          <div class="field"><label>Statement Start Date</label><input type="date" id="startDate" value="${startDate}"/></div>
+          <div class="field"><label>Statement Ending Balance</label><input type="number" id="stmtEndBal" placeholder="0.00" step="0.01" value="${stmtEndBal}"/></div>
         </div>
-        <div class="field">
-          <label>Statement End Date</label>
-          <input type="date" id="endDate" value="${endDate}"/>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Bank Statement Source</div>
+        <div id="plaid-area"><div style="font-size:11px;color:var(--muted);padding:4px 0 8px">Checking Plaid…</div></div>
+        <div class="or-divider">or upload CSV</div>
+        <div class="drop ${bankFile?'filled':''}" id="drop-zone">
+          <input type="file" id="csv-fi" accept=".csv" style="display:none"/>
+          ${bankFile?`<div class="drop-icon">✓</div><div class="drop-label" style="color:var(--teal)">${esc(bankFile.name)}</div><div class="drop-sub">Click to replace</div>`
+            :`<div class="drop-icon">📄</div><div class="drop-label">Drop bank CSV here</div><div class="drop-sub">Chase, bank statement, or Rentvine export</div>`}
         </div>
+        <button class="run-btn" id="run-btn">Run Reconciliation →</button>
       </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Statement Start Date</label>
-          <input type="date" id="startDate" value="${startDate}"/>
-        </div>
-        <div class="field">
-          <label>Statement Ending Balance</label>
-          <input type="number" id="stmtEndBal" placeholder="0.00" step="0.01" value="${stmtEndBal}"/>
-        </div>
-      </div>
-    </div>
-    <div class="config-card">
-      <div class="config-title">Bank Statement Source</div>
-      <div id="plaid-status-area">
-        <div style="font-size:11px;color:var(--muted);padding:8px 0">Checking Plaid connection…</div>
-      </div>
-      <div class="drop-zone ${bankFile?'filled':''}" id="drop-zone">
-        <input type="file" id="csv-input" accept=".csv" style="display:none"/>
-        ${bankFile
-          ?`<div class="dz-icon">✓</div><div class="dz-label" style="color:var(--teal)">${esc(bankFile.name)}</div><div class="dz-sub">Click to replace</div>`
-          :`<div class="dz-icon">📄</div><div class="dz-label">Upload bank statement CSV (optional)</div><div class="dz-sub">Or use Plaid connection above</div>`}
-      </div>
-      <button class="run-btn" id="run-btn">Run Reconciliation →</button>
     </div>
   </div>`;
 }
 
-// ── LOADING ───────────────────────────────────────────────────────────────────
-function renderLoading(){
-  const steps = S.loadSteps;
-  return `
-  <div class="topbar"><span class="topbar-title"><span>Aloe</span> PM · Bank Reconciliation</span></div>
-  <div class="load-wrap">
+// LOADING
+function renderLoading() {
+  return `<div class="topbar"><span class="topbar-title"><span>Aloe</span> PM · Bank Reconciliation</span></div>
+  <div class="load-screen">
     <div class="spinner"></div>
-    <div class="load-msg">Loading transactions…</div>
-    <div class="load-steps">
-      ${steps.map(s=>`<div class="load-step ${s.status}">${esc(s.label)}</div>`).join('')}
-    </div>
+    <div class="load-msg">Loading &amp; matching transactions…</div>
+    <div class="load-steps">${ST.loadSteps.map(s=>`<div class="step ${s.status}">${esc(s.label)}</div>`).join('')}</div>
   </div>`;
 }
 
-// ── RECON ─────────────────────────────────────────────────────────────────────
-function renderRecon(){
-  const {txns, checked, begBal, stmtEndBal, startDate, endDate, plaidAcct, bankFile} = S;
-  const {moneyIn,moneyOut,clearedIn,clearedOut,totalIn,totalOut,clearedBal,endBal,diff} = computeSummary();
-  const isBalanced = Math.abs(diff) < 0.01;
+// RECON
+function renderRecon() {
+  const {filter,rvSort,bkSort,rvRows,bankRows,links,linksRev,linkTypes,linkMode,linkSrc,linkSrcSide,selRV,selBK,stmtEndBal} = ST;
+  const {rvMatched,rvPartial,rvManual,rvUnmatched,bkUnmatched,rvIn,rvOut,endBal,isBalanced} = computeSummary();
 
-  const acctNames = {'129':'1000: Rental Trust Account (3221)','130':'1100: Security Deposit','149':'3100: Employee Trust'};
+  const rvFiltered = getSortedFiltered('rv');
+  const bkFiltered = getSortedFiltered('bk');
 
-  // Row renderer
-  const renderRow = (t) => {
-    const isCleared = checked.has(t.id);
-    const dirClass = t.direction==='in' ? 'amt-in' : 'amt-out';
-    const dirPrefix = t.direction==='in' ? '+' : '-';
-    return `<tr class="${isCleared?'cleared':''}" data-id="${t.id}">
-      <td class="chk-cell"><input type="checkbox" class="row-chk" data-id="${t.id}" ${isCleared?'checked':''}></td>
-      <td class="mono" style="font-size:11px;color:var(--text2)">${fmtDate(t.date)}</td>
-      <td><span class="tag ${t.tag}">${esc(t.type)}</span></td>
-      <td class="mono" style="font-size:11px;color:var(--text2)">${esc(t.reference)}</td>
-      <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.description)}">${esc(t.description)}</td>
-      <td class="${dirClass}" style="text-align:right">${dirPrefix}${fmt(t.amount)}</td>
-    </tr>`;
+  // Row renderer — RV side
+  const rvRow = r => {
+    const lt=linkTypes[r.id], isLinked=!!links[r.id];
+    const isSel=selRV===r.id, isPartner=selBK&&links[r.id]===selBK;
+    const isPend=linkMode&&linkSrcSide==='rv'&&linkSrc===r.id;
+    const isDim=linkMode&&!isPend&&!isSel;
+    let cls='row rv-grid';
+    if(isSel||isPartner) cls+=' selected';
+    else if(isPend) cls+=' pending';
+    else if(lt==='manual') cls+=' manual-match';
+    else if(lt==='partial') cls+=' partial';
+    else if(isLinked) cls+=' matched';
+    if(isDim) cls+=' dimmed';
+    const dot=isLinked?(lt==='manual'?'<div class="match-dot dot-p"></div>':lt==='partial'?'<div class="match-dot dot-a"></div>':'<div class="match-dot dot-g"></div>'):'';
+    return `<div class="${cls}" data-id="${r.id}" data-side="rv">
+      <span class="c date">${fmtD(r.date)}</span>
+      <span class="c"><span class="tag ${r.tag}">${esc(r.typeLabel)}</span></span>
+      <span class="c" title="${esc(r.description)}">${esc(r.description)}</span>
+      <span class="c amt ${r.direction}">${r.direction==='in'?'+':'-'}${fmt(r.amount)}</span>
+      ${dot}
+    </div>`;
   };
 
-  const inIds  = moneyIn.map(t=>t.id);
-  const outIds = moneyOut.map(t=>t.id);
-  const allInChecked  = inIds.length>0  && inIds.every(id=>checked.has(id));
-  const allOutChecked = outIds.length>0 && outIds.every(id=>checked.has(id));
+  // Row renderer — Bank side
+  const bkRow = r => {
+    const rvId=linksRev[r.id], lt=rvId?linkTypes[rvId]:null;
+    const isLinked=!!rvId;
+    const isSel=selBK===r.id, isPartner=selRV&&links[selRV]===r.id;
+    const isPend=linkMode&&linkSrcSide==='bk'&&linkSrc===r.id;
+    const isDim=linkMode&&!isPend&&!isSel;
+    let cls='row bk-grid';
+    if(isSel||isPartner) cls+=' selected';
+    else if(isPend) cls+=' pending';
+    else if(lt==='manual') cls+=' manual-match';
+    else if(lt==='partial') cls+=' partial';
+    else if(isLinked) cls+=' matched';
+    if(isDim) cls+=' dimmed';
+    const dot=isLinked?(lt==='manual'?'<div class="match-dot dot-p"></div>':lt==='partial'?'<div class="match-dot dot-a"></div>':'<div class="match-dot dot-g"></div>'):'';
+    return `<div class="${cls}" data-id="${r.id}" data-side="bk">
+      <span class="c date">${fmtD(r.date)}</span>
+      <span class="c" title="${esc(r.description)}">${esc(r.description)}</span>
+      <span class="c amt ${r.direction}">${r.direction==='in'?'+':'-'}${fmt(r.amount)}</span>
+      ${dot}
+    </div>`;
+  };
 
-  const cols = `
-    <th class="chk-cell center"><input type="checkbox" class="chk-all-header" id="chk-all-in" ${allInChecked?'checked':''}></th>
-    <th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th class="right">Amount</th>`;
+  const sortBtn=(side,col,label)=>{
+    const cur=side==='rv'?rvSort:bkSort;
+    const [c,d]=cur.split('_');
+    const cls=c===col?(d==='asc'?' sa':' sd'):'';
+    return `<span class="${cls}" data-sort="${side}-${col}">${label}</span>`;
+  };
+
+  const filterBtns=[
+    ['all','All'],['matched','✓ Matched'],['partial','~ Partial'],['unmatched','Unmatched'],
+  ].map(([v,l])=>`<button class="tb-btn ${filter===v?'active':''}" data-filter="${v}">${l}</button>`).join('');
 
   return `
-  <div class="recon-wrap">
-    <!-- HEADER -->
-    <div class="recon-header">
-      <div>
-        <div class="recon-title">Bank Reconciliation</div>
-        <div class="recon-sub">${esc(acctNames[S.bankId]||'')} · ${fmtDate(startDate)} – ${fmtDate(endDate)}</div>
-      </div>
-      <div class="header-field" style="margin-left:20px">
-        <label>Stmt End Date</label>
-        <span style="font-size:12px;color:var(--text2);font-family:'DM Mono',monospace">${endDate}</span>
-      </div>
-      <div class="header-field">
-        <label>Stmt Ending Balance</label>
-        <input type="number" id="stmt-end-live" value="${stmtEndBal}" step="0.01" placeholder="0.00" style="width:140px"/>
-      </div>
-      <div class="header-field">
-        <label>Beginning Balance</label>
-        <span class="beg-bal">${fmt(begBal)}</span>
-      </div>
-      <div class="topbar-right" style="margin-left:auto">
-        <button class="top-btn" id="back-btn">← New Recon</button>
-        <button class="top-btn primary" id="save-btn" ${isBalanced?'':'disabled'}>Reconcile</button>
+  <div class="topbar">
+    <span class="topbar-title"><span>Aloe</span> PM · Recon · ${ST.startDate} → ${ST.endDate}</span>
+    <div class="topbar-right">
+      <button class="top-btn" id="back-btn">← New</button>
+      <button class="top-btn" id="export-btn">⬇ Unmatched</button>
+    </div>
+  </div>
+
+  <div class="recon-layout">
+    <!-- STATS -->
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-dot" style="background:var(--green)"></div><span class="stat-label">Matched</span><span class="stat-val">${rvMatched}</span></div>
+      <div class="stat"><div class="stat-dot" style="background:var(--amber)"></div><span class="stat-label">Partial</span><span class="stat-val">${rvPartial}</span></div>
+      <div class="stat"><div class="stat-dot" style="background:var(--purple)"></div><span class="stat-label">Manual</span><span class="stat-val">${rvManual}</span></div>
+      <div class="stat"><div class="stat-dot" style="background:var(--border2)"></div><span class="stat-label">RV no match</span><span class="stat-val" style="color:var(--red)">${rvUnmatched}</span></div>
+      <div class="stat"><div class="stat-dot" style="background:var(--border2)"></div><span class="stat-label">Bank not in RV</span><span class="stat-val" style="color:var(--red)">${bkUnmatched}</span></div>
+      <div class="stats-bar-sep"></div>
+      <div class="stat"><span class="stat-label">RV In</span><span class="stat-val" style="color:var(--green)">${fmt(rvIn)}</span></div>
+      <div class="stat"><span class="stat-label">RV Out</span><span class="stat-val" style="color:var(--red)">${fmt(rvOut)}</span></div>
+      <div class="stat"><span class="stat-label">Net</span><span class="stat-val">${fmt(rvIn-rvOut)}</span></div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      ${filterBtns}
+      <div class="tb-sep"></div>
+      ${linkMode?'':`<button class="tb-btn" id="link-btn">🔗 Link rows</button>`}
+      ${selRV&&links[selRV]?`<button class="tb-btn" style="color:var(--red);border-color:var(--red-bd)" id="unlink-btn">✕ Unlink</button>`:''}
+      <div class="tb-right">
+        <span style="font-size:10px;color:var(--muted)">${linkMode?'🔗 Click RV row → click Bank row to link':'Click row to select · Right-click to unlink'}</span>
       </div>
     </div>
 
-    <!-- BODY -->
-    <div class="recon-body">
-      <!-- TRANSACTIONS -->
-      <div class="txn-area">
+    <!-- LINK BANNER -->
+    <div class="link-banner ${linkMode?'on':''}">
+      🔗 Link mode — click a <strong>Rentvine</strong> row, then its matching <strong>Bank</strong> row
+      <button class="link-cancel" id="cancel-link">Cancel</button>
+    </div>
 
-        <!-- MONEY IN -->
-        <div class="section-hdr">
-          <input type="checkbox" class="chk-all" id="chk-all-in" ${allInChecked?'checked':''} title="Select all Money In">
-          <span class="section-hdr-title">💰 Money In</span>
-          <span style="font-size:11px;color:var(--muted);margin-left:6px">${moneyIn.length} transactions · ${moneyIn.filter(t=>checked.has(t.id)).length} cleared</span>
-          <span class="section-total green">${fmt(totalIn)}</span>
+    <!-- WORKSPACE -->
+    <div class="workspace">
+      <!-- RV PANEL -->
+      <div class="panel panel-left">
+        <div class="panel-hdr">
+          <span class="panel-name">📋 Rentvine</span>
+          <span class="panel-count">${rvFiltered.length} / ${rvRows.length}</span>
         </div>
-        <table class="txn-table">
-          <thead><tr>
-            <th class="chk-cell"></th>
-            <th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th class="right">Amount</th>
-          </tr></thead>
-          <tbody>
-            ${moneyIn.length ? moneyIn.map(renderRow).join('') : `<tr><td colspan="6" class="empty-msg">No Money In transactions for this period</td></tr>`}
-          </tbody>
-        </table>
-
-        <!-- MONEY OUT -->
-        <div class="section-hdr">
-          <input type="checkbox" class="chk-all" id="chk-all-out" ${allOutChecked?'checked':''} title="Select all Money Out">
-          <span class="section-hdr-title">💸 Money Out</span>
-          <span style="font-size:11px;color:var(--muted);margin-left:6px">${moneyOut.length} transactions · ${moneyOut.filter(t=>checked.has(t.id)).length} cleared</span>
-          <span class="section-total red">${fmt(totalOut)}</span>
+        <div class="col-hdr rv-grid">
+          ${sortBtn('rv','date','Date')}
+          <span>Type</span>
+          <span>Description</span>
+          ${sortBtn('rv','amt','Amount')}
         </div>
-        <table class="txn-table">
-          <thead><tr>
-            <th class="chk-cell"></th>
-            <th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th class="right">Amount</th>
-          </tr></thead>
-          <tbody>
-            ${moneyOut.length ? moneyOut.map(renderRow).join('') : `<tr><td colspan="6" class="empty-msg">No Money Out transactions for this period</td></tr>`}
-          </tbody>
-        </table>
-
+        <div class="rows" id="rv-rows">
+          ${rvFiltered.length ? rvFiltered.map(rvRow).join('') : `<div class="empty">No rows</div>`}
+        </div>
       </div>
 
-      <!-- SUMMARY PANEL -->
-      <div class="summary-panel">
-        <!-- Cleared Balance -->
-        <div class="balance-block ${isBalanced?'':''}">
-          <div class="balance-label" style="color:var(--muted)">Ending Balance (Statement)</div>
-          <div class="balance-amount" style="color:var(--text)">${fmt(endBal)}</div>
-        </div>
+      <!-- DIVIDER -->
+      <div class="divider-col"><span class="div-label">Match</span></div>
 
-        <!-- Cleared -->
+      <!-- BANK PANEL -->
+      <div class="panel">
+        <div class="panel-hdr">
+          <span class="panel-name">🏦 Bank Statement</span>
+          <span class="panel-count">${bkFiltered.length} / ${bankRows.length}</span>
+        </div>
+        <div class="col-hdr bk-grid">
+          ${sortBtn('bk','date','Date')}
+          <span>Description</span>
+          ${sortBtn('bk','amt','Amount')}
+        </div>
+        <div class="rows" id="bk-rows">
+          ${bkFiltered.length ? bkFiltered.map(bkRow).join('') : `<div class="empty">${bankRows.length?'No rows match filter':'No bank transactions — check Plaid connection or upload CSV'}</div>`}
+        </div>
+      </div>
+
+      <!-- SUMMARY -->
+      <div class="sum-panel">
+        <div class="stmt-input-wrap">
+          <label>Statement Ending Balance</label>
+          <input type="number" id="stmt-live" value="${stmtEndBal}" step="0.01" placeholder="0.00"/>
+        </div>
+        <div class="bal-block ${isBalanced?'ok':'off'}" style="margin:14px">
+          <div class="bal-label ${isBalanced?'ok':'off'}">${isBalanced?'✓ Balanced':'Out of Balance'}</div>
+          <div class="bal-amt ${isBalanced?'ok':'off'}">${isBalanced?'$0.00':fmt(Math.abs(endBal-(rvIn-rvOut)))}</div>
+          <div class="bal-sub">${isBalanced?'All transactions accounted for':endBal===0?'Enter statement ending balance above':'Difference needs to be resolved'}</div>
+        </div>
         <div class="sum-block">
-          <div class="sum-label">Cleared</div>
-          <div class="sum-row"><span class="sk">Money In</span><span class="sv" style="color:var(--green)">${fmt(clearedIn)}</span></div>
-          <div class="sum-row"><span class="sk">Money Out</span><span class="sv" style="color:var(--red)">${fmt(clearedOut)}</span></div>
+          <div class="sum-title">Rentvine</div>
+          <div class="sum-row"><span class="sk">Total In (${rvRows.filter(r=>r.direction==='in').length})</span><span class="sv" style="color:var(--green)">${fmt(rvIn)}</span></div>
+          <div class="sum-row"><span class="sk">Total Out (${rvRows.filter(r=>r.direction==='out').length})</span><span class="sv" style="color:var(--red)">${fmt(rvOut)}</span></div>
           <div class="sum-divider"></div>
-          <div class="sum-total">
-            <span class="st">Cleared Balance</span>
-            <span class="sv">${fmt(clearedBal)}</span>
-          </div>
+          <div class="sum-row"><span class="sk">Net</span><span class="sv">${fmt(rvIn-rvOut)}</span></div>
         </div>
-
-        <!-- Out of Balance -->
-        <div class="diff-block ${isBalanced?'bal-ok':'bal-off'}">
-          <div class="dl ${isBalanced?'bal-green':'bal-red'}">${isBalanced?'✓ Balanced':'Out of Balance'}</div>
-          <div class="da ${isBalanced?'bal-green':'bal-red'}">${isBalanced?'$0.00':fmt(Math.abs(diff))}</div>
-          <div class="ds" style="color:var(--text2)">${isBalanced?'All transactions accounted for':diff>0?'Statement is higher than cleared':'Statement is lower than cleared'}</div>
-        </div>
-
-        <!-- Totals -->
         <div class="sum-block">
-          <div class="sum-label">All Transactions</div>
-          <div class="sum-row"><span class="sk">Total In (${moneyIn.length})</span><span class="sv" style="color:var(--green)">${fmt(totalIn)}</span></div>
-          <div class="sum-row"><span class="sk">Total Out (${moneyOut.length})</span><span class="sv" style="color:var(--red)">${fmt(totalOut)}</span></div>
-          <div class="sum-divider"></div>
-          <div class="sum-row"><span class="sk">Cleared In (${moneyIn.filter(t=>checked.has(t.id)).length})</span><span class="sv">${fmt(clearedIn)}</span></div>
-          <div class="sum-row"><span class="sk">Cleared Out (${moneyOut.filter(t=>checked.has(t.id)).length})</span><span class="sv">${fmt(clearedOut)}</span></div>
+          <div class="sum-title">Match Status</div>
+          <div class="sum-row"><span class="sk">✓ Auto-matched</span><span class="sv" style="color:var(--green)">${rvMatched}</span></div>
+          <div class="sum-row"><span class="sk">~ Partial</span><span class="sv" style="color:var(--amber)">${rvPartial}</span></div>
+          <div class="sum-row"><span class="sk">🔗 Manual</span><span class="sv" style="color:var(--purple)">${rvManual}</span></div>
+          <div class="sum-row"><span class="sk">RV no match</span><span class="sv" style="color:var(--red)">${rvUnmatched}</span></div>
+          <div class="sum-row"><span class="sk">Bank not in RV</span><span class="sv" style="color:var(--red)">${bkUnmatched}</span></div>
         </div>
-
-        <!-- Source -->
         <div class="sum-block">
-          <div class="sum-label">Data Source</div>
-          <div style="font-size:11px;color:var(--text2)">
-            ${plaidAcct?`🔗 Plaid · ${plaidAcct.name}`:bankFile?`📄 ${esc(bankFile.name)}`:'Rentvine only'}
-          </div>
-          <div style="font-size:10px;color:var(--muted);margin-top:4px">
-            ${txns.length} total transactions · ${checked.size} cleared
-          </div>
+          <div class="sum-title">Legend</div>
+          <div class="sum-row"><span class="sk"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:5px"></span>Matched</span></div>
+          <div class="sum-row"><span class="sk"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber);margin-right:5px"></span>Partial — verify</span></div>
+          <div class="sum-row"><span class="sk"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--purple);margin-right:5px"></span>Manual link</span></div>
+          <div class="sum-row"><span class="sk" style="color:var(--muted)">⬜ White — no match</span></div>
         </div>
       </div>
     </div>
@@ -632,9 +679,9 @@ function renderRecon(){
 }
 
 // ─── BIND ─────────────────────────────────────────────────────────────────────
-function bindAll(){
-  if(S.screen==='config'){
-    document.getElementById('bankId')?.addEventListener('change',e=>set({bankId:e.target.value}));
+function bindAll() {
+  if(ST.screen==='config') {
+    document.getElementById('bankId')?.addEventListener('change',e=>{ set({bankId:e.target.value}); });
     document.getElementById('startDate')?.addEventListener('change',e=>set({startDate:e.target.value}));
     document.getElementById('endDate')?.addEventListener('change',e=>set({endDate:e.target.value}));
     document.getElementById('stmtEndBal')?.addEventListener('input',e=>set({stmtEndBal:e.target.value}));
@@ -642,99 +689,71 @@ function bindAll(){
     bindDrop();
     loadPlaidStatus();
   }
-  if(S.screen==='recon'){
-    document.getElementById('back-btn')?.addEventListener('click',()=>set({screen:'config',txns:[],checked:new Set()}));
-    document.getElementById('stmt-end-live')?.addEventListener('input',e=>set({stmtEndBal:e.target.value}));
-
-    // Row checkboxes
-    document.querySelectorAll('.row-chk').forEach(chk=>{
-      chk.addEventListener('change',e=>{
-        e.stopPropagation();
-        toggleCheck(chk.dataset.id);
+  if(ST.screen==='recon') {
+    document.getElementById('back-btn')?.addEventListener('click',()=>set({screen:'config',rvRows:[],bankRows:[],links:{},linksRev:{},linkTypes:{}}));
+    document.getElementById('export-btn')?.addEventListener('click',exportUnmatched);
+    document.getElementById('stmt-live')?.addEventListener('input',e=>set({stmtEndBal:e.target.value}));
+    document.getElementById('link-btn')?.addEventListener('click',()=>set({linkMode:true,linkSrc:null,linkSrcSide:null}));
+    document.getElementById('cancel-link')?.addEventListener('click',()=>set({linkMode:false,linkSrc:null,linkSrcSide:null}));
+    document.getElementById('unlink-btn')?.addEventListener('click',()=>{ if(ST.selRV) removeLink(ST.selRV); });
+    document.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>set({filter:b.dataset.filter})));
+    document.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{
+      const [side,col]=th.dataset.sort.split('-');
+      const key=side==='rv'?'rvSort':'bkSort';
+      const [c,d]=ST[key].split('_');
+      set({[key]:c===col?(d==='asc'?col+'_desc':col+'_asc'):col+'_asc'});
+    }));
+    document.querySelectorAll('.row').forEach(row=>{
+      row.addEventListener('click',()=>clickRow(row.dataset.side,row.dataset.id));
+      row.addEventListener('contextmenu',e=>{ e.preventDefault();
+        const {side,id}=row.dataset;
+        if(side==='rv'&&ST.links[id]) removeLink(id);
+        else if(side==='bk'&&ST.linksRev[id]) removeLink(ST.linksRev[id]);
       });
-    });
-
-    // Select all Money In
-    document.getElementById('chk-all-in')?.addEventListener('change',e=>{
-      const ids = S.txns.filter(t=>t.direction==='in').map(t=>t.id);
-      checkAll(ids, e.target.checked);
-    });
-    // Select all Money Out
-    document.getElementById('chk-all-out')?.addEventListener('change',e=>{
-      const ids = S.txns.filter(t=>t.direction==='out').map(t=>t.id);
-      checkAll(ids, e.target.checked);
-    });
-
-    // Row click to toggle (clicking anywhere on row)
-    document.querySelectorAll('.txn-table tbody tr').forEach(row=>{
-      row.addEventListener('click',e=>{
-        if(e.target.type==='checkbox') return;
-        const id = row.dataset.id;
-        if(id) toggleCheck(id);
-      });
-    });
-
-    document.getElementById('save-btn')?.addEventListener('click',()=>{
-      alert('Reconciliation complete! ✓\n\nIn the future this will save to Rentvine.');
     });
   }
 }
 
-function bindDrop(){
-  const drop=document.getElementById('drop-zone');
-  const fi=document.getElementById('csv-input');
+function bindDrop() {
+  const drop=document.getElementById('drop-zone'), fi=document.getElementById('csv-fi');
   if(!drop||!fi) return;
   drop.addEventListener('click',()=>fi.click());
   drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
   drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
-  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');handleFile(e.dataTransfer.files[0]);});
-  fi.addEventListener('change',e=>handleFile(e.target.files[0]));
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');hf(e.dataTransfer.files[0]);});
+  fi.addEventListener('change',e=>hf(e.target.files[0]));
 }
-async function handleFile(file){
-  if(!file) return;
-  const text = await file.text();
-  set({bankFile:file, bankText:text});
-}
+async function hf(file){ if(!file) return; const text=await file.text(); set({bankFile:file,bankText:text}); }
 
-async function loadPlaidStatus(){
-  const area = document.getElementById('plaid-status-area');
-  if(!area) return;
-  try{
-    const bankKeyMap = {'129':'trust','130':'security','149':'employee'};
-    const key = bankKeyMap[S.bankId] || 'trust';
-    const sr = await fetch('/api/plaid/status');
-    const sd = await sr.json();
-    const acct = sd.accounts?.[key];
-    if(acct?.connected){
-      const br = await fetch('/api/plaid/balances');
-      const bd = await br.json();
-      const bal = bd[key];
-      const balStr = bal?.available!=null ? fmt(bal.available) : '';
-      S.plaidAcct = {key, name: acct.name, balance: balStr};
-      area.innerHTML = `<div class="plaid-connected">
+async function loadPlaidStatus() {
+  const area=document.getElementById('plaid-area'); if(!area) return;
+  try {
+    const keyMap={'129':'trust','130':'security','149':'employee'};
+    const key=keyMap[ST.bankId]||'trust';
+    const sd=await fetch('/api/plaid/status').then(r=>r.json());
+    const acct=sd.accounts?.[key];
+    if(acct?.connected) {
+      const bd=await fetch('/api/plaid/balances').then(r=>r.json());
+      const bal=bd[key];
+      const balStr=bal?.available!=null?fmt(bal.available):'';
+      ST.plaidAcct={key,name:acct.name,balance:balStr};
+      area.innerHTML=`<div class="plaid-banner">
         <div class="plaid-dot"></div>
-        <div>
-          <div class="plaid-name">Connected via Plaid · ${esc(acct.name)}</div>
-          <div style="font-size:10px;color:var(--teal);margin-top:2px">Transactions will be pulled automatically for the selected date range</div>
-        </div>
+        <div><div class="plaid-text">Connected via Plaid · ${esc(acct.name)}</div>
+        <div style="font-size:10px;color:var(--teal);margin-top:1px">Transactions pulled automatically for selected date range</div></div>
         ${balStr?`<div class="plaid-bal">${balStr}</div>`:''}
       </div>`;
     } else {
-      S.plaidAcct = null;
-      area.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0 10px">No Plaid connection for this account — upload a CSV above or <a href="/bank-setup" style="color:var(--teal)">connect via Plaid</a>.</div>`;
+      ST.plaidAcct=null;
+      area.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:2px 0 8px">No Plaid connection for this account. <a href="/bank-setup" style="color:var(--teal)">Connect via Plaid</a> or upload a CSV below.</div>`;
     }
-  } catch(e){
-    S.plaidAcct = null;
-    area.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0 10px">Upload a bank statement CSV below.</div>`;
-  }
+  } catch(e) { ST.plaidAcct=null; area.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:2px 0 8px">Upload a bank CSV below.</div>`; }
 }
 
 // Set default dates (current month)
-const now = new Date();
-const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
-const lastDay = new Date(y, now.getMonth()+1, 0).getDate();
-S.startDate = `${y}-${m}-01`;
-S.endDate   = `${y}-${m}-${lastDay}`;
+const _now=new Date(), _y=_now.getFullYear(), _m=String(_now.getMonth()+1).padStart(2,'0');
+ST.startDate=`${_y}-${_m}-01`;
+ST.endDate=`${_y}-${_m}-${new Date(_y,_now.getMonth()+1,0).getDate()}`;
 
 render();
 </script>
