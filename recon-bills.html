@@ -1003,21 +1003,22 @@ async function loadPlaidChase(){
       const bd=await fetch('/api/plaid/balances').then(r=>r.json());
       const bal=bd.chase;
       const balStr=bal?.available!=null?('$'+Math.abs(bal.available).toLocaleString('en-US',{minimumFractionDigits:2})+' available'):'';
-      S.plaidChase={connected:true,name:acct.name,balance:balStr};
+      ST.plaidChase={connected:true,name:acct.name,balance:balStr};
       area.innerHTML=`<div style="background:var(--teal-light);border:1px solid var(--teal-border);border-radius:6px;padding:7px 10px;display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <div style="width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
         <div><div style="font-size:11px;font-weight:600;color:var(--teal)">${acct.name}</div>
         ${balStr?`<div style="font-size:10px;color:var(--teal)">${balStr}</div>`:''}
         <div style="font-size:10px;color:var(--teal-dk)">Transactions pulled automatically · last 90 days</div></div>
       </div>`;
-      // Re-render to enable run button
-      set({plaidChase:S.plaidChase});
+      // Enable run button without full re-render
+      const btn=document.getElementById('run-btn');
+      if(btn) btn.disabled=false;
     } else {
-      S.plaidChase=null;
+      ST.plaidChase=null;
       area.innerHTML=`<div style="font-size:10px;color:var(--muted);padding:2px 0 6px">No Plaid connection · <a href="/bank-setup" style="color:var(--teal)">Connect Chase via Plaid</a> or upload CSV below.</div>`;
     }
   }catch(e){
-    S.plaidChase=null;
+    ST.plaidChase=null;
     area.innerHTML=`<div style="font-size:10px;color:var(--muted);padding:2px 0 6px">Upload Chase CSV below.</div>`;
   }
 }
@@ -1025,7 +1026,6 @@ async function loadPlaidChase(){
 function bindAll(){
   if(ST.screen==='config'){
     bindDrop('drop-chase','fi-chase',(f,t)=>set({chaseFile:f,chaseText:t}));
-    loadPlaidChase();
     loadPlaidChase();
     // Rentvine pulled automatically — no CSV bind needed
     document.getElementById('run-btn')?.addEventListener('click',run);
