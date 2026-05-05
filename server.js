@@ -3663,11 +3663,7 @@ app.get('/metrics', (req, res) => {
     }
 
     res.json({ ok: true });
-  } catch (err) {
-    console.error('Vendor apply error:', err);
-    res.status(500).json({ error: 'Failed to submit application' });
-  }
-});
+
 // Vendor application form submission
 app.post('/api/vendor-apply', async (req, res) => {
   try {
