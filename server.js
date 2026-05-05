@@ -3650,7 +3650,7 @@ app.get('/metrics', (req, res) => {
     res.sendFile(new URL('./metrics.html', import.meta.url).pathname);
 });
 
-    // Slack notification to #vendors
+// Slack notification to #vendors
     const slackWebhook = process.env.SLACK_VENDOR_WEBHOOK || process.env.SLACK_WEBHOOK_URL;
     if (slackWebhook) {
       await fetch(slackWebhook, {
