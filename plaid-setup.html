@@ -68,6 +68,7 @@ const ACCOUNTS = [
   {key:'trust',    number:'1000', name:'Rental Trust Account',     sub:'xxxx-3221 · Primary operating account'},
   {key:'security', number:'1100', name:'Security Deposit Account', sub:'Tenant security deposits'},
   {key:'employee', number:'3100', name:'Employee Trust',           sub:'Employee trust account'},
+  {key:'chase',    number:'8412', name:'Chase Card (Reimbursements)', sub:'Credit card · Aloe PM reimbursement charges'},
 ];
 
 let status = {};
@@ -92,6 +93,7 @@ function renderAccounts(balances) {
     const s = status[acct.key] || {};
     const b = balances[acct.key] || {};
     const connected = s.connected;
+    // Use the mask-matched account (isTarget:true) or fall back to first
     const bal = b.accounts?.find(a => a.isTarget) || b.accounts?.[0];
     const balAmt = b.available ?? b.current ?? bal?.available ?? bal?.current;
     const balName = b.accountName || bal?.name || '';

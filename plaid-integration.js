@@ -31,12 +31,14 @@ const ACCESS_TOKENS = {
   trust:    process.env.PLAID_TOKEN_TRUST    || null,
   security: process.env.PLAID_TOKEN_SECURITY || null,
   employee: process.env.PLAID_TOKEN_EMPLOYEE || null,
+  chase:    process.env.PLAID_TOKEN_CHASE    || null,
 };
 
 const ACCOUNT_MAP = {
   trust:    { name: 'Rental Trust Account',    rvId: '129', number: '1000', mask: '3221' },
   security: { name: 'Security Deposit Account', rvId: '130', number: '1100', mask: '3248' },
   employee: { name: 'Employee Trust',           rvId: '149', number: '3100', mask: '0327' },
+  chase:    { name: 'Chase Card (Reimbursements)', rvId: null, number: '8412', mask: null },
 };
 
 async function plaidPost(endpoint, body) {
@@ -118,6 +120,7 @@ export function initPlaidRoutes(app) {
         ? data.accounts?.find(a => a.mask === targetMask)
         : data.accounts?.[0];
       const targetAccountId = matchedAccount?.account_id;
+      const isCreditCard = matchedAccount?.type === 'credit' || account_key === 'chase';
 
       // Filter to only transactions from the matching account
       const filtered = targetAccountId
@@ -129,7 +132,8 @@ export function initPlaidRoutes(app) {
         date: t.date,
         description: t.name || t.merchant_name || '',
         amount: Math.abs(t.amount),
-        // Plaid: positive amount = debit (money out), negative = credit (money in)
+        // Plaid: positive amount = debit/charge (money out), negative = credit/payment (money in)
+        // For credit cards this is the same convention — positive = charge
         direction: t.amount > 0 ? 'out' : 'in',
         pending: t.pending,
         category: t.personal_finance_category?.primary || '',

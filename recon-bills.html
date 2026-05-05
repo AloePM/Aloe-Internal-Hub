@@ -39,6 +39,7 @@ body{
   background:var(--bg);
   color:var(--text);
   height:100vh;
+  max-height:100vh;
   display:flex;
   flex-direction:column;
   overflow:hidden;
@@ -124,8 +125,9 @@ body{
   grid-template-columns:1fr auto 1fr;
   overflow:hidden;
   min-height:0;
+  height:0; /* force grid to respect flex parent height */
 }
-.panel{display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+.panel{display:flex;flex-direction:column;overflow:hidden;background:var(--panel);height:100%}
 .panel-left{border-right:1px solid var(--border)}
 .panel-divider{
   width:36px;
@@ -138,6 +140,8 @@ body{
   padding-top:8px;
   gap:6px;
   flex-shrink:0;
+  height:100%;
+  overflow:hidden;
 }
 .div-icon{
   font-size:10px;
@@ -207,7 +211,7 @@ body{
 .chase-cols{grid-template-columns:72px 1fr 44px 68px}
 
 /* ── SCROLL AREA ─────────────────────────────────────────────────────── */
-.rows-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
+.rows-wrap{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0}
 .rows-wrap::-webkit-scrollbar{width:6px}
 .rows-wrap::-webkit-scrollbar-track{background:transparent}
 .rows-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -388,6 +392,7 @@ const ST = {
   screen: 'config',
   chaseFile: null, chaseText: '',
   rvFile: null,    rvText: '',
+  plaidChase: null,
   error: '',
 
   // Parsed rows — never mutated after parsing
@@ -560,14 +565,29 @@ function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 // ─────────────────────────────────────────────────────────────────────────────
 // RUN
 // ─────────────────────────────────────────────────────────────────────────────
-function run(){
+async function run(){
   if(!ST.chaseText||!ST.rvText){set({error:'Upload both files first.'});return;}
   try{
-    const chaseAll=parseChase(ST.chaseText);
-    const chaseDates=chaseAll.map(r=>r.date).sort();
-    const chaseEnd=chaseDates[chaseDates.length-1];
-    const cutoff=shiftDate(chaseEnd,-90);
-    const chaseRows=chaseAll.filter(r=>r.date>=cutoff);
+    // Get Chase transactions — Plaid preferred, CSV fallback
+    let chaseRows=[];
+    if(ST.plaidChase?.connected){
+      const chaseEnd=new Date().toISOString().slice(0,10);
+      const cutoff=shiftDate(chaseEnd,-90);
+      const pr=await fetch(`/api/plaid/transactions?account_key=chase&start_date=${cutoff}&end_date=${chaseEnd}`);
+      if(!pr.ok) throw new Error('Plaid Chase fetch failed: '+pr.status);
+      const pd=await pr.json();
+      chaseRows=(pd.transactions||[]).map(t=>({
+        id:'pl'+t.transactionId, date:t.date,
+        description:t.description, amount:t.amount, card:'···8412',
+      }));
+      if(!chaseRows.length) throw new Error('No Chase charges found via Plaid for the last 90 days');
+    } else {
+      const chaseAll=parseChase(ST.chaseText);
+      const chaseDates=chaseAll.map(r=>r.date).sort();
+      const chaseEnd=chaseDates[chaseDates.length-1];
+      const cutoff=shiftDate(chaseEnd,-90);
+      chaseRows=chaseAll.filter(r=>r.date>=cutoff);
+    }
 
     const rvRows=parseRVPayables(ST.rvText);
     const {links,linksRev,linkTypes}=autoMatch(rvRows,chaseRows);
@@ -721,12 +741,13 @@ function renderConfig(){
       <div class="config-title">Upload both files</div>
       <div class="drop-row">
         <div>
-          <div class="drop-label">💳 Chase card CSV</div>
+          <div class="drop-label">💳 Chase card</div>
+          <div id="chase-plaid-area" style="margin-bottom:6px"><div style="font-size:10px;color:#94A3B8;padding:2px 0">Checking Plaid…</div></div>
           <div class="drop-box ${chaseFile?'filled':''}" id="drop-chase">
             <input type="file" id="fi-chase" accept=".csv" style="display:none"/>
             ${chaseFile
               ?`<div class="drop-icon">✓</div><div class="drop-name" style="color:var(--teal)">${esc(chaseFile.name)}</div><div class="drop-sub">Click to replace</div>`
-              :`<div class="drop-icon">💳</div><div class="drop-name">Drop Chase CSV</div><div class="drop-sub">Transaction Date, Description, Amount, Type</div>`}
+              :`<div class="drop-icon">📄</div><div class="drop-name">Or drop Chase CSV</div><div class="drop-sub">Transaction Date, Description, Amount, Type</div>`}
           </div>
         </div>
         <div>
@@ -739,7 +760,7 @@ function renderConfig(){
           </div>
         </div>
       </div>
-      <button class="run-btn" id="run-btn" ${!chaseFile||!rvFile?'disabled':''}>Open side-by-side →</button>
+      <button class="run-btn" id="run-btn" ${(!chaseFile&&!ST.plaidChase?.connected)||!rvFile?'disabled':''}>Open side-by-side →</button>
     </div>
   </div>`;
 }
@@ -937,9 +958,40 @@ function renderRecon(){
 // ─────────────────────────────────────────────────────────────────────────────
 // BIND
 // ─────────────────────────────────────────────────────────────────────────────
+async function loadPlaidChase(){
+  const area=document.getElementById('chase-plaid-area');
+  if(!area) return;
+  try{
+    const sd=await fetch('/api/plaid/status').then(r=>r.json());
+    const acct=sd.accounts?.chase;
+    if(acct?.connected){
+      const bd=await fetch('/api/plaid/balances').then(r=>r.json());
+      const bal=bd.chase;
+      const balStr=bal?.available!=null?('$'+Math.abs(bal.available).toLocaleString('en-US',{minimumFractionDigits:2})+' available'):'';
+      S.plaidChase={connected:true,name:acct.name,balance:balStr};
+      area.innerHTML=`<div style="background:var(--teal-light);border:1px solid var(--teal-border);border-radius:6px;padding:7px 10px;display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0"></div>
+        <div><div style="font-size:11px;font-weight:600;color:var(--teal)">${acct.name}</div>
+        ${balStr?`<div style="font-size:10px;color:var(--teal)">${balStr}</div>`:''}
+        <div style="font-size:10px;color:var(--teal-dk)">Transactions pulled automatically · last 90 days</div></div>
+      </div>`;
+      // Re-render to enable run button
+      set({plaidChase:S.plaidChase});
+    } else {
+      S.plaidChase=null;
+      area.innerHTML=`<div style="font-size:10px;color:var(--muted);padding:2px 0 6px">No Plaid connection · <a href="/bank-setup" style="color:var(--teal)">Connect Chase via Plaid</a> or upload CSV below.</div>`;
+    }
+  }catch(e){
+    S.plaidChase=null;
+    area.innerHTML=`<div style="font-size:10px;color:var(--muted);padding:2px 0 6px">Upload Chase CSV below.</div>`;
+  }
+}
+
 function bindAll(){
   if(ST.screen==='config'){
     bindDrop('drop-chase','fi-chase',(f,t)=>set({chaseFile:f,chaseText:t}));
+    loadPlaidChase();
+    loadPlaidChase();
     bindDrop('drop-rv','fi-rv',(f,t)=>set({rvFile:f,rvText:t}));
     document.getElementById('run-btn')?.addEventListener('click',run);
     return;
