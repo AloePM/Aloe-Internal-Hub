@@ -66,6 +66,8 @@ def get_lease_data(lease_id):
                         "tenant3_phone": t(2).get("phone","") or t(2).get("cellPhone",""),
                         "tenant3_email": t(2).get("email",""),
                         "owner_name":   owner.get("name",""),
+                        "owner_first":  owner.get("name","").split()[0] if owner.get("name","") else "",
+                        "owner_last":   " ".join(owner.get("name","").split()[1:]) if owner.get("name","") else "",
                         "owner_phone":  owner.get("phone","") or owner.get("cellPhone",""),
                         "owner_email":  owner.get("email",""),
                         "lease_start":  lease.get("startDate",""),
@@ -108,129 +110,199 @@ def get_lease_data(lease_id):
 # y_from_bottom = PDF points from bottom of page
 TEMPLATE_COORDS = {
 
-    "maricopameadowsTenantRegistrationFormBlank": [
-        ("owner_name",      95, 687, 300, 9),
-        ("owner_phone",     18, 594, 120, 9),
-        ("owner_email",    255, 594, 270, 9),
-        ("address",         18, 568, 330, 9),
-        ("city",           170, 557, 130, 9),
-        ("state",          280, 557,  60, 9),
-        ("zip",            380, 557,  80, 9),
-        ("tenant1",         18, 392, 170, 9),
-        ("tenant_phone",   196, 392, 110, 9),
-        ("tenant_email",   310, 392, 220, 9),
-        ("tenant2",         18, 376, 170, 9),
-        ("tenant2_phone",  196, 376, 110, 9),
-        ("tenant2_email",  310, 376, 220, 9),
-        ("vehicle1_make",   20, 248, 120, 9),
-        ("vehicle1_model", 144, 248, 125, 9),
+        "maricopameadowsTenantRegistrationFormBlank": [
+        # Grid-verified coordinates — each y confirmed against rendered overlay
+        # NAME line at y=648 (just above the blank underline)
+        ("owner_name",      69, 648, 322, 9),
+        # PHONE: fill after "Phone:" label (x1=48), y=594 (on the phone line)
+        ("owner_phone",     50, 594,  87, 9),
+        # EMAIL: fill after "Email:" label (x1=280), y=594
+        ("owner_email",    282, 594, 118, 9),
+        # PROPERTY ADDRESS street: after "Property Address:" (x1=92), y=578
+        ("address",         94, 572, 200, 9),
+        # City/State/Zip: AFTER each subfield label, y=562
+        # City label ends x=377 -> fill x=379; State label ends x=464 -> x=466; Zip label ends x=513 -> x=515
+        ("city",           379, 566,  65, 9),
+        ("state",          466, 566,  35, 9),
+        ("zip",            515, 566,  30, 9),
+        # MAILING ADDRESS: full address on the mailing blank line y=543, after label x=91
+        ("mailing_street",  91, 537, 440, 8),
+        # ADULT OCCUPANTS: col headers at y=390; first fill row y=374, then 358, 342
+        ("tenant1",         18, 374, 170, 9),
+        ("tenant_phone",   194, 374, 108, 9),
+        ("tenant_email",   308, 374, 226, 9),
+        ("tenant2",         18, 358, 170, 9),
+        ("tenant2_phone",  194, 358, 108, 9),
+        ("tenant2_email",  308, 358, 226, 9),
+        ("tenant3",         18, 342, 170, 9),
+        ("tenant3_phone",  194, 342, 108, 9),
+        ("tenant3_email",  308, 342, 226, 9),
+        # VEHICLES: Make/Model col headers at y=267; first fill row y=248, second y=229
+        ("vehicle1_make",   20, 248, 118, 9),
+        ("vehicle1_model", 144, 248, 127, 9),
         ("vehicle1_state", 335, 248,  60, 9),
-        ("vehicle1_plate", 409, 248, 120, 9),
-        ("lease_start",     80, 141, 190, 9),
-        ("lease_end",      320, 141, 200, 9),
-        ("owner_name",      80, 109, 300, 9),
-        ("today",          450, 109,  80, 9),
+        ("vehicle1_plate", 409, 248, 125, 9),
+        ("vehicle2_make",   20, 229, 118, 9),
+        ("vehicle2_model", 144, 229, 127, 9),
+        ("vehicle2_state", 335, 229,  60, 9),
+        ("vehicle2_plate", 409, 229, 125, 9),
+        # LEASE DATES: Start at x=51 y=151, End at x=424 y=151
+        ("lease_start",     90, 151, 296, 9),
+        ("lease_end",      424, 151, 108, 9),
+        # OWNER SIGNATURE: cursive, after "Owner Signature:" (x1=91), y=124
+        ("owner_name_cursive", 93, 124, 282, 12),
+        ("today",          439, 124,  91, 9),
     ],
 
-    "focus_hoa": [
-        # First Name underscore: x0=96 y=574.7 | Last Name: x0=271 | Phone: x0=465
-        # (Focus has First/Last separate - use owner_name for first, rest for last)
-        ("owner_name",     208, 521.1, 190, 9),  # mgmt company underscore
-        ("mgmt_phone",     459, 521.1, 120, 9),
-        ("mgmt_email",     187, 496.2, 178, 9),
-        ("mgmt_address",   412, 496.2, 165, 9),  # contact
-        ("full_address",   234, 471.4, 228, 9),  # property address line
-        # Owner mailing
-        ("owner_name",     321, 401.3, 262, 9),  # owner mailing underscore
-        # Lease
-        ("lease_start",    122, 339.7,  82, 9),
-        ("lease_end",      290, 337.0,  76, 9),
-        # Tenants name | phone | email
-        ("tenant1",         68, 288.6, 155, 9),
-        ("tenant_phone",   269, 290.5,  95, 9),
-        ("tenant_email",   448, 288.0, 134, 9),
-        ("tenant2",         67, 264.1, 155, 9),
-        ("tenant2_phone",  265, 266.0, 102, 9),
-        ("tenant2_email",  445, 263.5, 134, 9),
-        ("tenant3",         67, 239.9, 155, 9),
-        ("tenant3_phone",  265, 241.9, 102, 9),
-        ("tenant3_email",  445, 239.4, 134, 9),
-        # Vehicles
-        ("vehicle1_make",   67, 166.3, 155, 9),
-        ("vehicle1_model", 267, 168.2,  96, 9),
-        ("vehicle1_plate", 445, 165.7, 134, 9),
-        # Signature
-        ("owner_name",     163,  40.8, 222, 9),
+        "focus_hoa": [
+        # Grid-verified — underscore y_bottom = correct fill y
+        # First Name: after "First Name:" (x1=130), y=574.7
+        ("owner_first",     132, 574.7, 112, 9),
+        # Last Name: after "Last Name:" (x1=305), y=575.2
+        ("owner_last",      307, 575.2, 120, 9),
+        # Phone: after "Phone:" (x1=465), y=575.2
+        ("owner_phone",     467, 575.2, 115, 9),
+        # Owner Email: after "Email:" (x1=150), y=546.1
+        ("owner_email",     152, 546.1, 430, 9),
+        # Mgmt Company CO: underscore x0=208, y=521.1
+        ("mgmt_company",    208, 521.1, 190, 9),
+        # Mgmt Phone: underscore x0=459, y=521.1
+        ("mgmt_phone",      459, 521.1, 120, 9),
+        # Mgmt email: underscore x0=187, y=496.2
+        ("mgmt_email",      187, 496.2, 178, 9),
+        # Mgmt Address: underscore x0=234, y=471.4
+        ("mgmt_address",    234, 471.4, 228, 9),
+        # Property Address (Street, City, State, Zip): after label x1=291, y=437.5
+        ("full_address",    294, 437.5, 208, 9),
+        # Owner Mailing Address: Aloe PM hardcoded address
+        ("mailing_street",  321, 401.3, 263, 8),
+        # Lease Start: underscore x0=122, y=339.3 (NOT 339.7 - use label y)
+        ("lease_start",     122, 339.3,  82, 9),
+        # End Date: underscore x0=290, y=337.0
+        ("lease_end",       290, 337.0,  77, 9),
+        # Tenant 1: name x0=68 y=288.6 | phone x0=269 y=290.5 | email x0=448 y=288.0
+        ("tenant1",          68, 288.6, 155, 9),
+        ("tenant_phone",    269, 290.5,  96, 9),
+        ("tenant_email",    448, 288.0, 134, 9),
+        # Tenant 2: y=264.1 / 266.0 / 263.5
+        ("tenant2",          67, 264.1, 155, 9),
+        ("tenant2_phone",   265, 266.0, 102, 9),
+        ("tenant2_email",   445, 263.5, 134, 9),
+        # Tenant 3: y=239.9 / 241.9 / 239.4
+        ("tenant3",          67, 239.9, 155, 9),
+        ("tenant3_phone",   265, 241.9, 102, 9),
+        ("tenant3_email",   445, 239.4, 134, 9),
+        # Vehicle make x0=68 y=166.3 | model x0=267 y=168.2 | plate x0=448 y=165.7
+        ("vehicle1_make",    68, 166.3, 155, 9),
+        ("vehicle1_model",  267, 168.2,  96, 9),
+        ("vehicle1_plate",  448, 165.7, 134, 9),
+        # Owner Signature: after "Owner Signature:" (x1=160), y=40.8 (cursive)
+        ("owner_name_cursive", 163, 40.8, 222, 12),
+        # Date: after "Date:" (x1=415), y=40.8
+        ("today",           416, 40.8,  170, 9),
     ],
 
     "FSR_Property_Release_and_Information_Form_FILLABLE_2017_(1)_(10)": [
-        ("full_address",    23, 648, 580, 9),
-        ("owner_name",      23, 630, 580, 9),
-        ("address",         23, 612, 580, 9),
-        ("city",            23, 594, 210, 9),
-        ("state",          238, 594, 170, 9),
-        ("zip",            413, 594, 180, 9),
-        ("owner_phone",     23, 575, 305, 9),
-        ("owner_email",     23, 557, 305, 9),
-        ("mgmt_company",    93, 520, 510, 9),
-        ("mgmt_address",    93, 501, 510, 9),
-        ("mgmt_phone",     308, 465, 130, 9),
-        ("mgmt_email",     335, 447, 260, 9),
-        ("tenant_name",     93, 390, 210, 9),
-        ("lease_start",    335, 390, 105, 9),
-        ("lease_end",      444, 390, 148, 9),
-        ("tenant_phone",    23, 371, 280, 9),
-        ("tenant_email",   308, 371, 295, 9),
-        ("tenant2",         71, 352, 235, 9),
-        ("tenant3",         71, 334, 235, 9),
-        ("owner_name",      74,  50, 400, 9),
-        ("today",          455,  50, 130, 9),
+        # Property Address row: x1=98 y=646.7
+        ("full_address",    98, 646.7, 505, 9),
+        # Property Owner row: x1=93 y=628.5
+        ("owner_name",      93, 628.5, 510, 9),
+        # Owner Mailing Address: x1=122 y=610.1
+        ("address",        122, 610.1, 470, 9),
+        # City/State/Zip: x1=44/264/428 y=591.7
+        ("city",            44, 591.7, 210, 9),
+        ("state",          264, 591.7, 145, 9),
+        ("zip",            428, 591.7, 158, 9),
+        # Owner Phone: x1=83 y=573.4 | Alt Phone x1=394
+        ("owner_phone",     83, 573.4, 245, 9),
+        # Owner Email: x1=80 y=555.0
+        ("owner_email",     80, 555.0, 278, 9),
+        # Management Co Name: x1=121 y=518.3
+        ("mgmt_company",   121, 518.3, 470, 9),
+        # Management Co Address: x1=130 y=499.9
+        ("mgmt_address",   130, 499.9, 462, 9),
+        # Contact Person: x1=100 y=463.4 | Work: x1=330
+        ("mgmt_company",   100, 463.4, 225, 9),
+        ("mgmt_phone",     330, 463.4, 260, 9),
+        # Email: x1=50 y=444.8 | Cell x1=335
+        ("mgmt_email",     335, 444.8, 258, 9),
+        # Tenant Name(s): x1=93 y=388.3 | Lease Start x1=358 | End x1=489
+        ("tenant_name",     93, 388.3, 210, 9),
+        ("lease_start",    358, 388.3, 101, 9),
+        ("lease_end",      489, 388.3, 113, 9),
+        # Phone: x1=54 y=369.9 | Email x1=335
+        ("tenant_phone",    54, 369.9, 273, 9),
+        ("tenant_email",   335, 369.9, 257, 9),
+        # Additional tenants
+        ("tenant2",        104, 351.6, 200, 9),
+        ("tenant3",        104, 333.2, 200, 9),
+        # Signature
+        ("owner_name",     106,  47.9, 340, 9),
+        ("today",          455,  47.9, 140, 9),
     ],
 
     "Tenant_Tracking_Form_-_Fillable_(1)": [
-        ("community",      172, 558, 380, 9),
-        ("owner_name",     138, 531, 415, 9),
-        ("full_address",   114, 504, 430, 9),
-        ("owner_phone",    138, 477, 145, 9),
-        ("owner_email",    318, 477, 235, 9),
-        ("tenant1",         72, 389, 213, 9),
-        ("tenant_phone",   288, 389,  63, 9),
-        ("tenant_email",   360, 389, 185, 9),
-        ("tenant2",         72, 362, 213, 9),
-        ("tenant2_phone",  288, 362,  63, 9),
-        ("tenant2_email",  360, 362, 185, 9),
-        ("tenant3",         72, 335, 213, 9),
-        ("tenant3_phone",  288, 335,  63, 9),
-        ("tenant3_email",  360, 335, 185, 9),
-        ("lease_start",     72, 303, 175, 9),
-        ("lease_end",      285, 303, 220, 9),
-        ("vehicle1_make",   72, 200, 540, 9),
+        ("community",      172, 555.8, 380, 9),
+        ("owner_name",     138, 528.9, 414, 9),
+        ("full_address",   114, 502.0, 428, 9),
+        ("owner_phone",    106, 475.2, 180, 9),
+        ("owner_email",    318, 475.2, 232, 9),
+        # Tenant name: after "1." (x1=98). Phone & Email combined after label (x1=356)
+        ("tenant1",            100, 401.7, 185, 9),
+        ("tenant1_phone_email", 357, 401.7, 195, 9),
+        ("tenant2",            100, 374.9, 185, 9),
+        ("tenant2_phone_email", 357, 374.9, 195, 9),
+        ("tenant3",            100, 348.0, 185, 9),
+        ("tenant3_phone_email", 357, 348.0, 195, 9),
+        ("lease_start",     72, 301.1, 174, 9),
+        ("lease_end",      285, 301.1, 218, 9),
+        ("vehicle1_summary", 72, 200.0, 540, 9),
     ],
 
     "Owner_Information__Agent_Authorization_-_Fillable": [
-        ("community",      172, 572, 380, 9),
-        ("owner_name",     138, 545, 430, 9),
-        ("full_address",   114, 518, 430, 9),
-        ("address",        146, 491, 420, 9),
-        ("owner_phone",    138, 465, 200, 9),
-        ("owner_phone",    345, 465, 200, 9),
-        ("owner_email",     72, 438, 480, 9),
-        ("mgmt_company",   218, 304, 380, 9),
-        ("mgmt_address",   138, 277, 435, 9),
-        ("mgmt_phone",     102, 250, 237, 9),
-        ("mgmt_email",     102, 223, 480, 9),
+        # Name of Community: x1=172 y=570.3
+        ("community",      172, 570.3, 512, 9),
+        # Your Name: x1=128 y=543.4
+        ("owner_name",     128, 543.4, 455, 9),
+        # Property Address: x1=156 y=516.6
+        ("full_address",   156, 516.6, 427, 9),
+        # Off-Site Mailing Address: x1=188 y=489.7
+        ("address",        188, 489.7, 394, 9),
+        # Home Phone: x1=136 y=462.9 | Cell Phone x1=377
+        ("owner_phone",    136, 462.9, 234, 9),
+        ("owner_phone",    377, 462.9, 206, 9),
+        # Email: x1=102 y=436.0
+        ("owner_email",    102, 436.0, 478, 9),
+        # Agent/Mgmt Company Name: x1=250 y=301.8
+        ("mgmt_company",   250, 301.8, 332, 9),
+        # Agent Mailing Address: x1=180 y=274.9
+        ("mgmt_address",   180, 274.9, 402, 9),
+        # Agent Phone Number: x1=133 y=248.0
+        ("mgmt_phone",     133, 248.0, 449, 9),
+        # Agent Email: x1=132 y=221.2
+        ("mgmt_email",     132, 221.2, 449, 9),
     ],
 
     "Senita_Tenant_Registration": [
-        ("owner_name",      65, 562, 540, 9),
-        ("full_address",    75, 535, 540, 9),
-        ("address",         70, 511, 540, 9),
-        ("owner_phone",     65, 488, 200, 9),
-        ("owner_email",    272, 487, 325, 9),
-        ("lease_start",     96, 321, 200, 9),
-        ("lease_end",      428, 319, 170, 9),
-        ("owner_name",     142, 260, 280, 9),
-        ("today",          432, 258, 160, 9),
+        # This is the Senita Community Association Architectural/Landscape Request Form
+        # Name: label y=559.6 | Parcel-Lot# on same line
+        ("owner_name",      65, 559.6, 410, 9),
+        # Property Address: y=533.3
+        ("full_address",    75, 533.3, 525, 9),
+        # Mailing Address: y=509.1
+        ("address",         70, 509.1, 525, 9),
+        # Phone: y=486.1 | Email y=484.9
+        ("owner_phone",     65, 486.1, 175, 9),
+        ("owner_email",    272, 484.9, 330, 9),
+        # Description of request — use community/lease info
+        ("community",       65, 438.0, 525, 9),
+        # Expected start date: y=318.7
+        ("lease_start",     96, 318.7, 330, 9),
+        # Expected completion date: y=316.2
+        ("lease_end",      429, 316.2, 163, 9),
+        # Signature of Homeowner: y=257.9
+        ("owner_name",     142, 257.9, 285, 9),
+        ("today",          432, 255.6, 160, 9),
     ],
 
     "AAM_Tenant_Registration_Form_-_Copy": [
@@ -386,12 +458,39 @@ def find_coord_key(template_id):
 def fill_pdf_overlay(pdf_path, data, coord_key):
     from pypdf import PdfReader, PdfWriter
     from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import urllib.request
+
+    # Load cursive font (Dancing Script preferred, Times-Italic fallback)
+    cursive_font = "Times-Italic"  # always available, looks signature-like
+    try:
+        font_path = "/tmp/DancingScript.ttf"
+        if Path(font_path).exists():
+            pdfmetrics.registerFont(TTFont("DancingScript", font_path))
+            cursive_font = "DancingScript"
+    except Exception as e:
+        sys.stderr.write(f"Cursive font load failed: {e}, using Times-Italic\n")
 
     coords  = TEMPLATE_COORDS.get(coord_key, [])
     reader  = PdfReader(str(pdf_path))
     page0   = reader.pages[0]
     page_w  = float(page0.mediabox.width)
     page_h  = float(page0.mediabox.height)
+
+    # Hardcoded mailing address for Aloe PM
+    fill_data = dict(data)
+    fill_data["mailing_street"] = "14817 E Chandler Heights Rd, Chandler, AZ 85249"
+    # Build vehicle summary for forms with a single vehicle text box
+    v1 = " ".join(filter(None, [data.get("vehicle1_make",""), data.get("vehicle1_model",""), data.get("vehicle1_color",""), data.get("vehicle1_plate","")]))
+    fill_data["vehicle1_summary"] = v1
+    # Combined phone+email for forms that use "Phone & Email:" as one field
+    fill_data["tenant1_phone_email"] = " | ".join(filter(None, [data.get("tenant_phone",""), data.get("tenant_email","")]))
+    fill_data["tenant2_phone_email"] = " | ".join(filter(None, [data.get("tenant2_phone",""), data.get("tenant2_email","")]))
+    fill_data["tenant3_phone_email"] = " | ".join(filter(None, [data.get("tenant3_phone",""), data.get("tenant3_email","")]))
+    fill_data["mailing_city"]   = ""  # combined into street above
+    fill_data["mailing_state"]  = ""
+    fill_data["mailing_zip"]    = ""
 
     packet = io.BytesIO()
     c = rl_canvas.Canvas(packet, pagesize=(page_w, page_h))
@@ -404,12 +503,25 @@ def fill_pdf_overlay(pdf_path, data, coord_key):
         field_key, x, y, max_w, font_size = entry
         if not field_key:
             continue
-        val = str(data.get(field_key, "") or "")
+
+        # Handle cursive signature fields
+        is_cursive = field_key.endswith("_cursive")
+        actual_key = field_key.replace("_cursive", "") if is_cursive else field_key
+
+        val = str(fill_data.get(actual_key, "") or fill_data.get(field_key, "") or "")
+        if max_w == 0:
+            continue  # disabled entry
         if not val:
             continue
-        c.setFont("Helvetica", font_size)
-        while c.stringWidth(val, "Helvetica", font_size) > max_w and len(val) > 1:
+
+        if is_cursive:
+            c.setFont(cursive_font, font_size)
+        else:
+            c.setFont("Helvetica", font_size)
+
+        while c.stringWidth(val, cursive_font if is_cursive else "Helvetica", font_size) > max_w and len(val) > 1:
             val = val[:-1]
+
         key = (round(x), round(y))
         if key in placed:
             continue
@@ -538,6 +650,12 @@ def main():
             sys.stderr.write(f"Tenant: {data.get('tenant_name')} | Addr: {data.get('full_address')}\n")
 
         data.update({k: v for k, v in overrides.items() if v})
+
+        # Always inject hardcoded Aloe PM mailing address fields
+        data.setdefault("mailing_address", "14817 E Chandler Heights Rd")
+        data.setdefault("mailing_city",    "Chandler")
+        data.setdefault("mailing_state",   "AZ")
+        data.setdefault("mailing_zip",     "85249")
 
         # Try coordinate map first
         coord_key = find_coord_key(template_id) or find_coord_key(pdf_path.stem)
