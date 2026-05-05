@@ -4,6 +4,13 @@ import fetch from 'node-fetch';
 import Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'child_process';
 
+import { initPlaidRoutes } from './plaid-integration.js';
+
+initPlaidRoutes(app);
+
+app.get('/bank-setup', (req, res) => 
+  res.sendFile(new URL('plaid-setup.html', import.meta.url).pathname)
+);
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
