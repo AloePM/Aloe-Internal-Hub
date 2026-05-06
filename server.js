@@ -305,6 +305,17 @@ app.get('/api/aptly/units', async function(req, res) {
     res.status(500).json({ error: e.message });
   }
 });
+// Proxy: vendor knowledge base docs
+app.get('/api/vendor-docs', async (req, res) => {
+  try {
+    const response = await fetch('https://aloe-knowledge-sync.onrender.com/api/documents?audience=vendor');
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Vendor docs proxy error:', err);
+    res.status(500).json({ error: 'Failed to load documents' });
+  }
+});
 app.get('/api/aptly/leads', async (req, res) => {
     try {
           const r = await fetch('https://api.getaptly.com/v1/boards?page=0&size=200', {
