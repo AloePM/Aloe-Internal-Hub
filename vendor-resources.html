@@ -656,7 +656,8 @@ async function openDocsModal() {
       return;
     }
 body.innerHTML = docs.map(function(doc) {
-  var url = doc.source_url || null;
+var url = doc.source_url || 
+  ('https://aloe-knowledge-sync.onrender.com/resources/vendor/doc/' + doc.id);
   var title = doc.title || 'Untitled';
   var sub = doc.subcategory ? doc.subcategory.replace(/_/g, ' ') : '';
   var dept = doc.department ? doc.department.replace(/_/g, ' ') : '';
