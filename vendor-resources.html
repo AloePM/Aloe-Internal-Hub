@@ -659,7 +659,7 @@ async function openDocsModal() {
       var url = doc.sourceUrl || doc.source_url || doc.url || '#';
       var title = doc.title || 'Untitled';
       var sub = doc.subcategory || doc.department || '';
-      var type = doc.documentType || doc.document_type || doc.type || '';
+      var type = doc.doc_Type || doc.document_type || doc.type || '';
       return '<a class="doc-card" href="' + url + '" target="_blank">' +
         '<div class="doc-icon">📋</div>' +
         '<div class="doc-info">' +
