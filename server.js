@@ -113,6 +113,16 @@ app.get('/api/vendors', async (req, res) => {
                if (batch.length < 100) break;
                page++;
         }
+     app.get('/api/vendor-docs', async (req, res) => {
+  try {
+    const response = await fetch('https://aloe-knowledge-sync.onrender.com/api/documents?audience=vendor');
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Vendor docs proxy error:', err);
+    res.status(500).json({ error: 'Failed to load documents' });
+  }
+});
         const vendors = allVendors.map(v => ({
                vendorID: v.vendorID || v.id || '',
                name: v.name || v.vendorName || '',
