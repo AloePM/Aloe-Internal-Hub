@@ -1143,31 +1143,43 @@ async function executeTool(name, input) {
       }
 
       case 'rv_get_work_orders': {
-        const p = { pageSize: 100, page: 1 };
-        if (input.propertyId) p.propertyID = input.propertyId;
-        const data = await rvFetch('/maintenance/work-orders', p);
-        let rawWOs = Array.isArray(data) ? data : (data && data.data) || [];
-        let allWOs = rawWOs.map(function(rec) {
-          if (rec.workOrder) {
-            return Object.assign({}, rec.workOrder, {
-              unitAddress: (rec.unit && (rec.unit.address || rec.unit.name)) || '',
-              vendorName: (rec.contact && rec.contact.name) || '',
-            });
-          }
-          return rec;
-        }).filter(function(wo) { return wo.workOrderID; });
-        let filtered = allWOs;
-        if (input.status === 'closed') {
-          filtered = allWOs.filter(function(wo) {
-            const sid = parseInt(wo.primaryWorkOrderStatusID);
-            return sid === 4 || sid === 5;
-          });
-        } else {
-          filtered = allWOs.filter(function(wo) {
-            const sid = parseInt(wo.primaryWorkOrderStatusID);
-            return sid !== 4 && sid !== 5;
-          });
-        }
+  const p = { pageSize: 100 };
+  if (input.propertyId) p.propertyID = input.propertyId;
+
+  // Paginate all pages instead of just page 1
+  let allWOs = [];
+  for (let pg = 1; pg <= 10; pg++) {
+    p.page = pg;
+    const data = await rvFetch('/maintenance/work-orders', p);
+    const rawBatch = Array.isArray(data) ? data : (data && data.data) || [];
+    if (rawBatch.length === 0) break;
+    const mapped = rawBatch.map(function(rec) {
+      if (rec.workOrder) {
+        return Object.assign({}, rec.workOrder, {
+          unitAddress: (rec.unit && (rec.unit.address || rec.unit.name)) || '',
+          vendorName: (rec.contact && rec.contact.name) || '',
+        });
+      }
+      return rec;
+    }).filter(function(wo) { return wo.workOrderID; });
+    allWOs = allWOs.concat(mapped);
+    if (rawBatch.length < 100) break;
+  }
+
+  let filtered = allWOs;
+  if (input.status === 'closed') {
+    filtered = allWOs.filter(function(wo) {
+      const sid = parseInt(wo.primaryWorkOrderStatusID);
+      return sid === 4 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
+    });
+  } else {
+    // Open = not closed, not cancelled, no closedDate
+    filtered = allWOs.filter(function(wo) {
+      const sid = parseInt(wo.primaryWorkOrderStatusID);
+      const isClosed = sid === 4 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
+      return !isClosed;
+    });
+  }
         const unassigned = filtered.filter(function(wo) { return !wo.vendorContactID; });
         const now2 = Date.now();
         const slim2 = filtered.map(function(wo) {
