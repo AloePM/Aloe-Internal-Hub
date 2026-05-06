@@ -1414,58 +1414,105 @@ async function executeTool(name, input) {
       }
 
       case 'compare_work_orders': {
-        const [rvData, aptlyData] = await Promise.all([
-          rvFetch('/maintenance/work-orders', { pageSize: 100, page: 1 }),
-          unitsFetch('/api/board/workOrder', { page: 0, pageSize: 100, includeArchived: false }),
-        ]);
-        const rvRaw = Array.isArray(rvData) ? rvData : [];
-        const rvWOs = rvRaw.map(function(rec) {
-          return rec.workOrder ? Object.assign({}, rec.workOrder, {
-            unitAddress: (rec.unit && (rec.unit.address || rec.unit.name)) || '',
-            vendorName: (rec.contact && rec.contact.name) || '',
-          }) : rec;
-        }).filter(function(wo) {
-          return wo.workOrderID && parseInt(wo.primaryWorkOrderStatusID) !== 4 && parseInt(wo.primaryWorkOrderStatusID) !== 5;
+  // Paginate Rentvine fully
+  let rvAllRaw = [];
+  for (let pg = 1; pg <= 10; pg++) {
+    const d = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+    const batch = Array.isArray(d) ? d : (d && d.data) || [];
+    if (batch.length === 0) break;
+    rvAllRaw = rvAllRaw.concat(batch);
+    if (batch.length < 100) break;
+  }
+
+  const rvWOs = rvAllRaw.map(function(rec) {
+    return rec.workOrder ? Object.assign({}, rec.workOrder, {
+      unitAddress: (rec.unit && (rec.unit.address || rec.unit.name)) || '',
+      vendorName: (rec.contact && rec.contact.name) || '',
+    }) : rec;
+  }).filter(function(wo) {
+    if (!wo.workOrderID) return false;
+    const sid = parseInt(wo.primaryWorkOrderStatusID);
+    const isClosed = sid === 4 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
+    return !isClosed;
+  });
+
+  // Paginate Aptly fully
+  let aptlyAllRaw = [];
+  for (let pg = 0; pg <= 5; pg++) {
+    const d = await unitsFetch('/api/board/workOrder', { page: pg, pageSize: 100, includeArchived: false });
+    const batch = Array.isArray(d) ? d : (d && d.data) || [];
+    if (batch.length === 0) break;
+    aptlyAllRaw = aptlyAllRaw.concat(batch);
+    if (batch.length < 100) break;
+  }
+
+  const aptlyWOs = aptlyAllRaw.filter(function(c) {
+    return !c.archived && !/completed|cancelled|closed|rejected/i.test(c.stage || '');
+  });
+
+  const rvByNumber = {};
+  rvWOs.forEach(function(wo) { if (wo.workOrderNumber) rvByNumber[String(wo.workOrderNumber)] = wo; });
+
+  const aptlyByNumber = {};
+  aptlyWOs.forEach(function(c) { if (c.workOrderNumber) aptlyByNumber[String(c.workOrderNumber)] = c; });
+
+  const matched = [];
+  const aptlyOnly = [];
+  const statusMismatch = [];
+
+  aptlyWOs.forEach(function(c) {
+    const num = String(c.workOrderNumber || '');
+    if (!num) {
+      aptlyOnly.push({ number: 'no number', title: c.description || c.name, aptlyStage: c.stage, property: (c.location || [])[0]?.name || (c.unit || [])[0]?.name || '' });
+      return;
+    }
+    const rv = rvByNumber[num];
+    if (!rv) {
+      aptlyOnly.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, property: (c.location || [])[0]?.name || (c.unit || [])[0]?.name || '' });
+    } else {
+      const rvStatusId = parseInt(rv.primaryWorkOrderStatusID);
+      const rvIsClosed = rvStatusId === 4 || rvStatusId === 5 || !!rv.closedDate || !!rv.dateClosed;
+      const aptlyIsClosed = /completed|cancelled|closed|rejected/i.test(c.stage || '');
+      if (rvIsClosed !== aptlyIsClosed) {
+        statusMismatch.push({
+          number: num,
+          title: c.description || c.name,
+          aptlyStage: c.stage,
+          rvStatusId,
+          rvClosedDate: rv.closedDate || rv.dateClosed || null,
+          property: (c.location || [])[0]?.name || (c.unit || [])[0]?.name || rv.unitAddress || '',
         });
-        const aptlyRaw = Array.isArray(aptlyData) ? aptlyData : (aptlyData && aptlyData.data) || [];
-        const aptlyWOs = aptlyRaw.filter(function(c) {
-          return !c.archived && !/completed|cancelled|rejected/i.test(c.stage || '');
-        });
-        const rvByNumber = {};
-        rvWOs.forEach(function(wo) { if (wo.workOrderNumber) rvByNumber[String(wo.workOrderNumber)] = wo; });
-        const aptlyByNumber = {};
-        aptlyWOs.forEach(function(c) { if (c.workOrderNumber) aptlyByNumber[String(c.workOrderNumber)] = c; });
-        const matched = [];
-        const aptlyOnly = [];
-        const statusMismatch = [];
-        aptlyWOs.forEach(function(c) {
-          const num = String(c.workOrderNumber || '');
-          if (!num) { aptlyOnly.push({ number: 'no number', title: c.description || c.name, aptlyStage: c.stage, property: (c.unit && c.unit.name) || '' }); return; }
-          const rv = rvByNumber[num];
-          if (!rv) {
-            aptlyOnly.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, property: (c.unit && c.unit.name) || '' });
-          } else {
-            const rvStatusId = parseInt(rv.primaryWorkOrderStatusID);
-            const aptlyStage = (c.stage || '').toLowerCase();
-            const rvIsOpen = rvStatusId <= 2;
-            const aptlyIsOpen = !/completed|cancelled|rejected/i.test(aptlyStage);
-            if (rvIsOpen !== aptlyIsOpen) {
-              statusMismatch.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, rvStatusId: rvStatusId, property: (c.unit && c.unit.name) || rv.unitAddress || '' });
-            } else {
-              matched.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, rvStatusId: rvStatusId });
-            }
-          }
-        });
-        const rvOnly = rvWOs.filter(function(wo) {
-          return wo.workOrderNumber && !aptlyByNumber[String(wo.workOrderNumber)];
-        }).map(function(wo) {
-          return { number: String(wo.workOrderNumber), title: wo.description || '?', rvStatusId: wo.primaryWorkOrderStatusID, property: wo.unitAddress || '' };
-        });
-        return JSON.stringify({
-          summary: { rvTotal: rvWOs.length, aptlyTotal: aptlyWOs.length, matched: matched.length, aptlyOnly: aptlyOnly.length, rvOnly: rvOnly.length, statusMismatch: statusMismatch.length },
-          aptlyOnly, rvOnly, statusMismatch,
-        });
+      } else {
+        matched.push({ number: num, title: c.description || c.name, aptlyStage: c.stage, rvStatusId });
       }
+    }
+  });
+
+  const rvOnly = rvWOs.filter(function(wo) {
+    return wo.workOrderNumber && !aptlyByNumber[String(wo.workOrderNumber)];
+  }).map(function(wo) {
+    return {
+      number: String(wo.workOrderNumber),
+      title: (wo.description || '?').replace(/<[^>]+>/g, ' ').trim().slice(0, 60),
+      rvStatusId: wo.primaryWorkOrderStatusID,
+      property: wo.unitAddress || '',
+    };
+  });
+
+  return JSON.stringify({
+    summary: {
+      rvTotal: rvWOs.length,
+      aptlyTotal: aptlyWOs.length,
+      matched: matched.length,
+      aptlyOnly: aptlyOnly.length,
+      rvOnly: rvOnly.length,
+      statusMismatch: statusMismatch.length,
+    },
+    aptlyOnly,
+    rvOnly,
+    statusMismatch,
+  });
+}
 
       case 'aptly_get_leads': {
         const schema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
