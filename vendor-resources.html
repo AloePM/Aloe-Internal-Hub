@@ -655,20 +655,25 @@ async function openDocsModal() {
       body.innerHTML = '<div class="modal-loading">No vendor documents found.</div>';
       return;
     }
-    body.innerHTML = docs.map(function(doc) {
-      var url = doc.sourceUrl || doc.source_url || doc.url || '#';
-      var title = doc.title || 'Untitled';
-      var sub = doc.subcategory || doc.department || '';
-      var type = doc.doc_Type || doc.document_type || doc.type || '';
-      return '<a class="doc-card" href="' + url + '" target="_blank">' +
-        '<div class="doc-icon">📋</div>' +
-        '<div class="doc-info">' +
-          '<div class="doc-title">' + title + '</div>' +
-          '<div class="doc-meta">' + [sub, type].filter(Boolean).join(' · ') + '</div>' +
-        '</div>' +
-        '<div class="doc-arrow">→</div>' +
-      '</a>';
-    }).join('');
+body.innerHTML = docs.map(function(doc) {
+  var url = doc.source_url || null;
+  var title = doc.title || 'Untitled';
+  var sub = doc.subcategory ? doc.subcategory.replace(/_/g, ' ') : '';
+  var dept = doc.department ? doc.department.replace(/_/g, ' ') : '';
+  var meta = [dept, sub].filter(Boolean).join(' · ');
+  var tag = url
+    ? '<a class="doc-card" href="' + url + '" target="_blank">'
+    : '<div class="doc-card" style="cursor:default;opacity:0.7">';
+  var endTag = url ? '</a>' : '</div>';
+  return tag +
+    '<div class="doc-icon">📋</div>' +
+    '<div class="doc-info">' +
+      '<div class="doc-title">' + title + '</div>' +
+      '<div class="doc-meta">' + (meta || doc.doc_type || '') + '</div>' +
+    '</div>' +
+    (url ? '<div class="doc-arrow">→</div>' : '<div class="doc-arrow" style="font-size:12px;color:#94A3B8">No link</div>') +
+  endTag;
+}).join('');
   } catch(err) {
     body.innerHTML = '<div class="modal-error">Could not load documents. Please try again.</div>';
   }
