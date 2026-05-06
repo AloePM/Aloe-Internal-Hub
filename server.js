@@ -333,7 +333,7 @@ app.get('/api/aptly/units', async function(req, res) {
 app.get('/api/vendor-docs', async (req, res) => {
   try {
     const kbBase = process.env.KB_URL || 'https://aloe-knowledge-sync.onrender.com';
-    const response = await fetch(`${kbBase}/api/documents?audience=vendor`);
+const response = await fetch(`${kbBase}/api/public/documents?audience=vendor`);
     if (!response.ok) {
       const text = await response.text();
       console.error('Vendor docs KB error:', response.status, text.slice(0, 200));
