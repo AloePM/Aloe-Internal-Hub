@@ -156,10 +156,78 @@ a:hover{text-decoration:underline;}
   <p>We manage 500+ properties across the Phoenix Metro area and partner with trusted vendors who share our commitment to quality, communication, and reliability.</p>
   <div class="hero-actions">
     <a href="#apply" class="btn-primary">Apply to Be a Vendor</a>
-    <a href="#expectations" class="btn-outline">View Our Standards</a>
+<a href="#expectations" class="btn-outline">View Our Standards</a>
+<a href="#" class="btn-outline" onclick="openDocsModal();return false;">📄 View Documents</a>  </div>
+</div>
+  <!-- DOCUMENTS MODAL -->
+<div class="modal-overlay" id="docs-modal" onclick="closeDocsModal(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>📄 Vendor Documents</h3>
+      <button class="modal-close" onclick="closeDocsModal()">✕</button>
+    </div>
+    <div class="modal-body" id="docs-modal-body">
+      <div class="modal-loading">Loading documents...</div>
+    </div>
   </div>
 </div>
+/* DOCS MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff;border-radius:16px;width:90%;max-width:680px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-header{padding:20px 24px;border-bottom:1px solid #E2E5EC;display:flex;justify-content:space-between;align-items:center;}
+.modal-header h3{font-size:18px;font-weight:700;color:#0F172A;}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:#94A3B8;line-height:1;}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1;}
+.doc-card{background:#F8FAFC;border:1px solid #E2E5EC;border-radius:10px;padding:16px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start;text-decoration:none;transition:border-color 0.15s;}
+.doc-card:hover{border-color:#0891B2;background:#EDF9FC;text-decoration:none;}
+.doc-icon{font-size:24px;flex-shrink:0;}
+.doc-info{flex:1;}
+.doc-title{font-size:14px;font-weight:600;color:#0F172A;margin-bottom:3px;}
+.doc-meta{font-size:12px;color:#64748B;}
+.doc-arrow{color:#94A3B8;font-size:16px;align-self:center;}
+.modal-loading{text-align:center;padding:40px;color:#64748B;font-size:14px;}
+.modal-error{text-align:center;padding:40px;color:#DC2626;font-size:14px;}
+  async function openDocsModal() {
+  document.getElementById('docs-modal').classList.add('open');
+  var body = document.getElementById('docs-modal-body');
+  body.innerHTML = '<div class="modal-loading">Loading documents...</div>';
+  try {
+    var res = await fetch('/api/vendor-docs');
+    var data = await res.json();
+    var docs = Array.isArray(data) ? data : (data.documents || data.docs || []);
+    if (!docs.length) {
+      body.innerHTML = '<div class="modal-loading">No vendor documents found.</div>';
+      return;
+    }
+    body.innerHTML = docs.map(function(doc) {
+      var url = doc.sourceUrl || doc.source_url || doc.url || '#';
+      var title = doc.title || 'Untitled';
+      var sub = doc.subcategory || doc.department || '';
+      var type = doc.documentType || doc.document_type || doc.type || '';
+      return '<a class="doc-card" href="' + url + '" target="_blank">' +
+        '<div class="doc-icon">📋</div>' +
+        '<div class="doc-info">' +
+          '<div class="doc-title">' + title + '</div>' +
+          '<div class="doc-meta">' + [sub, type].filter(Boolean).join(' · ') + '</div>' +
+        '</div>' +
+        '<div class="doc-arrow">→</div>' +
+      '</a>';
+    }).join('');
+  } catch(err) {
+    body.innerHTML = '<div class="modal-error">Could not load documents. Please try again.</div>';
+  }
+}
 
+function closeDocsModal(e) {
+  if (!e || e.target === document.getElementById('docs-modal')) {
+    document.getElementById('docs-modal').classList.remove('open');
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDocsModal();
+});
 <!-- STATS BAR -->
 <div class="stats-bar">
   <div class="stat-item"><div class="stat-num">500+</div><div class="stat-label">Properties Managed</div></div>
