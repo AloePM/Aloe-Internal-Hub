@@ -2272,8 +2272,18 @@ BENCHMARK DATA:
             result = result.slice(0, 8000) + '...[truncated]';
           }
         }
-        if (typeof result === 'string' && result.length > 10000) {
-          result = result.slice(0, 10000) + '...[truncated for context limit]';
+        if (typeof result === 'string' && result.length > 15000) {
+          // For work orders, trim issue text before hard truncating
+          try {
+            const parsed = JSON.parse(result);
+            if (parsed && parsed.workOrders && Array.isArray(parsed.workOrders)) {
+              const slim = parsed.workOrders.map(function(wo) {
+                return { address: wo.address, num: wo.num, issue: (wo.issue || '').split(' ').slice(0, 4).join(' '), vendor: wo.vendor, opened: wo.opened, daysOpen: wo.daysOpen, status: wo.status };
+              });
+              result = JSON.stringify(Object.assign({}, parsed, { workOrders: slim }));
+            }
+          } catch(e) {}
+          if (result.length > 15000) result = result.slice(0, 15000) + '...[truncated]';
         }
         return {
           type: 'tool_result',
