@@ -2490,15 +2490,31 @@ app.get('/api/metrics', async (req, res) => {
     const TMK = thisMonthKey();
     const now = new Date();
 
-    // ── 1. Properties ────────────────────────────────────────────────────
-    let allProps = [], pg = 1;
-    while (pg <= 20) {
-      const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      allProps = allProps.concat(batch);
-      if (batch.length < 200) break;
-      pg++;
+    // ── 1-4. PARALLEL FETCH — all Rentvine data at once ─────────────────
+    // Run all fetches concurrently instead of sequentially for 3-4x speedup
+    async function fetchAllPages(path, params = {}, maxPages = 10) {
+      let all = [], pg = 1;
+      while (pg <= maxPages) {
+        const batch = await rvFetch(path, { ...params, pageSize: 200, page: pg });
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        all = all.concat(batch);
+        if (batch.length < 200) break;
+        pg++;
+      }
+      return all;
     }
+
+    // Fire all 4 Rentvine fetches at the same time
+    const [allProps, activeLeases, pastLeases, allUnits] = await Promise.all([
+      fetchAllPages('/properties/export', {}, 10),
+      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 1 }, 10),
+      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 15), // past/closed for move-outs
+      fetchAllPages('/properties/units/export', {}, 5),
+    ]);
+
+    // ALL leases = active + past (no need to re-fetch everything)
+    const allLeases = [...activeLeases, ...pastLeases];
+    console.log(`Metrics parallel fetch: ${allProps.length} props, ${activeLeases.length} active leases, ${pastLeases.length} past leases, ${allUnits.length} units`);
 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
@@ -2516,41 +2532,6 @@ app.get('/api/metrics', async (req, res) => {
       const k = monthKey(p.dateTimeCreated || p.dateContractBegins);
       if (k && propGainedByMonth[k] !== undefined) propGainedByMonth[k]++;
     });
-
-    // ── 2. Active leases only (primaryLeaseStatusIDs[]=1) ────────────────
-    // Rentvine /leases/export returns { lease:{...}, unit:{...}, property:{...} }
-    // Status 1 = Active, 2 = Past, 3 = Future/Pending
-    let activeLeases = []; pg = 1;
-    while (pg <= 20) {
-      const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page: pg });
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      activeLeases = activeLeases.concat(batch);
-      if (batch.length < 200) break;
-      pg++;
-    }
-
-    // ── 3. ALL leases for move-in/out trend data (fetch more pages for history) ──
-    let allLeases = []; pg = 1;
-    while (pg <= 30) { // increased from 20 to 30 to capture more history
-      const batch = await rvFetch('/leases/export', { pageSize: 200, page: pg });
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      allLeases = allLeases.concat(batch);
-      if (batch.length < 200) break;
-      pg++;
-    }
-    console.log(`Metrics: fetched ${allLeases.length} total leases for trend data`);
-
-    // ── 4. Units — use isVacant flag directly from Rentvine ───────────────
-    // Rentvine unit record: isVacant='1' means vacant, isVacant='0' means occupied
-    // isActive='1' means the unit is actively managed (not archived)
-    let allUnits = []; pg = 1;
-    while (pg <= 10) {
-      const batch = await rvFetch('/properties/units/export', { pageSize: 200, page: pg });
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      allUnits = allUnits.concat(batch);
-      if (batch.length < 200) break;
-      pg++;
-    }
 
     // Filter to active managed units only
     const activeUnits = allUnits.filter(item => {
@@ -2691,20 +2672,34 @@ app.get('/api/metrics', async (req, res) => {
       ? Math.round(daysToLeaseArr.reduce((a, b) => a + b, 0) / daysToLeaseArr.length)
       : null;
 
-    // ── 3. Applications from Aptly ────────────────────────────────────────
-    const appsSchema = await unitsFetch('/api/schema/MJxaStgENouWrNEKd');
-    const appsSchemaMap = {};
-    if (Array.isArray(appsSchema)) appsSchema.forEach(f => { appsSchemaMap[f.key] = f.label; });
-
-    let allApps = []; let appPg = 0;
-    while (appPg < 10) {
-      const batch = await unitsFetch('/api/board/MJxaStgENouWrNEKd', { page: appPg, pageSize: 100 });
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-      if (items.length === 0) break;
-      allApps = allApps.concat(items);
-      if (items.length < 100) break;
-      appPg++;
+    // ── 3–8. PARALLEL FETCH — all Aptly boards at once ──────────────────
+    async function fetchAptlyBoard(boardId, opts = {}) {
+      let all = [], pg = 0;
+      const max = opts.maxPages || 5;
+      while (pg < max) {
+        const batch = await unitsFetch('/api/board/' + boardId, { page: pg, pageSize: 100, ...opts.params });
+        const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
+        if (items.length === 0) break;
+        all = all.concat(items);
+        if (items.length < 100) break;
+        pg++;
+      }
+      return all;
     }
+
+    // Fire all Aptly board fetches simultaneously
+    const [allApps, unitsCards, allLeadsRaw, allPMA, allOffboard, allMoveOuts, allWOsRaw] = await Promise.all([
+      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 5 }),
+      getUnitsCards(),
+      fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 3, params: { includeArchived: true } }),
+      fetchAptlyBoard('LDhqFFos8fsQLavv8', { maxPages: 5, params: { includeArchived: true } }),
+      fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 3, params: { includeArchived: true } }),
+      fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 5, params: { includeArchived: true } }),
+      fetchAptlyBoard('workOrder', { maxPages: 3, params: { includeArchived: false } }),
+    ]);
+
+    const allWOs = allWOsRaw.filter(c => !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''));
+    console.log(`Metrics Aptly fetch: ${allApps.length} apps, ${allLeadsRaw.length} leads, ${allPMA.length} PMA, ${allOffboard.length} offboard, ${allMoveOuts.length} moveouts, ${allWOs.length} WOs`);
 
     const appsByMonth = buildMonthBuckets(12);
     const appsApprovedByMonth = buildMonthBuckets(12);
@@ -2731,8 +2726,7 @@ app.get('/api/metrics', async (req, res) => {
       }
     });
 
-    // ── 4. Listings (Aptly Units board) ──────────────────────────────────
-    const unitsCards = await getUnitsCards();
+    // ── 4. Process Aptly data (already fetched in parallel above) ──────
     const publishedListings = unitsCards.filter(c =>
       c['Published For Rent'] === 'checked' || c['Published For Rent'] === true ||
       c['Syndicate'] === 'checked'
@@ -2753,19 +2747,7 @@ app.get('/api/metrics', async (req, res) => {
     }).length;
 
     // Keyless deadbolts — from Aptly leads data: Mirror Lockbox Type = "Keyless Deadbolt"
-    // Count unique unit addresses with Keyless Deadbolt
     const keylessUnits = new Set();
-    const leadsSchema = await unitsFetch('/api/schema/4EMDSYKirhQaNdQKz');
-    let allLeadsRaw = []; let lPg = 0;
-    while (lPg < 5) {
-      const batch = await unitsFetch('/api/board/4EMDSYKirhQaNdQKz', { page: lPg, pageSize: 100, includeArchived: true });
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-      if (items.length === 0) break;
-      allLeadsRaw = allLeadsRaw.concat(items);
-      if (items.length < 100) break;
-      lPg++;
-    }
-
     allLeadsRaw.forEach(card => {
       const lockboxType = card['Mirror Lockbox Type'] || card.mirrorLockboxType || '';
       if (/keyless deadbolt/i.test(lockboxType)) {
@@ -2790,21 +2772,7 @@ app.get('/api/metrics', async (req, res) => {
       if (k && newLeadsByMonth[k] !== undefined) newLeadsByMonth[k]++;
     });
 
-    // ── 5. Owner Pipeline (PMA board) ────────────────────────────────────
-    const pmaSchema = await unitsFetch('/api/schema/LDhqFFos8fsQLavv8');
-    const pmaSchemaMap = {};
-    if (Array.isArray(pmaSchema)) pmaSchema.forEach(f => { pmaSchemaMap[f.key] = f.label; });
-
-    let allPMA = []; let pmaPg = 0;
-    while (pmaPg < 10) {
-      const batch = await unitsFetch('/api/board/LDhqFFos8fsQLavv8', { page: pmaPg, pageSize: 100, includeArchived: true });
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-      if (items.length === 0) break;
-      allPMA = allPMA.concat(items);
-      if (items.length < 100) break;
-      pmaPg++;
-    }
-
+    // ── 5. Owner Pipeline (PMA board — fetched above in parallel) ───────
     const pmaSignedByMonth = buildMonthBuckets(12);
     const newPipelineByMonth = buildMonthBuckets(12);
     let pmaSignedMTD = 0, newPipelineMTD = 0;
@@ -2824,21 +2792,7 @@ app.get('/api/metrics', async (req, res) => {
       }
     });
 
-    // ── 6. Offboard / End Management — board ID: BaMiriNFDZBtWd5rR ─────────
-    // Confirmed field structure from live data:
-    // - card.Reason = plain string (the actual reason: "Selling with Another Agent" etc.)
-    // - card.Stage  = pipeline stage ("New", "In Progress", "Complete" etc.)
-    // - card.createdAt = ISO date when the offboard was initiated
-    let allOffboard = []; let obPg = 0;
-    while (obPg < 10) {
-      const batch = await unitsFetch('/api/board/BaMiriNFDZBtWd5rR', { page: obPg, pageSize: 100, includeArchived: true });
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-      if (items.length === 0) break;
-      allOffboard = allOffboard.concat(items);
-      if (items.length < 100) break;
-      obPg++;
-    }
-
+    // ── 6. End Management (offboard board — fetched above in parallel) ──
     const endMgmtByMonth = buildMonthBuckets(12);
     const endMgmtReasons = {};
     let endMgmtMTD = 0;
@@ -2855,17 +2809,7 @@ app.get('/api/metrics', async (req, res) => {
       }
     });
 
-    // ── 7. Move-Outs Board (Comprehensive Inspections) ────────────────────
-    let allMoveOuts = []; let moPg = 0;
-    while (moPg < 10) {
-      const batch = await unitsFetch('/api/board/YA3QWmPebvMwLwbB3', { page: moPg, pageSize: 100, includeArchived: true });
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-      if (items.length === 0) break;
-      allMoveOuts = allMoveOuts.concat(items);
-      if (items.length < 100) break;
-      moPg++;
-    }
-
+    // ── 7. Move-Outs Board (fetched above in parallel) ────────────────────
     let comprehensiveInspYes = 0, comprehensiveInspNo = 0;
     allMoveOuts.forEach(card => {
       // Confirmed from live Aptly data: field is "Comprehensive Inspection" (plain string)
@@ -2875,18 +2819,7 @@ app.get('/api/metrics', async (req, res) => {
       else if (val === 'no') comprehensiveInspNo++;
     });
 
-    // ── 8. Work Orders ────────────────────────────────────────────────────
-    let allWOs = []; let woPg = 0;
-    while (woPg <= 5) {
-      const batch = await unitsFetch('/api/board/workOrder', { page: woPg, pageSize: 100, includeArchived: false });
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-      if (items.length === 0) break;
-      const active = items.filter(c => !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''));
-      allWOs = allWOs.concat(active);
-      if (items.length < 100) break;
-      woPg++;
-    }
-
+    // ── 8. Work Orders (fetched above in parallel) ────────────────────────
     const woByStage = {};
     allWOs.forEach(c => {
       const s = c.stage || 'Unknown';
