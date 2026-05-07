@@ -2527,45 +2527,54 @@ async function buildMetricsData() {
     // - status=6 = vacated, has moveOutDate populated (confirmed from debug)
     // - status=2 = past/expired, moveOutDate=null, use endDate
 
-    const [allProps, allUnits, status2Leases, status6Leases] = await Promise.all([
+    // Use /leases (not /leases/export) — returns full fields including
+    // moveOutDate, moveOutTenantReason, moveOutReasonID, closedDate, etc.
+    // Supports primaryLeaseStatusIDs[] filter reliably.
+    // Data shape: flat object (not nested under .lease)
+
+    async function fetchLeases(statusID, maxPages) {
+      let all = [], pg = 1;
+      while (pg <= maxPages) {
+        const batch = await rvFetch('/leases', {
+          'primaryLeaseStatusIDs[]': statusID,
+          pageSize: 200,
+          page: pg
+        });
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        all = all.concat(batch);
+        if (batch.length < 200) break;
+        pg++;
+      }
+      return all;
+    }
+
+    const [allProps, allUnits, activeLeases, pastLeases2, pastLeases6] = await Promise.all([
       fetchAllPages('/properties/export', {}, 3),
       fetchAllPages('/properties/units/export', {}, 3),
-      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 8), // past/expired
-      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 6 }, 8), // vacated with moveOutDate
+      fetchLeases(1, 5),   // active leases
+      fetchLeases(2, 8),   // past/expired leases  
+      fetchLeases(6, 8),   // vacated leases — these have moveOutDate populated
     ]);
 
-    // Past leases = status 2 + status 6
-    const pastLeases = [...status2Leases, ...status6Leases];
-
-    // Active leases = fetch using leaseIDs from occupied units
-    // Each active unit has leaseID pointing to its current lease
-    const activeUnitLeaseIDs = new Set(
-      allUnits
-        .filter(item => {
-          const u = item.unit || item;
-          return (u.isActive === '1' || u.isActive === 1) &&
-                 (u.isVacant === '0' || u.isVacant === 0 || u.isVacant === false) &&
-                 u.leaseID;
-        })
-        .map(item => String((item.unit || item).leaseID))
-    );
-
-    // Fetch a page of active leases to get lease details (endDate, moveInDate, etc)
-    // We already have move-in history from past leases; for active we need endDate for expirations
-    const activeLeasePage = await fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 1 }, 5);
-    // Supplement with any additional active leases found by unit leaseID matching in past fetch
-    const activeLeases = activeLeasePage.length > 0 ? activeLeasePage :
-      pastLeases.filter(item => {
-        const l = item.lease || item;
-        return activeUnitLeaseIDs.has(String(l.leaseID));
-      });
-
-    // All leases for move-in trend data
-    const allLeases = [...activeLeasePage, ...pastLeases];
+    const pastLeases = [...pastLeases2, ...pastLeases6];
+    const allLeases = [...activeLeases, ...pastLeases];
 
     console.log('Metrics fetch: ' + allProps.length + ' props, ' + allUnits.length + ' units, ' +
-      activeLeasePage.length + ' active leases (filter), ' +
-      status2Leases.length + ' status-2, ' + status6Leases.length + ' status-6 (vacated)');
+      activeLeases.length + ' active, ' + pastLeases2.length + ' past(2), ' +
+      pastLeases6.length + ' vacated(6)');
+
+    // Log sample to confirm fields
+    if (pastLeases6.length > 0) {
+      const s = pastLeases6[0];
+      console.log('Vacated lease sample: moveOutDate=' + s.moveOutDate +
+        ' moveOutTenantReason=' + s.moveOutTenantReason +
+        ' primaryLeaseStatusID=' + s.primaryLeaseStatusID);
+    }
+    if (pastLeases2.length > 0) {
+      const s = pastLeases2[0];
+      console.log('Past lease sample: moveOutDate=' + s.moveOutDate +
+        ' closedDate=' + s.closedDate + ' endDate=' + s.endDate);
+    }
 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
@@ -2616,16 +2625,13 @@ async function buildMetricsData() {
     const occupancyRate = totalUnits > 0 ? +((occupiedUnits / totalUnits) * 100).toFixed(1) : 0;
     console.log('Metrics occupancy: ' + occupiedUnits + ' occupied / ' + totalUnits + ' total = ' + occupancyRate + '%');
 
-    // Avg rent from unit records (more reliable than lease records when activeLeases is small)
-    const rents = activeUnits
-      .filter(item => {
-        const u = item.unit || item;
-        return (u.isVacant === '0' || u.isVacant === 0 || u.isVacant === false);
-      })
-      .map(item => {
-        const u = item.unit || item;
-        return parseFloat(u.rent || u.marketRent || 0);
-      }).filter(r => r > 0);
+    // Avg rent — try active leases first (rentAmount), fall back to unit rent field
+    const rents = activeLeases.length > 0
+      ? activeLeases.map(l => parseFloat(l.rentAmount || l.rent || 0)).filter(r => r > 0)
+      : activeUnits
+          .filter(item => { const u = item.unit||item; return u.isVacant==='0'||u.isVacant===0||u.isVacant===false; })
+          .map(item => { const u = item.unit||item; return parseFloat(u.rent||u.marketRent||0); })
+          .filter(r => r > 0);
     const avgRent = rents.length ? Math.round(rents.reduce((a, b) => a + b, 0) / rents.length) : 0;
     const vacancyLoss = vacantUnits * avgRent;
     console.log('Metrics avg rent: $' + avgRent + ' from ' + rents.length + ' units, vacancy loss: $' + vacancyLoss);
@@ -2641,14 +2647,15 @@ async function buildMetricsData() {
     const moveOutReasons = {};
 
     if (allLeases.length > 0) {
-      const sample = allLeases[0].lease || allLeases[0];
+      const sample = allLeases[0];
       console.log('Lease fields:', Object.keys(sample).join(', '));
-      console.log('Status-6 sample:', JSON.stringify(status6Leases.slice(0,2).map(i=>{const l=i.lease||i;return {leaseStatusID:l.leaseStatusID,moveOutDate:l.moveOutDate,closedDate:l.closedDate,endDate:l.endDate};})));
+      console.log('Vacated sample: moveOutDate=' + (pastLeases6[0]||{}).moveOutDate +
+        ' reason=' + (pastLeases6[0]||{}).moveOutTenantReason);
     }
 
-    // Use ALL leases for historical trend data
+    // /leases returns flat objects — item IS the lease directly
     allLeases.forEach(item => {
-      const l = item.lease || item;
+      const l = item;
 
       // Move-in date: when tenant actually moved in
       const mi = l.moveInDate || l.startDate;
@@ -2687,7 +2694,8 @@ async function buildMetricsData() {
       // Move-out reason
       const reasonStatusId = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
       if (reasonStatusId !== 1 && reasonStatusId !== 3) {
-        const reason = l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName || '';
+        // /leases endpoint fields: moveOutTenantReason (string), moveOutReasonID (int)
+        const reason = l.moveOutTenantReason || l.moveOutReason || l.vacateReason || '';
         if (reason) moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
       }
     });
@@ -2696,15 +2704,17 @@ async function buildMetricsData() {
     console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${pastLeases.length} closed leases using closedDate)`);
     // Sample a few closed leases to confirm field values
     if (pastLeases.length > 0) {
-      const sample = pastLeases.slice(0,3).map(i => { const l=i.lease||i; return {closedDate:l.closedDate, expectedMoveOutDate:l.expectedMoveOutDate, endDate:l.endDate, primaryLeaseStatusID:l.primaryLeaseStatusID}; });
-      console.log('Metrics closed lease sample:', JSON.stringify(sample));
+      const s6 = pastLeases6[0] || {};
+      const s2 = pastLeases2[0] || {};
+      console.log('Past(6) sample: moveOutDate=' + s6.moveOutDate + ' reason=' + s6.moveOutTenantReason);
+      console.log('Past(2) sample: moveOutDate=' + s2.moveOutDate + ' closedDate=' + s2.closedDate + ' endDate=' + s2.endDate);
     }
 
     // Upcoming expirations (next 90 days) — from active leases only
     const in90 = new Date(); in90.setDate(in90.getDate() + 90);
     const upcomingExpirations = activeLeases.filter(item => {
-      const l = item.lease || item;
-      const end = l.endDate; // contract end date — moveOutDate is always null
+      const l = item; // /leases returns flat objects
+      const end = l.endDate;
       if (!end) return false;
       const d = new Date(end);
       return d >= now && d <= in90;
@@ -2715,7 +2725,7 @@ async function buildMetricsData() {
     // Use availabilityDate on units vs moveInDate on leases
     const daysToLeaseArr = [];
     allLeases.forEach(item => {
-      const l = item.lease || item;
+      const l = item; // flat from /leases
       const mi = l.moveInDate;
       const listed = l.listingDate || l.marketingDate || l.availabilityDate;
       if (mi && listed) {
@@ -2898,22 +2908,29 @@ async function buildMetricsData() {
     const renewalsByMonth = buildMonthBuckets(24);
     const renewalsDetail = [];
 
+    // Build a unitID->address map from allUnits for address lookup
+    const unitAddressMap = {};
+    allUnits.forEach(item => {
+      const u = item.unit || item;
+      if (u.unitID) unitAddressMap[String(u.unitID)] = { address: u.address || '', city: u.city || '', rent: parseFloat(u.rent || 0) };
+    });
+
     activeLeases.forEach(item => {
-      const l = item.lease || item;
-      const u = item.unit || {};
-      const p2 = item.property || {};
-      const endDate = l.endDate || l.leaseEndDate;
+      const l = item; // flat from /leases
+      const endDate = l.endDate;
       if (!endDate) return;
       const ek = monthKey(endDate);
       if (ek && renewalsByMonth[ek] !== undefined) {
         renewalsByMonth[ek]++;
+        const unitInfo = unitAddressMap[String(l.unitID)] || {};
+        const tenantName = Array.isArray(l.tenants) ? (l.tenants[0]||{}).name||'--' : (l.tenants||'--');
         renewalsDetail.push({
-          address: u.address || p2.address || '—',
-          city: u.city || p2.city || '',
-          tenant: l.tenants && l.tenants[0] ? l.tenants[0].name : '—',
+          address: unitInfo.address || '--',
+          city: unitInfo.city || '',
+          tenant: tenantName,
           endDate,
           monthKey: ek,
-          rent: parseFloat(l.rentAmount || l.rent || 0),
+          rent: parseFloat(l.rentAmount || l.rent || unitInfo.rent || 0),
         });
       }
     });
