@@ -2516,17 +2516,28 @@ async function buildMetricsData() {
       return all;
     }
 
-    // Fire all 4 Rentvine fetches at the same time — hard limits to keep it fast
-    const [allProps, activeLeases, pastLeases, allUnits] = await Promise.all([
-      fetchAllPages('/properties/export', {}, 3),          // max 600 properties
-      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 1 }, 3), // max 600 active
-      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 3), // max 600 past
-      fetchAllPages('/properties/units/export', {}, 3),    // max 600 units
+    // Fire Rentvine fetches in parallel — fetch ALL leases in one call, filter client-side
+    // The primaryLeaseStatusIDs filter is unreliable; client-side filter is more accurate
+    const [allProps, allLeasesRaw, allUnits] = await Promise.all([
+      fetchAllPages('/properties/export', {}, 3),
+      fetchAllPages('/leases/export', {}, 5),  // fetch all leases, filter below
+      fetchAllPages('/properties/units/export', {}, 3),
     ]);
 
-    // ALL leases = active + past (no need to re-fetch everything)
-    const allLeases = [...activeLeases, ...pastLeases];
-    console.log(`Metrics parallel fetch: ${allProps.length} props, ${activeLeases.length} active leases, ${pastLeases.length} past leases, ${allUnits.length} units`);
+    // Split into active vs past client-side using leaseStatusID / primaryLeaseStatusID
+    // Status 1 = Active, 2 = Past/Closed, 3 = Future
+    const activeLeases = allLeasesRaw.filter(item => {
+      const l = item.lease || item;
+      const sid = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
+      return sid === 1;
+    });
+    const pastLeases = allLeasesRaw.filter(item => {
+      const l = item.lease || item;
+      const sid = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
+      return sid === 2;
+    });
+    const allLeases = allLeasesRaw; // keep all for trend data
+    console.log(`Metrics parallel fetch: ${allProps.length} props, ${activeLeases.length} active, ${pastLeases.length} past, ${allLeasesRaw.length} total leases, ${allUnits.length} units`);
 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
@@ -2612,29 +2623,22 @@ async function buildMetricsData() {
       if (mk && moveInsByMonth[mk] !== undefined) moveInsByMonth[mk]++;
       if (mk === TMK) moveInsMTD++;
 
-      // ── MOVE-OUTS: use moveOutDate ONLY (not endDate) ───────────────────
-      // moveOutDate = actual vacate date recorded in Rentvine
-      // endDate = lease contract end date (different — may be in future)
-      // We count a move-out if:
-      //   1. moveOutDate exists AND is in the past, OR
-      //   2. Lease status is Past/Closed (status 2) AND moveOutDate exists
-      const moveOutDate = l.moveOutDate; // actual move-out date field
-      const mok = monthKey(moveOutDate);
+      // ── MOVE-OUTS: use best available date from past/closed leases ─────
+      // From logs: moveOutDate=null but closedDate and expectedMoveOutDate exist
+      // Use: moveOutDate → closedDate → expectedMoveOutDate (in order of preference)
+      const statusId = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
+      const isPastLease = statusId === 2;
 
-      // Determine if this is a closed/past lease
-      // Rentvine uses leaseStatusID: 1=Active, 2=Past/Closed, 3=Future
-      // Also check status string as fallback
-      const statusId = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
-      const statusStr = (l.status || l.leaseStatus || '').toLowerCase();
-      const isPastLease = statusId === 2 || statusStr === 'past' || statusStr === 'closed' || statusStr === 'inactive';
-
-      // Count as actual move-out: has a moveOutDate that is in the past
-      if (moveOutDate) {
-        const moDateObj = new Date(moveOutDate);
-        const isActualMoveOut = moDateObj <= now; // date is in the past or today
-        if (isActualMoveOut) {
-          if (mok && moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
-          if (mok === TMK) moveOutsMTD++;
+      // Only count move-outs for past/closed leases
+      if (isPastLease) {
+        const moveOutDate = l.moveOutDate || l.closedDate || l.expectedMoveOutDate || l.endDate;
+        const mok = monthKey(moveOutDate);
+        if (moveOutDate) {
+          const moDateObj = new Date(moveOutDate);
+          if (moDateObj <= now) { // only past dates
+            if (mok && moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
+            if (mok === TMK) moveOutsMTD++;
+          }
         }
       }
 
@@ -2649,10 +2653,10 @@ async function buildMetricsData() {
         }
       }
 
-      // Move-out reason — from moveOutReason field on past/moved-out leases
-      const reason = l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName || '';
-      if (reason && moveOutDate) {
-        moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
+      // Move-out reason — only on past leases
+      if (isPastLease) {
+        const reason = l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName || '';
+        if (reason) moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
       }
     });
 
