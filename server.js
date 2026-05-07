@@ -2516,12 +2516,12 @@ async function buildMetricsData() {
       return all;
     }
 
-    // Fire all 4 Rentvine fetches at the same time
+    // Fire all 4 Rentvine fetches at the same time — hard limits to keep it fast
     const [allProps, activeLeases, pastLeases, allUnits] = await Promise.all([
-      fetchAllPages('/properties/export', {}, 10),
-      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 1 }, 10),
-      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 15), // past/closed for move-outs
-      fetchAllPages('/properties/units/export', {}, 5),
+      fetchAllPages('/properties/export', {}, 3),          // max 600 properties
+      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 1 }, 3), // max 600 active
+      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 3), // max 600 past
+      fetchAllPages('/properties/units/export', {}, 3),    // max 600 units
     ]);
 
     // ALL leases = active + past (no need to re-fetch everything)
@@ -2701,13 +2701,13 @@ async function buildMetricsData() {
 
     // Fire all Aptly board fetches simultaneously
     const [allApps, unitsCards, allLeadsRaw, allPMA, allOffboard, allMoveOuts, allWOsRaw] = await Promise.all([
-      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 5 }),
-      getUnitsCards(),
-      fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 3, params: { includeArchived: true } }),
-      fetchAptlyBoard('LDhqFFos8fsQLavv8', { maxPages: 5, params: { includeArchived: true } }),
-      fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 3, params: { includeArchived: true } }),
-      fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 5, params: { includeArchived: true } }),
-      fetchAptlyBoard('workOrder', { maxPages: 3, params: { includeArchived: false } }),
+      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 2 }),           // applications
+      getUnitsCards(),                                                    // listings
+      fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }), // leads (no archive)
+      fetchAptlyBoard('LDhqFFos8fsQLavv8', { maxPages: 2, params: { includeArchived: true } }),  // PMA
+      fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),  // offboard
+      fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),  // move-outs
+      fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),           // WOs
     ]);
 
     const allWOs = allWOsRaw.filter(c => !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''));
