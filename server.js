@@ -3101,7 +3101,6 @@ app.get('/debug/wo-sheffield', async function(req, res) {
   });
 });
 
-app.get('*', function(req, res) {   // ← wildcard stays here
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
