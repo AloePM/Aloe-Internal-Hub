@@ -612,7 +612,7 @@ function renderRenewals() {
   const moveOutMap={};
   moveOutsByMonth.forEach(x=>{moveOutMap[x.month]=x.value;});
   const moveOutCounts=months.map(m=>moveOutMap[m]||0);
-  const labels=months.map(m=>{if(!m)return''; const[y,mo]=m.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]+' ''+y.slice(2);});
+  const labels=months.map(m=>{if(!m)return''; const[y,mo]=m.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]+" '"+y.slice(2);});
 
   // Group renewals detail by month for the accordion
   const byMonth={};
@@ -756,8 +756,8 @@ function detailList(id, items, columns) {
 </html>
 +Number(r.rent).toLocaleString() : '—') + '</div>' +
   '</div>').join('');
-  return '<div class="detail-toggle" id="btn-'+id+'" onclick="toggleDetail(''+id+'')">' +
-    '<span>▼ Show ' + items.length + ' properties</span><span class="detail-toggle-arrow">▾</span>' +
+  return '<div class="detail-toggle" id="btn-'+id+'" onclick="toggleDetail(this.id.replace(\'btn-\',\'\'))">' +
+    '<span>Show ' + items.length + ' properties</span><span class="detail-toggle-arrow">v</span>' +
   '</div>' +
   '<div class="detail-list" id="list-'+id+'">' + header + rows + '</div>';
 }
