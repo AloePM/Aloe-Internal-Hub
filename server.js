@@ -1618,15 +1618,17 @@ if (input.status && input.status.toLowerCase() === 'emergency') {
   });
   return JSON.stringify({ total: slim.length, emergencies: slim });
 }
-  // rest of your existing code unchanged, just replace allWOs with activeWOs...
-        let filtered = allWOs;
+  let filtered = activeWOs;
         if (input.status) {
           const s = input.status.toLowerCase();
           if (s === 'open' || s === 'not closed') {
-            filtered = allWOs;
+            filtered = activeWOs;
           } else {
-            filtered = allWOs.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
+            filtered = activeWOs.filter(function(c) { return (c.stage || '').toLowerCase().includes(s); });
           }
+        }
+        if (!input.status) {
+          filtered = activeWOs;
         }
         if (input.property) {
           const p = input.property.toLowerCase();
