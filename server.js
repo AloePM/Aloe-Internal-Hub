@@ -2758,8 +2758,22 @@ async function buildMetricsData() {
     let upcomingExpirations = 0;
     const renewalCardDetails = [];
 
+    // Debug first card to see actual field names
+    if (allRenewals.length > 0) {
+      const sample = allRenewals[0];
+      const mirrorEndDate = sample['Mirror End Date'];
+      const titleDate = (sample.Title || '').slice(0, 10);
+      console.log('Renewal card fields:', Object.keys(sample).filter(k => k.toLowerCase().includes('end') || k.toLowerCase().includes('date') || k.toLowerCase().includes('mirror') || k === 'Title' || k === 'Stage').join(', '));
+      console.log('Renewal sample: Title=' + sample.Title + ' MirrorEndDate=' + mirrorEndDate + ' Stage=' + sample.Stage + ' IsWon=' + sample['Is Won'] + ' Archived=' + sample.Archived);
+    }
+
     allRenewals.forEach(card => {
-      const endDate = card['Mirror End Date'];
+      // Try Mirror End Date first, fall back to parsing the Title date (format: MM/DD/YYYY address)
+      let endDate = card['Mirror End Date'];
+      if (!endDate && card.Title) {
+        const titleParts = card.Title.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (titleParts) endDate = titleParts[3] + '-' + titleParts[1] + '-' + titleParts[2];
+      }
       if (!endDate) return;
       const ek = monthKey(endDate);
       const endDateObj = new Date(endDate);
@@ -2776,7 +2790,7 @@ async function buildMetricsData() {
         isWon: card['Is Won'] || false,
       });
     });
-    console.log('Renewals board: ' + allRenewals.length + ' cards, ' + upcomingExpirations + ' expiring in 90d');
+    console.log('Renewals board: ' + allRenewals.length + ' cards, ' + upcomingExpirations + ' expiring in 90d, ' + renewalCardDetails.length + ' with dates');
 
     // Keep old expiration loop for reference but don't overwrite expirationsByMonth
     if (allApps.length > 0) console.log('App stages:', [...new Set(allApps.slice(0,30).map(c=>c.stage||'?'))].join(', '));
@@ -2875,9 +2889,8 @@ async function buildMetricsData() {
       if (k && newPipelineByMonth[k] !== undefined) newPipelineByMonth[k]++;
       if (k === TMK) newPipelineMTD++;
 
-      // Owner Pipeline: card reaches "PMA Signed" stage then gets archived
-      // Must fetch includeArchived=true to capture all signed owners
-      if (stage.includes('pma signed') || stage.includes('signed') || stage.includes('onboard')) {
+      // Confirmed stage name: "PMA Signed" (from live logs)
+      if (stage === 'pma signed' || stage.includes('pma signed')) {
         const signedDate = card.updatedAt || card.createdAt;
         const sk = monthKey(signedDate);
         if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
