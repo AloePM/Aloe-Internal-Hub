@@ -3185,6 +3185,31 @@ app.get('/api/metrics/debug-units', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ── Warm cache on server startup ──────────────────────────────────────────
+// Pre-fetch all metrics data when the server starts so the first visitor
+// gets cached data instead of waiting for a full fetch
+async function warmMetricsCache() {
+  try {
+    console.log('Metrics: warming cache on startup...');
+    const r = await fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/metrics');
+    if (r.ok) {
+      console.log('Metrics: cache warmed successfully');
+    }
+  } catch(e) {
+    // Server may not be ready yet — retry after 10 seconds
+    setTimeout(async () => {
+      try {
+        await fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/metrics');
+        console.log('Metrics: cache warmed on retry');
+      } catch(e2) {
+        console.log('Metrics: cache warm failed (will load on first visit):', e2.message);
+      }
+    }, 10000);
+  }
+}
+// Warm after a short delay to let the server fully start
+setTimeout(warmMetricsCache, 5000);
+
 // Inspect live field names on key boards — useful after Aptly schema changes
 app.get('/api/metrics/debug', async (req, res) => {
   try {
