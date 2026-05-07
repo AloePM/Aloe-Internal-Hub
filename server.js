@@ -2249,6 +2249,14 @@ BENCHMARK DATA:
                 note: parsed.length > 15 ? 'Results trimmed — ' + (parsed.length - 15) + ' more not shown' : undefined,
                 data: trimmed
               });
+           } else if (parsed && parsed.workOrders && Array.isArray(parsed.workOrders)) {
+              // Work orders tool — keep all but strip heavy fields
+              const trimmed = parsed.workOrders.map(function(c) {
+                const clean = Object.assign({}, c);
+                delete clean.comments;
+                return clean;
+              });
+              result = JSON.stringify(Object.assign({}, parsed, { workOrders: trimmed }));
             } else if (parsed && parsed.cards && Array.isArray(parsed.cards)) {
               const trimmed = parsed.cards.slice(0, 20).map(function(c) {
                 const clean = Object.assign({}, c);
