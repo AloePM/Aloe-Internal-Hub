@@ -2497,15 +2497,7 @@ app.get('/api/metrics/refresh', (req, res) => {
 });
 
 // ── GET /api/metrics ────────────────────────────────────────────────────────
-app.get('/api/metrics', async (req, res) => {
-  try {
-    // ── Cache check ───────────────────────────────────────────────────────
-    const now_cache = Date.now();
-    if (_metricsCache && (now_cache - _metricsCacheTime) < METRICS_CACHE_TTL) {
-      console.log('Metrics: serving from cache (age:', Math.round((now_cache - _metricsCacheTime)/1000), 's)');
-      return res.json(_metricsCache);
-    }
-    console.log('Metrics: cache miss — fetching live data...');
+async function buildMetricsData() {
     const fetchStart = Date.now();
     const TMK = thisMonthKey();
     const now = new Date();
@@ -3032,12 +3024,24 @@ app.get('/api/metrics', async (req, res) => {
       },
     };
 
-    // Store in cache and send
-    _metricsCache = responseData;
-    _metricsCacheTime = Date.now();
-    console.log('Metrics: fetched in', Math.round((Date.now() - fetchStart)/1000), 's — cached for 15 min');
-    res.json(responseData);
+    console.log('Metrics: fetched in', Math.round((Date.now() - fetchStart)/1000), 's');
+    return responseData;
+}
 
+// ── GET /api/metrics ────────────────────────────────────────────────────────
+app.get('/api/metrics', async (req, res) => {
+  try {
+    // Serve from cache if fresh
+    const now_cache = Date.now();
+    if (_metricsCache && (now_cache - _metricsCacheTime) < METRICS_CACHE_TTL) {
+      console.log('Metrics: cache hit (age:', Math.round((now_cache - _metricsCacheTime)/1000), 's)');
+      return res.json(_metricsCache);
+    }
+    console.log('Metrics: cache miss — fetching live...');
+    const data = await buildMetricsData();
+    _metricsCache = data;
+    _metricsCacheTime = Date.now();
+    res.json(data);
   } catch (err) {
     console.error('Metrics API error:', err.message);
     res.status(500).json({ error: err.message });
@@ -3186,29 +3190,19 @@ app.get('/api/metrics/debug-units', async (req, res) => {
   }
 });
 // ── Warm cache on server startup ──────────────────────────────────────────
-// Pre-fetch all metrics data when the server starts so the first visitor
-// gets cached data instead of waiting for a full fetch
-async function warmMetricsCache() {
+// Calls buildMetricsData() directly (no HTTP round-trip) so cache is hot
+// before the first visitor arrives
+setTimeout(async () => {
   try {
     console.log('Metrics: warming cache on startup...');
-    const r = await fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/metrics');
-    if (r.ok) {
-      console.log('Metrics: cache warmed successfully');
-    }
+    const data = await buildMetricsData();
+    _metricsCache = data;
+    _metricsCacheTime = Date.now();
+    console.log('Metrics: cache warmed successfully');
   } catch(e) {
-    // Server may not be ready yet — retry after 10 seconds
-    setTimeout(async () => {
-      try {
-        await fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/metrics');
-        console.log('Metrics: cache warmed on retry');
-      } catch(e2) {
-        console.log('Metrics: cache warm failed (will load on first visit):', e2.message);
-      }
-    }, 10000);
+    console.log('Metrics: cache warm failed:', e.message);
   }
-}
-// Warm after a short delay to let the server fully start
-setTimeout(warmMetricsCache, 5000);
+}, 8000); // wait 8s for server to fully initialize
 
 // Inspect live field names on key boards — useful after Aptly schema changes
 app.get('/api/metrics/debug', async (req, res) => {
