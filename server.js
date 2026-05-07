@@ -2663,8 +2663,9 @@ async function buildMetricsData() {
       const isPastLease = primaryStatusId === 3; // Closed
 
       if (isPastLease) {
-        // moveOutDate is the actual move-out date on closed leases
-        const moveOutDate = l.moveOutDate || l.expectedMoveOutDate || l.endDate; // closedDate=null in export
+        // Use expectedMoveOutDate — this is what the team enters when processing a move-out
+        // Do not fall back to endDate as that pulls in old leases with historical end dates
+        const moveOutDate = l.expectedMoveOutDate || l.moveOutDate;
         const mok = monthKey(moveOutDate);
         if (moveOutDate && mok) {
           if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
