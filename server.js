@@ -3094,6 +3094,7 @@ app.get('/debug/wo-sheffield', async function(req, res) {
   res.json({
     total: batch.length,
     sheffieldFound: sheffield.length,
+    afterFilterCount: afterFilter.length,
     raw: sheffield.map(function(c) {
       return {
         cardId: c.cardId,
