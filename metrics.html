@@ -109,6 +109,22 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   .main{padding:16px}
   .topbar,.nav{padding:0 16px}
 }
+
+/* ── EXPANDABLE DETAIL LIST ─────────────────────────── */
+.detail-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 12px;background:var(--card2);border:1px solid var(--rule);border-radius:8px;margin-top:10px;font-size:12px;font-weight:600;color:var(--ink2);user-select:none;transition:background .15s}
+.detail-toggle:hover{background:#eef2f2}
+.detail-toggle-arrow{font-size:10px;color:var(--muted);transition:transform .2s}
+.detail-toggle.open .detail-toggle-arrow{transform:rotate(180deg)}
+.detail-list{display:none;margin-top:6px;border:1px solid var(--rule);border-radius:8px;overflow:hidden;max-height:320px;overflow-y:auto}
+.detail-list.open{display:block}
+.detail-list-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--rule)}
+.detail-list-row:last-child{border-bottom:none}
+.detail-list-row:nth-child(even){background:var(--card2)}
+.detail-list-addr{color:var(--ink2);font-weight:500}
+.detail-list-city{color:var(--muted);font-size:11px}
+.detail-list-meta{color:var(--muted);font-size:11px;text-align:right;font-family:'DM Mono',monospace}
+.detail-list-rent{font-weight:700;color:var(--ink);font-family:'DM Mono',monospace;text-align:right}
+.detail-list-header{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:6px 12px;background:var(--ink);font-size:10px;font-weight:600;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:.06em}
 </style>
 </head>
 <body>
@@ -139,6 +155,8 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   <button class="tab" data-tab="pipeline" onclick="switchTab('pipeline')"><span class="tab-icon">🎯</span>Owner Pipeline</button>
   <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')"><span class="tab-icon">🏢</span>Portfolio Growth</button>
   <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')"><span class="tab-icon">🔧</span>Maintenance</button>
+  <button class="tab" data-tab="renewals" onclick="switchTab('renewals')"><span class="tab-icon">🔁</span>Renewals</button>
+  <button class="tab" data-tab="renewals" onclick="switchTab('renewals')"><span class="tab-icon">🔁</span>Renewals</button>
   <button class="tab" data-tab="retention" onclick="switchTab('retention')"><span class="tab-icon">🔄</span>Retention</button>
 </div>
 
@@ -280,6 +298,16 @@ function renderTrends() {
       </div>
     </div>
 
+    <div class="trend-section-label">🔁 Renewals &amp; Retention</div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Lease Expirations vs Move-Outs (Renewal Pressure)</div></div>
+      <div class="chart-wrap" style="height:180px"><canvas id="tr-renewals"></canvas></div>
+      <div class="legend" style="margin-top:10px">
+        <div class="legend-item"><div class="legend-dot" style="background:${C.AMBER}"></div>Expirations</div>
+        <div class="legend-item"><div class="legend-dot" style="background:${C.RED}"></div>Move-Outs</div>
+      </div>
+    </div>
+
     <div class="trend-section-label">📋 Leasing Activity</div>
     <div class="card" style="margin-bottom:14px">
       <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Applications Received vs Approved</div></div>
@@ -317,6 +345,15 @@ function renderTrends() {
     mkBarColored('tr-net',labels,netGrowth,netColors,180);
     mkBar('tr-prop-gained',propLabels,[{label:'Added',data:propGained,backgroundColor:C.TEAL+'cc'}],160);
     mkLine('tr-prop-total',propLabels,[{label:'Properties',data:propTotals,borderColor:C.TEAL2}],160);
+    // renewals trend
+    const trRenLabels=(l.renewalsByMonth||[]).map(x=>sm(x.month));
+    const trRenCounts=(l.renewalsByMonth||[]).map(x=>x.value);
+    const trMoMap={};(l.moveOutsByMonth||[]).forEach(x=>{trMoMap[x.month]=x.value;});
+    const trMoCounts=trRenLabels.map((_,i)=>{const m=(l.renewalsByMonth||[])[i];return m?trMoMap[m.month]||0:0;});
+    mkBar('tr-renewals',trRenLabels,[
+      {label:'Expirations',data:trRenCounts,backgroundColor:C.AMBER+'cc'},
+      {label:'Move-Outs',data:trMoCounts,backgroundColor:C.RED+'cc'},
+    ],180);
     mkBar('tr-apps',labels,[
       {label:'Received',data:appsTotal,backgroundColor:C.TEAL+'aa'},
       {label:'Approved',data:appsApproved,backgroundColor:C.GREEN+'cc'},
@@ -362,11 +399,15 @@ function renderOverview() {
           <div class="occ-seg" style="width:${p.occupancyRate}%;background:${C.GREEN}">Occ</div>
           <div class="occ-seg" style="flex:1;background:var(--red)"></div>
         </div>
-        ${statRow('Occupied',fmt(p.occupiedUnits))}${statRow('Vacant',fmt(p.vacantUnits))}${statRow('Total Units',fmt(p.totalUnits))}${statRow('Vacancy Loss/mo',fmt(p.vacancyLoss,'$'))}
+        ${statRow('Occupied',fmt(p.occupiedUnits))}${statRow('Total Units',fmt(p.totalUnits))}${statRow('Vacancy Loss/mo',fmt(p.vacancyLoss,'$'))}
+        ${statRow('Vacant Units',fmt(p.vacantUnits))}
+        ${detailList('vacant-ov',(p.vacantUnitsList||[]).map(u=>({address:u.address,city:u.city,meta:(u.beds?u.beds+'bd':''+(u.baths?'/'+u.baths+'ba':'')),rent:u.rent})),['Address','Beds/Baths','Rent'])}
       </div>
       <div class="card">
         <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Leasing KPIs</div></div>
-        ${statRow('Move-Ins MTD',fmt(l.moveInsMTD))}${statRow('Move-Outs MTD',fmt(l.moveOutsMTD))}${statRow('Expiring (90d)',fmt(l.upcomingExpirations))}${statRow('Avg Days to Lease',l.avgDaysToLease!=null?l.avgDaysToLease+' days':'—')}${statRow('Listings Over 45d',fmt(p.listingsOver45Days))}${statRow('Active Listings',fmt(p.activeListings))}
+        ${statRow('Move-Ins MTD',fmt(l.moveInsMTD))}${statRow('Move-Outs MTD',fmt(l.moveOutsMTD))}${statRow('Expiring (90d)',fmt(l.upcomingExpirations))}${statRow('Avg Days to Lease',l.avgDaysToLease!=null?l.avgDaysToLease+' days':'—')}${statRow('Listings Over 45d',fmt(p.listingsOver45Days))}
+        ${statRow('Active Listings',fmt(p.activeListings))}
+        ${detailList('listings-ov',(p.activeListingsList||[]).map(u=>({address:u.address,city:u.city,meta:u.daysOnMarket!=null?u.daysOnMarket+'d on market':'avail '+u.availableDate,rent:u.rent})),['Address','Status','Rent'])}
       </div>
       <div class="card">
         <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL}"></div>Tech &amp; Ops</div></div>
@@ -556,7 +597,97 @@ function renderRetention() {
   </div>`;
 }
 
-const TABS={trends:renderTrends,overview:renderOverview,occupancy:renderOccupancy,leasing:renderLeasing,pipeline:renderPipeline,portfolio:renderPortfolio,maintenance:renderMaintenance,retention:renderRetention};
+
+// ─── RENEWALS TAB ────────────────────────────────────────────────────────────
+function renderRenewals() {
+  const l=D.leases, p=D.portfolio;
+  const renewalsByMonth=l.renewalsByMonth||[];
+  const moveOutsByMonth=l.moveOutsByMonth||[];
+  const renewalsDetail=l.renewalsDetail||[];
+
+  // Build a combined month list from renewals
+  const months=renewalsByMonth.map(x=>x.month);
+  const renewalCounts=renewalsByMonth.map(x=>x.value);
+  // Match move-outs to same months
+  const moveOutMap={};
+  moveOutsByMonth.forEach(x=>{moveOutMap[x.month]=x.value;});
+  const moveOutCounts=months.map(m=>moveOutMap[m]||0);
+  const labels=months.map(m=>{if(!m)return''; const[y,mo]=m.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]+' ''+y.slice(2);});
+
+  // Group renewals detail by month for the accordion
+  const byMonth={};
+  renewalsDetail.forEach(r=>{
+    if(!byMonth[r.monthKey])byMonth[r.monthKey]=[];
+    byMonth[r.monthKey].push(r);
+  });
+  const upcomingMonths=Object.keys(byMonth).filter(k=>k>=D.thisMonth).sort().slice(0,6);
+
+  document.getElementById('app').innerHTML=`
+  <div class="main">
+    <div class="page-header">
+      <div class="page-title">Lease Renewals &amp; Retention</div>
+      <div class="page-sub">Expirations by month · move-outs vs renewals · upcoming action list</div>
+    </div>
+    <div class="kpi-grid g4">
+      ${kpi('Expiring This Month',fmt(renewalsByMonth.find(x=>x.month===D.thisMonth)?.value||0),'leases up for renewal',C.AMBER)}
+      ${kpi('Move-Outs This Month',fmt(moveOutMap[D.thisMonth]||0),'actual move-outs',C.RED)}
+      ${kpi('Expiring (90 days)',fmt(l.upcomingExpirations),'need renewal action',C.AMBER)}
+      ${kpi('Active Leases',fmt(l.active),'currently occupied',C.GREEN)}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header">
+        <div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Expirations vs Move-Outs — Month over Month</div>
+        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">renewals = expirations − move-outs</span>
+      </div>
+      <div class="chart-wrap" style="height:220px"><canvas id="ren-combined"></canvas></div>
+      <div class="legend" style="margin-top:10px">
+        <div class="legend-item"><div class="legend-dot" style="background:${C.AMBER}"></div>Lease Expirations</div>
+        <div class="legend-item"><div class="legend-dot" style="background:${C.RED}"></div>Move-Outs</div>
+        <div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>Estimated Renewals (Exp − MO)</div>
+      </div>
+    </div>
+
+    <div class="trend-section-label">📅 Upcoming Expirations — Next 6 Months</div>
+    ${upcomingMonths.length ? upcomingMonths.map(mk => {
+      const items=byMonth[mk]||[];
+      const label=labels[months.indexOf(mk)]||mk;
+      return \`<div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--ink2);padding:6px 0">\${label} — \${items.length} expiring</div>
+        <div class="detail-list open" style="display:block">
+          <div class="detail-list-header"><span>Tenant / Address</span><span>Lease End Date</span><span>Monthly Rent</span></div>
+          \${items.map(r=>'<div class="detail-list-row"><div><div class="detail-list-addr">'+r.tenant+'</div><div class="detail-list-city">'+r.address+(r.city?', '+r.city:'')+'</div></div><div class="detail-list-meta">'+new Date(r.endDate).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+'</div><div class="detail-list-rent">'+(r.rent?'$'+Number(r.rent).toLocaleString():'—')+'</div></div>').join('')}
+        </div>
+      </div>\`;
+    }).join('') : '<div style="color:var(--ghost);font-size:13px">No upcoming expirations in the next 6 months</div>'}
+
+    <div class="trend-section-label">📋 All Upcoming Expirations</div>
+    <div class="card">
+      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Full Renewal List (Active Leases · Sorted by End Date)</div><span style="font-size:11px;color:var(--muted)">${renewalsDetail.length} total</span></div>
+      <div style="max-height:400px;overflow-y:auto">
+        <div class="detail-list-header"><span>Tenant / Address</span><span>Lease End Date</span><span>Monthly Rent</span></div>
+        ${renewalsDetail.slice(0,50).map(r=>'<div class="detail-list-row"><div><div class="detail-list-addr">'+r.tenant+'</div><div class="detail-list-city">'+r.address+(r.city?', '+r.city:'')+'</div></div><div class="detail-list-meta">'+new Date(r.endDate).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+'</div><div class="detail-list-rent">'+(r.rent?'$'+Number(r.rent).toLocaleString():'—')+'</div></div>').join('')}
+        ${renewalsDetail.length>50?'<div style="padding:10px 12px;font-size:11px;color:var(--muted)">Showing first 50 of '+renewalsDetail.length+' leases</div>':''}
+      </div>
+    </div>
+
+    <div class="data-note">
+      <span>🔁 Renewals estimated as Expirations − Move-Outs per month</span>
+      <span>📋 Data from Rentvine active lease endDate field</span>
+    </div>
+  </div>\`;
+
+  setTimeout(()=>{
+    // Estimated renewals = expirations - move-outs (floored at 0)
+    const estimated=renewalCounts.map((r,i)=>Math.max(0,r-moveOutCounts[i]));
+    mkBar('ren-combined',labels,[
+      {label:'Expirations',data:renewalCounts,backgroundColor:C.AMBER+'cc'},
+      {label:'Move-Outs',data:moveOutCounts,backgroundColor:C.RED+'cc'},
+      {label:'Est. Renewals',data:estimated,backgroundColor:C.GREEN+'cc'},
+    ],220);
+  },50);
+}
+const TABS={trends:renderTrends,overview:renderOverview,occupancy:renderOccupancy,leasing:renderLeasing,pipeline:renderPipeline,portfolio:renderPortfolio,maintenance:renderMaintenance,renewals:renderRenewals,retention:renderRetention};
 let activeTab='trends';
 function switchTab(id){
   activeTab=id;
@@ -593,6 +724,30 @@ async function loadData() {
   }
 }
 loadData();
+
+function toggleDetail(id) {
+  const btn = document.getElementById('btn-'+id);
+  const list = document.getElementById('list-'+id);
+  const isOpen = list.classList.contains('open');
+  list.classList.toggle('open', !isOpen);
+  btn.classList.toggle('open', !isOpen);
+}
+function detailList(id, items, columns) {
+  if (!items || !items.length) return '<div style="color:var(--ghost);font-size:12px;padding:8px 12px">No data available</div>';
+  const header = '<div class="detail-list-header">' + columns.map(c => '<span>' + c + '</span>').join('') + '</div>';
+  const rows = items.map(r => '<div class="detail-list-row">' +
+    '<div><div class="detail-list-addr">' + (r.address||'—') + '</div><div class="detail-list-city">' + (r.city||'') + '</div></div>' +
+    '<div class="detail-list-meta">' + (r.meta||'') + '</div>' +
+    '<div class="detail-list-rent">' + (r.rent ? '
+</body>
+</html>
++Number(r.rent).toLocaleString() : '—') + '</div>' +
+  '</div>').join('');
+  return '<div class="detail-toggle" id="btn-'+id+'" onclick="toggleDetail(''+id+'')">' +
+    '<span>▼ Show ' + items.length + ' properties</span><span class="detail-toggle-arrow">▾</span>' +
+  '</div>' +
+  '<div class="detail-list" id="list-'+id+'">' + header + rows + '</div>';
+}
 </script>
 </body>
 </html>
