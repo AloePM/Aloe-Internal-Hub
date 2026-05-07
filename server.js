@@ -3162,71 +3162,61 @@ app.get('/api/metrics/debug-leases', async (req, res) => {
 // Shows raw Rentvine lease data for past/closed leases to verify moveOutDate field
 app.get('/api/metrics/debug-moveouts', async (req, res) => {
   try {
-    // Fetch past/closed leases (status 2)
-    const pastLeases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 2, pageSize: 20, page: 1 });
-    const past = Array.isArray(pastLeases) ? pastLeases : [];
-
-    // Also fetch all leases page 1 to check field names
-    const allSample = await rvFetch('/leases/export', { pageSize: 10, page: 1 });
-    const all = Array.isArray(allSample) ? allSample : [];
-
-    // Count past leases with moveOutDate populated
-    let pastTotal = [], pg = 1;
+    // Fetch CLOSED leases (primaryLeaseStatusID=3) — these are actual move-outs
+    let closedLeases = [], pg = 1;
     while (pg <= 10) {
-      const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 2, pageSize: 200, page: pg });
+      const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 3, pageSize: 200, page: pg });
       if (!Array.isArray(batch) || batch.length === 0) break;
-      pastTotal = pastTotal.concat(batch);
+      closedLeases = closedLeases.concat(batch);
       if (batch.length < 200) break;
       pg++;
     }
+    const unwrapped = closedLeases.map(i => i.lease || i);
+    const withExpected = unwrapped.filter(l => !!l.expectedMoveOutDate);
+    const withMoveOut = unwrapped.filter(l => !!l.moveOutDate);
 
-    const withMoveOutDate = pastTotal.filter(i => { const l = i.lease||i; return !!(l.moveOutDate); });
-    const withReason = pastTotal.filter(i => { const l = i.lease||i; return !!(l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName); });
-
-    // Group by move-out month
-    const byMonth = {};
-    withMoveOutDate.forEach(i => {
-      const l = i.lease||i;
-      const d = (l.moveOutDate || '').slice(0, 7);
-      if (d) byMonth[d] = (byMonth[d] || 0) + 1;
+    // Group by expectedMoveOutDate (what metrics uses)
+    const byExpected = {};
+    withExpected.forEach(l => {
+      const d = (l.expectedMoveOutDate || '').slice(0, 7);
+      if (d) byExpected[d] = (byExpected[d] || 0) + 1;
     });
+    const byMoveOut = {};
+    withMoveOut.forEach(l => {
+      const d = (l.moveOutDate || '').slice(0, 7);
+      if (d) byMoveOut[d] = (byMoveOut[d] || 0) + 1;
+    });
+
+    // Individual April 2026 leases for verification
+    const april = unwrapped.filter(l =>
+      (l.expectedMoveOutDate || l.moveOutDate || '').slice(0, 7) === '2026-04'
+    ).map(l => ({
+      leaseID: l.leaseID,
+      tenant: l.tenants,
+      expectedMoveOutDate: l.expectedMoveOutDate,
+      moveOutDate: l.moveOutDate,
+      closedDate: l.closedDate,
+      endDate: l.endDate,
+    }));
 
     res.json({
       summary: {
-        totalPastLeases: pastTotal.length,
-        withMoveOutDate: withMoveOutDate.length,
-        withMoveOutReason: withReason.length,
+        totalClosedLeases: closedLeases.length,
+        withExpectedMoveOutDate: withExpected.length,
+        withMoveOutDate: withMoveOut.length,
       },
-      moveOutsByMonth: Object.entries(byMonth).sort().map(([month, count]) => ({ month, count })),
-      samplePastLease: past.slice(0, 3).map(i => {
-        const l = i.lease || i;
-        return {
-          leaseID: l.leaseID,
-          tenantName: l.tenants && l.tenants[0] && l.tenants[0].name,
-          leaseStatusID: l.leaseStatusID,
-          primaryLeaseStatusID: l.primaryLeaseStatusID,
-          status: l.status,
-          startDate: l.startDate,
-          endDate: l.endDate,
-          moveInDate: l.moveInDate,
-          moveOutDate: l.moveOutDate,
-          moveOutReason: l.moveOutReason,
-          vacateReason: l.vacateReason,
-          reasonForVacating: l.reasonForVacating,
-          moveOutReasonName: l.moveOutReasonName,
-          allLeaseKeys: Object.keys(l),
-        };
-      }),
-      sampleAllLease: all.slice(0, 2).map(i => {
-        const l = i.lease || i;
-        return {
-          leaseStatusID: l.leaseStatusID,
-          primaryLeaseStatusID: l.primaryLeaseStatusID,
-          status: l.status,
-          moveOutDate: l.moveOutDate,
-          endDate: l.endDate,
-        };
-      }),
+      byExpectedMoveOutMonth: Object.entries(byExpected).sort().map(([month, count]) => ({ month, count })),
+      byMoveOutDateMonth: Object.entries(byMoveOut).sort().map(([month, count]) => ({ month, count })),
+      april2026: april,
+      sample: unwrapped.slice(0, 3).map(l => ({
+        leaseID: l.leaseID,
+        tenant: l.tenants,
+        primaryLeaseStatusID: l.primaryLeaseStatusID,
+        expectedMoveOutDate: l.expectedMoveOutDate,
+        moveOutDate: l.moveOutDate,
+        closedDate: l.closedDate,
+        endDate: l.endDate,
+      })),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
