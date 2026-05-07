@@ -2631,6 +2631,12 @@ async function buildMetricsData() {
     const vacancyLoss = vacantUnits * avgRent;
     console.log('Metrics avg rent: $' + avgRent + ' from ' + rents.length + ' units, vacancy loss: $' + vacancyLoss);
 
+    // Build set of active unit IDs for move-out filtering
+    // Lost/offboarded properties have inactive units — exclude their moveOutDate-only records
+    const activeUnitIDs = new Set(
+      activeUnits.map(item => String((item.unit || item).unitID)).filter(Boolean)
+    );
+
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
     const moveInsByMonth = buildMonthBuckets(24);
@@ -2663,9 +2669,13 @@ async function buildMetricsData() {
       const isPastLease = primaryStatusId === 3; // Closed
 
       if (isPastLease) {
-        // Use expectedMoveOutDate — this is what the team enters when processing a move-out
-        // Do not fall back to endDate as that pulls in old leases with historical end dates
-        const moveOutDate = l.expectedMoveOutDate || l.moveOutDate;
+        // Move-out date logic:
+        // 1. Prefer expectedMoveOutDate — set by team when processing a real tenant move-out
+        // 2. Fall back to moveOutDate ONLY if unit is still active (not a lost/offboarded property)
+        //    Lost properties have moveOutDate but no expectedMoveOutDate and unit becomes inactive
+        const unitStillActive = activeUnitIDs.has(String(l.unitID));
+        const moveOutDate = l.expectedMoveOutDate ||
+          (l.moveOutDate && unitStillActive ? l.moveOutDate : null);
         const mok = monthKey(moveOutDate);
         if (moveOutDate && mok) {
           if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
