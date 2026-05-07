@@ -460,6 +460,7 @@ APTLY — Source of truth for listings and availability:
 - Renter leads pipeline (board ID: 4EMDSYKirhQaNdQKz)
 - Move-Ins, Move-Outs, HOA Violations, Tenant Renewals boards
 - Contact and lead details
+- EMERGENCY DETECTION: When showing work orders, always scan descriptions for: water leak, gas leak, no heat, no AC in summer, flood, sewage backup, burst pipe. If found, flag them as 🚨 EMERGENCY regardless of how they are staged in Aptly. The water leak at 1774 E Tara Dr is an example — it must be surfaced even if not tagged emergency.
 
 RENTVINE — Source of truth for tenant and accounting data:
 ZINSPECTOR — Inspection platform synced with Rentvine. Use zi_get_inspections tool to get latest move-in, move-out, maintenance, and periodic inspection activity for any property. Falls back to Rentvine inspection data if zInspector API is unavailable.
