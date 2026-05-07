@@ -2694,7 +2694,7 @@ async function buildMetricsData() {
     });
 
     const nonZeroMoveOuts = Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0));
-    console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${pastLeases.length} closed leases using closedDate)`);
+    console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${closedLeases.length} closed leases)`);
     // Sample a few closed leases to confirm field values
 
 
@@ -2745,7 +2745,7 @@ async function buildMetricsData() {
       fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 2 }),           // applications
       getUnitsCards(),                                                    // listings
       fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }), // leads (no archive)
-      fetchAptlyBoard('LDhqFFos8fsQLavv8', { maxPages: 2, params: { includeArchived: true } }),  // PMA
+      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 5, params: { includeArchived: true } }),  // Owner Pipeline — signed when card hits 'PMA Signed' stage
       fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),  // offboard
       fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),  // move-outs
       fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),           // WOs
@@ -2764,7 +2764,11 @@ async function buildMetricsData() {
     let appsMTD = 0, appsApprovedMTD = 0, appsDeniedMTD = 0, appsCancelledMTD = 0;
 
     // Log all unique stages so we can map them correctly
-    console.log('All app stages:', [...new Set(allApps.map(c=>c.stage||'?'))].join(' | '));
+    const allStages = [...new Set(allApps.map(c=>c.stage||'?'))];
+    console.log('All app stages (' + allApps.length + ' apps):', allStages.join(' | '));
+    // Also log schema fields available
+    const schemaFields = allApps.length > 0 ? Object.keys(allApps[0]).join(', ') : 'no apps';
+    console.log('App card fields:', schemaFields);
 
     allApps.forEach(card => {
       const k = monthKey(card.createdAt);
@@ -2845,8 +2849,9 @@ async function buildMetricsData() {
       if (k && newPipelineByMonth[k] !== undefined) newPipelineByMonth[k]++;
       if (k === TMK) newPipelineMTD++;
 
-      // Stage from live data: "Onboarded" = successfully signed
-      if (stage.includes('onboard') || stage.includes('signed') || stage.includes('won') || stage.includes('pma signed')) {
+      // Owner Pipeline: card reaches "PMA Signed" stage then gets archived
+      // Must fetch includeArchived=true to capture all signed owners
+      if (stage.includes('pma signed') || stage.includes('signed') || stage.includes('onboard')) {
         const signedDate = card.updatedAt || card.createdAt;
         const sk = monthKey(signedDate);
         if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
@@ -3320,7 +3325,7 @@ app.get('/api/metrics/debug', async (req, res) => {
     const obItems = Array.isArray(obSample) ? obSample : (obSample && obSample.data) || [];
 
     // PMA / Owner Pipeline
-    const pmaSample = await unitsFetch('/api/board/LDhqFFos8fsQLavv8', { page: 0, pageSize: 3 });
+    const pmaSample = await unitsFetch('/api/board/QySZ8yRWJ5KeYFcZt', { page: 0, pageSize: 3 });
     const pmaItems = Array.isArray(pmaSample) ? pmaSample : (pmaSample && pmaSample.data) || [];
 
     res.json({
@@ -3345,7 +3350,7 @@ app.get('/api/metrics/debug', async (req, res) => {
         allReasonsSeen: [...new Set(obItems.map(c => c.Reason).filter(Boolean))],
       },
       pmaBoard: {
-        id: 'LDhqFFos8fsQLavv8',
+        id: 'QySZ8yRWJ5KeYFcZt',
         stages: pmaItems.map(c => c.stage),
       },
     });
