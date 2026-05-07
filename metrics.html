@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Aloe PM — KPI Dashboard</title>
+<title>Aloe PM - KPI Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -24,7 +24,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
 .topbar{background:var(--ink);color:#fff;padding:0 28px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .topbar-left{display:flex;align-items:center;gap:16px}
 .logo{display:flex;align-items:center;gap:9px}
-.logo-mark{width:28px;height:28px;background:var(--teal);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--ink);letter-spacing:-0.5px}
+.logo-mark{width:28px;height:28px;background:var(--teal);border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:var(--ink)}
 .logo-name{font-weight:600;font-size:14px;color:#fff}
 .logo-sep{color:rgba(255,255,255,0.2);font-size:16px}
 .logo-page{font-size:13px;color:rgba(255,255,255,0.55);font-weight:400}
@@ -42,7 +42,6 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
 .tab{padding:13px 16px;font-size:13px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:'DM Sans',sans-serif;transition:all .15s;display:flex;align-items:center;gap:6px}
 .tab.active{color:var(--teal2);border-bottom-color:var(--teal);font-weight:600}
 .tab:hover:not(.active){color:var(--ink2)}
-.tab-icon{font-size:14px}
 .loading-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px}
 .spinner{width:32px;height:32px;border:2px solid var(--rule);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -101,6 +100,18 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
 .insp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .insp-label{font-size:12px;color:var(--ink2)}
 .insp-num{font-size:14px;font-weight:700;color:var(--ink);margin-left:auto;font-family:'DM Mono',monospace}
+.detail-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 12px;background:var(--card2);border:1px solid var(--rule);border-radius:8px;margin-top:10px;font-size:12px;font-weight:600;color:var(--ink2);user-select:none}
+.detail-toggle:hover{background:#eef2f2}
+.detail-list{display:none;margin-top:6px;border:1px solid var(--rule);border-radius:8px;overflow:hidden;max-height:320px;overflow-y:auto}
+.detail-list.open{display:block}
+.detail-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--rule)}
+.detail-row:last-child{border-bottom:none}
+.detail-row:nth-child(even){background:var(--card2)}
+.detail-addr{color:var(--ink2);font-weight:500}
+.detail-city{color:var(--muted);font-size:11px}
+.detail-meta{color:var(--muted);font-size:11px;text-align:right;font-family:'DM Mono',monospace}
+.detail-rent{font-weight:700;color:var(--ink);font-family:'DM Mono',monospace;text-align:right}
+.detail-header{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:6px 12px;background:var(--ink);font-size:10px;font-weight:600;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:.06em}
 .data-note{margin-top:24px;padding:11px 16px;background:var(--card);border:1px solid var(--rule);border-radius:var(--r2);font-size:11px;color:var(--ghost);display:flex;gap:16px;font-family:'DM Mono',monospace;flex-wrap:wrap}
 @media(max-width:900px){
   .kpi-grid.g5,.kpi-grid.g4{grid-template-columns:repeat(2,1fr)}
@@ -109,22 +120,6 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   .main{padding:16px}
   .topbar,.nav{padding:0 16px}
 }
-
-/* ── EXPANDABLE DETAIL LIST ─────────────────────────── */
-.detail-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:8px 12px;background:var(--card2);border:1px solid var(--rule);border-radius:8px;margin-top:10px;font-size:12px;font-weight:600;color:var(--ink2);user-select:none;transition:background .15s}
-.detail-toggle:hover{background:#eef2f2}
-.detail-toggle-arrow{font-size:10px;color:var(--muted);transition:transform .2s}
-.detail-toggle.open .detail-toggle-arrow{transform:rotate(180deg)}
-.detail-list{display:none;margin-top:6px;border:1px solid var(--rule);border-radius:8px;overflow:hidden;max-height:320px;overflow-y:auto}
-.detail-list.open{display:block}
-.detail-list-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 12px;font-size:12px;border-bottom:1px solid var(--rule)}
-.detail-list-row:last-child{border-bottom:none}
-.detail-list-row:nth-child(even){background:var(--card2)}
-.detail-list-addr{color:var(--ink2);font-weight:500}
-.detail-list-city{color:var(--muted);font-size:11px}
-.detail-list-meta{color:var(--muted);font-size:11px;text-align:right;font-family:'DM Mono',monospace}
-.detail-list-rent{font-weight:700;color:var(--ink);font-family:'DM Mono',monospace;text-align:right}
-.detail-list-header{display:grid;grid-template-columns:1fr auto auto;gap:8px;padding:6px 12px;background:var(--ink);font-size:10px;font-weight:600;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:.06em}
 </style>
 </head>
 <body>
@@ -133,7 +128,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
     <div class="logo">
       <div class="logo-mark">A</div>
       <span class="logo-name">Aloe PM</span>
-      <span class="logo-sep">·</span>
+      <span class="logo-sep">|</span>
       <span class="logo-page">KPI Dashboard</span>
     </div>
     <div class="live-badge" id="live-badge" style="display:none">
@@ -142,625 +137,765 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
     </div>
   </div>
   <div class="topbar-right">
-    <button class="btn btn-ghost" onclick="window.location.href='/'">← Hub</button>
-    <button class="btn btn-teal" id="refresh-btn" onclick="loadData()">↻ Cached</button><button class="btn btn-ghost" id="force-btn" onclick="forceRefresh()" title="Force re-fetch from Rentvine &amp; Aptly">⟳ Live</button>
+    <button class="btn btn-ghost" onclick="window.location.href='/'">Back to Hub</button>
+    <button class="btn btn-teal" id="refresh-btn" onclick="loadData()">Refresh</button>
+    <button class="btn btn-ghost" id="force-btn" onclick="forceRefresh()">Live Refresh</button>
   </div>
 </div>
 
 <div class="nav">
-  <button class="tab active" data-tab="trends" onclick="switchTab('trends')"><span class="tab-icon">📈</span>Trends</button>
-  <button class="tab" data-tab="overview" onclick="switchTab('overview')"><span class="tab-icon">📊</span>Overview</button>
-  <button class="tab" data-tab="occupancy" onclick="switchTab('occupancy')"><span class="tab-icon">🏠</span>Occupancy</button>
-  <button class="tab" data-tab="leasing" onclick="switchTab('leasing')"><span class="tab-icon">📋</span>Leasing</button>
-  <button class="tab" data-tab="pipeline" onclick="switchTab('pipeline')"><span class="tab-icon">🎯</span>Owner Pipeline</button>
-  <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')"><span class="tab-icon">🏢</span>Portfolio Growth</button>
-  <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')"><span class="tab-icon">🔧</span>Maintenance</button>
-  <button class="tab" data-tab="renewals" onclick="switchTab('renewals')"><span class="tab-icon">🔁</span>Renewals</button>
-  <button class="tab" data-tab="renewals" onclick="switchTab('renewals')"><span class="tab-icon">🔁</span>Renewals</button>
-  <button class="tab" data-tab="retention" onclick="switchTab('retention')"><span class="tab-icon">🔄</span>Retention</button>
+  <button class="tab active" data-tab="trends" onclick="switchTab('trends')">Trends</button>
+  <button class="tab" data-tab="overview" onclick="switchTab('overview')">Overview</button>
+  <button class="tab" data-tab="occupancy" onclick="switchTab('occupancy')">Occupancy</button>
+  <button class="tab" data-tab="leasing" onclick="switchTab('leasing')">Leasing</button>
+  <button class="tab" data-tab="pipeline" onclick="switchTab('pipeline')">Owner Pipeline</button>
+  <button class="tab" data-tab="renewals" onclick="switchTab('renewals')">Renewals</button>
+  <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">Portfolio Growth</button>
+  <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')">Maintenance</button>
+  <button class="tab" data-tab="retention" onclick="switchTab('retention')">Retention</button>
 </div>
 
 <div id="loading" class="loading-wrap">
   <div class="spinner"></div>
-  <div class="loading-text">Loading live data from Rentvine + Aptly…</div>
+  <div class="loading-text">Loading data from Rentvine + Aptly...</div>
 </div>
 <div id="error" class="error-wrap" style="display:none"></div>
 <div id="app" style="display:none"></div>
 
 <script>
-let D = null, charts = {};
-const C = { TEAL:'#3CC3E1',TEAL2:'#2aa8c4',GREEN:'#0fa86c',RED:'#e03e3e',AMBER:'#d4820a',BLUE:'#2563eb',PURPLE:'#7c3aed',GRAY:'#94acac' };
-const CD = { responsive:true,maintainAspectRatio:false, plugins:{legend:{display:false},tooltip:{backgroundColor:'#0d1a1a',titleColor:'#fff',bodyColor:'rgba(255,255,255,0.7)',borderColor:'rgba(255,255,255,0.08)',borderWidth:1,padding:10,cornerRadius:8,mode:'index',intersect:false}} };
+var D = null;
+var charts = {};
 
-function mkBar(id, labels, datasets, h=160) {
-  const el=document.getElementById(id); if(!el)return;
-  if(charts[id])charts[id].destroy();
-  charts[id]=new Chart(el,{type:'bar',data:{labels,datasets:datasets.map(d=>({...d,borderRadius:4,borderSkipped:false}))},options:{...CD,scales:{x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}}}});
-  el.parentElement.style.height=h+'px';
-}
-function mkLine(id, labels, datasets, h=160) {
-  const el=document.getElementById(id); if(!el)return;
-  if(charts[id])charts[id].destroy();
-  charts[id]=new Chart(el,{type:'line',data:{labels,datasets:datasets.map(d=>({...d,borderWidth:2.5,pointRadius:3,pointHoverRadius:5,tension:0.35,fill:true,backgroundColor:d.borderColor+'14'}))},options:{...CD,scales:{x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}}}});
-  el.parentElement.style.height=h+'px';
-}
-function mkBarColored(id, labels, data, colors, h=160) {
-  const el=document.getElementById(id); if(!el)return;
-  if(charts[id])charts[id].destroy();
-  charts[id]=new Chart(el,{type:'bar',data:{labels,datasets:[{data,backgroundColor:colors,borderRadius:4,borderSkipped:false}]},options:{...CD,scales:{x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}}}});
-  el.parentElement.style.height=h+'px';
+var C = {
+  TEAL:'#3CC3E1', TEAL2:'#2aa8c4',
+  GREEN:'#0fa86c', RED:'#e03e3e',
+  AMBER:'#d4820a', BLUE:'#2563eb',
+  PURPLE:'#7c3aed', GRAY:'#94acac'
+};
+
+var MO_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function sm(yyyymm) {
+  if (!yyyymm) return '';
+  var parts = yyyymm.split('-');
+  return MO_NAMES[parseInt(parts[1])-1] + " '" + parts[0].slice(2);
 }
 
-const sm = yyyymm => { if(!yyyymm)return''; const[y,m]=yyyymm.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+' \''+y.slice(2); };
-const fmt = (n,pre='',suf='') => n==null?'—':pre+Number(n).toLocaleString()+suf;
-const sum = arr => (arr||[]).reduce((a,b)=>a+b,0);
-const kpi = (label,value,sub,color) => `<div class="kpi"><div class="kpi-accent" style="background:${color}"></div><div class="kpi-label">${label}</div><div class="kpi-value">${value??'—'}</div>${sub?`<div class="kpi-sub">${sub}</div>`:''}</div>`;
-const statRow = (l,v) => `<div class="stat-row"><span class="stat-row-label">${l}</span><span class="stat-row-value">${v}</span></div>`;
-const barRows = (items,color) => { if(!items||!items.length)return'<div style="color:var(--ghost);font-size:12px;padding:8px 0">No data</div>'; const max=Math.max(...items.map(i=>i.count||i.value||0),1); return items.slice(0,8).map(i=>`<div class="bar-row"><div class="bar-row-label" title="${i.reason||i.source||i.stage||i.label||'?'}">${i.reason||i.source||i.stage||i.label||'?'}</div><div class="bar-row-track"><div class="bar-row-fill" style="width:${Math.round(((i.count||i.value||0)/max)*100)}%;background:${color}"></div></div><div class="bar-row-count">${i.count||i.value||0}</div></div>`).join(''); };
+function fmt(n, pre, suf) {
+  pre = pre || '';
+  suf = suf || '';
+  if (n == null) return '--';
+  return pre + Number(n).toLocaleString() + suf;
+}
 
-// ─── TRENDS TAB ──────────────────────────────────────────────────────────────
+function sum(arr) {
+  return (arr || []).reduce(function(a,b){return a+b;}, 0);
+}
+
+function kpi(label, value, sub, color) {
+  return '<div class="kpi"><div class="kpi-accent" style="background:'+color+'"></div>' +
+    '<div class="kpi-label">'+label+'</div>' +
+    '<div class="kpi-value">'+(value != null ? value : '--')+'</div>' +
+    (sub ? '<div class="kpi-sub">'+sub+'</div>' : '') +
+    '</div>';
+}
+
+function statRow(l, v) {
+  return '<div class="stat-row"><span class="stat-row-label">'+l+'</span><span class="stat-row-value">'+v+'</span></div>';
+}
+
+function barRows(items, color) {
+  if (!items || !items.length) return '<div style="color:var(--ghost);font-size:12px;padding:8px 0">No data</div>';
+  var max = Math.max.apply(null, items.map(function(i){return i.count||i.value||0;}).concat([1]));
+  return items.slice(0,8).map(function(i) {
+    var label = i.reason || i.source || i.stage || i.label || '?';
+    var count = i.count || i.value || 0;
+    var pct = Math.round((count/max)*100);
+    return '<div class="bar-row">' +
+      '<div class="bar-row-label" title="'+label+'">'+label+'</div>' +
+      '<div class="bar-row-track"><div class="bar-row-fill" style="width:'+pct+'%;background:'+color+'"></div></div>' +
+      '<div class="bar-row-count">'+count+'</div>' +
+    '</div>';
+  }).join('');
+}
+
+function detailToggle(id, count) {
+  return '<div class="detail-toggle" onclick="toggleDetail(\''+id+'\')">' +
+    '<span>Show '+count+' properties</span><span>v</span>' +
+  '</div>' +
+  '<div class="detail-list" id="dl-'+id+'"></div>';
+}
+
+function toggleDetail(id) {
+  var el = document.getElementById('dl-'+id);
+  if (!el) return;
+  el.classList.toggle('open');
+}
+
+function fillDetail(id, items) {
+  var el = document.getElementById('dl-'+id);
+  if (!el || !items || !items.length) return;
+  var html = '<div class="detail-header"><span>Address</span><span>Info</span><span>Rent</span></div>';
+  items.forEach(function(r) {
+    html += '<div class="detail-row">' +
+      '<div><div class="detail-addr">'+(r.address||'--')+'</div>' +
+      '<div class="detail-city">'+(r.city||'')+'</div></div>' +
+      '<div class="detail-meta">'+(r.meta||'')+'</div>' +
+      '<div class="detail-rent">'+(r.rent?'$'+Number(r.rent).toLocaleString():'--')+'</div>' +
+    '</div>';
+  });
+  el.innerHTML = html;
+}
+
+var CD = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: {
+    legend: {display:false},
+    tooltip: {backgroundColor:'#0d1a1a',titleColor:'#fff',bodyColor:'rgba(255,255,255,0.7)',padding:10,cornerRadius:8,mode:'index',intersect:false}
+  }
+};
+
+function mkBar(id, labels, datasets, h) {
+  h = h || 160;
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(el, {
+    type: 'bar',
+    data: {labels: labels, datasets: datasets.map(function(d) {
+      return Object.assign({}, d, {borderRadius:4, borderSkipped:false});
+    })},
+    options: Object.assign({}, CD, {scales:{
+      x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},
+      y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
+    }})
+  });
+  el.parentElement.style.height = h + 'px';
+}
+
+function mkBarColored(id, labels, data, colors, h) {
+  h = h || 160;
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(el, {
+    type: 'bar',
+    data: {labels: labels, datasets: [{data:data, backgroundColor:colors, borderRadius:4, borderSkipped:false}]},
+    options: Object.assign({}, CD, {scales:{
+      x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},
+      y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
+    }})
+  });
+  el.parentElement.style.height = h + 'px';
+}
+
+function mkLine(id, labels, datasets, h) {
+  h = h || 160;
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(el, {
+    type: 'line',
+    data: {labels: labels, datasets: datasets.map(function(d) {
+      return Object.assign({}, d, {borderWidth:2.5, pointRadius:3, pointHoverRadius:5, tension:0.35, fill:true, backgroundColor:d.borderColor+'14'});
+    })},
+    options: Object.assign({}, CD, {scales:{
+      x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},
+      y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
+    }})
+  });
+  el.parentElement.style.height = h + 'px';
+}
+
+// ---- TRENDS TAB ----
 function renderTrends() {
-  const p=D.portfolio, l=D.leases, pipe=D.pipeline, em=D.endManagement, app=D.applications;
-  const labels=(l.moveInsByMonth||[]).map(x=>sm(x.month));
-  const moveIns=(l.moveInsByMonth||[]).map(x=>x.value);
-  const moveOuts=(l.moveOutsByMonth||[]).map(x=>x.value);
-  const expirations=(l.expirationsByMonth||[]).map(x=>x.value);
-  const newLeads=(pipe.newLeadsByMonth||[]).map(x=>x.value);
-  const signed=(pipe.signedByMonth||[]).map(x=>x.value);
-  const endMgmt=(em.byMonth||[]).map(x=>x.value);
-  const appsTotal=(app.byMonth||[]).map(x=>x.value);
-  const appsApproved=(app.approvedByMonth||[]).map(x=>x.value);
-  const propTrend=p.propTrend||[];
-  const propLabels=propTrend.map(x=>sm(x.month));
-  const propTotals=propTrend.map(x=>x.total);
-  const propGained=propTrend.map(x=>x.gained);
-  const netGrowth=signed.map((s,i)=>s-(endMgmt[i]||0));
-  const netColors=netGrowth.map(v=>v>=0?C.GREEN+'cc':C.RED+'cc');
+  var p=D.portfolio, l=D.leases, pipe=D.pipeline, em=D.endManagement, app=D.applications;
+  var labels=(l.moveInsByMonth||[]).map(function(x){return sm(x.month);});
+  var moveIns=(l.moveInsByMonth||[]).map(function(x){return x.value;});
+  var moveOuts=(l.moveOutsByMonth||[]).map(function(x){return x.value;});
+  var expirations=(l.expirationsByMonth||[]).map(function(x){return x.value;});
+  var newLeads=(pipe.newLeadsByMonth||[]).map(function(x){return x.value;});
+  var signed=(pipe.signedByMonth||[]).map(function(x){return x.value;});
+  var endMgmt=(em.byMonth||[]).map(function(x){return x.value;});
+  var appsTotal=(app.byMonth||[]).map(function(x){return x.value;});
+  var appsApproved=(app.approvedByMonth||[]).map(function(x){return x.value;});
+  var propTrend=p.propTrend||[];
+  var propLabels=propTrend.map(function(x){return sm(x.month);});
+  var propTotals=propTrend.map(function(x){return x.total;});
+  var propGained=propTrend.map(function(x){return x.gained;});
+  var netGrowth=signed.map(function(s,i){return s-(endMgmt[i]||0);});
+  var netColors=netGrowth.map(function(v){return v>=0?C.GREEN+'cc':C.RED+'cc';});
+  var renewalCounts=(l.renewalsByMonth||[]).map(function(x){return x.value;});
+  var renLabels=(l.renewalsByMonth||[]).map(function(x){return sm(x.month);});
+  var moMap={};
+  (l.moveOutsByMonth||[]).forEach(function(x){moMap[x.month]=x.value;});
+  var renMoCounts=(l.renewalsByMonth||[]).map(function(x){return moMap[x.month]||0;});
 
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header">
-      <div class="page-title">Rolling 12-Month Trends</div>
-      <div class="page-sub">All key metrics at a glance · ${labels[0]||''} → ${labels[labels.length-1]||''}</div>
-    </div>
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Rolling 12-Month Trends</div>' +
+    '<div class="page-sub">All key metrics at a glance - '+labels[0]+' to '+labels[labels.length-1]+'</div></div>' +
 
-    <div class="trend-section-label">🏠 Resident Activity</div>
-    <div class="grid g-3">
-      <div class="trend-card">
-        <div class="trend-card-label"><div class="trend-card-label-bar" style="background:${C.TEAL}"></div>Move-Ins</div>
-        <div class="trend-card-value">${sum(moveIns)} <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>
-        <div class="chart-wrap" style="height:130px"><canvas id="tr-movein"></canvas></div>
-      </div>
-      <div class="trend-card">
-        <div class="trend-card-label"><div class="trend-card-label-bar" style="background:${C.GRAY}"></div>Move-Outs</div>
-        <div class="trend-card-value">${sum(moveOuts)} <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>
-        <div class="chart-wrap" style="height:130px"><canvas id="tr-moveout"></canvas></div>
-      </div>
-      <div class="trend-card">
-        <div class="trend-card-label"><div class="trend-card-label-bar" style="background:${C.AMBER}"></div>Lease Expirations</div>
-        <div class="trend-card-value">${sum(expirations)} <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>
-        <div class="chart-wrap" style="height:130px"><canvas id="tr-expiry"></canvas></div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Move-Ins vs Move-Outs vs Expirations — Combined</div></div>
-      <div class="chart-wrap" style="height:200px"><canvas id="tr-move-combined"></canvas></div>
-      <div class="legend" style="margin-top:10px">
-        <div class="legend-item"><div class="legend-dot" style="background:${C.TEAL}"></div>Move-Ins</div>
-        <div class="legend-item"><div class="legend-dot" style="background:${C.GRAY}"></div>Move-Outs</div>
-        <div class="legend-item"><div class="legend-dot" style="background:${C.AMBER}"></div>Expirations</div>
-      </div>
-    </div>
+    '<div class="trend-section-label">Resident Activity</div>' +
+    '<div class="grid g-3">' +
+      trendCard('tr-movein', 'Move-Ins', sum(moveIns), C.TEAL) +
+      trendCard('tr-moveout', 'Move-Outs', sum(moveOuts), C.GRAY) +
+      trendCard('tr-expiry', 'Lease Expirations', sum(expirations), C.AMBER) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">' +
+    '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move-Ins vs Move-Outs vs Expirations</div></div>' +
+    '<div class="chart-wrap" style="height:200px"><canvas id="tr-move-combined"></canvas></div>' +
+    '<div class="legend">' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Move-Ins</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GRAY+'"></div>Move-Outs</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Expirations</div>' +
+    '</div></div>' +
 
-    <div class="trend-section-label">🎯 Owner Pipeline</div>
-    <div class="grid g-3">
-      <div class="trend-card">
-        <div class="trend-card-label"><div class="trend-card-label-bar" style="background:${C.PURPLE}"></div>New Leads</div>
-        <div class="trend-card-value">${sum(newLeads)} <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>
-        <div class="chart-wrap" style="height:130px"><canvas id="tr-leads"></canvas></div>
-      </div>
-      <div class="trend-card">
-        <div class="trend-card-label"><div class="trend-card-label-bar" style="background:${C.GREEN}"></div>PMA Signed</div>
-        <div class="trend-card-value">${sum(signed)} <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>
-        <div class="chart-wrap" style="height:130px"><canvas id="tr-signed"></canvas></div>
-      </div>
-      <div class="trend-card">
-        <div class="trend-card-label"><div class="trend-card-label-bar" style="background:${C.RED}"></div>End Management</div>
-        <div class="trend-card-value">${sum(endMgmt)} <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>
-        <div class="chart-wrap" style="height:130px"><canvas id="tr-end"></canvas></div>
-      </div>
-    </div>
-    <div class="grid g-2" style="margin-bottom:14px">
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.PURPLE}"></div>Leads vs Signed vs Ended</div></div>
-        <div class="chart-wrap" style="height:180px"><canvas id="tr-pipe-combined"></canvas></div>
-        <div class="legend" style="margin-top:10px">
-          <div class="legend-item"><div class="legend-dot" style="background:${C.PURPLE}"></div>New Leads</div>
-          <div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>PMA Signed</div>
-          <div class="legend-item"><div class="legend-dot" style="background:${C.RED}"></div>End Management</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.GREEN}"></div>Net Owner Growth (Signed − Ended)</div><span style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace">green=growing · red=shrinking</span></div>
-        <div class="chart-wrap" style="height:180px"><canvas id="tr-net"></canvas></div>
-      </div>
-    </div>
+    '<div class="trend-section-label">Owner Pipeline</div>' +
+    '<div class="grid g-3">' +
+      trendCard('tr-leads', 'New Leads', sum(newLeads), C.PURPLE) +
+      trendCard('tr-signed', 'PMA Signed', sum(signed), C.GREEN) +
+      trendCard('tr-end', 'End Management', sum(endMgmt), C.RED) +
+    '</div>' +
+    '<div class="grid g-2" style="margin-bottom:14px">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Leads vs Signed vs Ended</div></div>' +
+      '<div class="chart-wrap" style="height:180px"><canvas id="tr-pipe-combined"></canvas></div>' +
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.PURPLE+'"></div>New Leads</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>PMA Signed</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>End Management</div></div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Net Owner Growth</div>' +
+      '<span style="font-size:10px;color:var(--muted)">green = growing, red = shrinking</span></div>' +
+      '<div class="chart-wrap" style="height:180px"><canvas id="tr-net"></canvas></div></div>' +
+    '</div>' +
 
-    <div class="trend-section-label">🏢 Portfolio Size</div>
-    <div class="grid g-2" style="margin-bottom:14px">
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Properties Added — Monthly</div></div>
-        <div class="chart-wrap" style="height:160px"><canvas id="tr-prop-gained"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Portfolio Total — Running Count</div></div>
-        <div class="chart-wrap" style="height:160px"><canvas id="tr-prop-total"></canvas></div>
-      </div>
-    </div>
+    '<div class="trend-section-label">Renewals</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">' +
+    '<div class="card-title-bar" style="background:'+C.AMBER+'"></div>Expirations vs Move-Outs</div></div>' +
+    '<div class="chart-wrap" style="height:180px"><canvas id="tr-renewals"></canvas></div>' +
+    '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Expirations</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Move-Outs</div></div></div>' +
 
-    <div class="trend-section-label">🔁 Renewals &amp; Retention</div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Lease Expirations vs Move-Outs (Renewal Pressure)</div></div>
-      <div class="chart-wrap" style="height:180px"><canvas id="tr-renewals"></canvas></div>
-      <div class="legend" style="margin-top:10px">
-        <div class="legend-item"><div class="legend-dot" style="background:${C.AMBER}"></div>Expirations</div>
-        <div class="legend-item"><div class="legend-dot" style="background:${C.RED}"></div>Move-Outs</div>
-      </div>
-    </div>
+    '<div class="trend-section-label">Portfolio Size</div>' +
+    '<div class="grid g-2" style="margin-bottom:14px">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Properties Added Monthly</div></div>' +
+      '<div class="chart-wrap" style="height:160px"><canvas id="tr-prop-gained"></canvas></div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Portfolio Total Running Count</div></div>' +
+      '<div class="chart-wrap" style="height:160px"><canvas id="tr-prop-total"></canvas></div></div>' +
+    '</div>' +
 
-    <div class="trend-section-label">📋 Leasing Activity</div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Applications Received vs Approved</div></div>
-      <div class="chart-wrap" style="height:180px"><canvas id="tr-apps"></canvas></div>
-      <div class="legend" style="margin-top:10px">
-        <div class="legend-item"><div class="legend-dot" style="background:${C.TEAL}"></div>Received</div>
-        <div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>Approved</div>
-      </div>
-    </div>
+    '<div class="trend-section-label">Leasing Activity</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">' +
+    '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Applications Received vs Approved</div></div>' +
+    '<div class="chart-wrap" style="height:180px"><canvas id="tr-apps"></canvas></div>' +
+    '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Received</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Approved</div></div></div>' +
 
-    <div class="data-note">
-      <span>📊 Rolling 12-month view · ${labels[0]} → ${labels[labels.length-1]}</span>
-      <span>🏠 ${p.activeProperties} properties · ${p.totalUnits} units</span>
-      <span>⏱ ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>
-    </div>
-  </div>`;
+    '<div class="data-note"><span>Rolling 12-month view</span><span>'+p.activeProperties+' properties, '+p.totalUnits+' units</span></div>' +
+    '</div>';
 
-  setTimeout(()=>{
-    mkBar('tr-movein',labels,[{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'}],130);
-    mkBar('tr-moveout',labels,[{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}],130);
-    mkBar('tr-expiry',labels,[{label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'}],130);
-    mkBar('tr-leads',labels,[{label:'New Leads',data:newLeads,backgroundColor:C.PURPLE+'cc'}],130);
-    mkBar('tr-signed',labels,[{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}],130);
-    mkBar('tr-end',labels,[{label:'End Mgmt',data:endMgmt,backgroundColor:C.RED+'cc'}],130);
-    mkBar('tr-move-combined',labels,[
+  document.getElementById('app').innerHTML = html;
+
+  setTimeout(function() {
+    mkBar('tr-movein', labels, [{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'}], 130);
+    mkBar('tr-moveout', labels, [{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}], 130);
+    mkBar('tr-expiry', labels, [{label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'}], 130);
+    mkBar('tr-leads', labels, [{label:'New Leads',data:newLeads,backgroundColor:C.PURPLE+'cc'}], 130);
+    mkBar('tr-signed', labels, [{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}], 130);
+    mkBar('tr-end', labels, [{label:'End Mgmt',data:endMgmt,backgroundColor:C.RED+'cc'}], 130);
+    mkBar('tr-move-combined', labels, [
       {label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'},
       {label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'},
-      {label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'},
-    ],200);
-    mkBar('tr-pipe-combined',labels,[
+      {label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'}
+    ], 200);
+    mkBar('tr-pipe-combined', labels, [
       {label:'New Leads',data:newLeads,backgroundColor:C.PURPLE+'cc'},
       {label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'},
-      {label:'End Management',data:endMgmt,backgroundColor:C.RED+'cc'},
-    ],180);
-    mkBarColored('tr-net',labels,netGrowth,netColors,180);
-    mkBar('tr-prop-gained',propLabels,[{label:'Added',data:propGained,backgroundColor:C.TEAL+'cc'}],160);
-    mkLine('tr-prop-total',propLabels,[{label:'Properties',data:propTotals,borderColor:C.TEAL2}],160);
-    // renewals trend
-    const trRenLabels=(l.renewalsByMonth||[]).map(x=>sm(x.month));
-    const trRenCounts=(l.renewalsByMonth||[]).map(x=>x.value);
-    const trMoMap={};(l.moveOutsByMonth||[]).forEach(x=>{trMoMap[x.month]=x.value;});
-    const trMoCounts=trRenLabels.map((_,i)=>{const m=(l.renewalsByMonth||[])[i];return m?trMoMap[m.month]||0:0;});
-    mkBar('tr-renewals',trRenLabels,[
-      {label:'Expirations',data:trRenCounts,backgroundColor:C.AMBER+'cc'},
-      {label:'Move-Outs',data:trMoCounts,backgroundColor:C.RED+'cc'},
-    ],180);
-    mkBar('tr-apps',labels,[
+      {label:'End Management',data:endMgmt,backgroundColor:C.RED+'cc'}
+    ], 180);
+    mkBarColored('tr-net', labels, netGrowth, netColors, 180);
+    mkBar('tr-renewals', renLabels, [
+      {label:'Expirations',data:renewalCounts,backgroundColor:C.AMBER+'cc'},
+      {label:'Move-Outs',data:renMoCounts,backgroundColor:C.RED+'cc'}
+    ], 180);
+    mkBar('tr-prop-gained', propLabels, [{label:'Added',data:propGained,backgroundColor:C.TEAL+'cc'}], 160);
+    mkLine('tr-prop-total', propLabels, [{label:'Properties',data:propTotals,borderColor:C.TEAL2}], 160);
+    mkBar('tr-apps', labels, [
       {label:'Received',data:appsTotal,backgroundColor:C.TEAL+'aa'},
-      {label:'Approved',data:appsApproved,backgroundColor:C.GREEN+'cc'},
-    ],180);
-  },50);
+      {label:'Approved',data:appsApproved,backgroundColor:C.GREEN+'cc'}
+    ], 180);
+  }, 50);
 }
 
-// ─── OVERVIEW TAB ────────────────────────────────────────────────────────────
+function trendCard(canvasId, label, total, color) {
+  return '<div class="trend-card">' +
+    '<div class="trend-card-label"><div class="trend-card-label-bar" style="background:'+color+'"></div>'+label+'</div>' +
+    '<div class="trend-card-value">'+total+' <span style="font-size:13px;font-weight:400;color:var(--muted)">last 12 mo</span></div>' +
+    '<div class="chart-wrap" style="height:130px"><canvas id="'+canvasId+'"></canvas></div>' +
+  '</div>';
+}
+
+// ---- OVERVIEW TAB ----
 function renderOverview() {
-  const p=D.portfolio,l=D.leases,pipe=D.pipeline,em=D.endManagement;
-  const labels=(l.moveInsByMonth||[]).map(x=>sm(x.month));
-  const moveIns=(l.moveInsByMonth||[]).map(x=>x.value);
-  const moveOuts=(l.moveOutsByMonth||[]).map(x=>x.value);
-  const signed=(pipe.signedByMonth||[]).map(x=>x.value);
-  const leads=(pipe.newLeadsByMonth||[]).map(x=>x.value);
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Operations Overview</div><div class="page-sub">Live · ${new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div></div>
-    <div class="kpi-grid g5">
-      ${kpi('Active Properties',fmt(p.activeProperties),`${p.totalUnits} total units`,C.TEAL2)}
-      ${kpi('Occupancy Rate',`${p.occupancyRate}%`,`${p.occupiedUnits} occupied · ${p.vacantUnits} vacant`,p.occupancyRate>=95?C.GREEN:C.AMBER)}
-      ${kpi('Open Work Orders',fmt(D.workOrders.openTotal),`${D.workOrders.unassigned} unassigned`,C.AMBER)}
-      ${kpi('PMA Signed MTD',fmt(pipe.signedMTD),'management agreements',C.PURPLE)}
-      ${kpi('End Mgmt MTD',fmt(em.totalMTD),'cancellations this month',em.totalMTD>0?C.RED:C.GREEN)}
-    </div>
-    <div class="grid g-2">
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Move Activity — Monthly</div></div>
-        <div class="chart-wrap" style="height:200px"><canvas id="ov-move"></canvas></div>
-        <div class="legend"><div class="legend-item"><div class="legend-dot" style="background:${C.TEAL}"></div>Move-Ins</div><div class="legend-item"><div class="legend-dot" style="background:${C.GRAY}"></div>Move-Outs</div></div>
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.PURPLE}"></div>Owner Pipeline — Monthly</div></div>
-        <div class="chart-wrap" style="height:200px"><canvas id="ov-pipe"></canvas></div>
-        <div class="legend"><div class="legend-item"><div class="legend-dot" style="background:${C.PURPLE}"></div>New Leads</div><div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>PMA Signed</div></div>
-      </div>
-    </div>
-    <div class="grid g-3">
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.GREEN}"></div>Occupancy</div></div>
-        <div class="kpi-value" style="font-size:42px;color:${p.occupancyRate>=95?C.GREEN:C.AMBER}">${p.occupancyRate}%</div>
-        <div class="occ-bar" style="margin-top:14px">
-          <div class="occ-seg" style="width:${p.occupancyRate}%;background:${C.GREEN}">Occ</div>
-          <div class="occ-seg" style="flex:1;background:var(--red)"></div>
-        </div>
-        ${statRow('Occupied',fmt(p.occupiedUnits))}${statRow('Total Units',fmt(p.totalUnits))}${statRow('Vacancy Loss/mo',fmt(p.vacancyLoss,'$'))}
-        ${statRow('Vacant Units',fmt(p.vacantUnits))}
-        ${detailList('vacant-ov',(p.vacantUnitsList||[]).map(u=>({address:u.address,city:u.city,meta:(u.beds?u.beds+'bd':''+(u.baths?'/'+u.baths+'ba':'')),rent:u.rent})),['Address','Beds/Baths','Rent'])}
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Leasing KPIs</div></div>
-        ${statRow('Move-Ins MTD',fmt(l.moveInsMTD))}${statRow('Move-Outs MTD',fmt(l.moveOutsMTD))}${statRow('Expiring (90d)',fmt(l.upcomingExpirations))}${statRow('Avg Days to Lease',l.avgDaysToLease!=null?l.avgDaysToLease+' days':'—')}${statRow('Listings Over 45d',fmt(p.listingsOver45Days))}
-        ${statRow('Active Listings',fmt(p.activeListings))}
-        ${detailList('listings-ov',(p.activeListingsList||[]).map(u=>({address:u.address,city:u.city,meta:u.daysOnMarket!=null?u.daysOnMarket+'d on market':'avail '+u.availableDate,rent:u.rent})),['Address','Status','Rent'])}
-      </div>
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL}"></div>Tech &amp; Ops</div></div>
-        ${statRow('Keyless Deadbolts',fmt(p.keylessDeadboltUnits))}${statRow('Comp. Insp. (Yes)',fmt(D.comprehensiveInspections.yes))}${statRow('Comp. Insp. (No)',fmt(D.comprehensiveInspections.no))}${statRow('Opt-In Rate',D.comprehensiveInspections.optInRate+'%')}${statRow('New Leads MTD',fmt(pipe.newLeadsMTD))}${statRow('Apps Approved MTD',fmt(D.applications.approvedMTD))}
-      </div>
-    </div>
-    <div class="data-note"><span>🏠 ${p.activeProperties} properties</span><span>📋 ${D.applications.totalMTD} apps MTD</span><span>🔧 ${D.workOrders.openTotal} open WOs</span><span>⏱ ${new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span></div>
-  </div>`;
-  setTimeout(()=>{
-    mkBar('ov-move',labels,[{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'},{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}],200);
-    mkBar('ov-pipe',labels,[{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}],200);
-  },50);
+  var p=D.portfolio, l=D.leases, pipe=D.pipeline, em=D.endManagement;
+  var labels=(l.moveInsByMonth||[]).map(function(x){return sm(x.month);});
+  var moveIns=(l.moveInsByMonth||[]).map(function(x){return x.value;});
+  var moveOuts=(l.moveOutsByMonth||[]).map(function(x){return x.value;});
+  var signed=(pipe.signedByMonth||[]).map(function(x){return x.value;});
+  var leads=(pipe.newLeadsByMonth||[]).map(function(x){return x.value;});
+
+  var vacantItems = (p.vacantUnitsList||[]).map(function(u){
+    return {address:u.address,city:u.city,meta:(u.beds?u.beds+'bd':''),rent:u.rent};
+  });
+  var listingItems = (p.activeListingsList||[]).map(function(u){
+    return {address:u.address,city:u.city,meta:(u.daysOnMarket!=null?u.daysOnMarket+'d on market':''),rent:u.rent};
+  });
+
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Operations Overview</div>' +
+    '<div class="page-sub">Live data</div></div>' +
+    '<div class="kpi-grid g5">' +
+      kpi('Active Properties', fmt(p.activeProperties), p.totalUnits+' total units', C.TEAL2) +
+      kpi('Occupancy Rate', p.occupancyRate+'%', p.occupiedUnits+' occupied, '+p.vacantUnits+' vacant', p.occupancyRate>=95?C.GREEN:C.AMBER) +
+      kpi('Open Work Orders', fmt(D.workOrders.openTotal), D.workOrders.unassigned+' unassigned', C.AMBER) +
+      kpi('PMA Signed MTD', fmt(pipe.signedMTD), 'management agreements', C.PURPLE) +
+      kpi('End Mgmt MTD', fmt(em.totalMTD), 'cancellations this month', em.totalMTD>0?C.RED:C.GREEN) +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move Activity Monthly</div></div>' +
+      '<div class="chart-wrap" style="height:200px"><canvas id="ov-move"></canvas></div>' +
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Move-Ins</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GRAY+'"></div>Move-Outs</div></div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Owner Pipeline Monthly</div></div>' +
+      '<div class="chart-wrap" style="height:200px"><canvas id="ov-pipe"></canvas></div>' +
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.PURPLE+'"></div>New Leads</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>PMA Signed</div></div></div>' +
+    '</div>' +
+    '<div class="grid g-3">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Occupancy</div></div>' +
+      '<div class="kpi-value" style="font-size:42px;color:'+(p.occupancyRate>=95?C.GREEN:C.AMBER)+'">'+p.occupancyRate+'%</div>' +
+      '<div class="occ-bar" style="margin-top:14px">' +
+        '<div class="occ-seg" style="width:'+p.occupancyRate+'%;background:'+C.GREEN+'">Occ</div>' +
+        '<div class="occ-seg" style="flex:1;background:var(--red)"></div>' +
+      '</div>' +
+      statRow('Occupied', fmt(p.occupiedUnits)) +
+      statRow('Total Units', fmt(p.totalUnits)) +
+      statRow('Vacancy Loss/mo', fmt(p.vacancyLoss,'$')) +
+      statRow('Vacant Units', fmt(p.vacantUnits)) +
+      detailToggle('vacant-ov', vacantItems.length) +
+      '</div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Leasing KPIs</div></div>' +
+      statRow('Move-Ins MTD', fmt(l.moveInsMTD)) +
+      statRow('Move-Outs MTD', fmt(l.moveOutsMTD)) +
+      statRow('Expiring (90d)', fmt(l.upcomingExpirations)) +
+      statRow('Avg Days to Lease', l.avgDaysToLease!=null?l.avgDaysToLease+' days':'--') +
+      statRow('Listings Over 45d', fmt(p.listingsOver45Days)) +
+      statRow('Active Listings', fmt(p.activeListings)) +
+      detailToggle('listings-ov', listingItems.length) +
+      '</div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL+'"></div>Tech and Ops</div></div>' +
+      statRow('Keyless Deadbolts', fmt(p.keylessDeadboltUnits)) +
+      statRow('Comp. Insp. (Yes)', fmt(D.comprehensiveInspections.yes)) +
+      statRow('Comp. Insp. (No)', fmt(D.comprehensiveInspections.no)) +
+      statRow('Opt-In Rate', D.comprehensiveInspections.optInRate+'%') +
+      statRow('New Leads MTD', fmt(pipe.newLeadsMTD)) +
+      statRow('Apps Approved MTD', fmt(D.applications.approvedMTD)) +
+      '</div>' +
+    '</div>' +
+    '<div class="data-note"><span>'+p.activeProperties+' properties</span><span>'+D.applications.totalMTD+' apps MTD</span><span>'+D.workOrders.openTotal+' open WOs</span></div>' +
+    '</div>';
+
+  document.getElementById('app').innerHTML = html;
+  fillDetail('vacant-ov', vacantItems);
+  fillDetail('listings-ov', listingItems);
+
+  setTimeout(function() {
+    mkBar('ov-move', labels, [{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'},{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}], 200);
+    mkBar('ov-pipe', labels, [{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}], 200);
+  }, 50);
 }
 
+// ---- OCCUPANCY TAB ----
 function renderOccupancy() {
-  const p=D.portfolio,l=D.leases;
-  const labels=(l.moveInsByMonth||[]).map(x=>sm(x.month));
-  const moveIns=(l.moveInsByMonth||[]).map(x=>x.value);
-  const moveOuts=(l.moveOutsByMonth||[]).map(x=>x.value);
-  const expirations=(l.expirationsByMonth||[]).map(x=>x.value);
-  const reasons=l.moveOutReasons||[];
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Occupancy &amp; Resident Status</div><div class="page-sub">Unit status, move activity, and lease expirations</div></div>
-    <div class="kpi-grid g5">
-      ${kpi('Occupancy Rate',`${p.occupancyRate}%`,'target ≥ 95%',p.occupancyRate>=95?C.GREEN:C.RED)}
-      ${kpi('Occupied Units',fmt(p.occupiedUnits),'active leases',C.GREEN)}
-      ${kpi('Vacant Units',fmt(p.vacantUnits),'no active lease',C.RED)}
-      ${kpi('Active Listings',fmt(p.activeListings),'published for rent',C.TEAL2)}
-      ${kpi('Vacancy Loss /mo',fmt(p.vacancyLoss,'$'),`avg $${p.avgRent}/mo`,C.AMBER)}
-    </div>
-    <div class="kpi-grid g3">
-      ${kpi('Move-Ins MTD',fmt(l.moveInsMTD),'started this month',C.TEAL2)}
-      ${kpi('Move-Outs MTD',fmt(l.moveOutsMTD),'ended this month',C.GRAY)}
-      ${kpi('Expiring (90 days)',fmt(l.upcomingExpirations),'upcoming lease ends',C.AMBER)}
-    </div>
-    <div class="grid g-2">
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Move-Ins vs Move-Outs</div></div><div class="chart-wrap" style="height:220px"><canvas id="occ-move"></canvas></div><div class="legend"><div class="legend-item"><div class="legend-dot" style="background:${C.TEAL}"></div>Move-Ins</div><div class="legend-item"><div class="legend-dot" style="background:${C.GRAY}"></div>Move-Outs</div></div></div>
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Lease Expirations — Monthly</div></div><div class="chart-wrap" style="height:220px"><canvas id="occ-exp"></canvas></div></div>
-    </div>
-    <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.RED}"></div>Move-Out Reasons</div></div>${reasons.length?barRows(reasons.map(r=>({...r,label:r.reason})),C.RED):'<div style="color:var(--ghost);font-size:13px">Move-out reasons populate from the Rentvine vacateReason field on lease records.</div>'}</div>
-  </div>`;
-  setTimeout(()=>{
-    mkBar('occ-move',labels,[{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'},{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}],220);
-    mkBar('occ-exp',labels,[{label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'}],220);
-  },50);
+  var p=D.portfolio, l=D.leases;
+  var labels=(l.moveInsByMonth||[]).map(function(x){return sm(x.month);});
+  var moveIns=(l.moveInsByMonth||[]).map(function(x){return x.value;});
+  var moveOuts=(l.moveOutsByMonth||[]).map(function(x){return x.value;});
+  var expirations=(l.expirationsByMonth||[]).map(function(x){return x.value;});
+  var reasons=l.moveOutReasons||[];
+
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Occupancy and Resident Status</div></div>' +
+    '<div class="kpi-grid g5">' +
+      kpi('Occupancy Rate', p.occupancyRate+'%', 'target 95%+', p.occupancyRate>=95?C.GREEN:C.RED) +
+      kpi('Occupied Units', fmt(p.occupiedUnits), 'active leases', C.GREEN) +
+      kpi('Vacant Units', fmt(p.vacantUnits), 'no active lease', C.RED) +
+      kpi('Active Listings', fmt(p.activeListings), 'published for rent', C.TEAL2) +
+      kpi('Vacancy Loss /mo', fmt(p.vacancyLoss,'$'), 'avg $'+p.avgRent+'/mo', C.AMBER) +
+    '</div>' +
+    '<div class="kpi-grid g3">' +
+      kpi('Move-Ins MTD', fmt(l.moveInsMTD), 'started this month', C.TEAL2) +
+      kpi('Move-Outs MTD', fmt(l.moveOutsMTD), 'ended this month', C.GRAY) +
+      kpi('Expiring (90 days)', fmt(l.upcomingExpirations), 'upcoming lease ends', C.AMBER) +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move-Ins vs Move-Outs</div></div>' +
+      '<div class="chart-wrap" style="height:220px"><canvas id="occ-move"></canvas></div>' +
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Move-Ins</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GRAY+'"></div>Move-Outs</div></div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Lease Expirations Monthly</div></div>' +
+      '<div class="chart-wrap" style="height:220px"><canvas id="occ-exp"></canvas></div></div>' +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Move-Out Reasons</div></div>' +
+    (reasons.length ? barRows(reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) :
+      '<div style="color:var(--ghost);font-size:13px">Move-out reasons populate from the Rentvine vacateReason field on lease records.</div>') +
+    '</div></div>';
+
+  document.getElementById('app').innerHTML = html;
+  setTimeout(function() {
+    mkBar('occ-move', labels, [{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'},{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}], 220);
+    mkBar('occ-exp', labels, [{label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'}], 220);
+  }, 50);
 }
 
+// ---- LEASING TAB ----
 function renderLeasing() {
-  const app=D.applications;
-  const labels=(app.byMonth||[]).map(x=>sm(x.month));
-  const received=(app.byMonth||[]).map(x=>x.value);
-  const approved=(app.approvedByMonth||[]).map(x=>x.value);
-  const denied=(app.deniedByMonth||[]).map(x=>x.value);
-  const cancelled=(app.cancelledByMonth||[]).map(x=>x.value);
-  const approvalRate=app.totalMTD>0?Math.round((app.approvedMTD/app.totalMTD)*100):0;
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Leasing Activity</div><div class="page-sub">Applications, approvals, and listing performance</div></div>
-    <div class="kpi-grid g4">
-      ${kpi('Applications MTD',fmt(app.totalMTD),'received this month',C.TEAL2)}
-      ${kpi('Approved MTD',fmt(app.approvedMTD),`${approvalRate}% approval rate`,C.GREEN)}
-      ${kpi('Denied MTD',fmt(app.deniedMTD),'did not qualify',C.RED)}
-      ${kpi('Cancelled MTD',fmt(app.cancelledMTD),'withdrawn or expired',C.AMBER)}
-    </div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Applications — Month over Month</div></div>
-      <div class="chart-wrap" style="height:240px"><canvas id="app-stacked"></canvas></div>
-      <div class="legend"><div class="legend-item"><div class="legend-dot" style="background:${C.TEAL}"></div>Received</div><div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>Approved</div><div class="legend-item"><div class="legend-dot" style="background:${C.RED}"></div>Denied</div><div class="legend-item"><div class="legend-dot" style="background:${C.AMBER}"></div>Cancelled</div></div>
-    </div>
-  </div>`;
-  setTimeout(()=>{
-    mkBar('app-stacked',labels,[
+  var app=D.applications;
+  var labels=(app.byMonth||[]).map(function(x){return sm(x.month);});
+  var received=(app.byMonth||[]).map(function(x){return x.value;});
+  var approved=(app.approvedByMonth||[]).map(function(x){return x.value;});
+  var denied=(app.deniedByMonth||[]).map(function(x){return x.value;});
+  var cancelled=(app.cancelledByMonth||[]).map(function(x){return x.value;});
+  var approvalRate=app.totalMTD>0?Math.round((app.approvedMTD/app.totalMTD)*100):0;
+
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Leasing Activity</div></div>' +
+    '<div class="kpi-grid g4">' +
+      kpi('Applications MTD', fmt(app.totalMTD), 'received this month', C.TEAL2) +
+      kpi('Approved MTD', fmt(app.approvedMTD), approvalRate+'% approval rate', C.GREEN) +
+      kpi('Denied MTD', fmt(app.deniedMTD), 'did not qualify', C.RED) +
+      kpi('Cancelled MTD', fmt(app.cancelledMTD), 'withdrawn or expired', C.AMBER) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">' +
+    '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Applications Month over Month</div></div>' +
+    '<div class="chart-wrap" style="height:240px"><canvas id="app-stacked"></canvas></div>' +
+    '<div class="legend">' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Received</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Approved</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Denied</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Cancelled</div>' +
+    '</div></div></div>';
+
+  document.getElementById('app').innerHTML = html;
+  setTimeout(function() {
+    mkBar('app-stacked', labels, [
       {label:'Received',data:received,backgroundColor:C.TEAL+'aa'},
       {label:'Approved',data:approved,backgroundColor:C.GREEN+'cc'},
       {label:'Denied',data:denied,backgroundColor:C.RED+'cc'},
-      {label:'Cancelled',data:cancelled,backgroundColor:C.AMBER+'aa'},
-    ],240);
-  },50);
+      {label:'Cancelled',data:cancelled,backgroundColor:C.AMBER+'aa'}
+    ], 240);
+  }, 50);
 }
 
+// ---- PIPELINE TAB ----
 function renderPipeline() {
-  const pipe=D.pipeline,em=D.endManagement;
-  const labels=(pipe.signedByMonth||[]).map(x=>sm(x.month));
-  const signed=(pipe.signedByMonth||[]).map(x=>x.value);
-  const leads=(pipe.newLeadsByMonth||[]).map(x=>x.value);
-  const endLabels=(em.byMonth||[]).map(x=>sm(x.month));
-  const endData=(em.byMonth||[]).map(x=>x.value);
-  const sources=pipe.leadSources||[];
-  const reasons=em.reasons||[];
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Owner Pipeline</div><div class="page-sub">New leads, PMA signings, and end management</div></div>
-    <div class="kpi-grid g4">
-      ${kpi('New Leads MTD',fmt(pipe.newLeadsMTD),'added to pipeline',C.PURPLE)}
-      ${kpi('PMA Signed MTD',fmt(pipe.signedMTD),'new management agreements',C.GREEN)}
-      ${kpi('End Mgmt MTD',fmt(em.totalMTD),'cancellations this month',em.totalMTD>0?C.RED:C.GREEN)}
-      ${kpi('Net Growth MTD',fmt(pipe.signedMTD-em.totalMTD,pipe.signedMTD-em.totalMTD>=0?'+':''),'signed minus ended',pipe.signedMTD-em.totalMTD>=0?C.GREEN:C.RED)}
-    </div>
-    <div class="grid g-2">
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.PURPLE}"></div>New Leads vs PMA Signed</div></div><div class="chart-wrap" style="height:220px"><canvas id="pipe-main"></canvas></div><div class="legend"><div class="legend-item"><div class="legend-dot" style="background:${C.PURPLE}"></div>New Leads</div><div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>PMA Signed</div></div></div>
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.RED}"></div>End Management — Monthly</div></div><div class="chart-wrap" style="height:220px"><canvas id="pipe-end"></canvas></div></div>
-    </div>
-    <div class="grid g-2">
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.PURPLE}"></div>Lead Sources</div></div>${sources.length?barRows(sources.map(s=>({...s,label:s.source})),C.PURPLE):'<div style="color:var(--ghost);font-size:13px">No lead source data yet</div>'}</div>
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.RED}"></div>End Management Reasons</div></div>${reasons.length?barRows(reasons.map(r=>({...r,label:r.reason})),C.RED):'<div style="color:var(--ghost);font-size:13px">Reasons flow from Aptly Offboard board.</div>'}</div>
-    </div>
-  </div>`;
-  setTimeout(()=>{
-    mkBar('pipe-main',labels,[{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}],220);
-    mkBar('pipe-end',endLabels,[{label:'End Management',data:endData,backgroundColor:C.RED+'cc'}],220);
-  },50);
+  var pipe=D.pipeline, em=D.endManagement;
+  var labels=(pipe.signedByMonth||[]).map(function(x){return sm(x.month);});
+  var signed=(pipe.signedByMonth||[]).map(function(x){return x.value;});
+  var leads=(pipe.newLeadsByMonth||[]).map(function(x){return x.value;});
+  var endLabels=(em.byMonth||[]).map(function(x){return sm(x.month);});
+  var endData=(em.byMonth||[]).map(function(x){return x.value;});
+  var sources=pipe.leadSources||[];
+  var reasons=em.reasons||[];
+  var net=pipe.signedMTD-em.totalMTD;
+
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Owner Pipeline</div></div>' +
+    '<div class="kpi-grid g4">' +
+      kpi('New Leads MTD', fmt(pipe.newLeadsMTD), 'added to pipeline', C.PURPLE) +
+      kpi('PMA Signed MTD', fmt(pipe.signedMTD), 'new management agreements', C.GREEN) +
+      kpi('End Mgmt MTD', fmt(em.totalMTD), 'cancellations this month', em.totalMTD>0?C.RED:C.GREEN) +
+      kpi('Net Growth MTD', (net>=0?'+':'')+net, 'signed minus ended', net>=0?C.GREEN:C.RED) +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>New Leads vs PMA Signed</div></div>' +
+      '<div class="chart-wrap" style="height:220px"><canvas id="pipe-main"></canvas></div>' +
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.PURPLE+'"></div>New Leads</div>' +
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>PMA Signed</div></div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Monthly</div></div>' +
+      '<div class="chart-wrap" style="height:220px"><canvas id="pipe-end"></canvas></div></div>' +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Lead Sources</div></div>' +
+      (sources.length ? barRows(sources.map(function(s){return {label:s.source,count:s.count};}), C.PURPLE) : '<div style="color:var(--ghost);font-size:13px">No lead source data yet</div>') +
+      '</div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Reasons</div></div>' +
+      (reasons.length ? barRows(reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:13px">Reasons flow from Aptly Offboard board.</div>') +
+      '</div>' +
+    '</div></div>';
+
+  document.getElementById('app').innerHTML = html;
+  setTimeout(function() {
+    mkBar('pipe-main', labels, [{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}], 220);
+    mkBar('pipe-end', endLabels, [{label:'End Management',data:endData,backgroundColor:C.RED+'cc'}], 220);
+  }, 50);
 }
 
-function renderPortfolio() {
-  const p=D.portfolio;
-  const trend=p.propTrend||[];
-  const labels=trend.map(x=>sm(x.month));
-  const totals=trend.map(x=>x.total);
-  const gained=trend.map(x=>x.gained);
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Portfolio Growth</div><div class="page-sub">Properties added and running total</div></div>
-    <div class="kpi-grid g4">
-      ${kpi('Active Properties',fmt(p.activeProperties),'currently managed',C.TEAL2)}
-      ${kpi('Total Units',fmt(p.totalUnits),'across all properties',C.TEAL)}
-      ${kpi('Gained MTD',fmt(p.gainedMTD),'new this month',C.GREEN)}
-      ${kpi('Keyless Deadbolts',fmt(p.keylessDeadboltUnits),'units enrolled',C.BLUE)}
-    </div>
-    <div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.TEAL2}"></div>Portfolio Total — Running Count</div></div><div class="chart-wrap" style="height:220px"><canvas id="port-total"></canvas></div></div>
-    <div class="grid g-2">
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.GREEN}"></div>Properties Added — Monthly</div></div><div class="chart-wrap" style="height:200px"><canvas id="port-gained"></canvas></div></div>
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.BLUE}"></div>Technology Adoption</div></div>
-        ${statRow('Keyless Deadbolt Units',fmt(p.keylessDeadboltUnits))}${statRow('Comp. Inspection — Yes',fmt(D.comprehensiveInspections.yes))}${statRow('Comp. Inspection — No',fmt(D.comprehensiveInspections.no))}${statRow('Opt-In Rate',D.comprehensiveInspections.optInRate+'%')}
-      </div>
-    </div>
-  </div>`;
-  setTimeout(()=>{
-    mkLine('port-total',labels,[{label:'Properties',data:totals,borderColor:C.TEAL2}],220);
-    mkBar('port-gained',labels,[{label:'Added',data:gained,backgroundColor:C.GREEN+'cc'}],200);
-  },50);
-}
-
-function renderMaintenance() {
-  const wo=D.workOrders;
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Maintenance</div><div class="page-sub">Open work orders by stage</div></div>
-    <div class="kpi-grid g3">
-      ${kpi('Open Work Orders',fmt(wo.openTotal),'all active stages',C.AMBER)}
-      ${kpi('Unassigned',fmt(wo.unassigned),'no vendor assigned',wo.unassigned>0?C.RED:C.GREEN)}
-      ${kpi('Assigned',fmt(wo.openTotal-wo.unassigned),'vendor assigned',C.GREEN)}
-    </div>
-    <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Work Orders by Stage</div></div>${(wo.byStage||[]).length?barRows((wo.byStage||[]).map(s=>({...s,label:s.stage})),C.AMBER,wo.openTotal):'<div style="color:var(--ghost);font-size:13px">No open work orders</div>'}</div>
-  </div>`;
-}
-
-function renderRetention() {
-  const ci=D.comprehensiveInspections,em=D.endManagement,l=D.leases;
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header"><div class="page-title">Owner &amp; Tenant Retention</div><div class="page-sub">Comprehensive inspections, end management, and lease health</div></div>
-    <div class="kpi-grid g4">
-      ${kpi('Comp. Inspection Opt-In',`${ci.optInRate}%`,`${ci.yes} yes · ${ci.no} no`,ci.optInRate>=50?C.GREEN:C.AMBER)}
-      ${kpi('End Mgmt MTD',fmt(em.totalMTD),'cancellations',em.totalMTD>0?C.RED:C.GREEN)}
-      ${kpi('Move-Out Reasons',fmt(l.moveOutReasons.length),'distinct reasons tracked',C.TEAL)}
-      ${kpi('Expiring Leases (90d)',fmt(l.upcomingExpirations),'need renewal action',C.AMBER)}
-    </div>
-    <div class="grid g-2">
-      <div class="card">
-        <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.GREEN}"></div>Comprehensive Inspection Opt-In</div></div>
-        <div class="insp-wrap" style="padding:10px 0">
-          <div class="insp-ring" style="width:100px;height:100px">
-            <svg width="100" height="100" viewBox="0 0 100 100"><circle class="insp-ring-bg" cx="50" cy="50" r="42" stroke-width="10"/><circle class="insp-ring-fill" cx="50" cy="50" r="42" stroke-width="10" stroke="${ci.optInRate>=50?C.GREEN:C.AMBER}" stroke-dasharray="${ci.optInRate*2.638} 263.8"/></svg>
-            <div class="insp-pct" style="font-size:20px">${ci.optInRate}%</div>
-          </div>
-          <div class="insp-legend">
-            <div class="insp-row"><div class="insp-dot" style="background:${C.GREEN}"></div><div class="insp-label">Yes — Opted In</div><div class="insp-num">${ci.yes}</div></div>
-            <div class="insp-row"><div class="insp-dot" style="background:var(--red)"></div><div class="insp-label">No — Opted Out</div><div class="insp-num">${ci.no}</div></div>
-            <div class="insp-row"><div class="insp-dot" style="background:var(--rule)"></div><div class="insp-label">Total Tracked</div><div class="insp-num">${ci.total}</div></div>
-          </div>
-        </div>
-      </div>
-      <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.RED}"></div>End Management Reasons</div></div>${em.reasons.length?barRows(em.reasons.map(r=>({...r,label:r.reason})),C.RED):'<div style="color:var(--ghost);font-size:12px;line-height:1.7">Reasons flow from Aptly Offboard board.</div>'}</div>
-    </div>
-    <div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.RED}"></div>Move-Out Reasons (from Rentvine)</div></div>${l.moveOutReasons.length?barRows(l.moveOutReasons.map(r=>({...r,label:r.reason})),C.RED):'<div style="color:var(--ghost);font-size:12px">Move-out reasons populate from the Rentvine vacateReason field on lease records.</div>'}</div>
-  </div>`;
-}
-
-
-// ─── RENEWALS TAB ────────────────────────────────────────────────────────────
+// ---- RENEWALS TAB ----
 function renderRenewals() {
-  const l=D.leases, p=D.portfolio;
-  const renewalsByMonth=l.renewalsByMonth||[];
-  const moveOutsByMonth=l.moveOutsByMonth||[];
-  const renewalsDetail=l.renewalsDetail||[];
+  var l=D.leases;
+  var renewalsByMonth=l.renewalsByMonth||[];
+  var moveOutsByMonth=l.moveOutsByMonth||[];
+  var renewalsDetail=l.renewalsDetail||[];
+  var months=renewalsByMonth.map(function(x){return x.month;});
+  var renewalCounts=renewalsByMonth.map(function(x){return x.value;});
+  var moMap={};
+  moveOutsByMonth.forEach(function(x){moMap[x.month]=x.value;});
+  var moveOutCounts=months.map(function(m){return moMap[m]||0;});
+  var labels=months.map(function(m){return sm(m);});
+  var thisMo=D.thisMonth||'';
+  var thisMoRen=renewalsByMonth.find(function(x){return x.month===thisMo;});
+  var thisMoCount=thisMoRen?thisMoRen.value:0;
 
-  // Build a combined month list from renewals
-  const months=renewalsByMonth.map(x=>x.month);
-  const renewalCounts=renewalsByMonth.map(x=>x.value);
-  // Match move-outs to same months
-  const moveOutMap={};
-  moveOutsByMonth.forEach(x=>{moveOutMap[x.month]=x.value;});
-  const moveOutCounts=months.map(m=>moveOutMap[m]||0);
-  const labels=months.map(m=>{if(!m)return''; const[y,mo]=m.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo)-1]+" '"+y.slice(2);});
-
-  // Group renewals detail by month for the accordion
-  const byMonth={};
-  renewalsDetail.forEach(r=>{
-    if(!byMonth[r.monthKey])byMonth[r.monthKey]=[];
+  // Build upcoming months detail
+  var byMonth={};
+  renewalsDetail.forEach(function(r){
+    if(!byMonth[r.monthKey]) byMonth[r.monthKey]=[];
     byMonth[r.monthKey].push(r);
   });
-  const upcomingMonths=Object.keys(byMonth).filter(k=>k>=D.thisMonth).sort().slice(0,6);
+  var upcoming=Object.keys(byMonth).filter(function(k){return k>=thisMo;}).sort().slice(0,6);
 
-  document.getElementById('app').innerHTML=`
-  <div class="main">
-    <div class="page-header">
-      <div class="page-title">Lease Renewals &amp; Retention</div>
-      <div class="page-sub">Expirations by month · move-outs vs renewals · upcoming action list</div>
-    </div>
-    <div class="kpi-grid g4">
-      ${kpi('Expiring This Month',fmt(renewalsByMonth.find(x=>x.month===D.thisMonth)?.value||0),'leases up for renewal',C.AMBER)}
-      ${kpi('Move-Outs This Month',fmt(moveOutMap[D.thisMonth]||0),'actual move-outs',C.RED)}
-      ${kpi('Expiring (90 days)',fmt(l.upcomingExpirations),'need renewal action',C.AMBER)}
-      ${kpi('Active Leases',fmt(l.active),'currently occupied',C.GREEN)}
-    </div>
+  var upcomingHtml='';
+  if(upcoming.length) {
+    upcoming.forEach(function(mk) {
+      var items=byMonth[mk]||[];
+      var idx=months.indexOf(mk);
+      var label=idx>=0?labels[idx]:mk;
+      var rows='';
+      items.forEach(function(r) {
+        var dateStr=r.endDate?new Date(r.endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'--';
+        var rentStr=r.rent?'$'+Number(r.rent).toLocaleString():'--';
+        rows+='<div class="detail-row"><div><div class="detail-addr">'+r.tenant+'</div><div class="detail-city">'+r.address+(r.city?', '+r.city:'')+'</div></div><div class="detail-meta">'+dateStr+'</div><div class="detail-rent">'+rentStr+'</div></div>';
+      });
+      upcomingHtml+='<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--ink2);padding:6px 0">'+label+' - '+items.length+' expiring</div>' +
+        '<div class="detail-list open" style="display:block"><div class="detail-header"><span>Tenant / Address</span><span>Lease End Date</span><span>Monthly Rent</span></div>'+rows+'</div></div>';
+    });
+  } else {
+    upcomingHtml='<div style="color:var(--ghost);font-size:13px">No upcoming expirations in next 6 months</div>';
+  }
 
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-header">
-        <div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Expirations vs Move-Outs — Month over Month</div>
-        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">renewals = expirations − move-outs</span>
-      </div>
-      <div class="chart-wrap" style="height:220px"><canvas id="ren-combined"></canvas></div>
-      <div class="legend" style="margin-top:10px">
-        <div class="legend-item"><div class="legend-dot" style="background:${C.AMBER}"></div>Lease Expirations</div>
-        <div class="legend-item"><div class="legend-dot" style="background:${C.RED}"></div>Move-Outs</div>
-        <div class="legend-item"><div class="legend-dot" style="background:${C.GREEN}"></div>Estimated Renewals (Exp − MO)</div>
-      </div>
-    </div>
+  // Build full list
+  var allRows='';
+  renewalsDetail.slice(0,50).forEach(function(r) {
+    var dateStr=r.endDate?new Date(r.endDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'--';
+    var rentStr=r.rent?'$'+Number(r.rent).toLocaleString():'--';
+    allRows+='<div class="detail-row"><div><div class="detail-addr">'+r.tenant+'</div><div class="detail-city">'+r.address+(r.city?', '+r.city:'')+'</div></div><div class="detail-meta">'+dateStr+'</div><div class="detail-rent">'+rentStr+'</div></div>';
+  });
+  var moreMsg=renewalsDetail.length>50?'<div style="padding:10px 12px;font-size:11px;color:var(--muted)">Showing 50 of '+renewalsDetail.length+' leases</div>':'';
 
-    <div class="trend-section-label">📅 Upcoming Expirations — Next 6 Months</div>
-    ${upcomingMonths.length ? upcomingMonths.map(mk => {
-      const items=byMonth[mk]||[];
-      const label=labels[months.indexOf(mk)]||mk;
-      return \`<div style="margin-bottom:10px">
-        <div style="font-size:12px;font-weight:700;color:var(--ink2);padding:6px 0">\${label} — \${items.length} expiring</div>
-        <div class="detail-list open" style="display:block">
-          <div class="detail-list-header"><span>Tenant / Address</span><span>Lease End Date</span><span>Monthly Rent</span></div>
-          \${items.map(r=>'<div class="detail-list-row"><div><div class="detail-list-addr">'+r.tenant+'</div><div class="detail-list-city">'+r.address+(r.city?', '+r.city:'')+'</div></div><div class="detail-list-meta">'+new Date(r.endDate).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+'</div><div class="detail-list-rent">'+(r.rent?'$'+Number(r.rent).toLocaleString():'—')+'</div></div>').join('')}
-        </div>
-      </div>\`;
-    }).join('') : '<div style="color:var(--ghost);font-size:13px">No upcoming expirations in the next 6 months</div>'}
+  var estimated=renewalCounts.map(function(r,i){return Math.max(0,r-moveOutCounts[i]);});
 
-    <div class="trend-section-label">📋 All Upcoming Expirations</div>
-    <div class="card">
-      <div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:${C.AMBER}"></div>Full Renewal List (Active Leases · Sorted by End Date)</div><span style="font-size:11px;color:var(--muted)">${renewalsDetail.length} total</span></div>
-      <div style="max-height:400px;overflow-y:auto">
-        <div class="detail-list-header"><span>Tenant / Address</span><span>Lease End Date</span><span>Monthly Rent</span></div>
-        ${renewalsDetail.slice(0,50).map(r=>'<div class="detail-list-row"><div><div class="detail-list-addr">'+r.tenant+'</div><div class="detail-list-city">'+r.address+(r.city?', '+r.city:'')+'</div></div><div class="detail-list-meta">'+new Date(r.endDate).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+'</div><div class="detail-list-rent">'+(r.rent?'$'+Number(r.rent).toLocaleString():'—')+'</div></div>').join('')}
-        ${renewalsDetail.length>50?'<div style="padding:10px 12px;font-size:11px;color:var(--muted)">Showing first 50 of '+renewalsDetail.length+' leases</div>':''}
-      </div>
-    </div>
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Lease Renewals and Retention</div>' +
+    '<div class="page-sub">Expirations by month vs move-outs</div></div>' +
+    '<div class="kpi-grid g4">' +
+      kpi('Expiring This Month', fmt(thisMoCount), 'leases up for renewal', C.AMBER) +
+      kpi('Move-Outs This Month', fmt(moMap[thisMo]||0), 'actual move-outs', C.RED) +
+      kpi('Expiring (90 days)', fmt(l.upcomingExpirations), 'need renewal action', C.AMBER) +
+      kpi('Active Leases', fmt(l.active), 'currently occupied', C.GREEN) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">' +
+    '<div class="card-title-bar" style="background:'+C.AMBER+'"></div>Expirations vs Move-Outs Month over Month</div></div>' +
+    '<div class="chart-wrap" style="height:220px"><canvas id="ren-combined"></canvas></div>' +
+    '<div class="legend">' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Lease Expirations</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Move-Outs</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Est. Renewals (Exp minus Move-Outs)</div>' +
+    '</div></div>' +
+    '<div class="trend-section-label">Upcoming Expirations - Next 6 Months</div>' +
+    upcomingHtml +
+    '<div class="trend-section-label">Full Renewal List</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>All Active Leases by End Date</div>' +
+    '<span style="font-size:11px;color:var(--muted)">'+renewalsDetail.length+' total</span></div>' +
+    '<div style="max-height:400px;overflow-y:auto">' +
+    '<div class="detail-header"><span>Tenant / Address</span><span>Lease End Date</span><span>Monthly Rent</span></div>' +
+    allRows+moreMsg+'</div></div>' +
+    '<div class="data-note"><span>Renewals estimated as Expirations minus Move-Outs per month</span></div>' +
+    '</div>';
 
-    <div class="data-note">
-      <span>🔁 Renewals estimated as Expirations − Move-Outs per month</span>
-      <span>📋 Data from Rentvine active lease endDate field</span>
-    </div>
-  </div>\`;
-
-  setTimeout(()=>{
-    // Estimated renewals = expirations - move-outs (floored at 0)
-    const estimated=renewalCounts.map((r,i)=>Math.max(0,r-moveOutCounts[i]));
-    mkBar('ren-combined',labels,[
+  document.getElementById('app').innerHTML = html;
+  setTimeout(function() {
+    mkBar('ren-combined', labels, [
       {label:'Expirations',data:renewalCounts,backgroundColor:C.AMBER+'cc'},
       {label:'Move-Outs',data:moveOutCounts,backgroundColor:C.RED+'cc'},
-      {label:'Est. Renewals',data:estimated,backgroundColor:C.GREEN+'cc'},
-    ],220);
-  },50);
-}
-const TABS={trends:renderTrends,overview:renderOverview,occupancy:renderOccupancy,leasing:renderLeasing,pipeline:renderPipeline,portfolio:renderPortfolio,maintenance:renderMaintenance,renewals:renderRenewals,retention:renderRetention};
-let activeTab='trends';
-function switchTab(id){
-  activeTab=id;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===id));
-  if(D)TABS[id]();
+      {label:'Est. Renewals',data:estimated,backgroundColor:C.GREEN+'cc'}
+    ], 220);
+  }, 50);
 }
 
+// ---- PORTFOLIO TAB ----
+function renderPortfolio() {
+  var p=D.portfolio;
+  var trend=p.propTrend||[];
+  var labels=trend.map(function(x){return sm(x.month);});
+  var totals=trend.map(function(x){return x.total;});
+  var gained=trend.map(function(x){return x.gained;});
+
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Portfolio Growth</div></div>' +
+    '<div class="kpi-grid g4">' +
+      kpi('Active Properties', fmt(p.activeProperties), 'currently managed', C.TEAL2) +
+      kpi('Total Units', fmt(p.totalUnits), 'across all properties', C.TEAL) +
+      kpi('Gained MTD', fmt(p.gainedMTD), 'new this month', C.GREEN) +
+      kpi('Keyless Deadbolts', fmt(p.keylessDeadboltUnits), 'units enrolled', C.BLUE) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Portfolio Total Running Count</div></div>' +
+    '<div class="chart-wrap" style="height:220px"><canvas id="port-total"></canvas></div></div>' +
+    '<div class="grid g-2">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Properties Added Monthly</div></div>' +
+      '<div class="chart-wrap" style="height:200px"><canvas id="port-gained"></canvas></div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.BLUE+'"></div>Technology Adoption</div></div>' +
+      statRow('Keyless Deadbolt Units', fmt(p.keylessDeadboltUnits)) +
+      statRow('Comp. Inspection Yes', fmt(D.comprehensiveInspections.yes)) +
+      statRow('Comp. Inspection No', fmt(D.comprehensiveInspections.no)) +
+      statRow('Opt-In Rate', D.comprehensiveInspections.optInRate+'%') +
+      '</div>' +
+    '</div></div>';
+
+  document.getElementById('app').innerHTML = html;
+  setTimeout(function() {
+    mkLine('port-total', labels, [{label:'Properties',data:totals,borderColor:C.TEAL2}], 220);
+    mkBar('port-gained', labels, [{label:'Added',data:gained,backgroundColor:C.GREEN+'cc'}], 200);
+  }, 50);
+}
+
+// ---- MAINTENANCE TAB ----
+function renderMaintenance() {
+  var wo=D.workOrders;
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Maintenance</div></div>' +
+    '<div class="kpi-grid g3">' +
+      kpi('Open Work Orders', fmt(wo.openTotal), 'all active stages', C.AMBER) +
+      kpi('Unassigned', fmt(wo.unassigned), 'no vendor assigned', wo.unassigned>0?C.RED:C.GREEN) +
+      kpi('Assigned', fmt(wo.openTotal-wo.unassigned), 'vendor assigned', C.GREEN) +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Work Orders by Stage</div></div>' +
+    ((wo.byStage||[]).length ? barRows((wo.byStage||[]).map(function(s){return {label:s.stage,count:s.count};}), C.AMBER) : '<div style="color:var(--ghost);font-size:13px">No open work orders</div>') +
+    '</div></div>';
+  document.getElementById('app').innerHTML = html;
+}
+
+// ---- RETENTION TAB ----
+function renderRetention() {
+  var ci=D.comprehensiveInspections, em=D.endManagement, l=D.leases;
+  var ciRadius = 42;
+  var ciCirc = 2 * Math.PI * ciRadius;
+  var ciDash = (ci.optInRate/100) * ciCirc;
+
+  var html = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Owner and Tenant Retention</div></div>' +
+    '<div class="kpi-grid g4">' +
+      kpi('Comp. Inspection Opt-In', ci.optInRate+'%', ci.yes+' yes, '+ci.no+' no', ci.optInRate>=50?C.GREEN:C.AMBER) +
+      kpi('End Mgmt MTD', fmt(em.totalMTD), 'cancellations', em.totalMTD>0?C.RED:C.GREEN) +
+      kpi('Move-Out Reasons', fmt(l.moveOutReasons.length), 'distinct reasons tracked', C.TEAL) +
+      kpi('Expiring Leases (90d)', fmt(l.upcomingExpirations), 'need renewal action', C.AMBER) +
+    '</div>' +
+    '<div class="grid g-2">' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Comprehensive Inspection Opt-In</div></div>' +
+      '<div class="insp-wrap" style="padding:10px 0">' +
+        '<div class="insp-ring" style="width:100px;height:100px">' +
+          '<svg width="100" height="100" viewBox="0 0 100 100">' +
+            '<circle class="insp-ring-bg" cx="50" cy="50" r="'+ciRadius+'" stroke-width="10"/>' +
+            '<circle class="insp-ring-fill" cx="50" cy="50" r="'+ciRadius+'" stroke-width="10" stroke="'+(ci.optInRate>=50?C.GREEN:C.AMBER)+'" stroke-dasharray="'+ciDash+' '+ciCirc+'"/>' +
+          '</svg>' +
+          '<div class="insp-pct" style="font-size:20px">'+ci.optInRate+'%</div>' +
+        '</div>' +
+        '<div class="insp-legend">' +
+          '<div class="insp-row"><div class="insp-dot" style="background:'+C.GREEN+'"></div><div class="insp-label">Yes Opted In</div><div class="insp-num">'+ci.yes+'</div></div>' +
+          '<div class="insp-row"><div class="insp-dot" style="background:var(--red)"></div><div class="insp-label">No Opted Out</div><div class="insp-num">'+ci.no+'</div></div>' +
+          '<div class="insp-row"><div class="insp-dot" style="background:var(--rule)"></div><div class="insp-label">Total Tracked</div><div class="insp-num">'+ci.total+'</div></div>' +
+        '</div>' +
+      '</div></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Reasons</div></div>' +
+      (em.reasons.length ? barRows(em.reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:12px">Reasons flow from Aptly Offboard board.</div>') +
+      '</div>' +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Move-Out Reasons from Rentvine</div></div>' +
+    (l.moveOutReasons.length ? barRows(l.moveOutReasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:12px">Move-out reasons populate from the Rentvine vacateReason field on lease records.</div>') +
+    '</div></div>';
+
+  document.getElementById('app').innerHTML = html;
+}
+
+// ---- TAB SWITCHING ----
+var TABS = {
+  trends: renderTrends,
+  overview: renderOverview,
+  occupancy: renderOccupancy,
+  leasing: renderLeasing,
+  pipeline: renderPipeline,
+  renewals: renderRenewals,
+  portfolio: renderPortfolio,
+  maintenance: renderMaintenance,
+  retention: renderRetention
+};
+
+var activeTab = 'trends';
+
+function switchTab(id) {
+  activeTab = id;
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.classList.toggle('active', t.dataset.tab === id);
+  });
+  if (D) TABS[id]();
+}
+
+// ---- DATA LOADING ----
 async function forceRefresh() {
-  document.getElementById('force-btn').textContent = '⟳ Fetching…';
+  document.getElementById('force-btn').textContent = 'Loading...';
   document.getElementById('force-btn').disabled = true;
-  try {
-    await fetch('/api/metrics/refresh');
-  } catch(e) {}
+  try { await fetch('/api/metrics/refresh'); } catch(e) {}
   await loadData();
-  document.getElementById('force-btn').textContent = '⟳ Live';
+  document.getElementById('force-btn').textContent = 'Live Refresh';
   document.getElementById('force-btn').disabled = false;
 }
 
 async function loadData() {
-  document.getElementById('loading').style.display='flex';
-  document.getElementById('app').style.display='none';
-  document.getElementById('error').style.display='none';
-  document.getElementById('live-badge').style.display='none';
-  document.getElementById('refresh-btn').textContent='↻ Loading…';
-    document.getElementById('force-btn').disabled=true;
-  document.getElementById('refresh-btn').disabled=true;
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('live-badge').style.display = 'none';
+  document.getElementById('refresh-btn').textContent = 'Loading...';
+  document.getElementById('refresh-btn').disabled = true;
+
   try {
-    const r=await fetch('/api/metrics');
-    if(!r.ok)throw new Error(`Server error ${r.status}: ${await r.text()}`);
-    D=await r.json();
-    document.getElementById('loading').style.display='none';
-    document.getElementById('app').style.display='block';
-    document.getElementById('live-badge').style.display='flex';
-    document.getElementById('live-time').textContent='Live · '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-    Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});
-    charts={};
+    var r = await fetch('/api/metrics');
+    if (!r.ok) throw new Error('Server error ' + r.status + ': ' + await r.text());
+    D = await r.json();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('live-badge').style.display = 'flex';
+
+    var genTime = D.generatedAt ? new Date(D.generatedAt) : new Date();
+    var ageMin = Math.round((Date.now() - genTime.getTime()) / 60000);
+    var ageLabel = ageMin < 1 ? 'just now' : ageMin === 1 ? '1 min ago' : ageMin + ' min ago';
+    document.getElementById('live-time').textContent = 'Data from ' + ageLabel;
+
+    Object.values(charts).forEach(function(c){try{c.destroy();}catch(e){}});
+    charts = {};
+
     TABS[activeTab]();
   } catch(e) {
-    document.getElementById('loading').style.display='none';
-    const errEl=document.getElementById('error');
-    errEl.style.display='block';
-    errEl.innerHTML=`⚠ Failed to load metrics: ${e.message}<br><small style="opacity:.7">Make sure /api/metrics is deployed. Visit <a href="/api/metrics/debug" target="_blank" style="color:var(--red)">/api/metrics/debug</a> to check board field names.</small>`;
+    document.getElementById('loading').style.display = 'none';
+    var errEl = document.getElementById('error');
+    errEl.style.display = 'block';
+    errEl.innerHTML = 'Failed to load metrics: ' + e.message;
   } finally {
-    document.getElementById('refresh-btn').textContent='↻ Cached';
-    document.getElementById('refresh-btn').disabled=false;
-    document.getElementById('force-btn').disabled=false;
+    document.getElementById('refresh-btn').textContent = 'Refresh';
+    document.getElementById('refresh-btn').disabled = false;
   }
 }
-loadData();
 
-function toggleDetail(id) {
-  const btn = document.getElementById('btn-'+id);
-  const list = document.getElementById('list-'+id);
-  const isOpen = list.classList.contains('open');
-  list.classList.toggle('open', !isOpen);
-  btn.classList.toggle('open', !isOpen);
-}
-function detailList(id, items, columns) {
-  if (!items || !items.length) return '<div style="color:var(--ghost);font-size:12px;padding:8px 12px">No data available</div>';
-  const header = '<div class="detail-list-header">' + columns.map(c => '<span>' + c + '</span>').join('') + '</div>';
-  const rows = items.map(r => '<div class="detail-list-row">' +
-    '<div><div class="detail-list-addr">' + (r.address||'—') + '</div><div class="detail-list-city">' + (r.city||'') + '</div></div>' +
-    '<div class="detail-list-meta">' + (r.meta||'') + '</div>' +
-    '<div class="detail-list-rent">' + (r.rent ? '
-</body>
-</html>
-+Number(r.rent).toLocaleString() : '—') + '</div>' +
-  '</div>').join('');
-  return '<div class="detail-toggle" id="btn-'+id+'" onclick="toggleDetail(this.id.replace(\'btn-\',\'\'))">' +
-    '<span>Show ' + items.length + ' properties</span><span class="detail-toggle-arrow">v</span>' +
-  '</div>' +
-  '<div class="detail-list" id="list-'+id+'">' + header + rows + '</div>';
-}
+loadData();
 </script>
 </body>
 </html>
