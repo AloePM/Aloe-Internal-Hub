@@ -1568,19 +1568,57 @@ async function executeTool(name, input) {
       }
 
       case 'aptly_get_work_orders': {
-        let allWOs = [];
-        let page = 0;
-        while (true) {
-          const params = { page, pageSize: 100, includeArchived: false };
-          const data = await unitsFetch('/api/board/workOrder', params);
-          const batch = Array.isArray(data) ? data : (data && data.data) || [];
-          if (batch.length === 0) break;
-          const active = batch.filter(function(c) { return !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''); });
-          allWOs = allWOs.concat(active);
-          if (batch.length < 100) break;
-          if (page >= 1) break;
-          page++;
-        }
+  let allWOs = [];
+  for (let page = 0; page <= 10; page++) {
+    const data = await unitsFetch('/api/board/workOrder', { 
+      page, 
+      pageSize: 100, 
+      includeArchived: false 
+    });
+    const batch = Array.isArray(data) ? data : (data && data.data) || [];
+    if (batch.length === 0) break;
+    allWOs = allWOs.concat(batch);  // accumulate ALL, filter AFTER
+    if (batch.length < 100) break;
+  }
+
+  // Filter AFTER collecting everything
+  const activeWOs = allWOs.filter(function(c) {
+    return !c.archived && !/closed|cancelled|complete/i.test(c.stage || '');
+  });
+  // After building activeWOs, add this before the status filter:
+if (input.status && input.status.toLowerCase() === 'emergency') {
+  const emergencies = activeWOs.filter(function(c) {
+    const stage = (c.stage || '').toLowerCase();
+    const priority = (c.priority || '').toLowerCase();
+    const desc = (c.description || c.name || '').replace(/<[^>]+>/g, '').toLowerCase();
+    return stage.includes('emergency') || 
+           priority.includes('emergency') || 
+           priority.includes('urgent') ||
+           /water.*leak|gas.*leak|no.*heat|no.*ac|flood|sewage|burst.*pipe/i.test(desc);
+  });
+  // return emergencies directly
+  const slim = emergencies.map(function(c) {
+    const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
+    const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
+    const address = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '';
+    const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
+    const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
+    const rawDesc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
+    return {
+      address,
+      num: c.workOrderNumber || '',
+      issue: rawDesc.slice(0, 80),
+      vendor,
+      opened: (c.createdAt || '').slice(0, 10),
+      daysOpen: created ? Math.floor((Date.now() - created) / 86400000) : null,
+      status: c.stage || '',
+      priority: c.priority || '',
+    };
+  });
+  return JSON.stringify({ total: slim.length, emergencies: slim });
+}
+  // rest of your existing code unchanged, just replace allWOs with activeWOs...
         let filtered = allWOs;
         if (input.status) {
           const s = input.status.toLowerCase();
