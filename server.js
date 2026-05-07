@@ -2558,14 +2558,19 @@ async function buildMetricsData() {
       activeLeases.length + ' active(status2), ' + closedLeases.length + ' closed(status3)');
 
     if (activeLeases.length > 0) {
+      const raw = activeLeasesRaw[0];
       const s = activeLeases[0];
-      console.log('Active lease sample: leaseID=' + s.leaseID + ' moveInDate=' + s.moveInDate +
+      console.log('Raw active item keys:', Object.keys(raw).join(', '));
+      console.log('Raw active lease keys:', raw.lease ? Object.keys(raw.lease).join(', ') : 'NO .lease');
+      console.log('Active unwrapped: leaseID=' + s.leaseID + ' moveInDate=' + s.moveInDate +
         ' endDate=' + s.endDate + ' primaryLeaseStatusID=' + s.primaryLeaseStatusID);
     }
     if (closedLeases.length > 0) {
+      const raw = closedLeasesRaw[0];
       const s = closedLeases[0];
-      console.log('Closed lease sample: moveOutDate=' + s.moveOutDate +
-        ' moveOutTenantReason=' + s.moveOutTenantReason + ' closedDate=' + s.closedDate);
+      console.log('Raw closed item keys:', Object.keys(raw).join(', '));
+      console.log('Closed unwrapped: moveOutDate=' + s.moveOutDate + ' closedDate=' + s.closedDate +
+        ' primaryLeaseStatusID=' + s.primaryLeaseStatusID);
     }
 
     const activeProps = allProps.filter(item => {
@@ -2575,7 +2580,7 @@ async function buildMetricsData() {
 
     const propGainedMTD = allProps.filter(item => {
       const p = item.property || item;
-      const dateAdded = p.dateContractBegins || p.dateTimeCreated || p.startDate || p.createdAt;
+      const dateAdded = p.dateTimeCreated; // dateContractBegins not in export, dateTimeCreated confirmed
       return monthKey(dateAdded) === TMK;
     }).length;
 
@@ -2589,7 +2594,7 @@ async function buildMetricsData() {
     allProps.forEach(item => {
       const p = item.property || item;
       // Try every possible date field for when property was added
-      const dateAdded = p.dateContractBegins || p.dateTimeCreated || p.startDate || p.createdAt;
+      const dateAdded = p.dateTimeCreated; // dateContractBegins not in export, dateTimeCreated confirmed
       const k = monthKey(dateAdded);
       if (k && propGainedByMonth[k] !== undefined) propGainedByMonth[k]++;
     });
@@ -2639,8 +2644,7 @@ async function buildMetricsData() {
     if (allLeases.length > 0) {
       const sample = allLeases[0];
       console.log('Lease fields:', Object.keys(sample).join(', '));
-      console.log('Vacated sample: moveOutDate=' + (pastLeases6[0]||{}).moveOutDate +
-        ' reason=' + (pastLeases6[0]||{}).moveOutTenantReason);
+      console.log('Vacated sample: moveOutDate=' + closedLeases[0].moveOutDate + ' endDate=' + closedLeases[0].endDate);
     }
 
     // /leases returns flat objects — item IS the lease directly
@@ -2660,7 +2664,7 @@ async function buildMetricsData() {
 
       if (isPastLease) {
         // moveOutDate is the actual move-out date on closed leases
-        const moveOutDate = l.moveOutDate || l.closedDate || l.expectedMoveOutDate || l.endDate;
+        const moveOutDate = l.moveOutDate || l.expectedMoveOutDate || l.endDate; // closedDate=null in export
         const mok = monthKey(moveOutDate);
         if (moveOutDate && mok) {
           if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
@@ -2692,11 +2696,7 @@ async function buildMetricsData() {
     const nonZeroMoveOuts = Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0));
     console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${pastLeases.length} closed leases using closedDate)`);
     // Sample a few closed leases to confirm field values
-    if (closedLeases.length > 0) {
-      const s = closedLeases[0];
-      console.log('Closed lease sample: moveOutDate=' + s.moveOutDate +
-        ' reason=' + s.moveOutTenantReason + ' primaryStatus=' + s.primaryLeaseStatusID);
-    }
+
 
     // Upcoming expirations (next 90 days) — from active leases only
     const in90 = new Date(); in90.setDate(in90.getDate() + 90);
@@ -2763,23 +2763,25 @@ async function buildMetricsData() {
     const appsCancelledByMonth = buildMonthBuckets(12);
     let appsMTD = 0, appsApprovedMTD = 0, appsDeniedMTD = 0, appsCancelledMTD = 0;
 
+    // Log all unique stages so we can map them correctly
+    console.log('All app stages:', [...new Set(allApps.map(c=>c.stage||'?'))].join(' | '));
+
     allApps.forEach(card => {
       const k = monthKey(card.createdAt);
-      const stage = (card.stage || card.Stage || '').toLowerCase();
+      const stageLow = (card.stage || '').toLowerCase();
 
       if (k && appsByMonth[k] !== undefined) appsByMonth[k]++;
       if (k === TMK) appsMTD++;
 
-      // Log first few stages to see what Aptly actually uses
-      const stageRaw = card.stage || card.Stage || '';
-      const stageLow = stageRaw.toLowerCase();
-      if (stageLow.includes('approv') || stageLow.includes('accept') || stageLow.includes('qualify') || card.appApproved === true) {
+      // Approved = successful outcome stages
+      if (stageLow.includes('approv') || stageLow.includes('lease sent') ||
+          stageLow.includes('moved in') || stageLow.includes('accepted')) {
         if (k && appsApprovedByMonth[k] !== undefined) appsApprovedByMonth[k]++;
         if (k === TMK) appsApprovedMTD++;
       } else if (stageLow.includes('den') || stageLow.includes('reject') || stageLow.includes('declin')) {
         if (k && appsDeniedByMonth[k] !== undefined) appsDeniedByMonth[k]++;
         if (k === TMK) appsDeniedMTD++;
-      } else if (stageLow.includes('cancel') || stageLow.includes('closed') || stageLow.includes('withdrawn') || stageLow.includes('withdraw')) {
+      } else if (stageLow.includes('cancel') || stageLow.includes('withdrawn') || stageLow.includes('withdraw')) {
         if (k && appsCancelledByMonth[k] !== undefined) appsCancelledByMonth[k]++;
         if (k === TMK) appsCancelledMTD++;
       }
@@ -2818,7 +2820,7 @@ async function buildMetricsData() {
     // Lead sources breakdown
     const leadSources = {};
     allLeadsRaw.forEach(card => {
-      const src = card['Lead Source'] || card.Source || card['Lead Type'] || card.source || card.leadSource || '';
+      const src = card.leadSource || card['Lead Source'] || card.Source || card['Lead Type'] || '';
       if (src) {
         leadSources[src] = (leadSources[src] || 0) + 1;
       }
