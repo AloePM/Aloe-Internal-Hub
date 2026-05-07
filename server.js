@@ -3078,6 +3078,30 @@ app.get('/api/metrics/debug', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get('/debug/wo-sheffield', async function(req, res) {
+  const data = await unitsFetch('/api/board/workOrder', { page: 0, pageSize: 100, includeArchived: false });
+  const batch = Array.isArray(data) ? data : (data && data.data) || [];
+  const sheffield = batch.filter(function(c) {
+    return JSON.stringify(c).toLowerCase().includes('sheffield');
+  });
+  res.json({
+    total: batch.length,
+    sheffieldFound: sheffield.length,
+    raw: sheffield.map(function(c) {
+      return {
+        cardId: c.cardId,
+        workOrderNumber: c.workOrderNumber,
+        stage: c.stage,
+        archived: c.archived,
+        location: c.location,
+        unit: c.unit,
+        description: (c.description || '').slice(0, 100),
+      };
+    })
+  });
+});
+
+app.get('*', function(req, res) {   // ← wildcard stays here
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
