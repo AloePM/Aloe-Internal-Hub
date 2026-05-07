@@ -3088,6 +3088,9 @@ app.get('/debug/wo-sheffield', async function(req, res) {
   const sheffield = batch.filter(function(c) {
     return JSON.stringify(c).toLowerCase().includes('sheffield');
   });
+  const afterFilter = sheffield.filter(function(c) {
+    return !c.archived && !/^(closed|cancelled|completed|rejected)/i.test(c.stage || '');
+  });
   res.json({
     total: batch.length,
     sheffieldFound: sheffield.length,
