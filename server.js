@@ -2518,26 +2518,24 @@ async function buildMetricsData() {
 
     // Fire Rentvine fetches in parallel — fetch ALL leases in one call, filter client-side
     // The primaryLeaseStatusIDs filter is unreliable; client-side filter is more accurate
-    const [allProps, allLeasesRaw, allUnits] = await Promise.all([
+    // Fetch all leases unfiltered — the status filter does not work reliably
+    // Split active vs past client-side using primaryLeaseStatusID field
+    const [allProps, allLeases, allUnits] = await Promise.all([
       fetchAllPages('/properties/export', {}, 3),
-      fetchAllPages('/leases/export', {}, 5),  // fetch all leases, filter below
+      fetchAllPages('/leases/export', {}, 5),
       fetchAllPages('/properties/units/export', {}, 3),
     ]);
 
-    // Split into active vs past client-side using leaseStatusID / primaryLeaseStatusID
-    // Status 1 = Active, 2 = Past/Closed, 3 = Future
-    const activeLeases = allLeasesRaw.filter(item => {
+    // primaryLeaseStatusID: 1=Active, 2=Past/Closed, 3=Future
+    const activeLeases = allLeases.filter(item => {
       const l = item.lease || item;
-      const sid = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
-      return sid === 1;
+      return parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0) === 1;
     });
-    const pastLeases = allLeasesRaw.filter(item => {
+    const pastLeases = allLeases.filter(item => {
       const l = item.lease || item;
-      const sid = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
-      return sid === 2;
+      return parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0) === 2;
     });
-    const allLeases = allLeasesRaw; // keep all for trend data
-    console.log(`Metrics parallel fetch: ${allProps.length} props, ${activeLeases.length} active, ${pastLeases.length} past, ${allLeasesRaw.length} total leases, ${allUnits.length} units`);
+    console.log(`Metrics fetch: ${allProps.length} props, ${allLeases.length} total leases → ${activeLeases.length} active, ${pastLeases.length} past, ${allUnits.length} units`);
 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
@@ -2623,22 +2621,20 @@ async function buildMetricsData() {
       if (mk && moveInsByMonth[mk] !== undefined) moveInsByMonth[mk]++;
       if (mk === TMK) moveInsMTD++;
 
-      // ── MOVE-OUTS: use best available date from past/closed leases ─────
-      // From logs: moveOutDate=null but closedDate and expectedMoveOutDate exist
-      // Use: moveOutDate → closedDate → expectedMoveOutDate (in order of preference)
+      // ── MOVE-OUTS: closed leases only, using closedDate as the move-out date ──
+      // Confirmed from logs: moveOutDate is always null in Rentvine export
+      // closedDate = when the lease was closed/terminated = actual move-out date
       const statusId = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
       const isPastLease = statusId === 2;
 
-      // Only count move-outs for past/closed leases
       if (isPastLease) {
-        const moveOutDate = l.moveOutDate || l.closedDate || l.expectedMoveOutDate || l.endDate;
+        // Priority: closedDate (actual close date) > expectedMoveOutDate > endDate
+        // Do NOT use moveOutDate — it is always null in the export API
+        const moveOutDate = l.closedDate || l.expectedMoveOutDate || l.endDate;
         const mok = monthKey(moveOutDate);
-        if (moveOutDate) {
-          const moDateObj = new Date(moveOutDate);
-          if (moDateObj <= now) { // only past dates
-            if (mok && moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
-            if (mok === TMK) moveOutsMTD++;
-          }
+        if (moveOutDate && mok) {
+          if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
+          if (mok === TMK) moveOutsMTD++;
         }
       }
 
@@ -2660,7 +2656,13 @@ async function buildMetricsData() {
       }
     });
 
-    console.log(`Metrics move-outs by month (last 24mo): ${JSON.stringify(Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0)))}`);
+    const nonZeroMoveOuts = Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0));
+    console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${pastLeases.length} closed leases using closedDate)`);
+    // Sample a few closed leases to confirm field values
+    if (pastLeases.length > 0) {
+      const sample = pastLeases.slice(0,3).map(i => { const l=i.lease||i; return {closedDate:l.closedDate, expectedMoveOutDate:l.expectedMoveOutDate, endDate:l.endDate, primaryLeaseStatusID:l.primaryLeaseStatusID}; });
+      console.log('Metrics closed lease sample:', JSON.stringify(sample));
+    }
 
     // Upcoming expirations (next 90 days) — from active leases only
     const in90 = new Date(); in90.setDate(in90.getDate() + 90);
@@ -2716,6 +2718,9 @@ async function buildMetricsData() {
 
     const allWOs = allWOsRaw.filter(c => !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''));
     console.log(`Metrics Aptly fetch: ${allApps.length} apps, ${allLeadsRaw.length} leads, ${allPMA.length} PMA, ${allOffboard.length} offboard, ${allMoveOuts.length} moveouts, ${allWOs.length} WOs`);
+    if (allApps.length > 0) console.log('App stages:', [...new Set(allApps.slice(0,30).map(c=>c.stage||'?'))].join(', '));
+    if (allPMA.length > 0) console.log('PMA stages:', [...new Set(allPMA.slice(0,30).map(c=>c.stage||'?'))].join(', '));
+    if (allLeadsRaw.length > 0) console.log('Lead keys:', Object.keys(allLeadsRaw[0]).join(', '));
 
     const appsByMonth = buildMonthBuckets(12);
     const appsApprovedByMonth = buildMonthBuckets(12);
@@ -2730,13 +2735,16 @@ async function buildMetricsData() {
       if (k && appsByMonth[k] !== undefined) appsByMonth[k]++;
       if (k === TMK) appsMTD++;
 
-      if (stage.includes('approved') || card.appApproved === true) {
+      // Log first few stages to see what Aptly actually uses
+      const stageRaw = card.stage || card.Stage || '';
+      const stageLow = stageRaw.toLowerCase();
+      if (stageLow.includes('approv') || stageLow.includes('accept') || stageLow.includes('qualify') || card.appApproved === true) {
         if (k && appsApprovedByMonth[k] !== undefined) appsApprovedByMonth[k]++;
         if (k === TMK) appsApprovedMTD++;
-      } else if (stage.includes('denied') || stage.includes('reject')) {
+      } else if (stageLow.includes('den') || stageLow.includes('reject') || stageLow.includes('declin')) {
         if (k && appsDeniedByMonth[k] !== undefined) appsDeniedByMonth[k]++;
         if (k === TMK) appsDeniedMTD++;
-      } else if (stage.includes('cancel') || stage.includes('closed') || stage.includes('withdrawn')) {
+      } else if (stageLow.includes('cancel') || stageLow.includes('closed') || stageLow.includes('withdrawn') || stageLow.includes('withdraw')) {
         if (k && appsCancelledByMonth[k] !== undefined) appsCancelledByMonth[k]++;
         if (k === TMK) appsCancelledMTD++;
       }
@@ -2775,8 +2783,8 @@ async function buildMetricsData() {
     // Lead sources breakdown
     const leadSources = {};
     allLeadsRaw.forEach(card => {
-      const src = card.Source || card['Lead Type'] || 'Unknown';
-      if (src && src !== 'Unknown') {
+      const src = card['Lead Source'] || card.Source || card['Lead Type'] || card.source || card.leadSource || '';
+      if (src) {
         leadSources[src] = (leadSources[src] || 0) + 1;
       }
     });
@@ -2800,7 +2808,8 @@ async function buildMetricsData() {
       if (k && newPipelineByMonth[k] !== undefined) newPipelineByMonth[k]++;
       if (k === TMK) newPipelineMTD++;
 
-      if (stage.includes('signed') || stage.includes('won') || stage.includes('pma signed')) {
+      // Stage from live data: "Onboarded" = successfully signed
+      if (stage.includes('onboard') || stage.includes('signed') || stage.includes('won') || stage.includes('pma signed')) {
         const signedDate = card.updatedAt || card.createdAt;
         const sk = monthKey(signedDate);
         if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
