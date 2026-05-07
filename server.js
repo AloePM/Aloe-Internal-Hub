@@ -2484,9 +2484,29 @@ function daysAgo(dateStr, from = new Date()) {
   return Math.floor((from - d) / 86400000);
 }
 
+
+// ── Metrics cache — 15 minute TTL ──────────────────────────────────────────
+let _metricsCache = null;
+let _metricsCacheTime = 0;
+const METRICS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+app.get('/api/metrics/refresh', (req, res) => {
+  _metricsCache = null;
+  _metricsCacheTime = 0;
+  res.json({ cleared: true, message: 'Cache cleared — next /api/metrics call will re-fetch live data' });
+});
+
 // ── GET /api/metrics ────────────────────────────────────────────────────────
 app.get('/api/metrics', async (req, res) => {
   try {
+    // ── Cache check ───────────────────────────────────────────────────────
+    const now_cache = Date.now();
+    if (_metricsCache && (now_cache - _metricsCacheTime) < METRICS_CACHE_TTL) {
+      console.log('Metrics: serving from cache (age:', Math.round((now_cache - _metricsCacheTime)/1000), 's)');
+      return res.json(_metricsCache);
+    }
+    console.log('Metrics: cache miss — fetching live data...');
+    const fetchStart = Date.now();
     const TMK = thisMonthKey();
     const now = new Date();
 
@@ -2914,7 +2934,7 @@ app.get('/api/metrics', async (req, res) => {
     // ── Build response ────────────────────────────────────────────────────
     const formatTrend = (obj) => Object.entries(obj).sort().map(([month, value]) => ({ month, value }));
 
-    res.json({
+    const responseData = {
       generatedAt: new Date().toISOString(),
       thisMonth: TMK,
 
@@ -3010,7 +3030,13 @@ app.get('/api/metrics', async (req, res) => {
       googleReviews: {
         note: 'Connect Google Business Profile API or log manually',
       },
-    });
+    };
+
+    // Store in cache and send
+    _metricsCache = responseData;
+    _metricsCacheTime = Date.now();
+    console.log('Metrics: fetched in', Math.round((Date.now() - fetchStart)/1000), 's — cached for 15 min');
+    res.json(responseData);
 
   } catch (err) {
     console.error('Metrics API error:', err.message);
