@@ -2641,33 +2641,6 @@ async function buildMetricsData() {
     // Use 24 months to capture full prior year + current year
     const moveInsByMonth = buildMonthBuckets(24);
     const moveOutsByMonth = buildMonthBuckets(24);
-    // ── Expirations from Aptly Tenant Renewals board ─────────────────────────
-    // "Mirror End Date" = lease expiration date on each renewal card
-    const expirationsByMonth = buildMonthBuckets(24);
-    let upcomingExpirations = 0;
-    const renewalCardDetails = [];
-
-    allRenewals.forEach(card => {
-      const endDate = card['Mirror End Date'];
-      if (!endDate) return;
-      const ek = monthKey(endDate);
-      const endDateObj = new Date(endDate);
-      if (ek && expirationsByMonth[ek] !== undefined) expirationsByMonth[ek]++;
-      if (endDateObj >= now && endDateObj <= in90 && !card['Is Won']) upcomingExpirations++;
-      const addr = card['Mirror Address'] ? card['Mirror Address'].address : '';
-      const city = card['Mirror Address'] ? card['Mirror Address'].city : '';
-      const rent = card['Mirror Rent'] ? parseFloat(card['Mirror Rent'].amount || 0) : 0;
-      const residents = Array.isArray(card.Resident)
-        ? card.Resident.map(r => r.name).join(', ') : (card.Resident || '');
-      if (ek) renewalCardDetails.push({
-        address: addr, city, tenant: residents, endDate,
-        monthKey: ek, rent, stage: card.Stage || '',
-        isWon: card['Is Won'] || false,
-      });
-    });
-    console.log('Renewals board: ' + allRenewals.length + ' cards, ' + upcomingExpirations + ' expiring in 90d');
-
-    // Keep old expiration loop for reference but don't overwrite expirationsByMonth
     let moveInsMTD = 0, moveOutsMTD = 0;
 
     // Move-out reasons from Rentvine lease records
@@ -2778,6 +2751,34 @@ async function buildMetricsData() {
 
     const allWOs = allWOsRaw.filter(c => !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''));
     console.log(`Metrics Aptly fetch: ${allApps.length} apps, ${allLeadsRaw.length} leads, ${allPMA.length} PMA, ${allOffboard.length} offboard, ${allMoveOuts.length} moveouts, ${allWOs.length} WOs`);
+
+    // ── Expirations from Aptly Tenant Renewals board ─────────────────────────
+    // "Mirror End Date" = lease expiration date on each renewal card
+    const expirationsByMonth = buildMonthBuckets(24);
+    let upcomingExpirations = 0;
+    const renewalCardDetails = [];
+
+    allRenewals.forEach(card => {
+      const endDate = card['Mirror End Date'];
+      if (!endDate) return;
+      const ek = monthKey(endDate);
+      const endDateObj = new Date(endDate);
+      if (ek && expirationsByMonth[ek] !== undefined) expirationsByMonth[ek]++;
+      if (endDateObj >= now && endDateObj <= in90 && !card['Is Won']) upcomingExpirations++;
+      const addr = card['Mirror Address'] ? card['Mirror Address'].address : '';
+      const city = card['Mirror Address'] ? card['Mirror Address'].city : '';
+      const rent = card['Mirror Rent'] ? parseFloat(card['Mirror Rent'].amount || 0) : 0;
+      const residents = Array.isArray(card.Resident)
+        ? card.Resident.map(r => r.name).join(', ') : (card.Resident || '');
+      if (ek) renewalCardDetails.push({
+        address: addr, city, tenant: residents, endDate,
+        monthKey: ek, rent, stage: card.Stage || '',
+        isWon: card['Is Won'] || false,
+      });
+    });
+    console.log('Renewals board: ' + allRenewals.length + ' cards, ' + upcomingExpirations + ' expiring in 90d');
+
+    // Keep old expiration loop for reference but don't overwrite expirationsByMonth
     if (allApps.length > 0) console.log('App stages:', [...new Set(allApps.slice(0,30).map(c=>c.stage||'?'))].join(', '));
     if (allPMA.length > 0) console.log('PMA stages:', [...new Set(allPMA.slice(0,30).map(c=>c.stage||'?'))].join(', '));
     if (allLeadsRaw.length > 0) console.log('Lead keys:', Object.keys(allLeadsRaw[0]).join(', '));
