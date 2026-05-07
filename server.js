@@ -1599,15 +1599,15 @@ if (input.status && input.status.toLowerCase() === 'emergency') {
   const slim = emergencies.map(function(c) {
     const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
     const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
-    const address = (locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '';
-    const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
-    const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
-    const rawDesc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
-    return {
-      address,
-      num: c.workOrderNumber || '',
-      issue: rawDesc.slice(0, 80),
+const address = normalizeAddr((locArr[0] && locArr[0].name) || (unitArr[0] && unitArr[0].name) || '');
+      const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
+      const vendor = (vendorArr[0] && vendorArr[0].name) || 'Unassigned';
+      const rawDesc = (c.description || c.name || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const created = c.createdAt ? new Date(c.createdAt).getTime() : null;
+      return {
+        address,
+        num: c.workOrderNumber || '',
+        issue: rawDesc.slice(0, 80),
       vendor,
       opened: (c.createdAt || '').slice(0, 10),
       daysOpen: created ? Math.floor((Date.now() - created) / 86400000) : null,
