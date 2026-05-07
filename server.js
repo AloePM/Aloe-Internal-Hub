@@ -1581,9 +1581,8 @@ async function executeTool(name, input) {
     if (batch.length < 100) break;
   }
 
-  // Filter AFTER collecting everything
-  const activeWOs = allWOs.filter(function(c) {
-    return !c.archived && !/closed|cancelled|complete/i.test(c.stage || '');
+ const activeWOs = allWOs.filter(function(c) {
+    return !c.archived && !/^(closed|cancelled|completed|rejected)/i.test(c.stage || '');
   });
   // After building activeWOs, add this before the status filter:
 if (input.status && input.status.toLowerCase() === 'emergency') {
