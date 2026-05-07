@@ -2526,31 +2526,46 @@ async function buildMetricsData() {
       fetchAllPages('/properties/units/export', {}, 3),
     ]);
 
-    // primaryLeaseStatusID: 1=Active, 2=Past/Closed, 3=Future
+    // leaseStatusID values confirmed from live data:
+    //   1 = Active (current lease)
+    //   2 = Past/expired
+    //   6 = Vacated/closed — these have moveOutDate populated
+    // Use leaseStatusID (not primaryLeaseStatusID) — it's more accurate per debug
     const activeLeases = allLeases.filter(item => {
       const l = item.lease || item;
-      return parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0) === 1;
+      const sid = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
+      return sid === 1;
     });
     const pastLeases = allLeases.filter(item => {
       const l = item.lease || item;
-      return parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0) === 2;
+      const sid = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
+      return sid !== 1 && sid !== 3; // everything closed/vacated: status 2, 6, etc
     });
-    console.log(`Metrics fetch: ${allProps.length} props, ${allLeases.length} total leases → ${activeLeases.length} active, ${pastLeases.length} past, ${allUnits.length} units`);
+    console.log(`Metrics fetch: ${allProps.length} props, ${allLeases.length} total leases → ${activeLeases.length} active, ${pastLeases.length} past/closed, ${allUnits.length} units`);
 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
       return p.isActive === '1' || p.isActive === 1 || p.isActive === true;
     });
 
-    const propGainedMTD = activeProps.filter(item => {
+    const propGainedMTD = allProps.filter(item => {
       const p = item.property || item;
-      return monthKey(p.dateTimeCreated || p.dateContractBegins) === TMK;
+      const dateAdded = p.dateContractBegins || p.dateTimeCreated || p.startDate || p.createdAt;
+      return monthKey(dateAdded) === TMK;
     }).length;
 
-    const propGainedByMonth = buildMonthBuckets(12);
-    activeProps.forEach(item => {
+    // Log property fields to see what date fields exist
+    if (allProps.length > 0) {
+      const sp = allProps[0].property || allProps[0];
+      console.log('Property fields:', Object.keys(sp).join(', '));
+      console.log('Property date sample:', sp.dateTimeCreated, sp.dateContractBegins, sp.startDate, sp.createdAt);
+    }
+    const propGainedByMonth = buildMonthBuckets(24);
+    allProps.forEach(item => {
       const p = item.property || item;
-      const k = monthKey(p.dateTimeCreated || p.dateContractBegins);
+      // Try every possible date field for when property was added
+      const dateAdded = p.dateContractBegins || p.dateTimeCreated || p.startDate || p.createdAt;
+      const k = monthKey(dateAdded);
       if (k && propGainedByMonth[k] !== undefined) propGainedByMonth[k]++;
     });
 
@@ -2621,16 +2636,14 @@ async function buildMetricsData() {
       if (mk && moveInsByMonth[mk] !== undefined) moveInsByMonth[mk]++;
       if (mk === TMK) moveInsMTD++;
 
-      // ── MOVE-OUTS: closed leases only, using closedDate as the move-out date ──
-      // Confirmed from logs: moveOutDate is always null in Rentvine export
-      // closedDate = when the lease was closed/terminated = actual move-out date
-      const statusId = parseInt(l.primaryLeaseStatusID || l.leaseStatusID || 0);
-      const isPastLease = statusId === 2;
+      // ── MOVE-OUTS ─────────────────────────────────────────────────────────
+      // leaseStatusID: 1=Active, 2=Past, 6=Vacated (has moveOutDate populated)
+      const statusId = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
+      const isPastLease = statusId !== 1 && statusId !== 3; // 2, 6, and any other closed status
 
       if (isPastLease) {
-        // Priority: closedDate (actual close date) > expectedMoveOutDate > endDate
-        // Do NOT use moveOutDate — it is always null in the export API
-        const moveOutDate = l.closedDate || l.expectedMoveOutDate || l.endDate;
+        // status 6 (vacated) has moveOutDate; status 2 (past) uses closedDate or endDate
+        const moveOutDate = l.moveOutDate || l.closedDate || l.expectedMoveOutDate || l.endDate;
         const mok = monthKey(moveOutDate);
         if (moveOutDate && mok) {
           if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
@@ -2642,15 +2655,18 @@ async function buildMetricsData() {
       // Use endDate for this (lease contract expiry, not actual move-out)
       const endDate = l.endDate || l.leaseEndDate;
       const endMok = monthKey(endDate);
-      if (endDate && statusId === 1) {
+      // Expirations: active leases (status 1) with future end dates
+      const leaseIsActive = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0) === 1;
+      if (endDate && leaseIsActive) {
         const endDateObj = new Date(endDate);
         if (endDateObj >= now) {
           if (endMok && expirationsByMonth[endMok] !== undefined) expirationsByMonth[endMok]++;
         }
       }
 
-      // Move-out reason — only on past leases
-      if (isPastLease) {
+      // Move-out reason
+      const reasonStatusId = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
+      if (reasonStatusId !== 1 && reasonStatusId !== 3) {
         const reason = l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName || '';
         if (reason) moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
       }
@@ -2668,11 +2684,12 @@ async function buildMetricsData() {
     const in90 = new Date(); in90.setDate(in90.getDate() + 90);
     const upcomingExpirations = activeLeases.filter(item => {
       const l = item.lease || item;
-      const end = l.moveOutDate || l.endDate;
+      const end = l.endDate; // contract end date — moveOutDate is always null
       if (!end) return false;
       const d = new Date(end);
       return d >= now && d <= in90;
     }).length;
+    console.log('Metrics: '+activeLeases.length+' active leases, '+upcomingExpirations+' expiring in 90d');
 
     // Avg days to lease: from listing date to moveInDate
     // Use availabilityDate on units vs moveInDate on leases
@@ -2920,16 +2937,14 @@ async function buildMetricsData() {
     }).sort((a, b) => (a.daysOnMarket || 0) - (b.daysOnMarket || 0));
 
     // ── 12. Property growth trend ──────────────────────────────────────────
-    const propByMonth = buildMonthBuckets(12);
-    // Derive a running total — use gained counts as proxy
-    const propKeys = Object.keys(propByMonth).sort();
-    let running = activeProps.length;
+    // Use the 24-month propGainedByMonth bucket already computed above
+    const propKeys = Object.keys(propGainedByMonth).sort();
+    let running = allProps.length; // start from total, work backwards
     const propTrend = propKeys.map(k => ({
       month: k,
       gained: propGainedByMonth[k] || 0,
-      total: 0, // filled below
+      total: 0,
     }));
-    // Calculate running total backwards
     for (let i = propTrend.length - 1; i >= 0; i--) {
       propTrend[i].total = running;
       running -= propTrend[i].gained;
