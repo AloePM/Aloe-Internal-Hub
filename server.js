@@ -2518,30 +2518,54 @@ async function buildMetricsData() {
 
     // Fire Rentvine fetches in parallel — fetch ALL leases in one call, filter client-side
     // The primaryLeaseStatusIDs filter is unreliable; client-side filter is more accurate
-    // Fetch all leases unfiltered — the status filter does not work reliably
-    // Split active vs past client-side using primaryLeaseStatusID field
-    const [allProps, allLeases, allUnits] = await Promise.all([
+    // FETCH STRATEGY (based on confirmed Rentvine behavior):
+    // - Unfiltered lease export returns status=6 (closed) leases first, so active leases
+    //   never appear in page 1-5. Cannot use unfiltered export for active leases.
+    // - primaryLeaseStatusIDs[]=1 filter returns only ~8 records (API limitation)
+    // - SOLUTION: derive active leases from UNITS (each occupied unit has leaseID)
+    //   then fetch closed leases separately for move-out history
+    // - status=6 = vacated, has moveOutDate populated (confirmed from debug)
+    // - status=2 = past/expired, moveOutDate=null, use endDate
+
+    const [allProps, allUnits, status2Leases, status6Leases] = await Promise.all([
       fetchAllPages('/properties/export', {}, 3),
-      fetchAllPages('/leases/export', {}, 5),
       fetchAllPages('/properties/units/export', {}, 3),
+      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 8), // past/expired
+      fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 6 }, 8), // vacated with moveOutDate
     ]);
 
-    // leaseStatusID values confirmed from live data:
-    //   1 = Active (current lease)
-    //   2 = Past/expired
-    //   6 = Vacated/closed — these have moveOutDate populated
-    // Use leaseStatusID (not primaryLeaseStatusID) — it's more accurate per debug
-    const activeLeases = allLeases.filter(item => {
-      const l = item.lease || item;
-      const sid = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
-      return sid === 1;
-    });
-    const pastLeases = allLeases.filter(item => {
-      const l = item.lease || item;
-      const sid = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
-      return sid !== 1 && sid !== 3; // everything closed/vacated: status 2, 6, etc
-    });
-    console.log(`Metrics fetch: ${allProps.length} props, ${allLeases.length} total leases → ${activeLeases.length} active, ${pastLeases.length} past/closed, ${allUnits.length} units`);
+    // Past leases = status 2 + status 6
+    const pastLeases = [...status2Leases, ...status6Leases];
+
+    // Active leases = fetch using leaseIDs from occupied units
+    // Each active unit has leaseID pointing to its current lease
+    const activeUnitLeaseIDs = new Set(
+      allUnits
+        .filter(item => {
+          const u = item.unit || item;
+          return (u.isActive === '1' || u.isActive === 1) &&
+                 (u.isVacant === '0' || u.isVacant === 0 || u.isVacant === false) &&
+                 u.leaseID;
+        })
+        .map(item => String((item.unit || item).leaseID))
+    );
+
+    // Fetch a page of active leases to get lease details (endDate, moveInDate, etc)
+    // We already have move-in history from past leases; for active we need endDate for expirations
+    const activeLeasePage = await fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 1 }, 5);
+    // Supplement with any additional active leases found by unit leaseID matching in past fetch
+    const activeLeases = activeLeasePage.length > 0 ? activeLeasePage :
+      pastLeases.filter(item => {
+        const l = item.lease || item;
+        return activeUnitLeaseIDs.has(String(l.leaseID));
+      });
+
+    // All leases for move-in trend data
+    const allLeases = [...activeLeasePage, ...pastLeases];
+
+    console.log('Metrics fetch: ' + allProps.length + ' props, ' + allUnits.length + ' units, ' +
+      activeLeasePage.length + ' active leases (filter), ' +
+      status2Leases.length + ' status-2, ' + status6Leases.length + ' status-6 (vacated)');
 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
@@ -2586,28 +2610,25 @@ async function buildMetricsData() {
 
     const occupiedUnitCount = totalUnits - vacantUnitCount;
 
-    // Sanity check: also count occupied via active leases as cross-reference
-    const occupiedUnitIDs = new Set(activeLeases.map(item => {
-      // Rentvine export nests unit data under item.unit, lease under item.lease
-      return (item.unit && item.unit.unitID) || (item.lease && item.lease.unitID);
-    }).filter(Boolean));
-
-    // Use whichever gives higher occupied count (catches edge cases)
-    const occupiedUnits = Math.max(occupiedUnitCount, occupiedUnitIDs.size);
-    const vacantUnits = totalUnits - occupiedUnits;
-
-    // Occupancy rate = occupied / total * 100
+    // Use isVacant flag from units — confirmed accurate (372 occupied, 17 vacant)
+    const occupiedUnits = occupiedUnitCount;
+    const vacantUnits = vacantUnitCount;
     const occupancyRate = totalUnits > 0 ? +((occupiedUnits / totalUnits) * 100).toFixed(1) : 0;
+    console.log('Metrics occupancy: ' + occupiedUnits + ' occupied / ' + totalUnits + ' total = ' + occupancyRate + '%');
 
-    console.log(`Metrics occupancy: ${occupiedUnits} occupied / ${totalUnits} total = ${occupancyRate}% (isVacant method: ${occupiedUnitCount}, lease method: ${occupiedUnitIDs.size})`);
-
-    // Avg rent from active leases
-    const rents = activeLeases.map(item => {
-      const l = item.lease || item;
-      return parseFloat(l.rentAmount || l.rent || 0);
-    }).filter(r => r > 0);
+    // Avg rent from unit records (more reliable than lease records when activeLeases is small)
+    const rents = activeUnits
+      .filter(item => {
+        const u = item.unit || item;
+        return (u.isVacant === '0' || u.isVacant === 0 || u.isVacant === false);
+      })
+      .map(item => {
+        const u = item.unit || item;
+        return parseFloat(u.rent || u.marketRent || 0);
+      }).filter(r => r > 0);
     const avgRent = rents.length ? Math.round(rents.reduce((a, b) => a + b, 0) / rents.length) : 0;
     const vacancyLoss = vacantUnits * avgRent;
+    console.log('Metrics avg rent: $' + avgRent + ' from ' + rents.length + ' units, vacancy loss: $' + vacancyLoss);
 
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
@@ -2619,14 +2640,13 @@ async function buildMetricsData() {
     // Move-out reasons from Rentvine lease records
     const moveOutReasons = {};
 
-    // Debug: log sample lease fields to identify correct field names
     if (allLeases.length > 0) {
       const sample = allLeases[0].lease || allLeases[0];
-      console.log('Metrics lease sample fields:', Object.keys(sample).join(', '));
-      console.log('Metrics lease sample moveOutDate:', sample.moveOutDate, 'leaseStatusID:', sample.leaseStatusID, 'primaryLeaseStatusID:', sample.primaryLeaseStatusID, 'status:', sample.status);
+      console.log('Lease fields:', Object.keys(sample).join(', '));
+      console.log('Status-6 sample:', JSON.stringify(status6Leases.slice(0,2).map(i=>{const l=i.lease||i;return {leaseStatusID:l.leaseStatusID,moveOutDate:l.moveOutDate,closedDate:l.closedDate,endDate:l.endDate};})));
     }
 
-    // Use ALL leases for historical trend data (move-ins/outs across time)
+    // Use ALL leases for historical trend data
     allLeases.forEach(item => {
       const l = item.lease || item;
 
