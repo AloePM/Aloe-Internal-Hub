@@ -143,7 +143,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   </div>
   <div class="topbar-right">
     <button class="btn btn-ghost" onclick="window.location.href='/'">← Hub</button>
-    <button class="btn btn-teal" id="refresh-btn" onclick="loadData()">↻ Refresh</button>
+    <button class="btn btn-teal" id="refresh-btn" onclick="loadData()">↻ Cached</button><button class="btn btn-ghost" id="force-btn" onclick="forceRefresh()" title="Force re-fetch from Rentvine &amp; Aptly">⟳ Live</button>
   </div>
 </div>
 
@@ -695,12 +695,24 @@ function switchTab(id){
   if(D)TABS[id]();
 }
 
+async function forceRefresh() {
+  document.getElementById('force-btn').textContent = '⟳ Fetching…';
+  document.getElementById('force-btn').disabled = true;
+  try {
+    await fetch('/api/metrics/refresh');
+  } catch(e) {}
+  await loadData();
+  document.getElementById('force-btn').textContent = '⟳ Live';
+  document.getElementById('force-btn').disabled = false;
+}
+
 async function loadData() {
   document.getElementById('loading').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('error').style.display='none';
   document.getElementById('live-badge').style.display='none';
   document.getElementById('refresh-btn').textContent='↻ Loading…';
+    document.getElementById('force-btn').disabled=true;
   document.getElementById('refresh-btn').disabled=true;
   try {
     const r=await fetch('/api/metrics');
@@ -719,8 +731,9 @@ async function loadData() {
     errEl.style.display='block';
     errEl.innerHTML=`⚠ Failed to load metrics: ${e.message}<br><small style="opacity:.7">Make sure /api/metrics is deployed. Visit <a href="/api/metrics/debug" target="_blank" style="color:var(--red)">/api/metrics/debug</a> to check board field names.</small>`;
   } finally {
-    document.getElementById('refresh-btn').textContent='↻ Refresh';
+    document.getElementById('refresh-btn').textContent='↻ Cached';
     document.getElementById('refresh-btn').disabled=false;
+    document.getElementById('force-btn').disabled=false;
   }
 }
 loadData();
