@@ -2458,7 +2458,7 @@ function monthKey(dateStr) {
   if (isNaN(d)) return null;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
-
+ 
 function buildMonthBuckets(n = 12) {
   const buckets = {};
   for (let i = n - 1; i >= 0; i--) {
@@ -2470,25 +2470,25 @@ function buildMonthBuckets(n = 12) {
   }
   return buckets;
 }
-
+ 
 function thisMonthKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
-
+ 
 function daysAgo(dateStr, from = new Date()) {
   if (!dateStr) return null;
   const d = new Date(dateStr);
   if (isNaN(d)) return null;
   return Math.floor((from - d) / 86400000);
 }
-
+ 
 // ── GET /api/metrics ────────────────────────────────────────────────────────
 app.get('/api/metrics', async (req, res) => {
   try {
     const TMK = thisMonthKey();
     const now = new Date();
-
+ 
     // ── 1. Properties ────────────────────────────────────────────────────
     let allProps = [], pg = 1;
     while (pg <= 20) {
@@ -2498,24 +2498,24 @@ app.get('/api/metrics', async (req, res) => {
       if (batch.length < 200) break;
       pg++;
     }
-
+ 
     const activeProps = allProps.filter(item => {
       const p = item.property || item;
       return p.isActive === '1' || p.isActive === 1 || p.isActive === true;
     });
-
+ 
     const propGainedMTD = activeProps.filter(item => {
       const p = item.property || item;
       return monthKey(p.dateTimeCreated || p.dateContractBegins) === TMK;
     }).length;
-
+ 
     const propGainedByMonth = buildMonthBuckets(12);
     activeProps.forEach(item => {
       const p = item.property || item;
       const k = monthKey(p.dateTimeCreated || p.dateContractBegins);
       if (k && propGainedByMonth[k] !== undefined) propGainedByMonth[k]++;
     });
-
+ 
     // ── 2. Active leases only (primaryLeaseStatusIDs[]=1) ────────────────
     // Rentvine /leases/export returns { lease:{...}, unit:{...}, property:{...} }
     // Status 1 = Active, 2 = Past, 3 = Future/Pending
@@ -2527,17 +2527,18 @@ app.get('/api/metrics', async (req, res) => {
       if (batch.length < 200) break;
       pg++;
     }
-
-    // ── 3. ALL leases for move-in/out trend data ──────────────────────────
+ 
+    // ── 3. ALL leases for move-in/out trend data (fetch more pages for history) ──
     let allLeases = []; pg = 1;
-    while (pg <= 20) {
+    while (pg <= 30) { // increased from 20 to 30 to capture more history
       const batch = await rvFetch('/leases/export', { pageSize: 200, page: pg });
       if (!Array.isArray(batch) || batch.length === 0) break;
       allLeases = allLeases.concat(batch);
       if (batch.length < 200) break;
       pg++;
     }
-
+    console.log(`Metrics: fetched ${allLeases.length} total leases for trend data`);
+ 
     // ── 4. Units — use isVacant flag directly from Rentvine ───────────────
     // Rentvine unit record: isVacant='1' means vacant, isVacant='0' means occupied
     // isActive='1' means the unit is actively managed (not archived)
@@ -2549,39 +2550,39 @@ app.get('/api/metrics', async (req, res) => {
       if (batch.length < 200) break;
       pg++;
     }
-
+ 
     // Filter to active managed units only
     const activeUnits = allUnits.filter(item => {
       const u = item.unit || item;
       // isActive '1'/1/true = unit is under active management
       return u.isActive === '1' || u.isActive === 1 || u.isActive === true;
     });
-
+ 
     const totalUnits = activeUnits.length;
-
+ 
     // Use isVacant field directly — this is what Rentvine's own dashboard uses
     const vacantUnitCount = activeUnits.filter(item => {
       const u = item.unit || item;
       return u.isVacant === '1' || u.isVacant === 1 || u.isVacant === true;
     }).length;
-
+ 
     const occupiedUnitCount = totalUnits - vacantUnitCount;
-
+ 
     // Sanity check: also count occupied via active leases as cross-reference
     const occupiedUnitIDs = new Set(activeLeases.map(item => {
       // Rentvine export nests unit data under item.unit, lease under item.lease
       return (item.unit && item.unit.unitID) || (item.lease && item.lease.unitID);
     }).filter(Boolean));
-
+ 
     // Use whichever gives higher occupied count (catches edge cases)
     const occupiedUnits = Math.max(occupiedUnitCount, occupiedUnitIDs.size);
     const vacantUnits = totalUnits - occupiedUnits;
-
+ 
     // Occupancy rate = occupied / total * 100
     const occupancyRate = totalUnits > 0 ? +((occupiedUnits / totalUnits) * 100).toFixed(1) : 0;
-
+ 
     console.log(`Metrics occupancy: ${occupiedUnits} occupied / ${totalUnits} total = ${occupancyRate}% (isVacant method: ${occupiedUnitCount}, lease method: ${occupiedUnitIDs.size})`);
-
+ 
     // Avg rent from active leases
     const rents = activeLeases.map(item => {
       const l = item.lease || item;
@@ -2589,53 +2590,80 @@ app.get('/api/metrics', async (req, res) => {
     }).filter(r => r > 0);
     const avgRent = rents.length ? Math.round(rents.reduce((a, b) => a + b, 0) / rents.length) : 0;
     const vacancyLoss = vacantUnits * avgRent;
-
+ 
     // ── Move-ins / outs / expirations by month ────────────────────────────
-    const moveInsByMonth = buildMonthBuckets(12);
-    const moveOutsByMonth = buildMonthBuckets(12);
+    // Use 24 months to capture full prior year + current year
+    const moveInsByMonth = buildMonthBuckets(24);
+    const moveOutsByMonth = buildMonthBuckets(24);
     const expirationsByMonth = buildMonthBuckets(12);
     let moveInsMTD = 0, moveOutsMTD = 0;
-
+ 
     // Move-out reasons from Rentvine lease records
     const moveOutReasons = {};
-
+ 
+    // Debug: log sample lease fields to identify correct field names
+    if (allLeases.length > 0) {
+      const sample = allLeases[0].lease || allLeases[0];
+      console.log('Metrics lease sample fields:', Object.keys(sample).join(', '));
+      console.log('Metrics lease sample moveOutDate:', sample.moveOutDate, 'leaseStatusID:', sample.leaseStatusID, 'primaryLeaseStatusID:', sample.primaryLeaseStatusID, 'status:', sample.status);
+    }
+ 
     // Use ALL leases for historical trend data (move-ins/outs across time)
     allLeases.forEach(item => {
       const l = item.lease || item;
-
+ 
       // Move-in date: when tenant actually moved in
       const mi = l.moveInDate || l.startDate;
       const mk = monthKey(mi);
       if (mk && moveInsByMonth[mk] !== undefined) moveInsByMonth[mk]++;
       if (mk === TMK) moveInsMTD++;
-
-      // Move-out date: when tenant actually moved out (past) or scheduled to move out
-      const mo = l.moveOutDate || l.endDate;
-      const mok = monthKey(mo);
-
-      // Count as move-out only if there IS a move-out date and the lease is past/closed
-      const leaseStatus = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
-      const isPastLease = leaseStatus === 2; // status 2 = Past/Closed
-      if (mo && isPastLease) {
-        if (mok && moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
-        if (mok === TMK) moveOutsMTD++;
-      }
-
-      // Expirations = active leases whose end date falls in a future or current month
-      if (mo && leaseStatus === 1) {
-        const moDate = new Date(mo);
-        if (moDate >= now) {
-          if (mok && expirationsByMonth[mok] !== undefined) expirationsByMonth[mok]++;
+ 
+      // ── MOVE-OUTS: use moveOutDate ONLY (not endDate) ───────────────────
+      // moveOutDate = actual vacate date recorded in Rentvine
+      // endDate = lease contract end date (different — may be in future)
+      // We count a move-out if:
+      //   1. moveOutDate exists AND is in the past, OR
+      //   2. Lease status is Past/Closed (status 2) AND moveOutDate exists
+      const moveOutDate = l.moveOutDate; // actual move-out date field
+      const mok = monthKey(moveOutDate);
+ 
+      // Determine if this is a closed/past lease
+      // Rentvine uses leaseStatusID: 1=Active, 2=Past/Closed, 3=Future
+      // Also check status string as fallback
+      const statusId = parseInt(l.leaseStatusID || l.primaryLeaseStatusID || 0);
+      const statusStr = (l.status || l.leaseStatus || '').toLowerCase();
+      const isPastLease = statusId === 2 || statusStr === 'past' || statusStr === 'closed' || statusStr === 'inactive';
+ 
+      // Count as actual move-out: has a moveOutDate that is in the past
+      if (moveOutDate) {
+        const moDateObj = new Date(moveOutDate);
+        const isActualMoveOut = moDateObj <= now; // date is in the past or today
+        if (isActualMoveOut) {
+          if (mok && moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
+          if (mok === TMK) moveOutsMTD++;
         }
       }
-
-      // Move-out reason — only on past leases
-      const reason = l.moveOutReason || l.vacateReason || l.reasonForVacating || '';
-      if (reason && isPastLease) {
+ 
+      // Expirations = active leases whose END DATE (contract) falls in a future month
+      // Use endDate for this (lease contract expiry, not actual move-out)
+      const endDate = l.endDate || l.leaseEndDate;
+      const endMok = monthKey(endDate);
+      if (endDate && statusId === 1) {
+        const endDateObj = new Date(endDate);
+        if (endDateObj >= now) {
+          if (endMok && expirationsByMonth[endMok] !== undefined) expirationsByMonth[endMok]++;
+        }
+      }
+ 
+      // Move-out reason — from moveOutReason field on past/moved-out leases
+      const reason = l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName || '';
+      if (reason && moveOutDate) {
         moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
       }
     });
-
+ 
+    console.log(`Metrics move-outs by month (last 24mo): ${JSON.stringify(Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0)))}`);
+ 
     // Upcoming expirations (next 90 days) — from active leases only
     const in90 = new Date(); in90.setDate(in90.getDate() + 90);
     const upcomingExpirations = activeLeases.filter(item => {
@@ -2645,7 +2673,7 @@ app.get('/api/metrics', async (req, res) => {
       const d = new Date(end);
       return d >= now && d <= in90;
     }).length;
-
+ 
     // Avg days to lease: from listing date to moveInDate
     // Use availabilityDate on units vs moveInDate on leases
     const daysToLeaseArr = [];
@@ -2661,12 +2689,12 @@ app.get('/api/metrics', async (req, res) => {
     const avgDaysToLease = daysToLeaseArr.length
       ? Math.round(daysToLeaseArr.reduce((a, b) => a + b, 0) / daysToLeaseArr.length)
       : null;
-
+ 
     // ── 3. Applications from Aptly ────────────────────────────────────────
     const appsSchema = await unitsFetch('/api/schema/MJxaStgENouWrNEKd');
     const appsSchemaMap = {};
     if (Array.isArray(appsSchema)) appsSchema.forEach(f => { appsSchemaMap[f.key] = f.label; });
-
+ 
     let allApps = []; let appPg = 0;
     while (appPg < 10) {
       const batch = await unitsFetch('/api/board/MJxaStgENouWrNEKd', { page: appPg, pageSize: 100 });
@@ -2676,20 +2704,20 @@ app.get('/api/metrics', async (req, res) => {
       if (items.length < 100) break;
       appPg++;
     }
-
+ 
     const appsByMonth = buildMonthBuckets(12);
     const appsApprovedByMonth = buildMonthBuckets(12);
     const appsDeniedByMonth = buildMonthBuckets(12);
     const appsCancelledByMonth = buildMonthBuckets(12);
     let appsMTD = 0, appsApprovedMTD = 0, appsDeniedMTD = 0, appsCancelledMTD = 0;
-
+ 
     allApps.forEach(card => {
       const k = monthKey(card.createdAt);
       const stage = (card.stage || card.Stage || '').toLowerCase();
-
+ 
       if (k && appsByMonth[k] !== undefined) appsByMonth[k]++;
       if (k === TMK) appsMTD++;
-
+ 
       if (stage.includes('approved') || card.appApproved === true) {
         if (k && appsApprovedByMonth[k] !== undefined) appsApprovedByMonth[k]++;
         if (k === TMK) appsApprovedMTD++;
@@ -2701,14 +2729,14 @@ app.get('/api/metrics', async (req, res) => {
         if (k === TMK) appsCancelledMTD++;
       }
     });
-
+ 
     // ── 4. Listings (Aptly Units board) ──────────────────────────────────
     const unitsCards = await getUnitsCards();
     const publishedListings = unitsCards.filter(c =>
       c['Published For Rent'] === 'checked' || c['Published For Rent'] === true ||
       c['Syndicate'] === 'checked'
     );
-
+ 
     // Days on market per listing
     const nowMs = Date.now();
     const listings45 = publishedListings.filter(c => {
@@ -2716,13 +2744,13 @@ app.get('/api/metrics', async (req, res) => {
       if (!d) return false;
       return (nowMs - new Date(d).getTime()) > 45 * 86400000;
     }).length;
-
+ 
     const listings90 = publishedListings.filter(c => {
       const d = c['Available Date'] || c['Stage Changed'] || c['Created At'] || '';
       if (!d) return false;
       return (nowMs - new Date(d).getTime()) > 90 * 86400000;
     }).length;
-
+ 
     // Keyless deadbolts — from Aptly leads data: Mirror Lockbox Type = "Keyless Deadbolt"
     // Count unique unit addresses with Keyless Deadbolt
     const keylessUnits = new Set();
@@ -2736,7 +2764,7 @@ app.get('/api/metrics', async (req, res) => {
       if (items.length < 100) break;
       lPg++;
     }
-
+ 
     allLeadsRaw.forEach(card => {
       const lockboxType = card['Mirror Lockbox Type'] || card.mirrorLockboxType || '';
       if (/keyless deadbolt/i.test(lockboxType)) {
@@ -2744,7 +2772,7 @@ app.get('/api/metrics', async (req, res) => {
         if (addr) keylessUnits.add(addr.split(',')[0].trim().toLowerCase());
       }
     });
-
+ 
     // Lead sources breakdown
     const leadSources = {};
     allLeadsRaw.forEach(card => {
@@ -2753,19 +2781,19 @@ app.get('/api/metrics', async (req, res) => {
         leadSources[src] = (leadSources[src] || 0) + 1;
       }
     });
-
+ 
     // New leads by month
     const newLeadsByMonth = buildMonthBuckets(12);
     allLeadsRaw.forEach(card => {
       const k = monthKey(card.createdAt || card['Created At']);
       if (k && newLeadsByMonth[k] !== undefined) newLeadsByMonth[k]++;
     });
-
+ 
     // ── 5. Owner Pipeline (PMA board) ────────────────────────────────────
     const pmaSchema = await unitsFetch('/api/schema/LDhqFFos8fsQLavv8');
     const pmaSchemaMap = {};
     if (Array.isArray(pmaSchema)) pmaSchema.forEach(f => { pmaSchemaMap[f.key] = f.label; });
-
+ 
     let allPMA = []; let pmaPg = 0;
     while (pmaPg < 10) {
       const batch = await unitsFetch('/api/board/LDhqFFos8fsQLavv8', { page: pmaPg, pageSize: 100, includeArchived: true });
@@ -2775,18 +2803,18 @@ app.get('/api/metrics', async (req, res) => {
       if (items.length < 100) break;
       pmaPg++;
     }
-
+ 
     const pmaSignedByMonth = buildMonthBuckets(12);
     const newPipelineByMonth = buildMonthBuckets(12);
     let pmaSignedMTD = 0, newPipelineMTD = 0;
-
+ 
     allPMA.forEach(card => {
       const stage = (card.stage || '').toLowerCase();
       const k = monthKey(card.createdAt);
-
+ 
       if (k && newPipelineByMonth[k] !== undefined) newPipelineByMonth[k]++;
       if (k === TMK) newPipelineMTD++;
-
+ 
       if (stage.includes('signed') || stage.includes('won') || stage.includes('pma signed')) {
         const signedDate = card.updatedAt || card.createdAt;
         const sk = monthKey(signedDate);
@@ -2794,7 +2822,7 @@ app.get('/api/metrics', async (req, res) => {
         if (sk === TMK) pmaSignedMTD++;
       }
     });
-
+ 
     // ── 6. Offboard / End Management — board ID: BaMiriNFDZBtWd5rR ─────────
     // Confirmed field structure from live data:
     // - card.Reason = plain string (the actual reason: "Selling with Another Agent" etc.)
@@ -2809,23 +2837,23 @@ app.get('/api/metrics', async (req, res) => {
       if (items.length < 100) break;
       obPg++;
     }
-
+ 
     const endMgmtByMonth = buildMonthBuckets(12);
     const endMgmtReasons = {};
     let endMgmtMTD = 0;
-
+ 
     allOffboard.forEach(card => {
       const k = monthKey(card.createdAt);
       if (k && endMgmtByMonth[k] !== undefined) endMgmtByMonth[k]++;
       if (k === TMK) endMgmtMTD++;
-
+ 
       // Reason is the explicit "Reason" field on the card (confirmed from live data)
       const reason = card['Reason'] || card.Reason || '';
       if (reason) {
         endMgmtReasons[reason] = (endMgmtReasons[reason] || 0) + 1;
       }
     });
-
+ 
     // ── 7. Move-Outs Board (Comprehensive Inspections) ────────────────────
     let allMoveOuts = []; let moPg = 0;
     while (moPg < 10) {
@@ -2836,7 +2864,7 @@ app.get('/api/metrics', async (req, res) => {
       if (items.length < 100) break;
       moPg++;
     }
-
+ 
     let comprehensiveInspYes = 0, comprehensiveInspNo = 0;
     allMoveOuts.forEach(card => {
       // Confirmed from live Aptly data: field is "Comprehensive Inspection" (plain string)
@@ -2845,7 +2873,7 @@ app.get('/api/metrics', async (req, res) => {
       if (val === 'yes') comprehensiveInspYes++;
       else if (val === 'no') comprehensiveInspNo++;
     });
-
+ 
     // ── 8. Work Orders ────────────────────────────────────────────────────
     let allWOs = []; let woPg = 0;
     while (woPg <= 5) {
@@ -2857,19 +2885,82 @@ app.get('/api/metrics', async (req, res) => {
       if (items.length < 100) break;
       woPg++;
     }
-
+ 
     const woByStage = {};
     allWOs.forEach(c => {
       const s = c.stage || 'Unknown';
       woByStage[s] = (woByStage[s] || 0) + 1;
     });
-
+ 
     const unassignedWOs = allWOs.filter(c => {
       const v = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
       return v.length === 0;
     }).length;
-
-    // ── 9. Property growth trend ──────────────────────────────────────────
+ 
+    // ── 9. Lease Renewals — leases expiring each month (next 24 months) ──
+    // Uses endDate on ACTIVE leases to show what's coming up for renewal
+    const renewalsByMonth = buildMonthBuckets(24);
+    const renewalsDetail = [];
+ 
+    activeLeases.forEach(item => {
+      const l = item.lease || item;
+      const u = item.unit || {};
+      const p2 = item.property || {};
+      const endDate = l.endDate || l.leaseEndDate;
+      if (!endDate) return;
+      const ek = monthKey(endDate);
+      if (ek && renewalsByMonth[ek] !== undefined) {
+        renewalsByMonth[ek]++;
+        renewalsDetail.push({
+          address: u.address || p2.address || '—',
+          city: u.city || p2.city || '',
+          tenant: l.tenants && l.tenants[0] ? l.tenants[0].name : '—',
+          endDate,
+          monthKey: ek,
+          rent: parseFloat(l.rentAmount || l.rent || 0),
+        });
+      }
+    });
+    renewalsDetail.sort((a, b) => (a.endDate || '').localeCompare(b.endDate || ''));
+ 
+    // ── 10. Vacant units detail list ──────────────────────────────────────
+    const vacantUnitsList = activeUnits
+      .filter(item => {
+        const u = item.unit || item;
+        return u.isVacant === '1' || u.isVacant === 1 || u.isVacant === true;
+      })
+      .map(item => {
+        const u = item.unit || item;
+        const p2 = item.property || {};
+        return {
+          address: u.address || p2.address || '—',
+          city: u.city || p2.city || '',
+          beds: u.bedrooms || u.beds || '',
+          baths: u.bathrooms || u.baths || '',
+          rent: parseFloat(u.marketRent || u.rent || 0),
+        };
+      })
+      .sort((a, b) => (a.address || '').localeCompare(b.address || ''));
+ 
+    // ── 11. Active listings detail list ───────────────────────────────────
+    const activeListingsList = publishedListings.map(c => {
+      const rentRaw = c['Market Rent'] || c['Rent'] || '';
+      const rent = rentRaw && typeof rentRaw === 'object' && rentRaw.amount
+        ? parseFloat(rentRaw.amount) : parseFloat(String(rentRaw || '0').replace(/[^0-9.]/g, ''));
+      const availRaw = c['Available Date'] || '';
+      const daysOnMarket = availRaw ? Math.floor((nowMs - new Date(availRaw).getTime()) / 86400000) : null;
+      return {
+        address: (c.Street || c.Address || c['Marketing Name'] || '—').replace(/^d{2}/d{2}/d{4}s+/, ''),
+        city: c.City || '',
+        beds: c.Beds || '',
+        baths: c.Baths || '',
+        rent,
+        availableDate: availRaw ? new Date(availRaw).toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'numeric'}) : '—',
+        daysOnMarket,
+      };
+    }).sort((a, b) => (a.daysOnMarket || 0) - (b.daysOnMarket || 0));
+ 
+    // ── 12. Property growth trend ──────────────────────────────────────────
     const propByMonth = buildMonthBuckets(12);
     // Derive a running total — use gained counts as proxy
     const propKeys = Object.keys(propByMonth).sort();
@@ -2885,14 +2976,14 @@ app.get('/api/metrics', async (req, res) => {
       running -= propTrend[i].gained;
       if (running < 0) running = 0;
     }
-
+ 
     // ── Build response ────────────────────────────────────────────────────
     const formatTrend = (obj) => Object.entries(obj).sort().map(([month, value]) => ({ month, value }));
-
+ 
     res.json({
       generatedAt: new Date().toISOString(),
       thisMonth: TMK,
-
+ 
       // Portfolio
       portfolio: {
         activeProperties: activeProps.length,
@@ -2909,8 +3000,10 @@ app.get('/api/metrics', async (req, res) => {
         keylessDeadboltUnits: keylessUnits.size,
         propGainedTrend: formatTrend(propGainedByMonth),
         propTrend,
+        vacantUnitsList,
+        activeListingsList,
       },
-
+ 
       // Leases / Occupancy
       leases: {
         active: activeLeases.length,
@@ -2918,14 +3011,16 @@ app.get('/api/metrics', async (req, res) => {
         moveOutsMTD,
         upcomingExpirations,
         avgDaysToLease,
-        moveInsByMonth: formatTrend(moveInsByMonth),
-        moveOutsByMonth: formatTrend(moveOutsByMonth),
-        expirationsByMonth: formatTrend(expirationsByMonth),
+        moveInsByMonth: formatTrend(moveInsByMonth),   // 24 months
+        moveOutsByMonth: formatTrend(moveOutsByMonth),  // 24 months
+        expirationsByMonth: formatTrend(expirationsByMonth), // 12 months (future)
         moveOutReasons: Object.entries(moveOutReasons)
           .sort((a, b) => b[1] - a[1])
           .map(([reason, count]) => ({ reason, count })),
+        renewalsByMonth: formatTrend(renewalsByMonth),
+        renewalsDetail,
       },
-
+ 
       // Applications
       applications: {
         totalMTD: appsMTD,
@@ -2937,7 +3032,7 @@ app.get('/api/metrics', async (req, res) => {
         deniedByMonth: formatTrend(appsDeniedByMonth),
         cancelledByMonth: formatTrend(appsCancelledByMonth),
       },
-
+ 
       // Owner Pipeline
       pipeline: {
         signedMTD: pmaSignedMTD,
@@ -2948,7 +3043,7 @@ app.get('/api/metrics', async (req, res) => {
           .sort((a, b) => b[1] - a[1])
           .map(([source, count]) => ({ source, count })),
       },
-
+ 
       // End Management
       endManagement: {
         totalMTD: endMgmtMTD,
@@ -2957,7 +3052,7 @@ app.get('/api/metrics', async (req, res) => {
           .sort((a, b) => b[1] - a[1])
           .map(([reason, count]) => ({ reason, count })),
       },
-
+ 
       // Comprehensive Inspections
       comprehensiveInspections: {
         yes: comprehensiveInspYes,
@@ -2967,7 +3062,7 @@ app.get('/api/metrics', async (req, res) => {
           ? +((comprehensiveInspYes / (comprehensiveInspYes + comprehensiveInspNo)) * 100).toFixed(1)
           : 0,
       },
-
+ 
       // Work Orders
       workOrders: {
         openTotal: allWOs.length,
@@ -2976,19 +3071,94 @@ app.get('/api/metrics', async (req, res) => {
           .sort((a, b) => b[1] - a[1])
           .map(([stage, count]) => ({ stage, count })),
       },
-
+ 
       // Google Reviews placeholder — manual input for now
       googleReviews: {
         note: 'Connect Google Business Profile API or log manually',
       },
     });
-
+ 
   } catch (err) {
     console.error('Metrics API error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
+ 
+// ── GET /api/metrics/debug-moveouts ────────────────────────────────────────
+// Shows raw Rentvine lease data for past/closed leases to verify moveOutDate field
+app.get('/api/metrics/debug-moveouts', async (req, res) => {
+  try {
+    // Fetch past/closed leases (status 2)
+    const pastLeases = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 2, pageSize: 20, page: 1 });
+    const past = Array.isArray(pastLeases) ? pastLeases : [];
+ 
+    // Also fetch all leases page 1 to check field names
+    const allSample = await rvFetch('/leases/export', { pageSize: 10, page: 1 });
+    const all = Array.isArray(allSample) ? allSample : [];
+ 
+    // Count past leases with moveOutDate populated
+    let pastTotal = [], pg = 1;
+    while (pg <= 10) {
+      const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 2, pageSize: 200, page: pg });
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      pastTotal = pastTotal.concat(batch);
+      if (batch.length < 200) break;
+      pg++;
+    }
+ 
+    const withMoveOutDate = pastTotal.filter(i => { const l = i.lease||i; return !!(l.moveOutDate); });
+    const withReason = pastTotal.filter(i => { const l = i.lease||i; return !!(l.moveOutReason || l.vacateReason || l.reasonForVacating || l.moveOutReasonName); });
+ 
+    // Group by move-out month
+    const byMonth = {};
+    withMoveOutDate.forEach(i => {
+      const l = i.lease||i;
+      const d = (l.moveOutDate || '').slice(0, 7);
+      if (d) byMonth[d] = (byMonth[d] || 0) + 1;
+    });
+ 
+    res.json({
+      summary: {
+        totalPastLeases: pastTotal.length,
+        withMoveOutDate: withMoveOutDate.length,
+        withMoveOutReason: withReason.length,
+      },
+      moveOutsByMonth: Object.entries(byMonth).sort().map(([month, count]) => ({ month, count })),
+      samplePastLease: past.slice(0, 3).map(i => {
+        const l = i.lease || i;
+        return {
+          leaseID: l.leaseID,
+          tenantName: l.tenants && l.tenants[0] && l.tenants[0].name,
+          leaseStatusID: l.leaseStatusID,
+          primaryLeaseStatusID: l.primaryLeaseStatusID,
+          status: l.status,
+          startDate: l.startDate,
+          endDate: l.endDate,
+          moveInDate: l.moveInDate,
+          moveOutDate: l.moveOutDate,
+          moveOutReason: l.moveOutReason,
+          vacateReason: l.vacateReason,
+          reasonForVacating: l.reasonForVacating,
+          moveOutReasonName: l.moveOutReasonName,
+          allLeaseKeys: Object.keys(l),
+        };
+      }),
+      sampleAllLease: all.slice(0, 2).map(i => {
+        const l = i.lease || i;
+        return {
+          leaseStatusID: l.leaseStatusID,
+          primaryLeaseStatusID: l.primaryLeaseStatusID,
+          status: l.status,
+          moveOutDate: l.moveOutDate,
+          endDate: l.endDate,
+        };
+      }),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+ 
 // ── GET /api/metrics/debug-units ───────────────────────────────────────────
 // Shows exactly what Rentvine returns for units + active leases
 // Visit this URL to verify isVacant, isActive field values
@@ -2997,15 +3167,15 @@ app.get('/api/metrics/debug-units', async (req, res) => {
     // Sample 5 units
     const unitSample = await rvFetch('/properties/units/export', { pageSize: 5, page: 1 });
     const units = Array.isArray(unitSample) ? unitSample : [];
-
+ 
     // Active leases sample
     const leaseSample = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 5, page: 1 });
     const activeLeases = Array.isArray(leaseSample) ? leaseSample : [];
-
+ 
     // All leases page 1 sample (no filter)
     const allLeaseSample = await rvFetch('/leases/export', { pageSize: 5, page: 1 });
     const allLeases = Array.isArray(allLeaseSample) ? allLeaseSample : [];
-
+ 
     // Count totals properly
     let allUnits = [], pg = 1;
     while (pg <= 10) {
@@ -3017,7 +3187,7 @@ app.get('/api/metrics/debug-units', async (req, res) => {
     }
     const activeCount = allUnits.filter(i => { const u = i.unit||i; return u.isActive==='1'||u.isActive===1||u.isActive===true; }).length;
     const vacantCount = allUnits.filter(i => { const u = i.unit||i; return (u.isActive==='1'||u.isActive===1||u.isActive===true) && (u.isVacant==='1'||u.isVacant===1||u.isVacant===true); }).length;
-
+ 
     let allActive = [], pg2 = 1;
     while (pg2 <= 20) {
       const batch = await rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 1, pageSize: 200, page: pg2 });
@@ -3026,7 +3196,7 @@ app.get('/api/metrics/debug-units', async (req, res) => {
       if (batch.length < 200) break;
       pg2++;
     }
-
+ 
     res.json({
       unitCounts: {
         totalRaw: allUnits.length,
@@ -3061,15 +3231,15 @@ app.get('/api/metrics/debug', async (req, res) => {
     // Move-Outs board — confirmed: "Comprehensive Inspection" = "Yes"/"No"
     const moSample = await unitsFetch('/api/board/YA3QWmPebvMwLwbB3', { page: 0, pageSize: 3 });
     const moItems = Array.isArray(moSample) ? moSample : (moSample && moSample.data) || [];
-
+ 
     // Offboard board — confirmed: card.Reason = plain string reason
     const obSample = await unitsFetch('/api/board/BaMiriNFDZBtWd5rR', { page: 0, pageSize: 5, includeArchived: true });
     const obItems = Array.isArray(obSample) ? obSample : (obSample && obSample.data) || [];
-
+ 
     // PMA / Owner Pipeline
     const pmaSample = await unitsFetch('/api/board/LDhqFFos8fsQLavv8', { page: 0, pageSize: 3 });
     const pmaItems = Array.isArray(pmaSample) ? pmaSample : (pmaSample && pmaSample.data) || [];
-
+ 
     res.json({
       moveOutsBoard: {
         id: 'YA3QWmPebvMwLwbB3',
@@ -3099,32 +3269,6 @@ app.get('/api/metrics/debug', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-app.get('/debug/wo-sheffield', async function(req, res) {
-  const data = await unitsFetch('/api/board/workOrder', { page: 0, pageSize: 100, includeArchived: false });
-  const batch = Array.isArray(data) ? data : (data && data.data) || [];
-  const sheffield = batch.filter(function(c) {
-    return JSON.stringify(c).toLowerCase().includes('sheffield');
-  });
-  const afterFilter = sheffield.filter(function(c) {
-    return !c.archived && !/^(closed|cancelled|completed|rejected)/i.test(c.stage || '');
-  });
-  res.json({
-    total: batch.length,
-    sheffieldFound: sheffield.length,
-    afterFilterCount: afterFilter.length,
-    raw: sheffield.map(function(c) {
-      return {
-        cardId: c.cardId,
-        workOrderNumber: c.workOrderNumber,
-        stage: c.stage,
-        archived: c.archived,
-        location: c.location,
-        unit: c.unit,
-        description: (c.description || '').slice(0, 100),
-      };
-    })
-  });
 });
 
 app.get('*', function(req, res) {
