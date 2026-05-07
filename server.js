@@ -1640,7 +1640,10 @@ if (input.status && input.status.toLowerCase() === 'emergency') {
           return Object.assign({}, c, { daysOpen });
         });
         const open = withMetrics;
-        const unassigned = open.filter(function(c) { return !c.vendor; });
+        const unassigned = open.filter(function(c) {
+          const vendorArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor ? [c.vendor] : []);
+          return vendorArr.length === 0;
+        });
         const byStage = {};
         withMetrics.forEach(function(c) { const s = c.stage || 'Unknown'; byStage[s] = (byStage[s] || 0) + 1; });
         const commentsMap = {};
