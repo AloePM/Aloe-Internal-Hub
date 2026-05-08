@@ -2788,7 +2788,7 @@ async function buildMetricsData() {
       fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 10, params: { includeArchived: true } }), // applications - 961 total
       getUnitsCards(),
       fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
-      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 5, params: { includeArchived: true } }),
+      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 10, params: { includeArchived: true } }), // Owner Pipeline
       fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),
       fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),
       fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),
@@ -2896,9 +2896,9 @@ async function buildMetricsData() {
 
       // Avg Time to Complete: hours from Application Created to Application Completed At
       // Aptly reports this in hours (19.4h confirmed from Aptly dashboard)
-      // appInputCompleted shows completion status; no direct completedAt date visible
-      // Use stageUpdatedAt when status is approved/denied as proxy for decision date
-      const completedAt = card['Application Completed At'] || card.appCompletedAt;
+      // No direct completedAt date in API - skipping completion time calculation
+      // appInputCompleted = "All Applicants" means all members completed
+      const completedAt = null; // field not available via API
       if (completedAt && createdDate) {
         const hrs = Math.round((new Date(completedAt) - new Date(createdDate)) / 3600000 * 10) / 10;
         if (hrs >= 0 && hrs < 2160) appCompletionHours.push(hrs); // max 90 days in hours
@@ -2932,8 +2932,11 @@ async function buildMetricsData() {
       console.log('App all keys:', Object.keys(s).join(', '));
       console.log('App Status:', JSON.stringify(s.Status || s.status || s.appStatus));
       console.log('App Created:', s['Application Created'] || s.appCreated || s.createdAt);
-      console.log('App Payments sample:', JSON.stringify((s.appPayments||s['Application Payments']||[]).slice(0,1)));
-      console.log('App appCreated:', s.appCreated, '| appInputCompleted:', s.appInputCompleted, '| appMoveInDate:', s.appMoveInDate);
+      console.log('App appCreated:', s.appCreated, '| appInputCompleted:', s.appInputCompleted, '| appPaymentMade:', s.appPaymentMade);
+      // Find first card with payments to confirm payment structure
+      const paidCard = allApps.find(c => c.appPaymentMade && c.appPaymentMade !== 'No Applicants' && (c.appPayments||[]).length > 0);
+      if (paidCard) console.log('App with payments:', JSON.stringify((paidCard.appPayments||[]).slice(0,1)));
+      else console.log('No cards with payments found in first 1000');
       console.log('App CompletedAt:', s['Application Completed At'] || s.appCompletedAt);
     }
 
@@ -3038,7 +3041,14 @@ async function buildMetricsData() {
 
     // Lost leads: stage === "Lost" (active or archived)
     // Stage Changed = when they moved to Lost = when we lost the lead
-    const lostCards = allPMA.filter(c => (c.stage || c.Stage || '') === 'Lost');
+    // From live data, lost stages seen: "Sent Follow Up Email - Leads Archived", "Not Valid Lead"
+    // No "Lost" stage found in 500 cards - log all stages to confirm
+    // Try broader lost detection
+    const lostCards = allPMA.filter(c => {
+      const s = (c.stage || c.Stage || '').toLowerCase();
+      return s === 'lost' || s.includes('lost') || s === 'not valid lead' || s.includes('not valid');
+    });
+    console.log('Lost/Invalid cards:', lostCards.length, 'stages:', [...new Set(lostCards.map(c=>c.stage))].join(', '));
     lostCards.forEach(card => {
       const k = monthKey(card.stageUpdatedAt || card.createdAt);
       if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
