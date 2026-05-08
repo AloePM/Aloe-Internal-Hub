@@ -2535,12 +2535,22 @@ async function buildMetricsData() {
     // Fetch active (status 2) and closed (status 3) separately in parallel
     // so closed leases don't crowd out active ones in pagination
 
-    const [allProps, allUnits, activeLeasesRaw, closedLeasesRaw] = await Promise.all([
+    const [allProps, allUnits, activeLeasesRaw, closedLeasesRaw, allPropsList] = await Promise.all([
       fetchAllPages('/properties/export', {}, 3),
       fetchAllPages('/properties/units/export', {}, 3),
       fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 5), // Active
       fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 3 }, 8), // Closed
+      fetchAllPages('/properties', {}, 5), // /properties list has dateContractBegins (export doesn't)
     ]);
+
+    // Build a map of propertyID -> dateContractBegins from the list endpoint
+    const propContractDatesMap = {};
+    allPropsList.forEach(p => {
+      if (p.propertyID && p.dateContractBegins) {
+        propContractDatesMap[String(p.propertyID)] = p.dateContractBegins;
+      }
+    });
+    console.log('Properties with dateContractBegins:', Object.keys(propContractDatesMap).length, 'of', allPropsList.length);
 
     // /leases/export nests data under .lease — unwrap for easy access
     const unwrap = items => items.map(item => {
@@ -2580,9 +2590,10 @@ async function buildMetricsData() {
 
     const propGainedMTD = allProps.filter(item => {
       const p = item.property || item;
-      // dateContractBegins = when management contract started = "property added" date
-      // dateTimeCreated = when the Rentvine record was created (often same as import date, not useful)
-      const dateAdded = p.dateContractBegins || p.dateTimeCreated;
+      // dateContractBegins from /properties list endpoint = when management started
+      // This correctly handles one owner with multiple properties (each gets its own date)
+      const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins;
+      const dateAdded = contractBegins || p.dateTimeCreated;
       return monthKey(dateAdded) === TMK;
     }).length;
 
@@ -2596,7 +2607,9 @@ async function buildMetricsData() {
     allProps.forEach(item => {
       const p = item.property || item;
       // Try every possible date field for when property was added
-      const dateAdded = p.dateTimeCreated; // dateContractBegins not in export, dateTimeCreated confirmed
+      // Use dateContractBegins from /properties list (not available on export)
+      const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins;
+      const dateAdded = contractBegins || p.dateTimeCreated;
       const k = monthKey(dateAdded);
       if (k && propGainedByMonth[k] !== undefined) propGainedByMonth[k]++;
     });
@@ -2634,10 +2647,33 @@ async function buildMetricsData() {
     console.log('Metrics avg rent: $' + avgRent + ' from ' + rents.length + ' units, vacancy loss: $' + vacancyLoss);
 
     // Build set of active unit IDs for move-out filtering
-    // Lost/offboarded properties have inactive units — exclude their moveOutDate-only records
     const activeUnitIDs = new Set(
       activeUnits.map(item => String((item.unit || item).unitID)).filter(Boolean)
     );
+
+    // Build set of propertyIDs that have ever had a lease (active or closed)
+    const propsWithLeaseHistory = new Set();
+    [...activeLeases, ...closedLeases].forEach(l => {
+      if (l.propertyID) propsWithLeaseHistory.add(String(l.propertyID));
+    });
+
+    // Pre-tenancy cancellations:
+    // isActive=false + dateContractEnds set + never had a lease = cancelled before first tenant
+    const preTenancyCancellations = [];
+    allProps.forEach(item => {
+      const p = item.property || item;
+      const isActive = p.isActive === true || p.isActive === 1 || p.isActive === '1';
+      if (!isActive && p.dateContractEnds && !propsWithLeaseHistory.has(String(p.propertyID))) {
+        const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins;
+        preTenancyCancellations.push({
+          address: p.address || '',
+          city: p.city || '',
+          dateContractBegins: contractBegins || p.dateTimeCreated,
+          dateContractEnds: p.dateContractEnds,
+        });
+      }
+    });
+    console.log('Pre-tenancy cancellations:', preTenancyCancellations.length);
 
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
@@ -3204,6 +3240,8 @@ async function buildMetricsData() {
         avgRent,
         vacancyLoss,
         gainedMTD: propGainedMTD,
+        preTenancyCancellations,
+        preTenancyCancellationCount: preTenancyCancellations.length,
         activeListings: publishedListings.length,
         listingsOver45Days: listings45,
         listingsOver90Days: listings90,
