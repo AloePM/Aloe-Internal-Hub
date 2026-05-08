@@ -3072,7 +3072,10 @@ async function buildMetricsData() {
       if (!contractEnd) return;
       const ek = monthKey(contractEnd);
       const title = (card.Title || card.name || '').trim();
-      const dedupKey = title + '|' + ek;
+      // Normalize title to street number only for dedup
+      // "40765 West Haley Drive" and "40765 W Haley" = same property
+      const streetNum = title.match(/^(\d+)/)?.[1] || title;
+      const dedupKey = streetNum + '|' + ek;
       if (seenEndMgmt.has(dedupKey)) return; // skip duplicate
       seenEndMgmt.add(dedupKey);
       if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
@@ -3569,7 +3572,8 @@ app.get('/api/metrics/debug-offboard', async (req, res) => {
       if (d) {
         const m = d.slice(0, 7);
         const title = (c.Title || c.name || '').trim();
-        const key = title + '|' + m;
+        const streetNum = title.match(/^(\d+)/)?.[1] || title;
+        const key = streetNum + '|' + m;
         const isDup = seenDebug.has(key);
         seenDebug.add(key);
         if (!byMonth[m]) byMonth[m] = [];
