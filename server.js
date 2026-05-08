@@ -2861,7 +2861,7 @@ async function buildMetricsData() {
     let appRevenueMTD = 0;
     const appRevenueByMonth = buildMonthBuckets(24);
     const approvedToMoveInDays = [];
-    const appCompletionHours = [];
+    const appDecisionHours = [];
 
     allApps.forEach(card => {
       // Confirmed: appCreated = Application Created date
@@ -2876,36 +2876,38 @@ async function buildMetricsData() {
       const statusLabel = statusObj.status || '';
       if (statusLabel) appStatusCounts[statusLabel] = (appStatusCounts[statusLabel] || 0) + 1;
 
-      if (statusUuid === 'app-approved') {
+      // Status UUIDs: confirmed from live logs include "application-closed", "app-approved" etc.
+      const isApproved = statusUuid.includes('approved') || card.appStatusIsApproved === true;
+      const isDenied = statusUuid.includes('denied');
+      const isClosed = statusUuid.includes('closed') || statusUuid.includes('cancelled') ||
+                       statusUuid.includes('archived') || card.appCancelled === true;
+
+      if (isApproved) {
         if (k && appsApprovedByMonth[k] !== undefined) appsApprovedByMonth[k]++;
         if (k === TMK) appsApprovedMTD++;
-        // Approved to Move-In days
-        // Confirmed: appMoveInDate = Move-In Date
-        const moveIn = card.appMoveInDate || card['Move-In Date'];
+        const moveIn = card.appMoveInDate;
         if (moveIn && createdDate) {
           const days = Math.round((new Date(moveIn) - new Date(createdDate)) / 86400000);
           if (days > 0 && days < 365) approvedToMoveInDays.push(days);
         }
-      } else if (statusUuid === 'app-denied') {
+      } else if (isDenied) {
         if (k && appsDeniedByMonth[k] !== undefined) appsDeniedByMonth[k]++;
         if (k === TMK) appsDeniedMTD++;
-      } else if (statusUuid === 'app-cancelled' || statusUuid === 'app-closed' || statusUuid === 'app-archived') {
+      } else if (isClosed) {
         if (k && appsCancelledByMonth[k] !== undefined) appsCancelledByMonth[k]++;
         if (k === TMK) appsCancelledMTD++;
       }
 
-      // Avg Time to Complete: hours from Application Created to Application Completed At
-      // Aptly reports this in hours (19.4h confirmed from Aptly dashboard)
-      // No direct completedAt date in API - skipping completion time calculation
-      // appInputCompleted = "All Applicants" means all members completed
-      const completedAt = null; // field not available via API
-      if (completedAt && createdDate) {
-        const hrs = Math.round((new Date(completedAt) - new Date(createdDate)) / 3600000 * 10) / 10;
-        if (hrs >= 0 && hrs < 2160) appCompletionHours.push(hrs); // max 90 days in hours
+      // Avg Time for Decision: appCreated -> appStatusUpdatedAt (when status changed)
+      const appStatusUpdatedAt = card.appStatusUpdatedAt;
+      if (appStatusUpdatedAt && createdDate && (isApproved || isDenied)) {
+        const hrs = Math.round((new Date(appStatusUpdatedAt) - new Date(createdDate)) / 3600000 * 10) / 10;
+        if (hrs >= 0 && hrs < 8760) appDecisionHours.push(hrs);
       }
 
-      // Confirmed: appPayments = Application Payments array
-      const payments = card.appPayments || card['Application Payments'] || [];
+
+      // Confirmed: appPayments array, amount.amount = cents (6500 = $65)
+      const payments = card.appPayments || [];
       if (Array.isArray(payments)) {
         payments.forEach(p => {
           const amt = p.amount ? parseFloat(p.amount.amount || 0) / 100 : 0;
@@ -2919,13 +2921,10 @@ async function buildMetricsData() {
 
     const avgApprovedToMoveIn = approvedToMoveInDays.length
       ? Math.round(approvedToMoveInDays.reduce((a,b)=>a+b,0)/approvedToMoveInDays.length) : null;
-    const avgCompletionHours = appCompletionHours.length
-      ? Math.round(appCompletionHours.reduce((a,b)=>a+b,0)/appCompletionHours.length * 10) / 10 : null;
+    const avgDecisionHours = appDecisionHours.length
+      ? Math.round(appDecisionHours.reduce((a,b)=>a+b,0)/appDecisionHours.length * 10) / 10 : null;
     // appInputCompleted = "All Applicants" when all have completed
-    const completedCount = allApps.filter(c => {
-      const v = c.appInputCompleted || c['Application Completed At'] || '';
-      return v && v !== 'No Applicants' && v !== '';
-    }).length;
+    const completedCount = allApps.filter(c => c.appInputCompleted === 'All Applicants').length;
     const completionRate = allApps.length > 0 ? Math.round((completedCount/allApps.length)*10000)/100 : 0;
     if (allApps.length > 0) {
       const s = allApps[0];
@@ -2933,10 +2932,7 @@ async function buildMetricsData() {
       console.log('App Status:', JSON.stringify(s.Status || s.status || s.appStatus));
       console.log('App Created:', s['Application Created'] || s.appCreated || s.createdAt);
       console.log('App appCreated:', s.appCreated, '| appInputCompleted:', s.appInputCompleted, '| appPaymentMade:', s.appPaymentMade);
-      // Find first card with payments to confirm payment structure
-      const paidCard = allApps.find(c => c.appPaymentMade && c.appPaymentMade !== 'No Applicants' && (c.appPayments||[]).length > 0);
-      if (paidCard) console.log('App with payments:', JSON.stringify((paidCard.appPayments||[]).slice(0,1)));
-      else console.log('No cards with payments found in first 1000');
+      // Payment structure confirmed: appPayments[].amount.amount = cents (/100 = dollars)
       console.log('App CompletedAt:', s['Application Completed At'] || s.appCompletedAt);
     }
 
@@ -3041,26 +3037,23 @@ async function buildMetricsData() {
 
     // Lost leads: stage === "Lost" (active or archived)
     // Stage Changed = when they moved to Lost = when we lost the lead
-    // From live data, lost stages seen: "Sent Follow Up Email - Leads Archived", "Not Valid Lead"
-    // No "Lost" stage found in 500 cards - log all stages to confirm
-    // Try broader lost detection
-    const lostCards = allPMA.filter(c => {
-      const s = (c.stage || c.Stage || '').toLowerCase();
-      return s === 'lost' || s.includes('lost') || s === 'not valid lead' || s.includes('not valid');
-    });
-    console.log('Lost/Invalid cards:', lostCards.length, 'stages:', [...new Set(lostCards.map(c=>c.stage))].join(', '));
+    // Confirmed from live data: "Lost" is the exact stage name for lost leads
+    // "Not Valid Lead" = unqualified, NOT the same as lost
+    const lostCards = allPMA.filter(c => (c.stage || c.Stage || '') === 'Lost');
+    console.log('Lost cards:', lostCards.length);
     lostCards.forEach(card => {
+      // stageUpdatedAt = when card was moved to Lost stage
       const k = monthKey(card.stageUpdatedAt || card.createdAt);
       if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
       if (k === TMK) lostMTD++;
-      // "Lost Reason" confirmed in PMA schema
-      const reason = card['Lost Reason'] || card['Lost Details'] || '';
+      // Confirmed from live data: lostReason (camelCase) is the field
+      const reason = card.lostReason || card['Lost Reason'] || '';
       if (reason) lostReasons[reason] = (lostReasons[reason] || 0) + 1;
     });
     if (lostCards.length > 0) {
       const s = lostCards[0];
-      console.log('Lost card fields:', Object.keys(s).filter(k => k.toLowerCase().includes('lost') || k.toLowerCase().includes('reason') || k === 'Stage' || k === 'Stage Changed').join(', '));
-      console.log('Lost sample: Stage=' + s.Stage + ' Reason=' + (s['Lost Reason'] || s['Loss Reason'] || 'not found'));
+      console.log('Lost card fields:', Object.keys(s).filter(k => k.includes('lost') || k.includes('Lost') || k === 'Stage').join(', '));
+      console.log('Lost sample: Stage=' + s.stage + ' Reason=' + (s.lostReason || s['Lost Reason'] || 'not found'));
     }
     console.log('Total Lost cards:', lostCards.length, '| PMA Signed:', pmaSigned.length);
 
@@ -3241,9 +3234,12 @@ async function buildMetricsData() {
         approvedMTD: appsApprovedMTD,
         deniedMTD: appsDeniedMTD,
         cancelledMTD: appsCancelledMTD,
+        totalAllTime: allApps.length,
+        approvedAllTime: appStatusCounts['Approved'] || 0,
+        deniedAllTime: appStatusCounts['Denied'] || 0,
         revenueMTD: Math.round(appRevenueMTD * 100) / 100,
         avgApprovedToMoveIn,
-        avgCompletionHours,
+        avgDecisionHours,
         completionRate,
         statusCounts: appStatusCounts,
         byMonth: formatTrend(appsByMonth),
