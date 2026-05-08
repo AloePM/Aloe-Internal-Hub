@@ -3053,12 +3053,11 @@ async function buildMetricsData() {
     pmaSigned.forEach(card => {
       // Management start date: prefer explicit date field, fall back to Stage Changed
       // (Stage Changed = when card moved to "PMA Signed" stage = effectively when signed)
-      // Management Start Date confirmed in PMA schema - use as primary
-      // stageUpdatedAt = when card last changed stage (may not be sign date)
-      const signedDate = card['Management Start Date'] || card.stageUpdatedAt || card.createdAt;
-      // Debug first signed card
+      // stageUpdatedAt = when card moved to "PMA Signed" stage = actual sign date
+      // Management Start Date = planned future start date — NOT when they signed
+      const signedDate = card.stageUpdatedAt || card.createdAt;
       if (pmaSigned.indexOf(card) === 0) {
-        console.log('PMA Signed card - Management Start Date:', card['Management Start Date'], 'stageUpdatedAt:', card.stageUpdatedAt);
+        console.log('PMA Signed card - stageUpdatedAt:', card.stageUpdatedAt, 'Management Start Date:', card['Management Start Date']);
       }
       const sk = monthKey(signedDate);
       if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
@@ -3082,8 +3081,8 @@ async function buildMetricsData() {
       const k = monthKey(card.stageUpdatedAt || card.createdAt);
       if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
       if (k === TMK) lostMTD++;
-      // Confirmed from live data: lostReason (camelCase) is the field
-      const reason = card.lostReason || card['Lost Reason'] || '';
+      // Both lostReason (camelCase) and "Lost Reason" (schema-resolved) may exist
+      const reason = card['Lost Reason'] || card.lostReason || '';
       if (reason) lostReasons[reason] = (lostReasons[reason] || 0) + 1;
     });
     if (lostCards.length > 0) {
