@@ -2749,17 +2749,56 @@ async function buildMetricsData() {
       return all;
     }
 
-    // Fire all Aptly board fetches simultaneously
-    const [allApps, unitsCards, allLeadsRaw, allPMA, allOffboard, allMoveOuts, allWOsRaw, allRenewals] = await Promise.all([
-      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 2 }),           // applications
-      getUnitsCards(),                                                    // listings
-      fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }), // leads
-      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 5, params: { includeArchived: true } }),  // Owner Pipeline
-      fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),  // offboard
-      fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),  // Aptly move-outs board
-      fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),           // WOs
-      fetchAptlyBoard('86YrLPbwdkxtdyZoj', { maxPages: 5, params: { includeArchived: true } }),  // Tenant Renewals
+    // Fetch schemas first to map UUID field keys to human-readable names
+    async function fetchAptlySchema(boardId) {
+      try {
+        const resp = await fetch(APTLY_BASE + '/api/schema/' + boardId, {
+          headers: { 'x-token': APTLY_TOKEN }
+        });
+        if (!resp.ok) return {};
+        const fields = await resp.json();
+        const map = {};
+        if (Array.isArray(fields)) fields.forEach(f => { map[f.key] = f.label; });
+        return map;
+      } catch(e) { return {}; }
+    }
+
+    // Helper: resolve UUID field keys using schema map
+    function resolveFields(card, schemaMap) {
+      const resolved = Object.assign({}, card);
+      Object.keys(schemaMap).forEach(uuid => {
+        if (uuid in card) {
+          resolved[schemaMap[uuid]] = card[uuid];
+        }
+      });
+      return resolved;
+    }
+
+    // Fetch schemas for boards that have custom UUID fields
+    const [offboardSchema, pmaSchema, renewalSchema] = await Promise.all([
+      fetchAptlySchema('BaMiriNFDZBtWd5rR'),
+      fetchAptlySchema('QySZ8yRWJ5KeYFcZt'),
+      fetchAptlySchema('86YrLPbwdkxtdyZoj'),
     ]);
+    console.log('Offboard schema keys:', Object.values(offboardSchema).join(', '));
+    console.log('PMA schema keys:', Object.values(pmaSchema).join(', '));
+
+    // Fire all Aptly board fetches simultaneously
+    const [allApps, unitsCards, allLeadsRaw, allPMARaw, allOffboardRaw, allMoveOuts, allWOsRaw, allRenewalsRaw] = await Promise.all([
+      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 2 }),
+      getUnitsCards(),
+      fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
+      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 5, params: { includeArchived: true } }),
+      fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),
+      fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),
+      fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),
+      fetchAptlyBoard('86YrLPbwdkxtdyZoj', { maxPages: 5, params: { includeArchived: true } }),
+    ]);
+
+    // Resolve UUID field keys using schemas
+    const allPMA = allPMARaw.map(c => resolveFields(c, pmaSchema));
+    const allOffboard = allOffboardRaw.map(c => resolveFields(c, offboardSchema));
+    const allRenewals = allRenewalsRaw.map(c => resolveFields(c, renewalSchema));
 
     const allWOs = allWOsRaw.filter(c => !c.archived && !/closed|cancelled|complete/i.test(c.stage || ''));
     console.log(`Metrics Aptly fetch: ${allApps.length} apps, ${allLeadsRaw.length} leads, ${allPMA.length} PMA, ${allOffboard.length} offboard, ${allMoveOuts.length} moveouts, ${allWOs.length} WOs`);
@@ -2781,10 +2820,12 @@ async function buildMetricsData() {
 
     allRenewals.forEach(card => {
       // Try Mirror End Date first, fall back to parsing the Title date (format: MM/DD/YYYY address)
+      // "Mirror End Date" is a custom field resolved via schema
+      // Also try Title parsing as fallback (format: MM/DD/YYYY address)
       let endDate = card['Mirror End Date'];
       if (!endDate && card.Title) {
-        const titleParts = card.Title.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-        if (titleParts) endDate = titleParts[3] + '-' + titleParts[1] + '-' + titleParts[2];
+        const m = card.Title.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) endDate = m[3] + '-' + m[1] + '-' + m[2];
       }
       if (!endDate) return;
       const ek = monthKey(endDate);
@@ -2918,8 +2959,9 @@ async function buildMetricsData() {
     pmaSigned.forEach(card => {
       // Management start date: prefer explicit date field, fall back to Stage Changed
       // (Stage Changed = when card moved to "PMA Signed" stage = effectively when signed)
-      // Field names from live data: stageUpdatedAt, createdAt (camelCase)
-      const signedDate = card.stageUpdatedAt || card.createdAt;
+      // "Management Start Date" is the confirmed field from CSV export
+      // It's a custom field resolved via schema from UUID key
+      const signedDate = card['Management Start Date'] || card.stageUpdatedAt || card.createdAt;
       const sk = monthKey(signedDate);
       if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
       if (sk === TMK) pmaSignedMTD++;
@@ -2938,7 +2980,8 @@ async function buildMetricsData() {
       const k = monthKey(card.stageUpdatedAt || card.createdAt);
       if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
       if (k === TMK) lostMTD++;
-      const reason = card['Lost Reason'] || card.lostReason || card['Loss Reason'] || '';
+      // "Lost Reason" confirmed from CSV export
+      const reason = card['Lost Reason'] || card.lostReason || '';
       if (reason) lostReasons[reason] = (lostReasons[reason] || 0) + 1;
     });
     if (lostCards.length > 0) {
