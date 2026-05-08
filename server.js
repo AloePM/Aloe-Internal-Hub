@@ -2785,7 +2785,7 @@ async function buildMetricsData() {
 
     // Fire all Aptly board fetches simultaneously
     const [allApps, unitsCards, allLeadsRaw, allPMARaw, allOffboardRaw, allMoveOuts, allWOsRaw, allRenewalsRaw] = await Promise.all([
-      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 2 }),
+      fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 5, params: { includeArchived: true } }), // applications
       getUnitsCards(),
       fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
       fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 5, params: { includeArchived: true } }),
@@ -2917,6 +2917,11 @@ async function buildMetricsData() {
     const avgCompletionDays = appCompletionDays.length
       ? Math.round(appCompletionDays.reduce((a,b)=>a+b,0)/appCompletionDays.length) : null;
 
+    if (allApps.length > 0) {
+      const s = allApps[0];
+      console.log('App card Status field:', JSON.stringify(s.Status), 'uuid:', s.Status && s.Status.uuid);
+      console.log('App Application Created:', s['Application Created'], 'createdAt:', s.createdAt);
+    }
     console.log('Apps: ' + allApps.length + ' total | statuses: ' + JSON.stringify(appStatusCounts));
     console.log('App revenue MTD: $' + appRevenueMTD.toFixed(2) + ' | Avg approved-to-movein: ' + avgApprovedToMoveIn + 'd');
 
@@ -2988,6 +2993,8 @@ async function buildMetricsData() {
     let pmaSignedMTD = 0;
 
     // Log a sample PMA Signed card to find the management start date field
+    const allPMAStages = [...new Set(allPMA.map(c=>c.stage||'?'))];
+    console.log('All PMA stages (' + allPMA.length + '):', allPMAStages.join(' | '));
     const pmaSigned = allPMA.filter(c => (c.stage || c.Stage || '') === 'PMA Signed');
     if (pmaSigned.length > 0) {
       const s = pmaSigned[0];
@@ -2999,9 +3006,13 @@ async function buildMetricsData() {
     pmaSigned.forEach(card => {
       // Management start date: prefer explicit date field, fall back to Stage Changed
       // (Stage Changed = when card moved to "PMA Signed" stage = effectively when signed)
-      // "Management Start Date" is the confirmed field from CSV export
-      // It's a custom field resolved via schema from UUID key
+      // Management Start Date confirmed in PMA schema - use as primary
+      // stageUpdatedAt = when card last changed stage (may not be sign date)
       const signedDate = card['Management Start Date'] || card.stageUpdatedAt || card.createdAt;
+      // Debug first signed card
+      if (pmaSigned.indexOf(card) === 0) {
+        console.log('PMA Signed card - Management Start Date:', card['Management Start Date'], 'stageUpdatedAt:', card.stageUpdatedAt);
+      }
       const sk = monthKey(signedDate);
       if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
       if (sk === TMK) pmaSignedMTD++;
@@ -3020,8 +3031,8 @@ async function buildMetricsData() {
       const k = monthKey(card.stageUpdatedAt || card.createdAt);
       if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
       if (k === TMK) lostMTD++;
-      // "Lost Reason" confirmed from CSV export
-      const reason = card['Lost Reason'] || card.lostReason || '';
+      // "Lost Reason" confirmed in PMA schema
+      const reason = card['Lost Reason'] || card['Lost Details'] || '';
       if (reason) lostReasons[reason] = (lostReasons[reason] || 0) + 1;
     });
     if (lostCards.length > 0) {
