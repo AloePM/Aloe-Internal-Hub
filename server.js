@@ -2550,7 +2550,11 @@ async function buildMetricsData() {
         propContractDatesMap[String(p.propertyID)] = p.dateContractBegins;
       }
     });
-    console.log('Properties with dateContractBegins:', Object.keys(propContractDatesMap).length, 'of', allPropsList.length);
+    const propContractBeginsCount = Object.keys(propContractDatesMap).length;
+    console.log('Properties with dateContractBegins:', propContractBeginsCount, 'of', allPropsList.length);
+    if (propContractBeginsCount === 0) {
+      console.log('dateContractBegins not populated in Rentvine — using dateTimeCreated for properties added chart');
+    }
 
     // /leases/export nests data under .lease — unwrap for easy access
     const unwrap = items => items.map(item => {
@@ -2664,11 +2668,11 @@ async function buildMetricsData() {
       const p = item.property || item;
       const isActive = p.isActive === true || p.isActive === 1 || p.isActive === '1';
       if (!isActive && p.dateContractEnds && !propsWithLeaseHistory.has(String(p.propertyID))) {
-        const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins;
+        const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins || p.dateTimeCreated;
         preTenancyCancellations.push({
           address: p.address || '',
           city: p.city || '',
-          dateContractBegins: contractBegins || p.dateTimeCreated,
+          dateContractBegins: contractBegins,
           dateContractEnds: p.dateContractEnds,
         });
       }
@@ -2824,7 +2828,7 @@ async function buildMetricsData() {
       fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 10, params: { includeArchived: true } }), // applications - 961 total
       getUnitsCards(),
       fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
-      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 10, params: { includeArchived: true } }), // Owner Pipeline
+      fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 15, params: { includeArchived: true } }), // Owner Pipeline — 15 pages to get full lost history
       fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),
       fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),
       fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),
@@ -3066,7 +3070,7 @@ async function buildMetricsData() {
 
     // 4. Lost leads — stage === "Lost" (active or archived)
     //    Use Lost Reason field for breakdown
-    const lostByMonth = buildMonthBuckets(24);
+    const lostByMonth = buildMonthBuckets(48); // Lost leads go back further than 24 months
     const lostReasons = {};
     let lostMTD = 0;
 
