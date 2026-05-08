@@ -643,45 +643,82 @@ function renderLeasing() {
 
 // ---- PIPELINE TAB ----
 function renderPipeline() {
-  var pipe=D.pipeline, em=D.endManagement;
+  var pipe=D.pipeline, em=D.endManagement, port=D.portfolio||{};
   var labels=(pipe.signedByMonth||[]).map(function(x){return sm(x.month);});
   var signed=(pipe.signedByMonth||[]).map(function(x){return x.value;});
   var leads=(pipe.newLeadsByMonth||[]).map(function(x){return x.value;});
   var endLabels=(em.byMonth||[]).map(function(x){return sm(x.month);});
   var endData=(em.byMonth||[]).map(function(x){return x.value;});
+  var ptLabels=(port.preTenancyByMonth||[]).map(function(x){return sm(x.month);});
+  var ptData=(port.preTenancyByMonth||[]).map(function(x){return x.value;});
   var reasons=em.reasons||[];
   var net=pipe.signedMTD-em.totalMTD;
+  var ptCancels=port.preTenancyCancellations||[];
+  var ptMTD=port.preTenancyMTD||0;
 
-  var html = '<div class="main">' +
-    '<div class="page-header"><div class="page-title">Owner Pipeline</div></div>' +
-    '<div class="kpi-grid g4">' +
-      kpi('New Leads MTD', fmt(pipe.newLeadsMTD), 'added to pipeline', C.PURPLE) +
-      kpi('PMA Signed MTD', fmt(pipe.signedMTD), 'new management agreements', C.GREEN) +
-      kpi('End Mgmt MTD', fmt(em.totalMTD), 'cancellations this month', em.totalMTD>0?C.RED:C.GREEN) +
-      kpi('Net Growth MTD', (net>=0?'+':'')+net, 'signed minus ended', net>=0?C.GREEN:C.RED) +
-    '</div>' +
-    '<div class="grid g-2">' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>New Leads vs PMA Signed</div></div>' +
-      '<div class="chart-wrap" style="height:220px"><canvas id="pipe-main"></canvas></div>' +
-      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.PURPLE+'"></div>New Leads</div>' +
-      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>PMA Signed</div></div></div>' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Monthly</div></div>' +
-      '<div class="chart-wrap" style="height:220px"><canvas id="pipe-end"></canvas></div></div>' +
-    '</div>' +
-    '<div class="grid g-2">' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Lost Leads by Reason</div></div>' +
-      (pipe.lostReasons&&pipe.lostReasons.length ? barRows(pipe.lostReasons.map(function(r){return {label:r.reason,count:r.count};}), C.PURPLE) : '<div style="color:var(--ghost);font-size:13px">Lost reason data from Owner Pipeline board.</div>') +
-      '</div>' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Reasons</div></div>' +
-      (reasons.length ? barRows(reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:13px">Reasons flow from Aptly Offboard board.</div>') +
-      '</div>' +
+  var ptRows=ptCancels.slice(0,20).map(function(p){
+    var begStr=p.dateContractBegins?new Date(p.dateContractBegins).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'--';
+    var endStr=p.dateContractEnds?new Date(p.dateContractEnds).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'--';
+    return '<div class="detail-row"><div><div class="detail-addr">'+p.address+'</div><div class="detail-city">'+p.city+'</div></div>'+
+      '<div class="detail-meta">Onboarded '+begStr+'</div>'+
+      '<div class="detail-rent" style="color:var(--amber);font-size:11px">Cancelled '+endStr+'</div></div>';
+  }).join('');
+
+  var html = '<div class="main">'+
+    '<div class="page-header"><div class="page-title">Owner Pipeline</div></div>'+
+    '<div class="kpi-grid g4">'+
+      kpi('New Leads MTD',fmt(pipe.newLeadsMTD),'added to pipeline',C.PURPLE)+
+      kpi('PMA Signed MTD',fmt(pipe.signedMTD),'new management agreements',C.GREEN)+
+      kpi('End Mgmt MTD',fmt(em.totalMTD),'with prior tenants',em.totalMTD>0?C.RED:C.GREEN)+
+      kpi('Net Growth MTD',(net>=0?'+':'')+net,'signed minus ended',net>=0?C.GREEN:C.RED)+
+    '</div>'+
+    '<div class="grid g-2">'+
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>New Leads vs PMA Signed</div></div>'+
+      '<div class="chart-wrap" style="height:220px"><canvas id="pipe-main"></canvas></div>'+
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.PURPLE+'"></div>New Leads</div>'+
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>PMA Signed</div></div></div>'+
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Monthly</div>'+
+      '<span style="font-size:11px;color:var(--muted)">Properties that had tenants</span></div>'+
+      '<div class="chart-wrap" style="height:220px"><canvas id="pipe-end"></canvas></div></div>'+
+    '</div>'+
+
+    // Pre-tenancy cancellations — separate section
+    '<div class="grid g-2" style="margin-bottom:0">'+
+      '<div class="card"><div class="card-header">'+
+      '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Pre-Tenancy Cancellations MTD</div>'+
+      '<span style="font-size:22px;font-weight:700;color:var(--amber)">'+ptMTD+'</span></div>'+
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Cancelled before first tenant was placed</div>'+
+      '<div class="chart-wrap" style="height:160px"><canvas id="pipe-pretenancy"></canvas></div>'+
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Pre-Tenancy Cancels</div></div></div>'+
+      '<div class="card"><div class="card-header">'+
+      '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Pre-Tenancy Cancel List</div>'+
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:rgba(245,158,11,0.1);color:var(--amber);border-radius:20px">'+ptCancels.length+' total</span></div>'+
+      (ptCancels.length?
+        '<div class="detail-list open" style="display:block;max-height:260px;overflow-y:auto">'+
+        '<div class="detail-header"><span>Property</span><span>Onboarded</span><span>Cancelled</span></div>'+
+        ptRows+(ptCancels.length>20?'<div style="padding:8px 12px;font-size:11px;color:var(--muted)">Showing 20 of '+ptCancels.length+'</div>':'')+
+        '</div>':
+        '<div style="color:var(--ghost);font-size:13px">No pre-tenancy cancellations found</div>')+
+      '</div>'+
+    '</div>'+
+
+    '<div class="grid g-2">'+
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Lost Leads by Reason</div></div>'+
+      (pipe.lostReasons&&pipe.lostReasons.length?barRows(pipe.lostReasons.map(function(r){return {label:r.reason,count:r.count};}),C.PURPLE):
+        '<div style="color:var(--ghost);font-size:13px">Lost reason data from Owner Pipeline board.</div>')+
+      '</div>'+
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Reasons</div></div>'+
+      (reasons.length?barRows(reasons.map(function(r){return {label:r.reason,count:r.count};}),C.RED):
+        '<div style="color:var(--ghost);font-size:13px">Reasons flow from Aptly Offboard board.</div>')+
+      '</div>'+
     '</div></div>';
 
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
-    mkBar('pipe-main', labels, [{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}], 220);
-    mkBar('pipe-end', endLabels, [{label:'End Management',data:endData,backgroundColor:C.RED+'cc'}], 220);
-  }, 50);
+    mkBar('pipe-main',labels,[{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}],220);
+    mkBar('pipe-end',endLabels,[{label:'End Management',data:endData,backgroundColor:C.RED+'cc'}],220);
+    if(ptLabels.length) mkBar('pipe-pretenancy',ptLabels,[{label:'Pre-Tenancy Cancels',data:ptData,backgroundColor:C.AMBER+'cc'}],160);
+  },50);
 }
 
 // ---- RENEWALS TAB ----
