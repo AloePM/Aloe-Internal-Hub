@@ -2850,39 +2850,76 @@ async function buildMetricsData() {
     if (allPMA.length > 0) console.log('PMA stages:', [...new Set(allPMA.slice(0,30).map(c=>c.stage||'?'))].join(', '));
     if (allLeadsRaw.length > 0) console.log('Lead keys:', Object.keys(allLeadsRaw[0]).join(', '));
 
-    const appsByMonth = buildMonthBuckets(12);
-    const appsApprovedByMonth = buildMonthBuckets(12);
-    const appsDeniedByMonth = buildMonthBuckets(12);
-    const appsCancelledByMonth = buildMonthBuckets(12);
+    // Applications — use Status.uuid for accurate status bucketing
+    // Confirmed from live data: Status = {uuid: "app-incomplete", status: "All Applications Incomplete"}
+    const appsByMonth = buildMonthBuckets(24);
+    const appsApprovedByMonth = buildMonthBuckets(24);
+    const appsDeniedByMonth = buildMonthBuckets(24);
+    const appsCancelledByMonth = buildMonthBuckets(24);
     let appsMTD = 0, appsApprovedMTD = 0, appsDeniedMTD = 0, appsCancelledMTD = 0;
-
-    // Log all unique stages so we can map them correctly
-    const allStages = [...new Set(allApps.map(c=>c.stage||'?'))];
-    console.log('All app stages (' + allApps.length + ' apps):', allStages.join(' | '));
-    // Also log schema fields available
-    const schemaFields = allApps.length > 0 ? Object.keys(allApps[0]).join(', ') : 'no apps';
-    console.log('App card fields:', schemaFields);
+    const appStatusCounts = {};
+    let appRevenueMTD = 0;
+    const appRevenueByMonth = buildMonthBuckets(24);
+    const approvedToMoveInDays = [];
+    const appCompletionDays = [];
 
     allApps.forEach(card => {
-      const k = monthKey(card.createdAt);
-      const stageLow = (card.stage || '').toLowerCase();
-
+      // Use "Application Created" field (confirmed from live data)
+      const createdDate = card['Application Created'] || card.createdAt;
+      const k = monthKey(createdDate);
       if (k && appsByMonth[k] !== undefined) appsByMonth[k]++;
       if (k === TMK) appsMTD++;
 
-      // Approved = successful outcome stages
-      if (stageLow.includes('approv') || stageLow.includes('lease sent') ||
-          stageLow.includes('moved in') || stageLow.includes('accepted')) {
+      // Status from Status object
+      const statusUuid = card.Status ? (card.Status.uuid || '') : '';
+      const statusLabel = card.Status ? (card.Status.status || '') : '';
+      if (statusLabel) appStatusCounts[statusLabel] = (appStatusCounts[statusLabel] || 0) + 1;
+
+      if (statusUuid === 'app-approved') {
         if (k && appsApprovedByMonth[k] !== undefined) appsApprovedByMonth[k]++;
         if (k === TMK) appsApprovedMTD++;
-      } else if (stageLow.includes('den') || stageLow.includes('reject') || stageLow.includes('declin')) {
+        // Approved to Move-In days
+        const moveIn = card['Move-In Date'];
+        if (moveIn && createdDate) {
+          const days = Math.round((new Date(moveIn) - new Date(createdDate)) / 86400000);
+          if (days > 0 && days < 365) approvedToMoveInDays.push(days);
+        }
+      } else if (statusUuid === 'app-denied') {
         if (k && appsDeniedByMonth[k] !== undefined) appsDeniedByMonth[k]++;
         if (k === TMK) appsDeniedMTD++;
-      } else if (stageLow.includes('cancel') || stageLow.includes('withdrawn') || stageLow.includes('withdraw')) {
+      } else if (statusUuid === 'app-cancelled' || statusUuid === 'app-closed' || statusUuid === 'app-archived') {
         if (k && appsCancelledByMonth[k] !== undefined) appsCancelledByMonth[k]++;
         if (k === TMK) appsCancelledMTD++;
       }
+
+      // Completion time: Application Created -> Application Completed At
+      const completedAt = card['Application Completed At'];
+      if (completedAt && createdDate) {
+        const days = Math.round((new Date(completedAt) - new Date(createdDate)) / 86400000);
+        if (days >= 0 && days < 90) appCompletionDays.push(days);
+      }
+
+      // Revenue: application fee payments (amount is in cents, /100 for dollars)
+      const payments = card['Application Payments'] || [];
+      if (Array.isArray(payments)) {
+        payments.forEach(p => {
+          const amt = p.amount ? parseFloat(p.amount.amount || 0) / 100 : 0;
+          if (amt > 0) {
+            if (k && appRevenueByMonth[k] !== undefined) appRevenueByMonth[k] += amt;
+            if (k === TMK) appRevenueMTD += amt;
+          }
+        });
+      }
     });
+
+    const avgApprovedToMoveIn = approvedToMoveInDays.length
+      ? Math.round(approvedToMoveInDays.reduce((a,b)=>a+b,0)/approvedToMoveInDays.length) : null;
+    const avgCompletionDays = appCompletionDays.length
+      ? Math.round(appCompletionDays.reduce((a,b)=>a+b,0)/appCompletionDays.length) : null;
+
+    console.log('Apps: ' + allApps.length + ' total | statuses: ' + JSON.stringify(appStatusCounts));
+    console.log('App revenue MTD: $' + appRevenueMTD.toFixed(2) + ' | Avg approved-to-movein: ' + avgApprovedToMoveIn + 'd');
+
 
     // ── 4. Process Aptly data (already fetched in parallel above) ──────
     const publishedListings = unitsCards.filter(c =>
@@ -2928,18 +2965,21 @@ async function buildMetricsData() {
     // New leads = every card by Created At date (when lead entered pipeline)
     const newLeadsByMonth = buildMonthBuckets(24);
     let newLeadsMTD = 0;
-    const leadSources = {};
+    // leadSources moved to renterLeadSources below
 
     allPMA.forEach(card => {
-      // Count as new lead by creation date
       const k = monthKey(card.createdAt);
       if (k && newLeadsByMonth[k] !== undefined) newLeadsByMonth[k]++;
       if (k === TMK) newLeadsMTD++;
-      // Source field — confirmed "Source" from live card data
-      const src = card.leadSource || card.Source || '';
-      if (src) leadSources[src] = (leadSources[src] || 0) + 1;
     });
-    console.log('New leads total:', allPMA.length, '| Lead sources:', JSON.stringify(leadSources));
+
+    // Renter lead sources — from Renter Leads board (prospective tenants)
+    const renterLeadSources = {};
+    allLeadsRaw.forEach(card => {
+      const src = card.leadSource || '';
+      if (src) renterLeadSources[src] = (renterLeadSources[src] || 0) + 1;
+    });
+    console.log('Owner pipeline leads:', allPMA.length, '| Renter lead sources:', JSON.stringify(renterLeadSources));
 
     // 3. PMA Signed — stage === "PMA Signed" (active OR archived)
     //    Use "Management Start Date" or "Date Contract Begins" for the month
@@ -3168,10 +3208,15 @@ async function buildMetricsData() {
         approvedMTD: appsApprovedMTD,
         deniedMTD: appsDeniedMTD,
         cancelledMTD: appsCancelledMTD,
+        revenueMTD: Math.round(appRevenueMTD * 100) / 100,
+        avgApprovedToMoveIn,
+        avgCompletionDays,
+        statusCounts: appStatusCounts,
         byMonth: formatTrend(appsByMonth),
         approvedByMonth: formatTrend(appsApprovedByMonth),
         deniedByMonth: formatTrend(appsDeniedByMonth),
         cancelledByMonth: formatTrend(appsCancelledByMonth),
+        revenueByMonth: formatTrend(appRevenueByMonth),
       },
 
       // Owner Pipeline
@@ -3184,7 +3229,7 @@ async function buildMetricsData() {
         newLeadsByMonth: formatTrend(newLeadsByMonth),
         lostByMonth: formatTrend(lostByMonth),
         lostReasons: Object.entries(lostReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
-        leadSources: Object.entries(leadSources)
+        renterLeadSources: Object.entries(renterLeadSources)
           .sort((a, b) => b[1] - a[1])
           .map(([source, count]) => ({ source, count })),
       },
