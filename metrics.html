@@ -758,8 +758,27 @@ function renderPortfolio() {
       statRow('Comp. Inspection No', fmt(D.comprehensiveInspections.no)) +
       statRow('Opt-In Rate', D.comprehensiveInspections.optInRate+'%') +
       '</div>' +
-    '</div></div>';
+    '</div>';
 
+  // Add needs-updated-agreement section
+  var needs = (D.endManagement && D.endManagement.needsUpdatedAgreement) || [];
+  if (needs.length > 0) {
+    var rows = needs.slice(0,30).map(function(p) {
+      return '<div class="detail-row"><div><div class="detail-addr">'+p.address+'</div><div class="detail-city">'+p.city+'</div></div>' +
+        '<div class="detail-meta">Expired '+new Date(p.dateContractEnds).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>' +
+        '<div class="detail-rent" style="color:var(--amber);font-size:11px">Active</div></div>';
+    }).join('');
+    html += '<div class="card" style="margin-top:14px"><div class="card-header">' +
+      '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Needs Updated Management Agreement</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--amber-d);color:var(--amber);border-radius:20px">'+needs.length+' properties</span></div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Active properties with expired contract end date — agreement needs renewal</div>' +
+      '<div class="detail-list open" style="display:block;max-height:320px;overflow-y:auto">' +
+      '<div class="detail-header"><span>Property Address</span><span>Contract Expired</span><span>Status</span></div>' +
+      rows + (needs.length > 30 ? '<div style="padding:8px 12px;font-size:11px;color:var(--muted)">Showing 30 of '+needs.length+'</div>' : '') +
+      '</div></div>';
+  }
+
+  html += '</div>';
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
     mkLine('port-total', labels, [{label:'Properties',data:totals,borderColor:C.TEAL2}], 220);
