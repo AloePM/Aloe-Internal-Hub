@@ -558,41 +558,87 @@ function renderOccupancy() {
 
 // ---- LEASING TAB ----
 function renderLeasing() {
-  var app=D.applications;
+  var app=D.applications||{};
+  var pipe=D.pipeline||{};
+  var p=D.portfolio||{};
+  var l=D.leases||{};
   var labels=(app.byMonth||[]).map(function(x){return sm(x.month);});
   var received=(app.byMonth||[]).map(function(x){return x.value;});
   var approved=(app.approvedByMonth||[]).map(function(x){return x.value;});
   var denied=(app.deniedByMonth||[]).map(function(x){return x.value;});
   var cancelled=(app.cancelledByMonth||[]).map(function(x){return x.value;});
+  var revenue=(app.revenueByMonth||[]).map(function(x){return x.value;});
   var approvalRate=app.totalMTD>0?Math.round((app.approvedMTD/app.totalMTD)*100):0;
+  var statusCounts=app.statusCounts||{};
+  var renterSources=(pipe.renterLeadSources||[]);
 
-  var html = '<div class="main">' +
-    '<div class="page-header"><div class="page-title">Leasing Activity</div></div>' +
-    '<div class="kpi-grid g4">' +
-      kpi('Applications MTD', fmt(app.totalMTD), 'received this month', C.TEAL2) +
-      kpi('Approved MTD', fmt(app.approvedMTD), approvalRate+'% approval rate', C.GREEN) +
-      kpi('Denied MTD', fmt(app.deniedMTD), 'did not qualify', C.RED) +
-      kpi('Cancelled MTD', fmt(app.cancelledMTD), 'withdrawn or expired', C.AMBER) +
-    '</div>' +
-    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">' +
-    '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Applications Month over Month</div></div>' +
-    '<div class="chart-wrap" style="height:240px"><canvas id="app-stacked"></canvas></div>' +
-    '<div class="legend">' +
-    '<div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Received</div>' +
-    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Approved</div>' +
-    '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Denied</div>' +
-    '<div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Cancelled</div>' +
-    '</div></div></div>';
+  var statusOrder=[
+    'All Applications Incomplete','Partially Completed Applications','Pending Screening',
+    'Screening Incomplete','Pending Decision','Approved','Denied','Closed','Archived','Cancelled'
+  ];
+  var statusRows=statusOrder.map(function(s){
+    return statusCounts[s]!=null ? statRow(s,fmt(statusCounts[s])) : '';
+  }).join('');
+
+  var html = '<div class="main">'+
+    '<div class="page-header"><div class="page-title">Leasing Activity</div>'+
+    '<div class="page-sub">Applications, lead sources, and performance</div></div>'+
+    '<div class="kpi-grid g4">'+
+      kpi('Applications MTD',fmt(app.totalMTD),'received this month',C.TEAL2)+
+      kpi('Approved MTD',fmt(app.approvedMTD),approvalRate+'% approval rate',C.GREEN)+
+      kpi('Denied MTD',fmt(app.deniedMTD),'did not qualify',C.RED)+
+      kpi('Cancelled/Closed MTD',fmt(app.cancelledMTD),'withdrawn or expired',C.AMBER)+
+    '</div>'+
+    '<div class="kpi-grid g4">'+
+      kpi('App Revenue MTD',app.revenueMTD!=null?'$'+Number(app.revenueMTD).toFixed(0):'--','application fee income',C.GREEN)+
+      kpi('Avg Approved to Move-In',app.avgApprovedToMoveIn!=null?app.avgApprovedToMoveIn+'d':'--','days from approval to move-in',C.TEAL2)+
+      kpi('Avg Time to Complete',app.avgCompletionDays!=null?app.avgCompletionDays+'d':'--','days to complete app',C.AMBER)+
+      kpi('Active Listings',fmt(p.activeListings),'published for rent',C.BLUE)+
+    '</div>'+
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">'+
+    '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Application Count by Month</div></div>'+
+    '<div class="chart-wrap" style="height:220px"><canvas id="app-volume"></canvas></div>'+
+    '<div class="legend">'+
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Received</div>'+
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Approved</div>'+
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Denied</div>'+
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Cancelled</div>'+
+    '</div></div>'+
+    '<div class="grid g-2">'+
+      '<div class="card"><div class="card-header"><div class="card-title">'+
+      '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Application Status Breakdown</div></div>'+
+      (statusRows||'<div style="color:var(--ghost);font-size:12px">No status data yet</div>')+
+      '</div>'+
+      '<div class="card"><div class="card-header"><div class="card-title">'+
+      '<div class="card-title-bar" style="background:'+C.GREEN+'"></div>Application Revenue by Month</div></div>'+
+      '<div class="chart-wrap" style="height:180px"><canvas id="app-revenue"></canvas></div></div>'+
+    '</div>'+
+    '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
+    '<div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Renter Lead Sources</div>'+
+    '<span style="font-size:11px;color:var(--muted)">Where prospective tenants come from</span></div>'+
+    (renterSources.length?barRows(renterSources.map(function(s){return {label:s.source,count:s.count};}),C.PURPLE):
+      '<div style="color:var(--ghost);font-size:13px">Lead source data from Renter Leads board</div>')+
+    '</div>'+
+    '<div class="card"><div class="card-header"><div class="card-title">'+
+    '<div class="card-title-bar" style="background:'+C.AMBER+'"></div>Listing Performance</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">'+
+    '<div>'+statRow('Active Listings',fmt(p.activeListings))+'</div>'+
+    '<div>'+statRow('Avg Days to Lease',l.avgDaysToLease!=null?l.avgDaysToLease+'d':'--')+'</div>'+
+    '<div>'+statRow('Over 45 Days',fmt(p.listingsOver45Days))+'</div>'+
+    '<div>'+statRow('Over 90 Days',fmt(p.listingsOver90Days))+'</div>'+
+    '</div></div>'+
+    '</div>';
 
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
-    mkBar('app-stacked', labels, [
+    mkBar('app-volume',labels,[
       {label:'Received',data:received,backgroundColor:C.TEAL+'aa'},
       {label:'Approved',data:approved,backgroundColor:C.GREEN+'cc'},
       {label:'Denied',data:denied,backgroundColor:C.RED+'cc'},
       {label:'Cancelled',data:cancelled,backgroundColor:C.AMBER+'aa'}
-    ], 240);
-  }, 50);
+    ],220);
+    mkBar('app-revenue',labels,[{label:'Revenue',data:revenue,backgroundColor:C.GREEN+'cc'}],180);
+  },50);
 }
 
 // ---- PIPELINE TAB ----
@@ -603,7 +649,6 @@ function renderPipeline() {
   var leads=(pipe.newLeadsByMonth||[]).map(function(x){return x.value;});
   var endLabels=(em.byMonth||[]).map(function(x){return sm(x.month);});
   var endData=(em.byMonth||[]).map(function(x){return x.value;});
-  var sources=pipe.leadSources||[];
   var reasons=em.reasons||[];
   var net=pipe.signedMTD-em.totalMTD;
 
