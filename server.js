@@ -2939,33 +2939,28 @@ async function buildMetricsData() {
     }
     console.log('Total Lost cards:', lostCards.length, '| PMA Signed:', pmaSigned.length);
 
-    // ── 6. End Management — from Rentvine dateContractEnds on properties ───
-    // Use dateContractEnds on ALL properties (active AND inactive/deactivated)
-    // This matches the Rentvine "Properties" report filtered by Date Contract Ends
-    // Do NOT use Aptly Offboard board — that board is for workflow tracking only
+    // ── 6. End Management — from Aptly Offboard Owner board ────────────────
+    // Field: "Mirror Date Contract Ends" = when management ends
+    // Field: "Reason" = why they left
+    // Use active AND archived cards
     const endMgmtByMonth = buildMonthBuckets(24);
     const endMgmtReasons = {};
     let endMgmtMTD = 0;
 
-    allProps.forEach(item => {
-      const p = item.property || item;
-      const contractEnd = p.dateContractEnds;
+    allOffboard.forEach(card => {
+      const contractEnd = card['Mirror Date Contract Ends'];
       if (!contractEnd) return;
       const ek = monthKey(contractEnd);
-      // Only count if the contract end date is in the past or current month
-      // (don't count future-dated contract ends as ended management)
-      const endObj = new Date(contractEnd);
-      if (endObj > now) return;
       if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
       if (ek === TMK) endMgmtMTD++;
+      const reason = card['Reason'] || '';
+      if (reason) endMgmtReasons[reason] = (endMgmtReasons[reason] || 0) + 1;
     });
 
-    // Sample a few to confirm dateContractEnds is populated
-    const withContractEnd = allProps.filter(i => (i.property||i).dateContractEnds);
-    console.log('End mgmt: ' + withContractEnd.length + ' props with dateContractEnds, ' + endMgmtMTD + ' ending this month');
-    if (withContractEnd.length > 0) {
-      const s = withContractEnd[0].property || withContractEnd[0];
-      console.log('End mgmt sample: address=' + s.address + ' dateContractEnds=' + s.dateContractEnds + ' isActive=' + s.isActive);
+    console.log('End mgmt: ' + allOffboard.length + ' offboard cards, ' + endMgmtMTD + ' ending this month');
+    if (allOffboard.length > 0) {
+      const s = allOffboard[0];
+      console.log('Offboard sample: Title=' + s.Title + ' contractEnd=' + s['Mirror Date Contract Ends'] + ' Reason=' + s['Reason']);
     }
 
     // ── 7. Move-Outs Board (fetched above in parallel) ────────────────────
