@@ -2864,22 +2864,24 @@ async function buildMetricsData() {
     const appCompletionHours = [];
 
     allApps.forEach(card => {
-      // Use "Application Created" field (confirmed from live data)
-      const createdDate = card['Application Created'] || card.createdAt;
+      // Try multiple possible field names for created date
+      const createdDate = card['Application Created'] || card.appCreated ||
+        card['Created At'] || card.createdAt;
       const k = monthKey(createdDate);
       if (k && appsByMonth[k] !== undefined) appsByMonth[k]++;
       if (k === TMK) appsMTD++;
 
-      // Status from Status object
-      const statusUuid = card.Status ? (card.Status.uuid || '') : '';
-      const statusLabel = card.Status ? (card.Status.status || '') : '';
+      // Status field - try multiple possible key names
+      const statusObj = card.Status || card.status || card.appStatus || card['App Status'] || {};
+      const statusUuid = statusObj.uuid || '';
+      const statusLabel = statusObj.status || statusObj.label || statusObj.name || '';
       if (statusLabel) appStatusCounts[statusLabel] = (appStatusCounts[statusLabel] || 0) + 1;
 
       if (statusUuid === 'app-approved') {
         if (k && appsApprovedByMonth[k] !== undefined) appsApprovedByMonth[k]++;
         if (k === TMK) appsApprovedMTD++;
         // Approved to Move-In days
-        const moveIn = card['Move-In Date'];
+        const moveIn = card['Move-In Date'] || card.appMoveInDate || card['Move In Date'];
         if (moveIn && createdDate) {
           const days = Math.round((new Date(moveIn) - new Date(createdDate)) / 86400000);
           if (days > 0 && days < 365) approvedToMoveInDays.push(days);
@@ -2894,14 +2896,14 @@ async function buildMetricsData() {
 
       // Avg Time to Complete: hours from Application Created to Application Completed At
       // Aptly reports this in hours (19.4h confirmed from Aptly dashboard)
-      const completedAt = card['Application Completed At'];
+      const completedAt = card['Application Completed At'] || card.appCompletedAt || card['Application Completed'];
       if (completedAt && createdDate) {
         const hrs = Math.round((new Date(completedAt) - new Date(createdDate)) / 3600000 * 10) / 10;
         if (hrs >= 0 && hrs < 2160) appCompletionHours.push(hrs); // max 90 days in hours
       }
 
       // Revenue: application fee payments (amount is in cents, /100 for dollars)
-      const payments = card['Application Payments'] || [];
+      const payments = card['Application Payments'] || card.appPayments || [];
       if (Array.isArray(payments)) {
         payments.forEach(p => {
           const amt = p.amount ? parseFloat(p.amount.amount || 0) / 100 : 0;
@@ -2921,10 +2923,12 @@ async function buildMetricsData() {
     const completionRate = allApps.length > 0 ? Math.round((completedCount/allApps.length)*10000)/100 : 0;
     if (allApps.length > 0) {
       const s = allApps[0];
-      console.log('App Application Created:', s['Application Created'], 'createdAt:', s.createdAt);
+      console.log('App all keys:', Object.keys(s).join(', '));
+      console.log('App Status:', JSON.stringify(s.Status || s.status || s.appStatus));
+      console.log('App Created:', s['Application Created'] || s.appCreated || s.createdAt);
+      console.log('App Payments sample:', JSON.stringify((s['Application Payments']||s.appPayments||[]).slice(0,1)));
+      console.log('App CompletedAt:', s['Application Completed At'] || s.appCompletedAt);
     }
-    console.log('Apps: ' + allApps.length + ' total | statuses: ' + JSON.stringify(appStatusCounts));
-    console.log('App revenue MTD: $' + appRevenueMTD.toFixed(2) + ' | Avg completion: ' + avgCompletionHours + 'h | Approved-to-movein: ' + avgApprovedToMoveIn + 'd | Completion rate: ' + completionRate + '%');
 
 
     // ── 4. Process Aptly data (already fetched in parallel above) ──────
