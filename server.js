@@ -3423,6 +3423,76 @@ setTimeout(async () => {
   }
 }, 8000); // wait 8s for server to fully initialize
 
+// ── GET /api/metrics/debug-offboard ───────────────────────────────────────
+// Shows all offboard cards with their Mirror Date Contract Ends and Reason
+app.get('/api/metrics/debug-offboard', async (req, res) => {
+  try {
+    const APTLY_BASE = 'https://core-api.getaptly.com';
+    const APTLY_TOKEN = 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+
+    // Fetch schema first to resolve UUID keys
+    const schemaResp = await fetch(APTLY_BASE + '/api/schema/BaMiriNFDZBtWd5rR', {
+      headers: { 'x-token': APTLY_TOKEN }
+    });
+    const schemaFields = await schemaResp.json();
+    const schemaMap = {};
+    if (Array.isArray(schemaFields)) schemaFields.forEach(f => { schemaMap[f.key] = f.label; });
+
+    // Fetch all offboard cards (active + archived)
+    let all = [], pg = 0;
+    while (pg < 5) {
+      const resp = await fetch(APTLY_BASE + '/api/board/BaMiriNFDZBtWd5rR?page=' + pg + '&pageSize=100&includeArchived=true', {
+        headers: { 'x-token': APTLY_TOKEN }
+      });
+      const batch = await resp.json();
+      const items = Array.isArray(batch) ? batch : [];
+      if (items.length === 0) break;
+      all = all.concat(items);
+      if (items.length < 100) break;
+      pg++;
+    }
+
+    // Resolve UUID keys
+    const cards = all.map(card => {
+      const resolved = Object.assign({}, card);
+      Object.keys(schemaMap).forEach(uuid => {
+        if (uuid in card) resolved[schemaMap[uuid]] = card[uuid];
+      });
+      return resolved;
+    });
+
+    // Group by Mirror Date Contract Ends month
+    const byMonth = {};
+    const noDate = [];
+    cards.forEach(c => {
+      const d = c['Mirror Date Contract Ends'];
+      if (d) {
+        const m = d.slice(0, 7);
+        if (!byMonth[m]) byMonth[m] = [];
+        byMonth[m].push({
+          title: c.Title || c.name,
+          contractEnd: d,
+          reason: c.Reason || '',
+          stage: c.stage || c.Stage || '',
+          archived: c.archived,
+        });
+      } else {
+        noDate.push({ title: c.Title || c.name, stage: c.stage, archived: c.archived });
+      }
+    });
+
+    res.json({
+      total: cards.length,
+      schema: schemaMap,
+      byMonth: Object.entries(byMonth).sort().map(([month, items]) => ({ month, count: items.length, items })),
+      withoutDate: noDate.length,
+      noDateSample: noDate.slice(0, 5),
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Inspect live field names on key boards — useful after Aptly schema changes
 app.get('/api/metrics/debug', async (req, res) => {
   try {
