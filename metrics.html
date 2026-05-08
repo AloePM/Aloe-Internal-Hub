@@ -591,9 +591,9 @@ function renderLeasing() {
     '</div>'+
     '<div class="kpi-grid g4">'+
       kpi('App Revenue MTD',app.revenueMTD!=null?'$'+Number(app.revenueMTD).toFixed(0):'--','application fee income',C.GREEN)+
-      kpi('Avg Approved to Move-In',app.avgApprovedToMoveIn!=null?app.avgApprovedToMoveIn+'d':'--','days from approval to move-in',C.TEAL2)+
-      kpi('Avg Time to Complete',app.avgCompletionDays!=null?app.avgCompletionDays+'d':'--','days to complete app',C.AMBER)+
-      kpi('Active Listings',fmt(p.activeListings),'published for rent',C.BLUE)+
+      kpi('Avg Approved to Move-In',app.avgApprovedToMoveIn!=null?app.avgApprovedToMoveIn+' days':'--','from approval to move-in',C.TEAL2)+
+      kpi('Avg Time to Complete',app.avgCompletionHours!=null?app.avgCompletionHours+'h':'--','hours to complete app',C.AMBER)+
+      kpi('Completion Rate',app.completionRate!=null?app.completionRate+'%':'--','apps fully completed',app.completionRate>=50?C.GREEN:C.AMBER)+
     '</div>'+
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title">'+
     '<div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Application Count by Month</div></div>'+
