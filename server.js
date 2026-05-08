@@ -2580,7 +2580,9 @@ async function buildMetricsData() {
 
     const propGainedMTD = allProps.filter(item => {
       const p = item.property || item;
-      const dateAdded = p.dateTimeCreated; // dateContractBegins not in export, dateTimeCreated confirmed
+      // dateContractBegins = when management contract started = "property added" date
+      // dateTimeCreated = when the Rentvine record was created (often same as import date, not useful)
+      const dateAdded = p.dateContractBegins || p.dateTimeCreated;
       return monthKey(dateAdded) === TMK;
     }).length;
 
@@ -2937,22 +2939,34 @@ async function buildMetricsData() {
     }
     console.log('Total Lost cards:', lostCards.length, '| PMA Signed:', pmaSigned.length);
 
-    // ── 6. End Management (offboard board — fetched above in parallel) ──
-    const endMgmtByMonth = buildMonthBuckets(12);
+    // ── 6. End Management — from Rentvine dateContractEnds on properties ───
+    // Use dateContractEnds on ALL properties (active AND inactive/deactivated)
+    // This matches the Rentvine "Properties" report filtered by Date Contract Ends
+    // Do NOT use Aptly Offboard board — that board is for workflow tracking only
+    const endMgmtByMonth = buildMonthBuckets(24);
     const endMgmtReasons = {};
     let endMgmtMTD = 0;
 
-    allOffboard.forEach(card => {
-      const k = monthKey(card.createdAt);
-      if (k && endMgmtByMonth[k] !== undefined) endMgmtByMonth[k]++;
-      if (k === TMK) endMgmtMTD++;
-
-      // Reason is the explicit "Reason" field on the card (confirmed from live data)
-      const reason = card['Reason'] || card.Reason || '';
-      if (reason) {
-        endMgmtReasons[reason] = (endMgmtReasons[reason] || 0) + 1;
-      }
+    allProps.forEach(item => {
+      const p = item.property || item;
+      const contractEnd = p.dateContractEnds;
+      if (!contractEnd) return;
+      const ek = monthKey(contractEnd);
+      // Only count if the contract end date is in the past or current month
+      // (don't count future-dated contract ends as ended management)
+      const endObj = new Date(contractEnd);
+      if (endObj > now) return;
+      if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
+      if (ek === TMK) endMgmtMTD++;
     });
+
+    // Sample a few to confirm dateContractEnds is populated
+    const withContractEnd = allProps.filter(i => (i.property||i).dateContractEnds);
+    console.log('End mgmt: ' + withContractEnd.length + ' props with dateContractEnds, ' + endMgmtMTD + ' ending this month');
+    if (withContractEnd.length > 0) {
+      const s = withContractEnd[0].property || withContractEnd[0];
+      console.log('End mgmt sample: address=' + s.address + ' dateContractEnds=' + s.dateContractEnds + ' isActive=' + s.isActive);
+    }
 
     // ── 7. Move-Outs Board (fetched above in parallel) ────────────────────
     let comprehensiveInspYes = 0, comprehensiveInspNo = 0;
