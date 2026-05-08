@@ -2655,39 +2655,47 @@ async function buildMetricsData() {
       activeUnits.map(item => String((item.unit || item).unitID)).filter(Boolean)
     );
 
-    // Build set of propertyIDs that have ever had a lease (active or closed)
-    const propsWithLeaseHistory = new Set();
-    [...activeLeases, ...closedLeases].forEach(l => {
-      if (l.propertyID) propsWithLeaseHistory.add(String(l.propertyID));
+    // Build maps for pre-tenancy detection
+    // propsWithMoveIn = had a real tenant (moveInDate set on any lease)
+    // propsWithLeaseNoMoveIn = closed lease but moveInDate is null = tenant never moved in
+    const propsWithMoveIn = new Set();
+    const propsWithLeaseNoMoveIn = new Map(); // propertyID -> closeDate
+
+    closedLeases.forEach(l => {
+      if (!l.propertyID) return;
+      if (l.moveInDate) {
+        propsWithMoveIn.add(String(l.propertyID));
+      } else {
+        const closeDate = l.moveOutDate || l.expectedMoveOutDate || l.endDate || '';
+        const existing = propsWithLeaseNoMoveIn.get(String(l.propertyID));
+        if (!existing || closeDate > existing) propsWithLeaseNoMoveIn.set(String(l.propertyID), closeDate);
+      }
     });
+    activeLeases.forEach(l => { if (l.propertyID) propsWithMoveIn.add(String(l.propertyID)); });
 
     // Pre-tenancy cancellations:
-    // isActive=false + dateContractEnds set + never had a lease = cancelled before first tenant
-    // Tracked SEPARATELY from end management (which is for properties that had tenants)
+    // Inactive property where no real tenant ever moved in
     const preTenancyCancellations = [];
     const preTenancyByMonth = buildMonthBuckets(24);
     let preTenancyMTD = 0;
     allProps.forEach(item => {
       const p = item.property || item;
       const isActive = p.isActive === true || p.isActive === 1 || p.isActive === '1';
-      if (!isActive && p.dateContractEnds && !propsWithLeaseHistory.has(String(p.propertyID))) {
-        const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins || p.dateTimeCreated;
-        const cancelDate = p.dateContractEnds;
-        const ek = monthKey(cancelDate);
-        if (ek && preTenancyByMonth[ek] !== undefined) preTenancyByMonth[ek]++;
-        if (ek === TMK) preTenancyMTD++;
-        preTenancyCancellations.push({
-          address: p.address || '',
-          city: p.city || '',
-          dateContractBegins: contractBegins,
-          dateContractEnds: cancelDate,
-          monthKey: ek,
-        });
-      }
+      if (isActive) return;
+      if (propsWithMoveIn.has(String(p.propertyID))) return; // had real tenants
+      // Inactive + no real tenant = pre-tenancy cancel
+      const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins || p.dateTimeCreated;
+      const leaseCloseDate = propsWithLeaseNoMoveIn.get(String(p.propertyID)) || '';
+      const cancelDate = p.dateContractEnds || leaseCloseDate || p.dateTimeModified || '';
+      if (!cancelDate) return;
+      const ek = monthKey(cancelDate);
+      if (ek && preTenancyByMonth[ek] !== undefined) preTenancyByMonth[ek]++;
+      if (ek === TMK) preTenancyMTD++;
+      preTenancyCancellations.push({ address: p.address||'', city: p.city||'', dateContractBegins: contractBegins, dateContractEnds: cancelDate, monthKey: ek });
     });
-    // Sort by contract end date descending
     preTenancyCancellations.sort((a,b) => (b.dateContractEnds||'').localeCompare(a.dateContractEnds||''));
     console.log('Pre-tenancy cancellations:', preTenancyCancellations.length, 'this month:', preTenancyMTD);
+    if (preTenancyCancellations.length > 0) console.log('Sample:', preTenancyCancellations[0].address, preTenancyCancellations[0].dateContractEnds);
 
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
