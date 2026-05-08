@@ -584,9 +584,9 @@ function renderLeasing() {
     '<div class="page-header"><div class="page-title">Leasing Activity</div>'+
     '<div class="page-sub">Applications, lead sources, and performance</div></div>'+
     '<div class="kpi-grid g4">'+
-      kpi('Applications MTD',fmt(app.totalMTD),'received this month',C.TEAL2)+
-      kpi('Approved MTD',fmt(app.approvedMTD),approvalRate+'% approval rate',C.GREEN)+
-      kpi('Denied MTD',fmt(app.deniedMTD),'did not qualify',C.RED)+
+      kpi('Applications MTD',fmt(app.totalMTD),(app.totalAllTime||0)+' all time',C.TEAL2)+
+      kpi('Approved MTD',fmt(app.approvedMTD),(app.approvedAllTime||0)+' all time · '+approvalRate+'% rate',C.GREEN)+
+      kpi('Denied MTD',fmt(app.deniedMTD),(app.deniedAllTime||0)+' all time',C.RED)+
       kpi('Cancelled/Closed MTD',fmt(app.cancelledMTD),'withdrawn or expired',C.AMBER)+
     '</div>'+
     '<div class="kpi-grid g4">'+
@@ -669,8 +669,8 @@ function renderPipeline() {
       '<div class="chart-wrap" style="height:220px"><canvas id="pipe-end"></canvas></div></div>' +
     '</div>' +
     '<div class="grid g-2">' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Lead Sources</div></div>' +
-      (sources.length ? barRows(sources.map(function(s){return {label:s.source,count:s.count};}), C.PURPLE) : '<div style="color:var(--ghost);font-size:13px">No lead source data yet</div>') +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Lost Leads by Reason</div></div>' +
+      (pipe.lostReasons&&pipe.lostReasons.length ? barRows(pipe.lostReasons.map(function(r){return {label:r.reason,count:r.count};}), C.PURPLE) : '<div style="color:var(--ghost);font-size:13px">Lost reason data from Owner Pipeline board.</div>') +
       '</div>' +
       '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Reasons</div></div>' +
       (reasons.length ? barRows(reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:13px">Reasons flow from Aptly Offboard board.</div>') +
