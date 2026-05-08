@@ -3583,6 +3583,69 @@ setTimeout(async () => {
   }
 }, 8000); // wait 8s for server to fully initialize
 
+// ── GET /api/metrics/debug-pretenancy ─────────────────────────────────────
+// Shows inactive properties and their lease history to debug pre-tenancy detection
+app.get('/api/metrics/debug-pretenancy', async (req, res) => {
+  try {
+    // Fetch inactive properties
+    const [closedRaw, activeRaw, propsRaw] = await Promise.all([
+      rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 3, pageSize: 200, page: 1 }),
+      rvFetch('/leases/export', { 'primaryLeaseStatusIDs[]': 2, pageSize: 200, page: 1 }),
+      rvFetch('/properties/export', { isActive: false, pageSize: 100, page: 1 }),
+    ]);
+
+    const closed = (Array.isArray(closedRaw) ? closedRaw : []).map(i => i.lease || i);
+    const active = (Array.isArray(activeRaw) ? activeRaw : []).map(i => i.lease || i);
+    const inactiveProps = (Array.isArray(propsRaw) ? propsRaw : []).map(i => i.property || i);
+
+    // Build moveIn sets
+    const propsWithMoveIn = new Set();
+    const noMoveIn = {};
+    closed.forEach(l => {
+      if (!l.propertyID) return;
+      if (l.moveInDate) propsWithMoveIn.add(String(l.propertyID));
+      else noMoveIn[String(l.propertyID)] = { leaseID: l.leaseID, moveInDate: l.moveInDate, moveOutDate: l.moveOutDate, endDate: l.endDate, closedDate: l.closedDate };
+    });
+    active.forEach(l => { if (l.propertyID) propsWithMoveIn.add(String(l.propertyID)); });
+
+    // Specific lease lookup
+    const lease758 = await rvFetch('/leases/758');
+
+    // Check the specific addresses
+    const specific = inactiveProps.filter(p => {
+      const a = (p.address || '').toLowerCase();
+      return a.includes('66th') || a.includes('197th') || a.includes('jardin') ||
+             a.includes('williams') || a.includes('marquez');
+    });
+
+    // Classify all inactive props
+    const classified = inactiveProps.slice(0, 50).map(p => ({
+      propertyID: p.propertyID,
+      address: p.address,
+      isActive: p.isActive,
+      dateContractEnds: p.dateContractEnds,
+      hasMoveIn: propsWithMoveIn.has(String(p.propertyID)),
+      leaseInfo: noMoveIn[String(p.propertyID)] || null,
+      classification: propsWithMoveIn.has(String(p.propertyID)) ? 'had-tenant' :
+        (noMoveIn[String(p.propertyID)] ? 'lease-no-movein' : 'no-lease'),
+    }));
+
+    res.json({
+      inactivePropsTotal: inactiveProps.length,
+      propsWithMoveIn: propsWithMoveIn.size,
+      propsWithLeaseNoMoveIn: Object.keys(noMoveIn).length,
+      lease758: lease758,
+      specificAddresses: specific.map(p => ({
+        propertyID: p.propertyID, address: p.address, isActive: p.isActive,
+        dateContractEnds: p.dateContractEnds,
+        hasMoveIn: propsWithMoveIn.has(String(p.propertyID)),
+        leaseNoMoveIn: noMoveIn[String(p.propertyID)] || null,
+      })),
+      sample50: classified,
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/metrics/debug-offboard ───────────────────────────────────────
 // Shows all offboard cards with their Mirror Date Contract Ends and Reason
 app.get('/api/metrics/debug-offboard', async (req, res) => {
