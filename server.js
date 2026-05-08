@@ -2536,11 +2536,11 @@ async function buildMetricsData() {
     // so closed leases don't crowd out active ones in pagination
 
     const [allProps, allUnits, activeLeasesRaw, closedLeasesRaw, allPropsList] = await Promise.all([
-      fetchAllPages('/properties/export', {}, 3),
-      fetchAllPages('/properties/units/export', {}, 3),
+      fetchAllPages('/properties/export', { isActive: true }, 5), // active properties, 5 pages
+      fetchAllPages('/properties/units/export', { isActive: true }, 5), // active units only, 5 pages
       fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 5), // Active
       fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 3 }, 8), // Closed
-      fetchAllPages('/properties', {}, 5), // /properties list has dateContractBegins (export doesn't)
+      fetchAllPages('/properties', { isActive: true }, 5), // for dateContractBegins
     ]);
 
     // Build a map of propertyID -> dateContractBegins from the list endpoint
@@ -2619,27 +2619,21 @@ async function buildMetricsData() {
     });
 
     // Filter to active managed units only
-    const activeUnits = allUnits.filter(item => {
-      const u = item.unit || item;
-      // isActive '1'/1/true = unit is under active management
-      return u.isActive === '1' || u.isActive === 1 || u.isActive === true;
-    });
+    // All fetched units are already filtered isActive=true from the export
+    // isVacant can be boolean true/false or string '1'/'0' depending on API version
+    const isUnitActive = u => u.isActive === true || u.isActive === 1 || u.isActive === '1' || u.isActive === 'true';
+    const isUnitVacant = u => u.isVacant === true || u.isVacant === 1 || u.isVacant === '1' || u.isVacant === 'true';
 
+    const activeUnits = allUnits.filter(item => isUnitActive(item.unit || item));
     const totalUnits = activeUnits.length;
 
-    // Use isVacant field directly — this is what Rentvine's own dashboard uses
-    const vacantUnitCount = activeUnits.filter(item => {
-      const u = item.unit || item;
-      return u.isVacant === '1' || u.isVacant === 1 || u.isVacant === true;
-    }).length;
-
+    const vacantUnitCount = activeUnits.filter(item => isUnitVacant(item.unit || item)).length;
     const occupiedUnitCount = totalUnits - vacantUnitCount;
-
-    // Use isVacant flag from units — confirmed accurate (372 occupied, 17 vacant)
     const occupiedUnits = occupiedUnitCount;
     const vacantUnits = vacantUnitCount;
     const occupancyRate = totalUnits > 0 ? +((occupiedUnits / totalUnits) * 100).toFixed(1) : 0;
     console.log('Metrics occupancy: ' + occupiedUnits + ' occupied / ' + totalUnits + ' total = ' + occupancyRate + '%');
+    console.log('Units sample isActive/isVacant types:', typeof (allUnits[0]&&(allUnits[0].unit||allUnits[0]).isActive), typeof (allUnits[0]&&(allUnits[0].unit||allUnits[0]).isVacant));
 
     // Avg rent from unit records (rent field confirmed on unit export)
     const rents = activeUnits
@@ -3253,7 +3247,10 @@ async function buildMetricsData() {
 
       // Portfolio
       portfolio: {
-        activeProperties: activeProps.length,
+        activeProperties: allProps.filter(i => {
+          const p = i.property||i;
+          return p.isActive === true || p.isActive === 1 || p.isActive === '1';
+        }).length,
         totalUnits,
         occupiedUnits,
         vacantUnits,
