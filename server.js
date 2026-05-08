@@ -2991,50 +2991,51 @@ async function buildMetricsData() {
     }
     console.log('Total Lost cards:', lostCards.length, '| PMA Signed:', pmaSigned.length);
 
-    // ── 6. End Management — from Rentvine properties with dateContractEnds ──
-    // isActive=false + past dateContractEnds = LOST (count as end management)
-    // isActive=true  + past dateContractEnds = needs updated agreement (track separately)
+    // ── 6. End Management — from Aptly Offboard board ──────────────────────
+    // Field: "Mirror Date Contract Ends" (schema-resolved from UUID)
+    // Field: "Reason" (schema-resolved from UUID)
+    // DEDUPLICATION: same property can have multiple cards (New/In Progress/Done)
+    // Only count each unique property title once per month
     const endMgmtByMonth = buildMonthBuckets(24);
     const endMgmtReasons = {};
     let endMgmtMTD = 0;
-    const needsUpdatedAgreement = [];
+    const seenEndMgmt = new Set();
 
+    allOffboard.forEach(card => {
+      const contractEnd = card['Mirror Date Contract Ends'];
+      if (!contractEnd) return;
+      const ek = monthKey(contractEnd);
+      const title = (card.Title || card.name || '').trim();
+      const dedupKey = title + '|' + ek;
+      if (seenEndMgmt.has(dedupKey)) return; // skip duplicate
+      seenEndMgmt.add(dedupKey);
+      if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
+      if (ek === TMK) endMgmtMTD++;
+      const reason = card['Reason'] || '';
+      if (reason) endMgmtReasons[reason] = (endMgmtReasons[reason] || 0) + 1;
+    });
+
+    // Needs updated agreement: active Rentvine properties with past dateContractEnds
+    const needsUpdatedAgreement = [];
     allProps.forEach(item => {
       const p = item.property || item;
       const contractEnd = p.dateContractEnds;
       if (!contractEnd) return;
       const endObj = new Date(contractEnd);
-      const ek = monthKey(contractEnd);
       const isActive = p.isActive === true || p.isActive === 1 || p.isActive === '1';
-
-      if (endObj <= now) {
-        if (!isActive) {
-          // LOST — inactive property with past contract end = end management
-          if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
-          if (ek === TMK) endMgmtMTD++;
-        } else {
-          // ACTIVE but contract expired — needs updated management agreement
-          needsUpdatedAgreement.push({
-            address: p.address || '',
-            city: p.city || '',
-            dateContractEnds: contractEnd,
-            isActive,
-          });
-        }
+      if (endObj <= now && isActive) {
+        needsUpdatedAgreement.push({
+          address: p.address || '',
+          city: p.city || '',
+          dateContractEnds: contractEnd,
+        });
       }
     });
 
-    // Get reasons from Offboard board (schema-resolved)
-    allOffboard.forEach(card => {
-      const reason = card['Reason'] || '';
-      if (reason) endMgmtReasons[reason] = (endMgmtReasons[reason] || 0) + 1;
-    });
-
-    console.log('End mgmt: ' + endMgmtMTD + ' lost this month, ' + needsUpdatedAgreement.length + ' need updated agreement');
+    console.log('End mgmt: ' + seenEndMgmt.size + ' unique props, ' + endMgmtMTD + ' this month, ' + needsUpdatedAgreement.length + ' need updated agreement');
     if (allOffboard.length > 0) {
       const s = allOffboard[0];
-      console.log('Offboard resolved keys:', Object.keys(s).filter(k => !k.match(/^[a-z0-9]{15,}$/i)).join(', '));
-      console.log('Offboard sample Reason=' + s['Reason'] + ' contractEnd=' + s['Mirror Date Contract Ends']);
+      console.log('Offboard sample: Title=' + (s.Title||s.name) + ' contractEnd=' + s['Mirror Date Contract Ends'] + ' Reason=' + s['Reason']);
     }
 
     // ── 7. Move-Outs Board (fetched above in parallel) ────────────────────
@@ -3484,24 +3485,34 @@ app.get('/api/metrics/debug-offboard', async (req, res) => {
       return resolved;
     });
 
-    // Group by Mirror Date Contract Ends month
+    // Group by Mirror Date Contract Ends month — deduplicate by title+month
     const byMonth = {};
     const noDate = [];
+    const seenDebug = new Set();
     cards.forEach(c => {
       const d = c['Mirror Date Contract Ends'];
       if (d) {
         const m = d.slice(0, 7);
+        const title = (c.Title || c.name || '').trim();
+        const key = title + '|' + m;
+        const isDup = seenDebug.has(key);
+        seenDebug.add(key);
         if (!byMonth[m]) byMonth[m] = [];
         byMonth[m].push({
-          title: c.Title || c.name,
+          title,
           contractEnd: d,
           reason: c.Reason || '',
-          stage: c.stage || c.Stage || '',
+          stage: c.stage || '',
           archived: c.archived,
+          duplicate: isDup,
         });
       } else {
         noDate.push({ title: c.Title || c.name, stage: c.stage, archived: c.archived });
       }
+    });
+    // Add unique counts
+    Object.keys(byMonth).forEach(m => {
+      byMonth[m]._unique = byMonth[m].filter(i => !i.duplicate).length;
     });
 
     res.json({
