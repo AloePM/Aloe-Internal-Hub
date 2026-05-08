@@ -2861,42 +2861,81 @@ async function buildMetricsData() {
       }
     });
 
-    // Lead sources breakdown
+    // ── Owner Pipeline — all data from Aptly Owner Pipeline board ──────────
+    // Board: QySZ8yRWJ5KeYFcZt
+    // Confirmed field names from live data:
+    //   Created At = when lead entered pipeline (use for new leads per month)
+    //   Source = lead source string (e.g. "Property Manager Websites", "Facebook/Social Media")
+    //   Stage = "PMA Signed", "Lost", "Not Valid Lead", "Engaged", etc.
+    //   Is Won = boolean (true when PMA Signed)
+    //   Archived = boolean
+    //   Lost Reason = custom field for why lead was lost (need to confirm exact key)
+
+    // 1. New leads per month — use Created At on ALL cards (active + archived)
+    // New leads = every card by Created At date (when lead entered pipeline)
+    const newLeadsByMonth = buildMonthBuckets(24);
+    let newLeadsMTD = 0;
     const leadSources = {};
-    allLeadsRaw.forEach(card => {
-      const src = card.leadSource || card['Lead Source'] || card.Source || card['Lead Type'] || '';
-      if (src) {
-        leadSources[src] = (leadSources[src] || 0) + 1;
-      }
-    });
-
-    // New leads by month
-    const newLeadsByMonth = buildMonthBuckets(12);
-    allLeadsRaw.forEach(card => {
-      const k = monthKey(card.createdAt || card['Created At']);
-      if (k && newLeadsByMonth[k] !== undefined) newLeadsByMonth[k]++;
-    });
-
-    // ── 5. Owner Pipeline (PMA board — fetched above in parallel) ───────
-    const pmaSignedByMonth = buildMonthBuckets(12);
-    const newPipelineByMonth = buildMonthBuckets(12);
-    let pmaSignedMTD = 0, newPipelineMTD = 0;
 
     allPMA.forEach(card => {
-      const stage = (card.stage || '').toLowerCase();
-      const k = monthKey(card.createdAt);
-
-      if (k && newPipelineByMonth[k] !== undefined) newPipelineByMonth[k]++;
-      if (k === TMK) newPipelineMTD++;
-
-      // Confirmed stage name: "PMA Signed" (from live logs)
-      if (stage === 'pma signed' || stage.includes('pma signed')) {
-        const signedDate = card.updatedAt || card.createdAt;
-        const sk = monthKey(signedDate);
-        if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
-        if (sk === TMK) pmaSignedMTD++;
-      }
+      // Count as new lead by creation date
+      const k = monthKey(card['Created At'] || card.createdAt);
+      if (k && newLeadsByMonth[k] !== undefined) newLeadsByMonth[k]++;
+      if (k === TMK) newLeadsMTD++;
+      // Source field — confirmed "Source" from live card data
+      const src = card.Source || '';
+      if (src) leadSources[src] = (leadSources[src] || 0) + 1;
     });
+    console.log('New leads total:', allPMA.length, '| Lead sources:', JSON.stringify(leadSources));
+
+    // 3. PMA Signed — stage === "PMA Signed" (active OR archived)
+    //    Use "Management Start Date" or "Date Contract Begins" for the month
+    //    Fall back to Stage Changed date, then Created At
+    const pmaSignedByMonth = buildMonthBuckets(24);
+    let pmaSignedMTD = 0;
+
+    // Log a sample PMA Signed card to find the management start date field
+    const pmaSigned = allPMA.filter(c => (c.Stage || c.stage || '') === 'PMA Signed');
+    if (pmaSigned.length > 0) {
+      const s = pmaSigned[0];
+      console.log('PMA Signed sample fields:', Object.keys(s).join(', '));
+      console.log('PMA Signed sample Stage Changed:', s['Stage Changed'], 'Created At:', s['Created At']);
+    }
+    console.log('Total PMA Signed cards:', pmaSigned.length);
+
+    pmaSigned.forEach(card => {
+      // Management start date: prefer explicit date field, fall back to Stage Changed
+      // (Stage Changed = when card moved to "PMA Signed" stage = effectively when signed)
+      const signedDate = card['Management Start Date'] || card['Date Contract Begins'] ||
+        card['Management Date'] || card['Start Date'] || card['Stage Changed'] ||
+        card['Created At'] || card.createdAt;
+      const sk = monthKey(signedDate);
+      if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
+      if (sk === TMK) pmaSignedMTD++;
+    });
+
+    // 4. Lost leads — stage === "Lost" (active or archived)
+    //    Use Lost Reason field for breakdown
+    const lostByMonth = buildMonthBuckets(24);
+    const lostReasons = {};
+    let lostMTD = 0;
+
+    // Lost leads: stage === "Lost" (active or archived)
+    // Stage Changed = when they moved to Lost = when we lost the lead
+    const lostCards = allPMA.filter(c => (c.Stage || c.stage || '') === 'Lost');
+    lostCards.forEach(card => {
+      const k = monthKey(card['Stage Changed'] || card['Created At'] || card.createdAt);
+      if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
+      if (k === TMK) lostMTD++;
+      const reason = card['Lost Reason'] || card['Loss Reason'] || card['Reason Lost'] || card.lostReason || '';
+      if (reason) lostReasons[reason] = (lostReasons[reason] || 0) + 1;
+    });
+    if (lostCards.length > 0) {
+      const s = lostCards[0];
+      console.log('Lost card fields:', Object.keys(s).filter(k => k.toLowerCase().includes('lost') || k.toLowerCase().includes('reason') || k === 'Stage' || k === 'Stage Changed').join(', '));
+      console.log('Lost sample: Stage=' + s.Stage + ' Reason=' + (s['Lost Reason'] || s['Loss Reason'] || 'not found'));
+    }
+    console.log('Total Lost cards:', lostCards.length, '| PMA Signed:', pmaSigned.length);
 
     // ── 6. End Management (offboard board — fetched above in parallel) ──
     const endMgmtByMonth = buildMonthBuckets(12);
@@ -3052,15 +3091,20 @@ async function buildMetricsData() {
       },
 
       // Owner Pipeline
+      // Owner Pipeline — from Aptly Owner Pipeline board
       pipeline: {
         signedMTD: pmaSignedMTD,
-        newLeadsMTD: newPipelineMTD,
+        newLeadsMTD,
+        lostMTD,
         signedByMonth: formatTrend(pmaSignedByMonth),
         newLeadsByMonth: formatTrend(newLeadsByMonth),
+        lostByMonth: formatTrend(lostByMonth),
+        lostReasons: Object.entries(lostReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
         leadSources: Object.entries(leadSources)
           .sort((a, b) => b[1] - a[1])
           .map(([source, count]) => ({ source, count })),
       },
+
 
       // End Management
       endManagement: {
