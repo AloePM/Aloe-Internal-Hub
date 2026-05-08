@@ -2663,21 +2663,31 @@ async function buildMetricsData() {
 
     // Pre-tenancy cancellations:
     // isActive=false + dateContractEnds set + never had a lease = cancelled before first tenant
+    // Tracked SEPARATELY from end management (which is for properties that had tenants)
     const preTenancyCancellations = [];
+    const preTenancyByMonth = buildMonthBuckets(24);
+    let preTenancyMTD = 0;
     allProps.forEach(item => {
       const p = item.property || item;
       const isActive = p.isActive === true || p.isActive === 1 || p.isActive === '1';
       if (!isActive && p.dateContractEnds && !propsWithLeaseHistory.has(String(p.propertyID))) {
         const contractBegins = propContractDatesMap[String(p.propertyID)] || p.dateContractBegins || p.dateTimeCreated;
+        const cancelDate = p.dateContractEnds;
+        const ek = monthKey(cancelDate);
+        if (ek && preTenancyByMonth[ek] !== undefined) preTenancyByMonth[ek]++;
+        if (ek === TMK) preTenancyMTD++;
         preTenancyCancellations.push({
           address: p.address || '',
           city: p.city || '',
           dateContractBegins: contractBegins,
-          dateContractEnds: p.dateContractEnds,
+          dateContractEnds: cancelDate,
+          monthKey: ek,
         });
       }
     });
-    console.log('Pre-tenancy cancellations:', preTenancyCancellations.length);
+    // Sort by contract end date descending
+    preTenancyCancellations.sort((a,b) => (b.dateContractEnds||'').localeCompare(a.dateContractEnds||''));
+    console.log('Pre-tenancy cancellations:', preTenancyCancellations.length, 'this month:', preTenancyMTD);
 
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
@@ -3245,6 +3255,8 @@ async function buildMetricsData() {
         gainedMTD: propGainedMTD,
         preTenancyCancellations,
         preTenancyCancellationCount: preTenancyCancellations.length,
+        preTenancyMTD,
+        preTenancyByMonth: formatTrend(preTenancyByMonth),
         activeListings: publishedListings.length,
         listingsOver45Days: listings45,
         listingsOver90Days: listings90,
