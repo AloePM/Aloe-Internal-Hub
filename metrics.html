@@ -823,6 +823,26 @@ function renderPortfolio() {
       '</div></div>';
   }
 
+  // Pre-tenancy cancellations section
+  var preCancels = (D.portfolio && D.portfolio.preTenancyCancellations) || [];
+  if (preCancels.length > 0) {
+    var pcRows = preCancels.slice(0,30).map(function(p) {
+      var begStr = p.dateContractBegins ? new Date(p.dateContractBegins).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '--';
+      var endStr = p.dateContractEnds ? new Date(p.dateContractEnds).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '--';
+      return '<div class="detail-row"><div><div class="detail-addr">'+p.address+'</div><div class="detail-city">'+p.city+'</div></div>' +
+        '<div class="detail-meta">Onboarded '+begStr+'</div>' +
+        '<div class="detail-rent" style="color:var(--red);font-size:11px">Ended '+endStr+'</div></div>';
+    }).join('');
+    html += '<div class="card" style="margin-top:14px"><div class="card-header">' +
+      '<div class="card-title"><div class="card-title-bar" style="background:var(--red)"></div>Pre-Tenancy Cancellations</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:rgba(239,68,68,0.1);color:var(--red);border-radius:20px">'+preCancels.length+' properties</span></div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Properties that ended management before a tenant was ever placed</div>' +
+      '<div class="detail-list open" style="display:block;max-height:320px;overflow-y:auto">' +
+      '<div class="detail-header"><span>Property</span><span>Onboarded</span><span>Contract Ended</span></div>' +
+      pcRows + (preCancels.length > 30 ? '<div style="padding:8px 12px;font-size:11px;color:var(--muted)">Showing 30 of '+preCancels.length+'</div>' : '') +
+      '</div></div>';
+  }
+
   html += '</div>';
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
