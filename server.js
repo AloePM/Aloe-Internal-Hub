@@ -2991,31 +2991,50 @@ async function buildMetricsData() {
     }
     console.log('Total Lost cards:', lostCards.length, '| PMA Signed:', pmaSigned.length);
 
-    // ── 6. End Management — from Aptly Offboard Owner board ────────────────
-    // Field: "Mirror Date Contract Ends" = when management ends
-    // Field: "Reason" = why they left
-    // Use active AND archived cards
+    // ── 6. End Management — from Rentvine properties with dateContractEnds ──
+    // isActive=false + past dateContractEnds = LOST (count as end management)
+    // isActive=true  + past dateContractEnds = needs updated agreement (track separately)
     const endMgmtByMonth = buildMonthBuckets(24);
     const endMgmtReasons = {};
     let endMgmtMTD = 0;
+    const needsUpdatedAgreement = [];
 
-    allOffboard.forEach(card => {
-      // From live card data: "Mirror Date Contract Ends" and "Reason" are confirmed field names
-      const contractEnd = card['Mirror Date Contract Ends'];
+    allProps.forEach(item => {
+      const p = item.property || item;
+      const contractEnd = p.dateContractEnds;
       if (!contractEnd) return;
+      const endObj = new Date(contractEnd);
       const ek = monthKey(contractEnd);
-      if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
-      if (ek === TMK) endMgmtMTD++;
+      const isActive = p.isActive === true || p.isActive === 1 || p.isActive === '1';
+
+      if (endObj <= now) {
+        if (!isActive) {
+          // LOST — inactive property with past contract end = end management
+          if (ek && endMgmtByMonth[ek] !== undefined) endMgmtByMonth[ek]++;
+          if (ek === TMK) endMgmtMTD++;
+        } else {
+          // ACTIVE but contract expired — needs updated management agreement
+          needsUpdatedAgreement.push({
+            address: p.address || '',
+            city: p.city || '',
+            dateContractEnds: contractEnd,
+            isActive,
+          });
+        }
+      }
+    });
+
+    // Get reasons from Offboard board (schema-resolved)
+    allOffboard.forEach(card => {
       const reason = card['Reason'] || '';
       if (reason) endMgmtReasons[reason] = (endMgmtReasons[reason] || 0) + 1;
     });
 
-    console.log('End mgmt: ' + allOffboard.length + ' offboard cards, ' + endMgmtMTD + ' ending this month');
+    console.log('End mgmt: ' + endMgmtMTD + ' lost this month, ' + needsUpdatedAgreement.length + ' need updated agreement');
     if (allOffboard.length > 0) {
       const s = allOffboard[0];
-      const allKeys = Object.keys(s).join(', ');
-      console.log('Offboard card keys:', allKeys);
-      console.log('Offboard sample: Title=' + s.Title + ' contractEnd=' + s['Mirror Date Contract Ends'] + ' Reason=' + s.Reason);
+      console.log('Offboard resolved keys:', Object.keys(s).filter(k => !k.match(/^[a-z0-9]{15,}$/i)).join(', '));
+      console.log('Offboard sample Reason=' + s['Reason'] + ' contractEnd=' + s['Mirror Date Contract Ends']);
     }
 
     // ── 7. Move-Outs Board (fetched above in parallel) ────────────────────
@@ -3174,6 +3193,7 @@ async function buildMetricsData() {
       endManagement: {
         totalMTD: endMgmtMTD,
         byMonth: formatTrend(endMgmtByMonth),
+        needsUpdatedAgreement,
         reasons: Object.entries(endMgmtReasons)
           .sort((a, b) => b[1] - a[1])
           .map(([reason, count]) => ({ reason, count })),
@@ -3441,11 +3461,14 @@ app.get('/api/metrics/debug-offboard', async (req, res) => {
     // Fetch all offboard cards (active + archived)
     let all = [], pg = 0;
     while (pg < 5) {
-      const resp = await fetch(APTLY_BASE + '/api/board/BaMiriNFDZBtWd5rR?page=' + pg + '&pageSize=100&includeArchived=true', {
+      const params = new URLSearchParams({ page: pg, pageSize: 100, includeArchived: true });
+      const resp = await fetch(APTLY_BASE + '/api/board/BaMiriNFDZBtWd5rR?' + params, {
         headers: { 'x-token': APTLY_TOKEN }
       });
+      if (!resp.ok) { console.log('Offboard debug fetch failed:', resp.status); break; }
       const batch = await resp.json();
-      const items = Array.isArray(batch) ? batch : [];
+      const items = Array.isArray(batch) ? batch : (batch && batch.data ? batch.data : []);
+      console.log('Offboard debug page', pg, ':', items.length, 'items, first keys:', items[0] ? Object.keys(items[0]).slice(0,5).join(',') : 'none');
       if (items.length === 0) break;
       all = all.concat(items);
       if (items.length < 100) break;
