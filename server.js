@@ -2725,11 +2725,21 @@ async function buildMetricsData() {
       : null;
 
     // ── 3–8. PARALLEL FETCH — all Aptly boards at once ──────────────────
+    // Direct Aptly fetch using x-token — unitsFetch strips fields, must use raw fetch
+    const APTLY_BASE = 'https://core-api.getaptly.com';
+    const APTLY_TOKEN = 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+
     async function fetchAptlyBoard(boardId, opts = {}) {
       let all = [], pg = 0;
       const max = opts.maxPages || 5;
+      const extraParams = opts.params || {};
       while (pg < max) {
-        const batch = await unitsFetch('/api/board/' + boardId, { page: pg, pageSize: 100, ...opts.params });
+        const params = new URLSearchParams({ page: pg, pageSize: 100, ...extraParams });
+        const resp = await fetch(APTLY_BASE + '/api/board/' + boardId + '?' + params.toString(), {
+          headers: { 'x-token': APTLY_TOKEN }
+        });
+        if (!resp.ok) break;
+        const batch = await resp.json();
         const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
         if (items.length === 0) break;
         all = all.concat(items);
@@ -2881,11 +2891,11 @@ async function buildMetricsData() {
 
     allPMA.forEach(card => {
       // Count as new lead by creation date
-      const k = monthKey(card['Created At'] || card.createdAt);
+      const k = monthKey(card.createdAt);
       if (k && newLeadsByMonth[k] !== undefined) newLeadsByMonth[k]++;
       if (k === TMK) newLeadsMTD++;
       // Source field — confirmed "Source" from live card data
-      const src = card.Source || '';
+      const src = card.leadSource || card.Source || '';
       if (src) leadSources[src] = (leadSources[src] || 0) + 1;
     });
     console.log('New leads total:', allPMA.length, '| Lead sources:', JSON.stringify(leadSources));
@@ -2897,20 +2907,19 @@ async function buildMetricsData() {
     let pmaSignedMTD = 0;
 
     // Log a sample PMA Signed card to find the management start date field
-    const pmaSigned = allPMA.filter(c => (c.Stage || c.stage || '') === 'PMA Signed');
+    const pmaSigned = allPMA.filter(c => (c.stage || c.Stage || '') === 'PMA Signed');
     if (pmaSigned.length > 0) {
       const s = pmaSigned[0];
       console.log('PMA Signed sample fields:', Object.keys(s).join(', '));
-      console.log('PMA Signed sample Stage Changed:', s['Stage Changed'], 'Created At:', s['Created At']);
+      console.log('PMA Signed sample stageUpdatedAt:', s.stageUpdatedAt, 'createdAt:', s.createdAt);
     }
     console.log('Total PMA Signed cards:', pmaSigned.length);
 
     pmaSigned.forEach(card => {
       // Management start date: prefer explicit date field, fall back to Stage Changed
       // (Stage Changed = when card moved to "PMA Signed" stage = effectively when signed)
-      const signedDate = card['Management Start Date'] || card['Date Contract Begins'] ||
-        card['Management Date'] || card['Start Date'] || card['Stage Changed'] ||
-        card['Created At'] || card.createdAt;
+      // Field names from live data: stageUpdatedAt, createdAt (camelCase)
+      const signedDate = card.stageUpdatedAt || card.createdAt;
       const sk = monthKey(signedDate);
       if (sk && pmaSignedByMonth[sk] !== undefined) pmaSignedByMonth[sk]++;
       if (sk === TMK) pmaSignedMTD++;
@@ -2924,12 +2933,12 @@ async function buildMetricsData() {
 
     // Lost leads: stage === "Lost" (active or archived)
     // Stage Changed = when they moved to Lost = when we lost the lead
-    const lostCards = allPMA.filter(c => (c.Stage || c.stage || '') === 'Lost');
+    const lostCards = allPMA.filter(c => (c.stage || c.Stage || '') === 'Lost');
     lostCards.forEach(card => {
-      const k = monthKey(card['Stage Changed'] || card['Created At'] || card.createdAt);
+      const k = monthKey(card.stageUpdatedAt || card.createdAt);
       if (k && lostByMonth[k] !== undefined) lostByMonth[k]++;
       if (k === TMK) lostMTD++;
-      const reason = card['Lost Reason'] || card['Loss Reason'] || card['Reason Lost'] || card.lostReason || '';
+      const reason = card['Lost Reason'] || card.lostReason || card['Loss Reason'] || '';
       if (reason) lostReasons[reason] = (lostReasons[reason] || 0) + 1;
     });
     if (lostCards.length > 0) {
@@ -2948,6 +2957,7 @@ async function buildMetricsData() {
     let endMgmtMTD = 0;
 
     allOffboard.forEach(card => {
+      // From live card data: "Mirror Date Contract Ends" and "Reason" are confirmed field names
       const contractEnd = card['Mirror Date Contract Ends'];
       if (!contractEnd) return;
       const ek = monthKey(contractEnd);
@@ -2960,7 +2970,9 @@ async function buildMetricsData() {
     console.log('End mgmt: ' + allOffboard.length + ' offboard cards, ' + endMgmtMTD + ' ending this month');
     if (allOffboard.length > 0) {
       const s = allOffboard[0];
-      console.log('Offboard sample: Title=' + s.Title + ' contractEnd=' + s['Mirror Date Contract Ends'] + ' Reason=' + s['Reason']);
+      const allKeys = Object.keys(s).join(', ');
+      console.log('Offboard card keys:', allKeys);
+      console.log('Offboard sample: Title=' + s.Title + ' contractEnd=' + s['Mirror Date Contract Ends'] + ' Reason=' + s.Reason);
     }
 
     // ── 7. Move-Outs Board (fetched above in parallel) ────────────────────
