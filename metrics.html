@@ -255,20 +255,24 @@ var CD = {
   }
 };
 
-function mkBar(id, labels, datasets, h) {
+function mkBar(id, labels, datasets, h, horizontal) {
   h = h || 160;
   var el = document.getElementById(id);
   if (!el) return;
   if (charts[id]) charts[id].destroy();
+  var scales = horizontal ? {
+    x:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}},
+    y:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac',maxTicksLimit:12},grid:{display:false},border:{display:false}}
+  } : {
+    x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},
+    y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
+  };
   charts[id] = new Chart(el, {
     type: 'bar',
     data: {labels: labels, datasets: datasets.map(function(d) {
       return Object.assign({}, d, {borderRadius:4, borderSkipped:false});
     })},
-    options: Object.assign({}, CD, {scales:{
-      x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}},
-      y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
-    }})
+    options: Object.assign({}, CD, {indexAxis: horizontal?'y':'x', scales: scales})
   });
   el.parentElement.style.height = h + 'px';
 }
@@ -515,44 +519,95 @@ function renderOverview() {
 
 // ---- OCCUPANCY TAB ----
 function renderOccupancy() {
-  var p=D.portfolio, l=D.leases;
-  var labels=(l.moveInsByMonth||[]).map(function(x){return sm(x.month);});
-  var moveIns=(l.moveInsByMonth||[]).map(function(x){return x.value;});
-  var moveOuts=(l.moveOutsByMonth||[]).map(function(x){return x.value;});
-  var expirations=(l.expirationsByMonth||[]).map(function(x){return x.value;});
-  var reasons=l.moveOutReasons||[];
+  var occ=D.occupancy||{};
+  var p=D.portfolio||{};
+  var totalUnits=p.totalUnits||0;
+  var vacantUnits=p.vacantUnits||0;
+  var occupiedUnits=totalUnits-vacantUnits;
+  var rate=p.occupancyRate||0;
+  var avgRent=p.avgRent||0;
+  var totalRent=p.totalRentExpected||0;
+  var vacLoss=p.vacancyLoss||0;
+  var pastDue=p.pastDueTenants||[];
+  var totalPastDue=p.totalPastDue||0;
+  var moveOutReasons=(D.leases&&D.leases.moveOutReasons)||[];
 
-  var html = '<div class="main">' +
-    '<div class="page-header"><div class="page-title">Occupancy and Resident Status</div></div>' +
-    '<div class="kpi-grid g5">' +
-      kpi('Occupancy Rate', p.occupancyRate+'%', 'target 95%+', p.occupancyRate>=95?C.GREEN:C.RED) +
-      kpi('Occupied Units', fmt(p.occupiedUnits), 'active leases', C.GREEN) +
-      kpi('Vacant Units', fmt(p.vacantUnits), 'no active lease', C.RED) +
-      kpi('Active Listings', fmt(p.activeListings), 'published for rent', C.TEAL2) +
-      kpi('Vacancy Loss /mo', fmt(p.vacancyLoss,'$'), 'avg $'+p.avgRent+'/mo', C.AMBER) +
-    '</div>' +
-    '<div class="kpi-grid g3">' +
-      kpi('Move-Ins MTD', fmt(l.moveInsMTD), 'started this month', C.TEAL2) +
-      kpi('Move-Outs MTD', fmt(l.moveOutsMTD), 'ended this month', C.GRAY) +
-      kpi('Expiring (90 days)', fmt(l.upcomingExpirations), 'upcoming lease ends', C.AMBER) +
-    '</div>' +
-    '<div class="grid g-2">' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move-Ins vs Move-Outs</div></div>' +
-      '<div class="chart-wrap" style="height:220px"><canvas id="occ-move"></canvas></div>' +
-      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Move-Ins</div>' +
-      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GRAY+'"></div>Move-Outs</div></div></div>' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Lease Expirations Monthly</div></div>' +
-      '<div class="chart-wrap" style="height:220px"><canvas id="occ-exp"></canvas></div></div>' +
-    '</div>' +
-    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Move-Out Reasons</div></div>' +
-    (reasons.length ? barRows(reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) :
-      '<div style="color:var(--ghost);font-size:13px">Move-out reasons populate from the Rentvine vacateReason field on lease records.</div>') +
-    '</div></div>';
+  // Move-out reason chart data
+  var reasonLabels=moveOutReasons.map(function(r){return r.reason;});
+  var reasonCounts=moveOutReasons.map(function(r){return r.count;});
+
+  // Past due rows
+  var pdRows=pastDue.slice(0,30).map(function(t){
+    var notice=t.noticeDate?'<span style="font-size:10px;color:var(--amber);margin-left:6px">Notice given</span>':'';
+    return '<div class="detail-row"><div><div class="detail-addr">'+t.address+'</div>'+
+      '<div class="detail-city">'+t.tenant+notice+'</div></div>'+
+      '<div class="detail-rent" style="color:var(--red)">$'+Number(t.amountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>';
+  }).join('');
+
+  var html = '<div class="main">'+
+    '<div class="page-header"><div class="page-title">Occupancy</div></div>'+
+
+    // KPI row 1 - units
+    '<div class="kpi-grid g4">'+
+      kpi('Occupancy Rate',rate+'%',occupiedUnits+' of '+totalUnits+' units occupied',rate>=95?C.GREEN:rate>=90?C.AMBER:C.RED)+
+      kpi('Vacant Units',fmt(vacantUnits),'currently unoccupied',vacantUnits>0?C.AMBER:C.GREEN)+
+      kpi('Occupied Units',fmt(occupiedUnits),'active tenants',C.TEAL2)+
+      kpi('Active Listings',fmt(p.activeListings||0),'published for rent',C.BLUE)+
+    '</div>'+
+
+    // KPI row 2 - financials
+    '<div class="kpi-grid g4">'+
+      kpi('Avg Rent','$'+Number(avgRent).toLocaleString(),'per unit across portfolio',C.TEAL2)+
+      kpi('Total Rent (Owners)','$'+Number(totalRent).toLocaleString(),'total rent collected on behalf of owners',C.GREEN)+
+      kpi('Vacancy Loss (Mgmt)','$'+Number(vacLoss).toLocaleString(),'vacant × $85 mgmt fee per month',C.RED)+
+      kpi('Past Due Balance','$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),p.pastDueCount+' tenants behind on rent',totalPastDue>0?C.RED:C.GREEN)+
+    '</div>'+
+
+    '<div class="grid g-2">'+
+      // Move activity
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move Activity (24 months)</div></div>'+
+      '<div class="chart-wrap" style="height:200px"><canvas id="occ-moves"></canvas></div>'+
+      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Move-Ins</div>'+
+      '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Move-Outs</div></div></div>'+
+
+      // Move-out reasons bar chart
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Move-Out Reasons</div></div>'+
+      (moveOutReasons.length ?
+        '<div class="chart-wrap" style="height:200px"><canvas id="occ-reasons"></canvas></div>' :
+        '<div style="color:var(--ghost);font-size:13px">No move-out reasons on file yet in Rentvine</div>')+
+      '</div>'+
+    '</div>'+
+
+    // Past due tenants
+    '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
+    '<div class="card-title"><div class="card-title-bar" style="background:var(--red)"></div>Past Due Rent</div>'+
+    '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:rgba(239,68,68,0.1);color:var(--red);border-radius:20px">'+
+    '$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' total</span></div>'+
+    (pastDue.length ?
+      '<div class="detail-list open" style="display:block;max-height:400px;overflow-y:auto">'+
+      '<div class="detail-header"><span>Property / Tenant</span><span>Amount Due</span></div>'+
+      pdRows+(pastDue.length>30?'<div style="padding:8px;font-size:11px;color:var(--muted)">Showing 30 of '+pastDue.length+'</div>':'')+
+      '</div>' :
+      '<div style="color:var(--ghost);font-size:13px;padding:12px">No past due balances found</div>')+
+    '</div>'+
+
+    '</div>';
+
+  var moveLabels=(occ.moveInsByMonth||[]).map(function(x){return sm(x.month);});
+  var moveIns=(occ.moveInsByMonth||[]).map(function(x){return x.value;});
+  var moveOuts=(occ.moveOutsByMonth||[]).map(function(x){return x.value;});
 
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
-    mkBar('occ-move', labels, [{label:'Move-Ins',data:moveIns,backgroundColor:C.TEAL+'cc'},{label:'Move-Outs',data:moveOuts,backgroundColor:C.GRAY+'cc'}], 220);
-    mkBar('occ-exp', labels, [{label:'Expirations',data:expirations,backgroundColor:C.AMBER+'cc'}], 220);
+    mkBar('occ-moves', moveLabels, [
+      {label:'Move-Ins',data:moveIns,backgroundColor:C.GREEN+'cc'},
+      {label:'Move-Outs',data:moveOuts,backgroundColor:C.RED+'cc'}
+    ], 200);
+    if (moveOutReasons.length) {
+      mkBar('occ-reasons', reasonLabels, [
+        {label:'Count',data:reasonCounts,backgroundColor:C.AMBER+'cc'}
+      ], 200, true); // horizontal
+    }
   }, 50);
 }
 
