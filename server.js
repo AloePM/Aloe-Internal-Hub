@@ -2556,11 +2556,13 @@ async function buildMetricsData() {
       console.log('dateContractBegins not populated in Rentvine — using dateTimeCreated for properties added chart');
     }
 
-    // /leases/export nests data under .lease — unwrap for easy access
+    // /leases/export nests data under .lease — unwrap and preserve balances
     const unwrap = items => items.map(item => {
       const l = item.lease || item;
       l._unit = item.unit || {};
       l._property = item.property || {};
+      l._balances = item.balances || {};       // unpaid balance, prepayment, etc.
+      l._unpaidCharges = item.unpaidCharges || {}; // detail of unpaid charges
       return l;
     });
 
@@ -2635,14 +2637,17 @@ async function buildMetricsData() {
     console.log('Metrics occupancy: ' + occupiedUnits + ' occupied / ' + totalUnits + ' total = ' + occupancyRate + '%');
     console.log('Units sample isActive/isVacant types:', typeof (allUnits[0]&&(allUnits[0].unit||allUnits[0]).isActive), typeof (allUnits[0]&&(allUnits[0].unit||allUnits[0]).isVacant));
 
-    // Avg rent from unit records (rent field confirmed on unit export)
-    const rents = activeUnits
-      .filter(item => { const u = item.unit||item; return u.isVacant==='0'||u.isVacant===0||u.isVacant===false; })
-      .map(item => { const u = item.unit||item; return parseFloat(u.rent||u.marketRent||0); })
-      .filter(r => r > 0);
-    const avgRent = rents.length ? Math.round(rents.reduce((a, b) => a + b, 0) / rents.length) : 0;
-    const vacancyLoss = vacantUnits * avgRent;
-    console.log('Metrics avg rent: $' + avgRent + ' from ' + rents.length + ' units, vacancy loss: $' + vacancyLoss);
+    // Avg rent and total rent from unit records
+    const allUnitRents = activeUnits.map(item => parseFloat((item.unit||item).rent || 0)).filter(r => r > 0);
+    const occupiedUnitRents = activeUnits
+      .filter(item => !isUnitVacant(item.unit||item))
+      .map(item => parseFloat((item.unit||item).rent || 0)).filter(r => r > 0);
+    const avgRent = allUnitRents.length ? Math.round(allUnitRents.reduce((a,b)=>a+b,0) / allUnitRents.length) : 0;
+    const totalRentExpected = Math.round(allUnitRents.reduce((a,b)=>a+b,0)); // total rent on behalf of owners
+    // Vacancy loss = vacant units × $85 management fee (our fee, not owner rent)
+    const MGMT_FEE = 85;
+    const vacancyLoss = vacantUnits * MGMT_FEE;
+    console.log('Metrics avg rent: $' + avgRent + ' from ' + allUnitRents.length + ' units, total rent: $' + totalRentExpected + ', vacancy loss: $' + vacancyLoss);
 
     // Build set of active unit IDs for move-out filtering
     const activeUnitIDs = new Set(
@@ -2699,6 +2704,8 @@ async function buildMetricsData() {
 
     // Move-out reasons from Rentvine lease records
     const moveOutReasons = {};
+    const pastDueTenants = [];
+    let totalPastDue = 0;
 
     if (allLeases.length > 0) {
       const sample = allLeases[0];
@@ -2748,6 +2755,21 @@ async function buildMetricsData() {
       if (reasonStatusId === 3) { // Closed leases only
         const reason = l.moveOutTenantReason || l.moveOutReason || l.vacateReason || '';
         if (reason) moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
+
+      // ── PAST DUE / LATE RENT ───────────────────────────────────────────────
+      // _balances.accountsReceivableBalance = amount owed by tenant
+      if (parseInt(l.primaryLeaseStatusID||0) === 2 && l._balances) {
+        const owed = parseFloat(l._balances.accountsReceivableBalance || 0);
+        if (owed > 0) {
+          const tenantName = Array.isArray(l.tenants) ? (l.tenants[0]||{}).name||'--' : (l.tenants||'--');
+          pastDueTenants.push({
+            leaseID: l.leaseID, tenant: tenantName,
+            address: l._unit.address||'', city: l._unit.city||'',
+            amountDue: owed, noticeDate: l.noticeDate||null,
+          });
+          totalPastDue += owed;
+        }
+      }
       }
     });
 
