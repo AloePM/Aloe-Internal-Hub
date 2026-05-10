@@ -2698,8 +2698,11 @@ async function buildMetricsData() {
     if (preTenancyCancellations.length > 0) console.log('Sample:', preTenancyCancellations[0].address, preTenancyCancellations[0].dateContractEnds);
 
     // ── Occupancy trend by month ─────────────────────────────────────────
-    // Build month-over-month occupancy using current occupied + cumulative move activity
-    // Start from current occupancy and reconstruct backwards
+    // For each month: count leases that were ACTIVE during that month
+    // A lease is active in month M if:
+    //   moveInDate <= last day of M  AND
+    //   (no moveOut date OR moveOut date >= first day of M)
+    // This correctly handles portfolio growth/loss over time
     const occupancyTrendMonths = [];
     const now2 = new Date();
     for (let i = 23; i >= 0; i--) {
@@ -2707,26 +2710,54 @@ async function buildMetricsData() {
       occupancyTrendMonths.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
     }
 
-    // Track active leases per month by counting:
-    // - leases that started (moveInDate) before or during that month
-    // - minus leases that ended (expectedMoveOutDate/moveOutDate) before that month
     const occupancyByMonth = {};
     const vacancyByMonth = {};
+
     occupancyTrendMonths.forEach(mk => {
-      const monthEnd = new Date(mk + '-01');
-      monthEnd.setMonth(monthEnd.getMonth() + 1); // first day of next month
+      // First and last day of this month
+      const [yr, mo] = mk.split('-').map(Number);
+      const monthStart = new Date(yr, mo - 1, 1);
+      const monthEnd = new Date(yr, mo, 0); // last day of month
+
       let occupied = 0;
       allLeases.forEach(l => {
-        const moveIn = l.moveInDate ? new Date(l.moveInDate) : null;
+        // Must have a moveInDate to count as occupied
+        if (!l.moveInDate) return;
+        const moveIn = new Date(l.moveInDate);
+
+        // Lease must have started (moveIn) on or before last day of month
+        if (moveIn > monthEnd) return;
+
+        // Determine move-out date
         const moveOut = l.expectedMoveOutDate ? new Date(l.expectedMoveOutDate) :
-                        l.moveOutDate ? new Date(l.moveOutDate) : null;
-        if (!moveIn || moveIn >= monthEnd) return; // not moved in yet
-        if (moveOut && moveOut < new Date(mk + '-01')) return; // already moved out
+                        l.moveOutDate ? new Date(l.moveOutDate) :
+                        null; // still active = no move-out
+
+        // If moved out before this month started, skip
+        if (moveOut && moveOut < monthStart) return;
+
         occupied++;
       });
+
       occupancyByMonth[mk] = occupied;
-      vacancyByMonth[mk] = Math.max(0, totalUnits - occupied);
+
+      // Count properties active this month for accurate vacancy
+      // Active = created before month end AND (no contract end OR contract end >= month start)
+      let activePropsThisMonth = 0;
+      allProps.forEach(item => {
+        const p = item.property || item;
+        const created = p.dateTimeCreated ? new Date(p.dateTimeCreated) : null;
+        if (!created || created > monthEnd) return; // not created yet
+        const contractEnd = p.dateContractEnds ? new Date(p.dateContractEnds) : null;
+        if (contractEnd && contractEnd < monthStart) return; // already lost
+        activePropsThisMonth++;
+      });
+
+      vacancyByMonth[mk] = Math.max(0, activePropsThisMonth - occupied);
     });
+
+    console.log('Occupancy trend sample:', occupancyTrendMonths.slice(-3).map(mk =>
+      mk + ':' + occupancyByMonth[mk] + 'occ/' + vacancyByMonth[mk] + 'vac').join(' | '));
 
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
