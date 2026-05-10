@@ -2766,9 +2766,9 @@ async function buildMetricsData() {
         const pastDueRent = parseFloat(bal.pastDueRentAmount || 0);
         const pastDueTotal = parseFloat(bal.pastDueTotalAmount || 0);
         const unpaidTotal = parseFloat(bal.unpaidTotalAmount || 0);
-        // Log first few to compare against CSV
-        if (pastDueTenants.length < 3 && (pastDueRent > 0 || pastDueTotal > 0)) {
-          console.log('PastDue sample:', l._unit.address, '| bal keys:', Object.keys(bal).join(','), '| pastDueRent:', pastDueRent, '| pastDueTotal:', pastDueTotal, '| unpaidRent:', bal.unpaidRentAmount, '| unpaidTotal:', bal.unpaidTotalAmount);
+        // Log all balance fields for first few past-due tenants
+        if (pastDueTenants.length < 5 && pastDueRent > 0) {
+          console.log('PastDue:', l._unit.address, JSON.stringify(bal));
         }
         if (pastDueRent > 0) { // only show tenants with past due RENT
           const tenantName = Array.isArray(l.tenants)
