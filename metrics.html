@@ -536,12 +536,14 @@ function renderOccupancy() {
   var reasonLabels=moveOutReasons.map(function(r){return r.reason;});
   var reasonCounts=moveOutReasons.map(function(r){return r.count;});
 
-  // Past due rows
+  // Past due rows - use pastDueTotal and pastDueRent from balances
   var pdRows=pastDue.slice(0,30).map(function(t){
-    var notice=t.noticeDate?'<span style="font-size:10px;color:var(--amber);margin-left:6px">Notice given</span>':'';
-    return '<div class="detail-row"><div><div class="detail-addr">'+t.address+'</div>'+
-      '<div class="detail-city">'+t.tenant+notice+'</div></div>'+
-      '<div class="detail-rent" style="color:var(--red)">$'+Number(t.amountDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>';
+    var notice=t.noticeDate?'<span style="font-size:10px;color:var(--amber);margin-left:6px">⚠ Notice</span>':'';
+    var rentBadge=t.pastDueRent>0?'<span style="font-size:10px;color:var(--red);margin-left:4px">Rent: $'+Number(t.pastDueRent).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':'';
+    var unpaidBadge=(t.unpaidTotal>t.pastDueTotal&&t.unpaidTotal>0)?'<span style="font-size:10px;color:var(--muted);margin-left:4px">Unpaid: $'+Number(t.unpaidTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':'';
+    return '<div class="detail-row"><div><div class="detail-addr">'+t.address+notice+'</div>'+
+      '<div class="detail-city">'+t.tenant+rentBadge+unpaidBadge+'</div></div>'+
+      '<div class="detail-rent" style="color:var(--red);font-weight:700">$'+Number(t.pastDueTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>';
   }).join('');
 
   var html = '<div class="main">'+
@@ -585,7 +587,7 @@ function renderOccupancy() {
     '$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' total</span></div>'+
     (pastDue.length ?
       '<div class="detail-list open" style="display:block;max-height:400px;overflow-y:auto">'+
-      '<div class="detail-header"><span>Property / Tenant</span><span>Amount Due</span></div>'+
+      '<div class="detail-header"><span>Property / Tenant</span><span>Past Due Total</span></div>'+
       pdRows+(pastDue.length>30?'<div style="padding:8px;font-size:11px;color:var(--muted)">Showing 30 of '+pastDue.length+'</div>':'')+
       '</div>' :
       '<div style="color:var(--ghost);font-size:13px;padding:12px">No past due balances found</div>')+
