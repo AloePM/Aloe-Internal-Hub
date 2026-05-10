@@ -2755,10 +2755,10 @@ async function buildMetricsData() {
       if (reasonStatusId === 3) { // Closed leases only
         const reason = l.moveOutTenantReason || l.moveOutReason || l.vacateReason || '';
         if (reason) moveOutReasons[reason] = (moveOutReasons[reason] || 0) + 1;
+      }
 
       // ── PAST DUE / LATE RENT ───────────────────────────────────────────────
-      // _balances.accountsReceivableBalance = amount owed by tenant
-      if (parseInt(l.primaryLeaseStatusID||0) === 2 && l._balances) {
+      if (reasonStatusId === 2 && l._balances) {
         const owed = parseFloat(l._balances.accountsReceivableBalance || 0);
         if (owed > 0) {
           const tenantName = Array.isArray(l.tenants) ? (l.tenants[0]||{}).name||'--' : (l.tenants||'--');
@@ -2769,7 +2769,6 @@ async function buildMetricsData() {
           });
           totalPastDue += owed;
         }
-      }
       }
     });
 
@@ -3279,6 +3278,10 @@ async function buildMetricsData() {
         occupancyRate,
         avgRent,
         vacancyLoss,
+        totalRentExpected,
+        pastDueTenants: pastDueTenants.sort((a,b)=>b.amountDue-a.amountDue),
+        totalPastDue: Math.round(totalPastDue * 100) / 100,
+        pastDueCount: pastDueTenants.length,
         gainedMTD: propGainedMTD,
         preTenancyCancellations,
         preTenancyCancellationCount: preTenancyCancellations.length,
