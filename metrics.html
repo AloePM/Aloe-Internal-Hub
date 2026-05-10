@@ -519,8 +519,8 @@ function renderOverview() {
 
 // ---- OCCUPANCY TAB ----
 function renderOccupancy() {
-  var occ=D.occupancy||{};
   var p=D.portfolio||{};
+  var l=D.leases||{};
   var totalUnits=p.totalUnits||0;
   var vacantUnits=p.vacantUnits||0;
   var occupiedUnits=totalUnits-vacantUnits;
@@ -530,7 +530,7 @@ function renderOccupancy() {
   var vacLoss=p.vacancyLoss||0;
   var pastDue=p.pastDueTenants||[];
   var totalPastDue=p.totalPastDue||0;
-  var moveOutReasons=(D.leases&&D.leases.moveOutReasons)||[];
+  var moveOutReasons=l.moveOutReasons||[];
 
   // Move-out reason chart data
   var reasonLabels=moveOutReasons.map(function(r){return r.reason;});
@@ -560,7 +560,7 @@ function renderOccupancy() {
       kpi('Avg Rent','$'+Number(avgRent).toLocaleString(),'per unit across portfolio',C.TEAL2)+
       kpi('Total Rent (Owners)','$'+Number(totalRent).toLocaleString(),'total rent collected on behalf of owners',C.GREEN)+
       kpi('Vacancy Loss (Mgmt)','$'+Number(vacLoss).toLocaleString(),'vacant × $85 mgmt fee per month',C.RED)+
-      kpi('Past Due Balance','$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),p.pastDueCount+' tenants behind on rent',totalPastDue>0?C.RED:C.GREEN)+
+      kpi('Past Due Balance','$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),(pastDue.length||0)+' tenants behind on rent',totalPastDue>0?C.RED:C.GREEN)+
     '</div>'+
 
     '<div class="grid g-2">'+
@@ -593,9 +593,9 @@ function renderOccupancy() {
 
     '</div>';
 
-  var moveLabels=(occ.moveInsByMonth||[]).map(function(x){return sm(x.month);});
-  var moveIns=(occ.moveInsByMonth||[]).map(function(x){return x.value;});
-  var moveOuts=(occ.moveOutsByMonth||[]).map(function(x){return x.value;});
+  var moveLabels=(l.moveInsByMonth||[]).map(function(x){return sm(x.month);});
+  var moveIns=(l.moveInsByMonth||[]).map(function(x){return x.value;});
+  var moveOuts=(l.moveOutsByMonth||[]).map(function(x){return x.value;});
 
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
