@@ -2766,9 +2766,9 @@ async function buildMetricsData() {
         const pastDueRent = parseFloat(bal.pastDueRentAmount || 0);
         const pastDueTotal = parseFloat(bal.pastDueTotalAmount || 0);
         const unpaidTotal = parseFloat(bal.unpaidTotalAmount || 0);
-        // Log all balance fields for first few past-due tenants
-        if (pastDueTenants.length < 5 && pastDueRent > 0) {
-          console.log('PastDue:', l._unit.address, JSON.stringify(bal));
+        // Log leaseStatusID alongside balance to identify which statuses CSV excludes
+        if (pastDueRent > 0) {
+          console.log('PastDue:', l._unit.address, 'leaseStatusID:', l.leaseStatusID, 'pastDueRent:', pastDueRent);
         }
         if (pastDueRent > 0) { // only show tenants with past due RENT
           const tenantName = Array.isArray(l.tenants)
