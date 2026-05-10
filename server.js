@@ -2697,6 +2697,37 @@ async function buildMetricsData() {
     console.log('Pre-tenancy cancellations:', preTenancyCancellations.length, 'this month:', preTenancyMTD);
     if (preTenancyCancellations.length > 0) console.log('Sample:', preTenancyCancellations[0].address, preTenancyCancellations[0].dateContractEnds);
 
+    // ── Occupancy trend by month ─────────────────────────────────────────
+    // Build month-over-month occupancy using current occupied + cumulative move activity
+    // Start from current occupancy and reconstruct backwards
+    const occupancyTrendMonths = [];
+    const now2 = new Date();
+    for (let i = 23; i >= 0; i--) {
+      const d = new Date(now2.getFullYear(), now2.getMonth() - i, 1);
+      occupancyTrendMonths.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+    }
+
+    // Track active leases per month by counting:
+    // - leases that started (moveInDate) before or during that month
+    // - minus leases that ended (expectedMoveOutDate/moveOutDate) before that month
+    const occupancyByMonth = {};
+    const vacancyByMonth = {};
+    occupancyTrendMonths.forEach(mk => {
+      const monthEnd = new Date(mk + '-01');
+      monthEnd.setMonth(monthEnd.getMonth() + 1); // first day of next month
+      let occupied = 0;
+      allLeases.forEach(l => {
+        const moveIn = l.moveInDate ? new Date(l.moveInDate) : null;
+        const moveOut = l.expectedMoveOutDate ? new Date(l.expectedMoveOutDate) :
+                        l.moveOutDate ? new Date(l.moveOutDate) : null;
+        if (!moveIn || moveIn >= monthEnd) return; // not moved in yet
+        if (moveOut && moveOut < new Date(mk + '-01')) return; // already moved out
+        occupied++;
+      });
+      occupancyByMonth[mk] = occupied;
+      vacancyByMonth[mk] = Math.max(0, totalUnits - occupied);
+    });
+
     // ── Move-ins / outs / expirations by month ────────────────────────────
     // Use 24 months to capture full prior year + current year
     const moveInsByMonth = buildMonthBuckets(24);
@@ -2793,6 +2824,9 @@ async function buildMetricsData() {
 
     const nonZeroMoveOuts = Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0));
     console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${closedLeases.length} closed leases)`);
+    const withReason = closedLeases.filter(l => l.moveOutTenantReason);
+    console.log('Closed leases with moveOutTenantReason:', withReason.length, 'sample:', withReason[0] && withReason[0].moveOutTenantReason);
+    console.log('Move-out reasons found:', JSON.stringify(moveOutReasons));
     // Sample a few closed leases to confirm field values
 
 
@@ -3295,6 +3329,8 @@ async function buildMetricsData() {
         occupiedUnits,
         vacantUnits,
         occupancyRate,
+        occupancyByMonth: occupancyTrendMonths.map(mk => ({ month: mk, value: occupancyByMonth[mk]||0 })),
+        vacancyByMonth: occupancyTrendMonths.map(mk => ({ month: mk, value: vacancyByMonth[mk]||0 })),
         avgRent,
         vacancyLoss,
         totalRentExpected,
