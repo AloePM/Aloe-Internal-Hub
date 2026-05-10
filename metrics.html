@@ -536,14 +536,13 @@ function renderOccupancy() {
   var reasonLabels=moveOutReasons.map(function(r){return r.reason;});
   var reasonCounts=moveOutReasons.map(function(r){return r.count;});
 
-  // Past due rows - use pastDueTotal and pastDueRent from balances
-  var pdRows=pastDue.slice(0,30).map(function(t){
-    var notice=t.noticeDate?'<span style="font-size:10px;color:var(--amber);margin-left:6px">⚠ Notice</span>':'';
-    var rentBadge=t.pastDueRent>0?'<span style="font-size:10px;color:var(--red);margin-left:4px">Rent: $'+Number(t.pastDueRent).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':'';
-    var unpaidBadge=(t.unpaidTotal>t.pastDueTotal&&t.unpaidTotal>0)?'<span style="font-size:10px;color:var(--muted);margin-left:4px">Unpaid: $'+Number(t.unpaidTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':'';
+  // Past due rows — sorted by pastDueRent descending
+  var pdRows=pastDue.slice(0,50).map(function(t){
+    var notice=t.noticeDate?'<span style="font-size:10px;padding:1px 5px;background:rgba(245,158,11,0.15);color:var(--amber);border-radius:8px;margin-left:6px">⚠ Notice</span>':'';
+    var totalBadge=t.pastDueTotal>t.pastDueRent?'<span style="font-size:10px;color:var(--muted);margin-left:6px">Total due: $'+Number(t.pastDueTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':'';
     return '<div class="detail-row"><div><div class="detail-addr">'+t.address+notice+'</div>'+
-      '<div class="detail-city">'+t.tenant+rentBadge+unpaidBadge+'</div></div>'+
-      '<div class="detail-rent" style="color:var(--red);font-weight:700">$'+Number(t.pastDueTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>';
+      '<div class="detail-city" style="color:var(--muted)">'+t.tenant+totalBadge+'</div></div>'+
+      '<div class="detail-rent" style="color:var(--red);font-weight:700">$'+Number(t.pastDueRent).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div></div>';
   }).join('');
 
   var html = '<div class="main">'+
@@ -560,9 +559,9 @@ function renderOccupancy() {
     // KPI row 2 - financials
     '<div class="kpi-grid g4">'+
       kpi('Avg Rent','$'+Number(avgRent).toLocaleString(),'per unit across portfolio',C.TEAL2)+
-      kpi('Total Rent (Owners)','$'+Number(totalRent).toLocaleString(),'total rent collected on behalf of owners',C.GREEN)+
+      kpi('Total Rent (Owners)','$'+Number(totalRent).toLocaleString(),'sum of rent for occupied units',C.GREEN)+
       kpi('Vacancy Loss (Mgmt)','$'+Number(vacLoss).toLocaleString(),'vacant × $85 mgmt fee per month',C.RED)+
-      kpi('Past Due Balance','$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),(pastDue.length||0)+' tenants behind on rent',totalPastDue>0?C.RED:C.GREEN)+
+      kpi('Past Due Rent','$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),(pastDue.length||0)+' tenants with past due rent',totalPastDue>0?C.RED:C.GREEN)+
     '</div>'+
 
     '<div class="grid g-2">'+
@@ -587,7 +586,7 @@ function renderOccupancy() {
     '$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' total</span></div>'+
     (pastDue.length ?
       '<div class="detail-list open" style="display:block;max-height:400px;overflow-y:auto">'+
-      '<div class="detail-header"><span>Property / Tenant</span><span>Past Due Total</span></div>'+
+      '<div class="detail-header"><span>Property / Tenant</span><span>Past Due Rent</span></div>'+
       pdRows+(pastDue.length>30?'<div style="padding:8px;font-size:11px;color:var(--muted)">Showing 30 of '+pastDue.length+'</div>':'')+
       '</div>' :
       '<div style="color:var(--ghost);font-size:13px;padding:12px">No past due balances found</div>')+
