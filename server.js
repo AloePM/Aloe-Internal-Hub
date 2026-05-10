@@ -2758,16 +2758,29 @@ async function buildMetricsData() {
       }
 
       // ── PAST DUE / LATE RENT ───────────────────────────────────────────────
+      // balances object from /leases/export: pastDueTotalAmount, pastDueRentAmount,
+      // unpaidTotalAmount, unpaidRentAmount
       if (reasonStatusId === 2 && l._balances) {
-        const owed = parseFloat(l._balances.accountsReceivableBalance || 0);
-        if (owed > 0) {
-          const tenantName = Array.isArray(l.tenants) ? (l.tenants[0]||{}).name||'--' : (l.tenants||'--');
+        const bal = l._balances;
+        const pastDueTotal = parseFloat(bal.pastDueTotalAmount || 0);
+        const pastDueRent = parseFloat(bal.pastDueRentAmount || 0);
+        const unpaidTotal = parseFloat(bal.unpaidTotalAmount || 0);
+        if (pastDueTotal > 0 || unpaidTotal > 0) {
+          const tenantName = Array.isArray(l.tenants)
+            ? l.tenants.filter(t=>t.isActive).map(t=>t.name).join(', ') || '--'
+            : (l.tenants||'--');
           pastDueTenants.push({
-            leaseID: l.leaseID, tenant: tenantName,
-            address: l._unit.address||'', city: l._unit.city||'',
-            amountDue: owed, noticeDate: l.noticeDate||null,
+            leaseID: l.leaseID,
+            tenant: tenantName,
+            address: l._unit.address || '',
+            city: l._unit.city || '',
+            pastDueTotal,
+            pastDueRent,
+            unpaidTotal,
+            noticeDate: l.noticeDate || null,
+            endDate: l.endDate || null,
           });
-          totalPastDue += owed;
+          totalPastDue += pastDueTotal;
         }
       }
     });
