@@ -2643,7 +2643,8 @@ async function buildMetricsData() {
       .filter(item => !isUnitVacant(item.unit||item))
       .map(item => parseFloat((item.unit||item).rent || 0)).filter(r => r > 0);
     const avgRent = allUnitRents.length ? Math.round(allUnitRents.reduce((a,b)=>a+b,0) / allUnitRents.length) : 0;
-    const totalRentExpected = Math.round(allUnitRents.reduce((a,b)=>a+b,0)); // total rent on behalf of owners
+    // Total rent = occupied units only (CSV shows $954,305 = actual rent on behalf of owners)
+    const totalRentExpected = Math.round(occupiedUnitRents.reduce((a,b)=>a+b,0));
     // Vacancy loss = vacant units × $85 management fee (our fee, not owner rent)
     const MGMT_FEE = 85;
     const vacancyLoss = vacantUnits * MGMT_FEE;
@@ -2758,29 +2759,29 @@ async function buildMetricsData() {
       }
 
       // ── PAST DUE / LATE RENT ───────────────────────────────────────────────
-      // balances object from /leases/export: pastDueTotalAmount, pastDueRentAmount,
-      // unpaidTotalAmount, unpaidRentAmount
+      // CSV columns confirmed: "Past Due Rent" = pastDueRentAmount, "Total Past Due" = pastDueTotalAmount
+      // Show "Past Due Rent" only ($43,274.85) — not total past due which includes fees
       if (reasonStatusId === 2 && l._balances) {
         const bal = l._balances;
-        const pastDueTotal = parseFloat(bal.pastDueTotalAmount || 0);
         const pastDueRent = parseFloat(bal.pastDueRentAmount || 0);
+        const pastDueTotal = parseFloat(bal.pastDueTotalAmount || 0);
         const unpaidTotal = parseFloat(bal.unpaidTotalAmount || 0);
-        if (pastDueTotal > 0 || unpaidTotal > 0) {
+        if (pastDueRent > 0) { // only show tenants with past due RENT
           const tenantName = Array.isArray(l.tenants)
             ? l.tenants.filter(t=>t.isActive).map(t=>t.name).join(', ') || '--'
             : (l.tenants||'--');
           pastDueTenants.push({
             leaseID: l.leaseID,
             tenant: tenantName,
-            address: l._unit.address || '',
-            city: l._unit.city || '',
-            pastDueTotal,
-            pastDueRent,
+            address: l._unit.address || l._property.address || '',
+            city: l._unit.city || l._property.city || '',
+            pastDueRent,    // "Past Due Rent" column = what we show
+            pastDueTotal,   // "Total Past Due" column = includes fees
             unpaidTotal,
             noticeDate: l.noticeDate || null,
             endDate: l.endDate || null,
           });
-          totalPastDue += pastDueTotal;
+          totalPastDue += pastDueRent; // total = sum of past due RENT only
         }
       }
     });
