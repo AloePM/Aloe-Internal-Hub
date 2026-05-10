@@ -2766,10 +2766,11 @@ async function buildMetricsData() {
         const pastDueRent = parseFloat(bal.pastDueRentAmount || 0);
         const pastDueTotal = parseFloat(bal.pastDueTotalAmount || 0);
         const unpaidTotal = parseFloat(bal.unpaidTotalAmount || 0);
-        // Log leaseStatusID alongside balance to identify which statuses CSV excludes
-        if (pastDueRent > 0) {
-          console.log('PastDue:', l._unit.address, 'leaseStatusID:', l.leaseStatusID, 'pastDueRent:', pastDueRent);
-        }
+        // Exclude leaseStatusID=10 (legal/eviction/collections) — matches Rentvine CSV filter
+        // CSV filter: "Lease Status: in Active" which excludes legal/eviction status
+        const leaseStatusId = parseInt(l.leaseStatusID || 0);
+        if (leaseStatusId === 10) return; // skip legal/eviction leases
+
         if (pastDueRent > 0) { // only show tenants with past due RENT
           const tenantName = Array.isArray(l.tenants)
             ? l.tenants.filter(t=>t.isActive).map(t=>t.name).join(', ') || '--'
