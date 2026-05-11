@@ -579,13 +579,13 @@ function renderOccupancy() {
       '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Move-Ins</div>'+
       '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Move-Outs</div></div></div>'+
 
-      // Move-out reasons bar chart
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Move-Out Reasons</div></div>'+
+      // Move-out reasons card
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Tenant Move-Out Reasons</div></div>'+
       (moveOutReasons.length ?
         '<div class="chart-wrap" style="height:200px"><canvas id="occ-reasons"></canvas></div>' :
-        '<div style="color:var(--ghost);font-size:13px">Reasons from Aptly Offboard board</div>')+
+        '<div style="padding:16px"><div style="font-size:13px;color:var(--text);margin-bottom:8px;font-weight:600">No move-out reasons on file</div>'+
+        '<div style="font-size:12px;color:var(--muted);line-height:1.6">The <strong>Reason for Vacating</strong> field in Rentvine is currently not being filled in when processing move-outs. Once your team starts selecting a reason when closing leases in Rentvine, this chart will automatically populate.</div></div>')+
       '</div>'+
-    '</div>'+
 
     // Past due tenants
     '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
