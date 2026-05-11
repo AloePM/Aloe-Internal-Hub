@@ -2710,51 +2710,61 @@ async function buildMetricsData() {
       occupancyTrendMonths.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
     }
 
+    // Build occupancy trend using cumulative move-in/move-out deltas
+    // Start from TODAY's known occupied count and work backwards using move history
+    // This is accurate because we know exactly who moved in/out each month
+
+    // Step 1: Build move-in and move-out counts per month from lease history
+    const moveInDeltaByMonth = {};
+    const moveOutDeltaByMonth = {};
+    occupancyTrendMonths.forEach(mk => {
+      moveInDeltaByMonth[mk] = 0;
+      moveOutDeltaByMonth[mk] = 0;
+    });
+
+    // Count move-ins per month (from all leases with a moveInDate)
+    allLeases.forEach(l => {
+      if (!l.moveInDate) return;
+      const mk = monthKey(l.moveInDate);
+      if (mk && moveInDeltaByMonth[mk] !== undefined) moveInDeltaByMonth[mk]++;
+    });
+
+    // Count move-outs per month (closed leases only, using expectedMoveOutDate or moveOutDate)
+    closedLeases.forEach(l => {
+      const moveOutDate = l.expectedMoveOutDate || l.moveOutDate;
+      if (!moveOutDate) return;
+      const mk = monthKey(moveOutDate);
+      if (mk && moveOutDeltaByMonth[mk] !== undefined) moveOutDeltaByMonth[mk]++;
+    });
+
+    // Step 2: Start from current occupied count and walk backwards
     const occupancyByMonth = {};
     const vacancyByMonth = {};
+    let runningOccupied = occupiedUnitCount; // today's known count (485)
 
-    occupancyTrendMonths.forEach(mk => {
-      // First and last day of this month
+    // Walk backwards from most recent to oldest month
+    for (let i = occupancyTrendMonths.length - 1; i >= 0; i--) {
+      const mk = occupancyTrendMonths[i];
+      occupancyByMonth[mk] = Math.max(0, runningOccupied);
+
+      // Count active properties this month for vacancy
       const [yr, mo] = mk.split('-').map(Number);
       const monthStart = new Date(yr, mo - 1, 1);
-      const monthEnd = new Date(yr, mo, 0); // last day of month
-
-      let occupied = 0;
-      allLeases.forEach(l => {
-        // Must have a moveInDate to count as occupied
-        if (!l.moveInDate) return;
-        const moveIn = new Date(l.moveInDate);
-
-        // Lease must have started (moveIn) on or before last day of month
-        if (moveIn > monthEnd) return;
-
-        // Determine move-out date
-        const moveOut = l.expectedMoveOutDate ? new Date(l.expectedMoveOutDate) :
-                        l.moveOutDate ? new Date(l.moveOutDate) :
-                        null; // still active = no move-out
-
-        // If moved out before this month started, skip
-        if (moveOut && moveOut < monthStart) return;
-
-        occupied++;
-      });
-
-      occupancyByMonth[mk] = occupied;
-
-      // Count properties active this month for accurate vacancy
-      // Active = created before month end AND (no contract end OR contract end >= month start)
+      const monthEnd = new Date(yr, mo, 0);
       let activePropsThisMonth = 0;
       allProps.forEach(item => {
         const p = item.property || item;
         const created = p.dateTimeCreated ? new Date(p.dateTimeCreated) : null;
-        if (!created || created > monthEnd) return; // not created yet
+        if (!created || created > monthEnd) return;
         const contractEnd = p.dateContractEnds ? new Date(p.dateContractEnds) : null;
-        if (contractEnd && contractEnd < monthStart) return; // already lost
+        if (contractEnd && contractEnd < monthStart) return;
         activePropsThisMonth++;
       });
+      vacancyByMonth[mk] = Math.max(0, activePropsThisMonth - occupancyByMonth[mk]);
 
-      vacancyByMonth[mk] = Math.max(0, activePropsThisMonth - occupied);
-    });
+      // Go back one more month: subtract move-ins, add move-outs
+      runningOccupied = runningOccupied - (moveInDeltaByMonth[mk] || 0) + (moveOutDeltaByMonth[mk] || 0);
+    }
 
     console.log('Occupancy trend sample:', occupancyTrendMonths.slice(-3).map(mk =>
       mk + ':' + occupancyByMonth[mk] + 'occ/' + vacancyByMonth[mk] + 'vac').join(' | '));
@@ -2855,9 +2865,10 @@ async function buildMetricsData() {
 
     const nonZeroMoveOuts = Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0));
     console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${closedLeases.length} closed leases)`);
-    const withReason = closedLeases.filter(l => l.moveOutTenantReason);
-    console.log('Closed leases with moveOutTenantReason:', withReason.length, 'sample:', withReason[0] && withReason[0].moveOutTenantReason);
-    console.log('Move-out reasons found:', JSON.stringify(moveOutReasons));
+    // moveOutTenantReason not populated in Rentvine for this account
+    // Move-out reasons come from Aptly Offboard board "Reason" field (processed below)
+    // endMgmtReasons will be used for the move-out reasons chart
+    console.log('Move-out reasons from Rentvine: 0 (field not populated — using Aptly Offboard reasons instead)');
     // Sample a few closed leases to confirm field values
 
 
@@ -3393,10 +3404,10 @@ async function buildMetricsData() {
         moveInsByMonth: formatTrend(moveInsByMonth),   // 24 months
         moveOutsByMonth: formatTrend(moveOutsByMonth),  // 24 months
         expirationsByMonth: formatTrend(expirationsByMonth), // 24 months from Tenant Renewals board
-        moveOutReasons: Object.entries(moveOutReasons)
-          .sort((a, b) => b[1] - a[1])
-          .map(([reason, count]) => ({ reason, count })),
-        renewalsByMonth: formatTrend(renewalsByMonth),
+        // moveOutTenantReason not populated in Rentvine — use Aptly Offboard board reasons
+        moveOutReasons: Object.entries(endMgmtReasons)
+          .sort((a,b) => b[1]-a[1])
+          .map(([reason,count]) => ({reason,count})),
         renewalsDetail,
       },
 
