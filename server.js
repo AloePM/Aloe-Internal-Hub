@@ -1914,7 +1914,7 @@ app.post('/api/chat', async function(req, res) {
             method: 'POST',
             headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
             body: JSON.stringify({
-              model: 'claude-sonnet-4.5',
+              model: 'claude-sonnet-4-5',
               max_tokens: 1024,
               system: 'You are Aloe Assistant, an internal AI for Aloe Property Management. Answer the vendor question using ONLY the vendor reference provided. Be specific about which vendor to use, their coverage area, and any notes. If the question mentions a city or area, match it to the right vendor.',
               messages: [{ role: 'user', content: vendorPrompt + '\n\n---\nQuestion: ' + userMsg }]
@@ -1946,7 +1946,7 @@ app.post('/api/chat', async function(req, res) {
             method: 'POST',
             headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
             body: JSON.stringify({
-              model: 'claude-sonnet-4.5',
+              model: 'claude-sonnet-4-5',
               max_tokens: 600,
               system: `You are a maintenance cost advisor for Aloe Property Management in Phoenix, AZ. Use the benchmark data below to evaluate vendor quotes. Always give a clear verdict:
 ✅ APPROVE — price is within typical range
@@ -2202,7 +2202,7 @@ BENCHMARK DATA:
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4.5',
+          model: 'claude-sonnet-4-5',
           max_tokens: 1024,
           system: await (async function() {
             let sys = SYSTEM_PROMPT;
