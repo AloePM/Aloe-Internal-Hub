@@ -570,19 +570,28 @@ function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchRVBills(){
   const VENDOR=/aloe property management.*reimburs/i;
+  // Only fetch bills from last 90 days to avoid endless pagination
+  const endDate = new Date().toISOString().slice(0,10);
+  const cutoffDate = shiftDate(endDate, -90);
   let all=[], page=1;
-  while(true){
+
+  while(page <= 20){ // hard cap at 20 pages
     const r=await fetch(`/api/rentvine/accounting/bills?page=${page}&pageSize=200`);
     if(!r.ok) throw new Error(`Rentvine bills API returned ${r.status}`);
     const d=await r.json();
     const rows=Array.isArray(d)?d:(d?.data??[]);
     if(!rows.length) break;
+
+    let hitCutoff = false;
     rows.forEach(row=>{
       const b=row.bill, name=row.contact?.name||'';
       if(!b||!VENDOR.test(name)) return;
+      const date=(b.billDate||b.dateDue||'').slice(0,10);
+      // Bills are ordered newest first — stop once we pass 90-day cutoff
+      if(date && date < cutoffDate){ hitCutoff=true; return; }
       all.push({
         billID:    b.billID,
-        date:      (b.billDate||b.dateDue||'').slice(0,10),
+        date,
         reference: (b.reference||'').trim(),
         memo:      (b.paymentMemo||b.description||'').trim(),
         vendor:    name,
@@ -590,7 +599,8 @@ async function fetchRVBills(){
         matched:   false,
       });
     });
-    if(rows.length<200) break;
+
+    if(rows.length<200 || hitCutoff) break;
     page++;
   }
   return all;
@@ -1026,7 +1036,7 @@ async function loadPlaidChase(){
 function bindAll(){
   if(ST.screen==='config'){
     bindDrop('drop-chase','fi-chase',(f,t)=>set({chaseFile:f,chaseText:t}));
-    loadPlaidChase();
+    setTimeout(loadPlaidChase, 100); // defer so DOM is painted first
     // Rentvine pulled automatically — no CSV bind needed
     document.getElementById('run-btn')?.addEventListener('click',run);
     return;
