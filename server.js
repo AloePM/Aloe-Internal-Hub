@@ -2865,10 +2865,6 @@ async function buildMetricsData() {
 
     const nonZeroMoveOuts = Object.fromEntries(Object.entries(moveOutsByMonth).filter(([,v])=>v>0));
     console.log(`Metrics move-outs by month: ${JSON.stringify(nonZeroMoveOuts)} (from ${closedLeases.length} closed leases)`);
-    // moveOutTenantReason not populated in Rentvine for this account
-    // Move-out reasons come from Aptly Offboard board "Reason" field (processed below)
-    // endMgmtReasons will be used for the move-out reasons chart
-    console.log('Move-out reasons from Rentvine: 0 (field not populated — using Aptly Offboard reasons instead)');
     // Sample a few closed leases to confirm field values
 
 
@@ -3405,9 +3401,9 @@ async function buildMetricsData() {
         moveOutsByMonth: formatTrend(moveOutsByMonth),  // 24 months
         expirationsByMonth: formatTrend(expirationsByMonth), // 24 months from Tenant Renewals board
         // moveOutTenantReason not populated in Rentvine — use Aptly Offboard board reasons
-        moveOutReasons: Object.entries(endMgmtReasons)
-          .sort((a,b) => b[1]-a[1])
-          .map(([reason,count]) => ({reason,count})),
+        moveOutReasons: [], // moveOutTenantReason not populated in Rentvine
+
+
         renewalsDetail,
       },
 
