@@ -4198,7 +4198,7 @@ app.get('*', function(req, res) {
       <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
     </a>
 
-<a href="https://aloe-knowledge-sync.onrender.com/login" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training templates resources">      <span class="tool-badge badge-live">LIVE</span>
+<a href="https://aloe-knowledge-sync.onrender.com/" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training templates resources">      <span class="tool-badge badge-live">LIVE</span>
       <div class="tool-icon icon-teal">📚</div>
       <div class="tool-name">Knowledge Base</div>
       <div class="tool-desc">SOPs, policies, training, vendor list, cost benchmarks</div>
