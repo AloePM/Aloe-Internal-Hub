@@ -2371,12 +2371,6 @@ app.get('/sandbox', function(req, res) {
   res.sendFile(new URL('sandbox.html', import.meta.url).pathname);
 });
 
-app.get('/recon', function(req, res) {
-  const filePath = new URL('recon.html', import.meta.url).pathname;
-  res.sendFile(filePath, function(err) {
-    if (err) console.error('recon.html sendFile error:', err.message, 'path:', filePath);
-  });
-});
 app.get('/recon-bills', (req, res) =>
    res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
 );
@@ -4061,22 +4055,6 @@ app.get('*', function(req, res) {
       <div class="tool-name">Recon — Bills</div>
       <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
     </a>
-
-    <a href="/recon" class="tool-card primary" data-name="recon reconciliation maintenance work orders">
-      <span class="tool-badge badge-live">LIVE</span>
-      <div class="tool-icon icon-teal">🔍</div>
-      <div class="tool-name">Recon</div>
-      <div class="tool-desc">Cross-reference work orders between Aptly and Rentvine</div>
-    </a>
-
-    <a href="/accounting" class="tool-card primary" data-name="accounting payments ledger reconciliation randi">
-      <span class="tool-badge badge-soon">SOON</span>
-      <div class="tool-icon icon-amber">💰</div>
-      <div class="tool-name">Accounting</div>
-      <div class="tool-desc">Payments, ledger, reconciliation — Randi's domain</div>
-    </a>
-  </div>
-</div>
 
 <!-- OPERATIONS -->
 <div class="section">
