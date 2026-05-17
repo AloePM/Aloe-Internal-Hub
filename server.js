@@ -4055,6 +4055,8 @@ app.get('*', function(req, res) {
       <div class="tool-name">Recon — Bills</div>
       <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
     </a>
+      </div>
+</div>
 
 
 <!-- OPERATIONS -->
