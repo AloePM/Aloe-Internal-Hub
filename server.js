@@ -3884,6 +3884,196 @@ app.get('/api/metrics/debug', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ONE-TIME: sync Rentvine dateContractEnds from Aptly data
+// Visit /admin/sync-contract-dates once, then remove this route
+app.get('/admin/sync-contract-dates', async function(req, res) {
+  const UPDATES = [
+    { address: '35420 West San Alvarez Avenue', newDate: '2027-05-31' },
+    { address: '17365 North Cave Creek Road', newDate: '2027-05-31' },
+    { address: '2150 East Bell Road', newDate: '2027-05-31' },
+    { address: '37078 West Mondragone Lane', newDate: '2027-04-30' },
+    { address: '2056 North Thunderbird Avenue', newDate: '2027-04-30' },
+    { address: '3726 East Angstead Drive', newDate: '2027-04-30' },
+    { address: '21080 North Wilford Avenue', newDate: '2027-04-30' },
+    { address: '22148 Greenland Park Drive', newDate: '2027-03-31' },
+    { address: '21958 North Sunset Drive', newDate: '2027-03-31' },
+    { address: '22180 North Sunset Drive', newDate: '2027-03-31' },
+    { address: '22156 North Sunset Drive', newDate: '2027-03-31' },
+    { address: '21756 Reis Drive', newDate: '2027-03-31' },
+    { address: '20331 North Codey Circle', newDate: '2027-03-31' },
+    { address: '40571 West Nicole Court', newDate: '2027-03-31' },
+    { address: '41415 West Hopper Drive', newDate: '2027-03-31' },
+    { address: '41637 West Sunland Drive', newDate: '2027-03-31' },
+    { address: '3780 West Barcelona Drive', newDate: '2027-02-28' },
+    { address: '37154 West Amalfi Avenue', newDate: '2027-02-28' },
+    { address: '40304 West Hayden Drive', newDate: '2027-02-28' },
+    { address: '40381 West Hopper Drive', newDate: '2027-02-28' },
+    { address: '40402 West Hayden Drive', newDate: '2027-02-28' },
+    { address: '40411 West Helen Court', newDate: '2027-02-28' },
+    { address: '41236 West Jenna Lane', newDate: '2027-02-28' },
+    { address: '41298 West Hensley Way', newDate: '2027-02-28' },
+    { address: '41716 West Sunland Drive', newDate: '2027-02-28' },
+    { address: '21054 North Sansom Drive', newDate: '2027-02-28' },
+    { address: '1904 South Falcon Drive', newDate: '2027-02-28' },
+    { address: '3296 East Tonto Court', newDate: '2027-02-28' },
+    { address: '41605 West Corvalis Lane', newDate: '2027-01-31' },
+    { address: '8307 East Peterson Avenue', newDate: '2027-01-31' },
+    { address: '40505 West Agave Road', newDate: '2027-01-31' },
+    { address: '2031 East Virgo Place', newDate: '2026-12-31' },
+    { address: '40498 West Thornberry Lane', newDate: '2026-10-31' },
+    { address: '3010 East Horseshoe Drive', newDate: '2026-10-31' },
+    { address: '123 West Fairmont Drive', newDate: '2026-10-31' },
+    { address: '20290 North Codey Circle', newDate: '2026-10-31' },
+    { address: '2110 East Indigo Drive', newDate: '2026-10-31' },
+    { address: '40301 West Peggy Court', newDate: '2026-10-31' },
+    { address: '40219 West Mary Lou Drive', newDate: '2026-10-31' },
+    { address: '40584 West Helen Court', newDate: '2026-10-31' },
+    { address: '40113 West Tamara Lane', newDate: '2026-10-31' },
+    { address: '40100 West Wade Drive', newDate: '2026-10-31' },
+    { address: '22375 Van Der Veen Way', newDate: '2026-10-31' },
+    { address: '410 South Seawynds Boulevard', newDate: '2026-10-31' },
+    { address: '420 West Harwell Road', newDate: '2026-10-31' },
+    { address: '1045 West Pecos Avenue', newDate: '2026-10-31' },
+    { address: '291 West Cardinal Way', newDate: '2026-10-31' },
+    { address: '40540 West Park Hill Drive', newDate: '2026-10-31' },
+    { address: '41023 West Somers Drive', newDate: '2026-10-31' },
+    { address: '40629 West Sunland Drive', newDate: '2026-10-31' },
+    { address: '18850 North Toledo Avenue', newDate: '2026-10-31' },
+    { address: '2027 East University Drive', newDate: '2026-10-31' },
+    { address: '42291 West Desert Fairways Drive', newDate: '2026-10-31' },
+    { address: '42009 West Sunland Drive', newDate: '2026-10-31' },
+    { address: '41899 Hall Court', newDate: '2026-10-31' },
+    { address: '41769 West Sunland Drive', newDate: '2026-10-31' },
+    { address: '10453 North 76th Drive', newDate: '2026-10-31' },
+    { address: '39 North Pueblo Street', newDate: '2026-10-31' },
+    { address: '2771 East Carla Vista Drive', newDate: '2026-10-31' },
+    { address: '41314 West Hensley Way', newDate: '2026-10-31' },
+    { address: '2553 East Chester Drive', newDate: '2026-10-31' },
+    { address: '3094 East Winged Foot Drive', newDate: '2026-10-31' },
+    { address: '41231 West Crane Drive', newDate: '2026-10-31' },
+    { address: '41139 West Cahill Drive', newDate: '2026-10-31' },
+    { address: '4205 East Raven Road', newDate: '2026-10-31' },
+    { address: '4111 East Baylor Lane', newDate: '2026-10-31' },
+    { address: '37640 West Amalfi Avenue', newDate: '2026-10-31' },
+    { address: '36393 West El Greco Street', newDate: '2026-10-31' },
+    { address: '3549 East Apricot Lane', newDate: '2026-10-31' },
+    { address: '34058 Beeblossom Trail', newDate: '2026-10-31' },
+    { address: '2125 North San Vincente Drive', newDate: '2026-10-31' },
+    { address: '3685 East Bluebird Place', newDate: '2026-10-31' },
+    { address: '3440 West Toluca Drive', newDate: '2026-10-31' },
+    { address: '2244 East San Tan Drive', newDate: '2026-10-31' },
+    { address: '2680 East Chester Drive', newDate: '2026-10-31' },
+    { address: '3353 South Kimberlee Court', newDate: '2026-10-31' },
+    { address: '1 North 88th Avenue', newDate: '2026-10-31' },
+    { address: '20461 North Lemon Drop Drive', newDate: '2026-10-31' },
+    { address: '3622 South Cutler Drive', newDate: '2026-10-31' },
+    { address: '3724 West Harrison Street', newDate: '2026-10-31' },
+    { address: '1020 West Glenmere Drive', newDate: '2026-10-31' },
+    { address: '36043 West Velazquez Drive', newDate: '2026-10-31' },
+    { address: '2138 North Arbor Lane', newDate: '2026-10-31' },
+    { address: '2308 East Hidalgo Avenue', newDate: '2026-10-31' },
+    { address: '37984 West Montserrat Street', newDate: '2026-10-31' },
+    { address: '35912 West Santa Monica Avenue', newDate: '2026-10-31' },
+    { address: '35747 West Velazquez Drive', newDate: '2026-10-31' },
+    { address: '39955 West Brandt Drive', newDate: '2026-10-31' },
+    { address: '3800 South Cantabria Circle', newDate: '2026-10-31' },
+    { address: '1312 West Thompson Way', newDate: '2026-10-31' },
+    { address: '2974 East Powell Way', newDate: '2026-10-31' },
+    { address: '35029 North 12th Street', newDate: '2026-10-31' },
+    { address: '2261 West Redwood Drive', newDate: '2026-10-31' },
+    { address: '40049 West Sanders Way', newDate: '2026-09-30' },
+    { address: '1232 West Sea Fan Drive', newDate: '2026-09-30' },
+    { address: '3411 West Monona Drive', newDate: '2026-08-31' },
+    { address: '19286 North Duncan Drive', newDate: '2026-07-31' },
+    { address: '2839 East Sports Court', newDate: '2026-07-31' },
+    { address: '37024 West Bello Lane', newDate: '2026-07-31' },
+    { address: '236 South Rush Circle West', newDate: '2026-05-31' },
+    { address: '299 North Scott Drive', newDate: '2026-05-31' },
+    { address: '255 South Kyrene Road', newDate: '2026-05-31' },
+    { address: '20593 North Mac Neil Street', newDate: '2026-05-31' },
+    { address: '37844 West Amalfi Avenue', newDate: '2026-04-30' },
+    { address: '1170 West Chicago Street', newDate: '2025-07-18' },
+  ];
+
+  const results = { updated: [], notFound: [], errors: [] };
+
+  // Step 1: fetch all properties to build address -> propertyID map
+  let allProps = [];
+  for (let pg = 1; pg <= 10; pg++) {
+    const batch = await rvFetch('/properties/export', { pageSize: 200, page: pg });
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    allProps = allProps.concat(batch);
+    if (batch.length < 200) break;
+  }
+
+  // Build normalized address map
+  const propMap = {};
+  allProps.forEach(function(item) {
+    const p = item.property || item;
+    const addr = (p.address || '').toLowerCase()
+      .replace(/\bnorth\b/g,'n').replace(/\bsouth\b/g,'s')
+      .replace(/\beast\b/g,'e').replace(/\bwest\b/g,'w')
+      .replace(/\bstreet\b/g,'st').replace(/\bdrive\b/g,'dr')
+      .replace(/\blane\b/g,'ln').replace(/\bcourt\b/g,'ct')
+      .replace(/\bboulevard\b/g,'blvd').replace(/\bavenue\b/g,'ave')
+      .replace(/\broad\b/g,'rd').replace(/\bplace\b/g,'pl')
+      .replace(/\bcircle\b/g,'cir')
+      .replace(/[.,#]/g,'').replace(/\s+/g,' ').trim();
+    propMap[addr] = p.propertyID;
+  });
+
+  // Step 2: for each update, find propertyID and PATCH
+  for (const u of UPDATES) {
+    const normAddr = u.address.toLowerCase()
+      .replace(/\bnorth\b/g,'n').replace(/\bsouth\b/g,'s')
+      .replace(/\beast\b/g,'e').replace(/\bwest\b/g,'w')
+      .replace(/\bstreet\b/g,'st').replace(/\bdrive\b/g,'dr')
+      .replace(/\blane\b/g,'ln').replace(/\bcourt\b/g,'ct')
+      .replace(/\bboulevard\b/g,'blvd').replace(/\bavenue\b/g,'ave')
+      .replace(/\broad\b/g,'rd').replace(/\bplace\b/g,'pl')
+      .replace(/\bcircle\b/g,'cir')
+      .replace(/[.,#]/g,'').replace(/\s+/g,' ').trim();
+
+    const propertyID = propMap[normAddr];
+    if (!propertyID) {
+      results.notFound.push(u.address);
+      continue;
+    }
+
+    try {
+      const r = await fetch(`${RENTVINE_BASE}/properties/${propertyID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Basic ${RENTVINE_AUTH}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dateContractEnds: u.newDate }),
+      });
+      if (r.ok) {
+        results.updated.push({ address: u.address, propertyID, newDate: u.newDate });
+      } else {
+        const txt = await r.text();
+        results.errors.push({ address: u.address, propertyID, status: r.status, error: txt.slice(0,200) });
+      }
+    } catch(e) {
+      results.errors.push({ address: u.address, error: e.message });
+    }
+  }
+
+  res.json({
+    summary: {
+      updated: results.updated.length,
+      notFound: results.notFound.length,
+      errors: results.errors.length,
+    },
+    updated: results.updated,
+    notFound: results.notFound,
+    errors: results.errors,
+  });
+});
+
+app.get('*', function(req, res) {
+  res.send(`<!DOCTYPE html>
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
