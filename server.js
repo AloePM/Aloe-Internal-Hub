@@ -93,7 +93,7 @@ app.get('/vendors', (req, res) => {
      res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
 });
 app.get('/resources/vendors', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'vendor-resources.html'));
+  res.sendFile(new URL('./public/vendor-resources.html', import.meta.url).pathname);
 });
 
 app.get('/api/vendors', async (req, res) => {
