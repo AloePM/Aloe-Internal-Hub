@@ -411,63 +411,7 @@ async function submitForm() {
   }
 }
 
-document.querySelectorAll('a[href^="#"]').forEach(function(a) {
-  a.addEventListener('click', function(e) {
-    var t = document.querySelector(this.getAttribute('href'));
-    if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
-  });
-});
 
-function openDocsModal() {
-  document.getElementById('docs-modal').classList.add('open');
-  var body = document.getElementById('docs-modal-body');
-  var docs = [
-    {
-      icon: '📄',
-      title: 'Independent Contractor Agreement',
-      meta: 'Required before starting any work',
-      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/resources/vendor/doc/4a2a43ce-3805-4879-bdfd-a0376b44bede'
-    },
-    {
-      icon: '📋',
-      title: 'Vendor Requirements Acknowledgement',
-      meta: 'Insurance, W-9, and compliance requirements',
-      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/resources/vendor/doc/8b5e4cba-d6b5-4254-9bf6-6825f0d64862'
-    },
-    {
-      icon: '📋',
-      title: 'Maintenance Code of Conduct',
-      meta: 'Standards for working on Aloe PM properties',
-      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/resources/vendor/doc/b87bb1d5-5bbd-493e-a804-47683a227298'
-    },
-    {
-      icon: '📋',
-      title: 'Maintenance Cost Benchmark Guide',
-      meta: 'Pricing benchmarks for vendor reference',
-      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/resources/vendor/doc/8b8b63f1-a524-4f90-8fcd-0381c4c302c6'
-    }
-  ];
-  body.innerHTML = docs.map(function(doc) {
-    return '<a class="doc-card" href="' + doc.url + '" target="_blank">' +
-      '<div class="doc-icon">' + doc.icon + '</div>' +
-      '<div class="doc-info">' +
-        '<div class="doc-title">' + doc.title + '</div>' +
-        '<div class="doc-meta">' + doc.meta + '</div>' +
-      '</div>' +
-      '<div class="doc-arrow">→</div>' +
-    '</a>';
-  }).join('');
-}
-
-function closeDocsModal(e) {
-  if (!e || e.target === document.getElementById('docs-modal')) {
-    document.getElementById('docs-modal').classList.remove('open');
-  }
-}
-
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeDocsModal();
-});
 </script>
 </body>
 </html>
