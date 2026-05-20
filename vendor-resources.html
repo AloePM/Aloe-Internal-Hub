@@ -447,41 +447,45 @@ document.querySelectorAll('a[href^="#"]').forEach(function(a) {
   });
 });
 
-async function openDocsModal() {
+function openDocsModal() {
   document.getElementById('docs-modal').classList.add('open');
   var body = document.getElementById('docs-modal-body');
-  body.innerHTML = '<div class="modal-loading">Loading documents...</div>';
-  try {
-    var res = await fetch('/api/vendor-docs');
-    var data = await res.json();
-    var docs = Array.isArray(data) ? data : (data.documents || data.docs || []);
-    if (!docs.length) {
-      body.innerHTML = '<div class="modal-loading">No vendor documents found.</div>';
-      return;
+  var docs = [
+    {
+      icon: '📄',
+      title: 'Vendor Agreement & Independent Contractor Agreement',
+      meta: 'Required before starting any work',
+      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/home?doc=4a2a43ce-3805-4879-bdfd-a0376b44bede'
+    },
+    {
+      icon: '📋',
+      title: 'Vendor Requirements Acknowledgement',
+      meta: 'Insurance, W-9, and compliance requirements',
+      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/home?doc=b87bb1d5-5bbd-493e-a804-47683a227298'
+    },
+    {
+      icon: '📋',
+      title: 'Vendor Code of Conduct',
+      meta: 'Standards for working on Aloe PM properties',
+      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/home?doc=8b8b63f1-a524-4f90-8fcd-0381c4c302c6'
+    },
+    {
+      icon: '📋',
+      title: 'Work Order & Invoice Standards',
+      meta: 'How to submit, photo requirements, payment terms',
+      url: 'https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/home?doc=8b5e4cba-d6b5-4254-9bf6-6825f0d64862'
     }
-body.innerHTML = docs.map(function(doc) {
-var url = doc.source_url || 
-  ('https://aloe-knowledge-sync.onrender.com/resources/vendor/doc/' + doc.id);
-  var title = doc.title || 'Untitled';
-  var sub = doc.subcategory ? doc.subcategory.replace(/_/g, ' ') : '';
-  var dept = doc.department ? doc.department.replace(/_/g, ' ') : '';
-  var meta = [dept, sub].filter(Boolean).join(' · ');
-  var tag = url
-    ? '<a class="doc-card" href="' + url + '" target="_blank">'
-    : '<div class="doc-card" style="cursor:default;opacity:0.7">';
-  var endTag = url ? '</a>' : '</div>';
-  return tag +
-    '<div class="doc-icon">📋</div>' +
-    '<div class="doc-info">' +
-      '<div class="doc-title">' + title + '</div>' +
-      '<div class="doc-meta">' + (meta || doc.doc_type || '') + '</div>' +
-    '</div>' +
-    (url ? '<div class="doc-arrow">→</div>' : '<div class="doc-arrow" style="font-size:12px;color:#94A3B8">No link</div>') +
-  endTag;
-}).join('');
-  } catch(err) {
-    body.innerHTML = '<div class="modal-error">Could not load documents. Please try again.</div>';
-  }
+  ];
+  body.innerHTML = docs.map(function(doc) {
+    return '<a class="doc-card" href="' + doc.url + '" target="_blank">' +
+      '<div class="doc-icon">' + doc.icon + '</div>' +
+      '<div class="doc-info">' +
+        '<div class="doc-title">' + doc.title + '</div>' +
+        '<div class="doc-meta">' + doc.meta + '</div>' +
+      '</div>' +
+      '<div class="doc-arrow">→</div>' +
+    '</a>';
+  }).join('');
 }
 
 function closeDocsModal(e) {
