@@ -285,23 +285,7 @@ app.get('/api/aptly/units', async function(req, res) {
   }
 });
 // Proxy: vendor knowledge base docs
-app.get('/api/vendor-docs', async (req, res) => {
-  try {
-    const kbBase = process.env.KB_URL || 'https://aloe-knowledge-sync.onrender.com';
-const response = await fetch(`${kbBase}/api/public/documents?audience=vendor`);
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('Vendor docs KB error:', response.status, text.slice(0, 200));
-      return res.status(500).json({ error: 'KB returned error', status: response.status });
-    }
-    const data = await response.json();
-    console.log('Vendor docs raw:', JSON.stringify(data).slice(0, 300));
-    res.json(data);
-  } catch (err) {
-    console.error('Vendor docs proxy error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
+
 app.get('/api/aptly/leads', async (req, res) => {
     try {
           const r = await fetch('https://api.getaptly.com/v1/boards?page=0&size=200', {
