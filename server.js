@@ -108,47 +108,7 @@ app.get('/api/vendors', async (req, res) => {
                if (batch.length < 100) break;
                page++;
         }
-   app.get('/api/vendor-docs', async (req, res) => {
-  try {
-    const kbBase = process.env.KB_URL || 'https://aloe-knowledge-sync.onrender.com';
-    // Try both possible endpoint formats
-    let response = await fetch(`${kbBase}/api/documents`);
-    if (!response.ok) response = await fetch(`${kbBase}/documents`);
-    if (!response.ok) throw new Error(`KB returned ${response.status}`);
-    const data = await response.json();
-    // Data may be array or { documents: [] }
-    const all = Array.isArray(data) ? data : (data.documents || data.docs || data.data || []);
-    // Filter to vendor audience - field may be array or string
-    const vendorDocs = all.filter(doc => {
-      const aud = doc.audience || doc.audiences || [];
-      if (Array.isArray(aud)) return aud.includes('vendor');
-      if (typeof aud === 'string') return aud.includes('vendor');
-      return false;
-    });
-    console.log(`Vendor docs: ${vendorDocs.length} of ${all.length} total`);
-    res.json(vendorDocs);
-  } catch (err) {
-    console.error('Vendor docs proxy error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-        const vendors = allVendors.map(v => ({
-               vendorID: v.vendorID || v.id || '',
-               name: v.name || v.vendorName || '',
-               companyName: v.companyName || '',
-               category: v.vendorType || v.category || v.tradeType || '',
-               phone: v.phone || v.phoneNumber || v.primaryPhone || '',
-               email: v.email || v.emailAddress || '',
-               isActive: v.isActive !== false && v.status !== 'Inactive',
-               workOrderCount: v.workOrderCount || v.totalWorkOrders || 0,
-               openWorkOrders: v.openWorkOrders || v.openWorkOrderCount || 0,
-        }));
-        res.json({ vendors, total: vendors.length });
-   } catch (err) {
-        console.error('Vendors API error:', err);
-        res.status(500).json({ error: err.message, vendors: [] });
-   }
-});
+   
 app.get('/renewals', (req, res) =>
   res.sendFile(new URL('./renewals.html', import.meta.url).pathname));
 app.get('/api/pet-policy', async function(req, res) {
