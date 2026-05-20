@@ -11,3 +11,5 @@ steps:
   - aloe-pm-assistant-git
   - --image=us-west4-docker.pkg.dev/property-agent-496300/cloud-run-source-deploy/aloepm-aloe-pm-assistant/aloe-pm-assistant-git:$COMMIT_SHA
   - --region=us-west4
+options:
+  logging: CLOUD_LOGGING_ONLY
