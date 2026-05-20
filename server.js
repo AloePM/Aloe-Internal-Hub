@@ -4471,5 +4471,6 @@ if (process.env.SLACK_TOKEN) {
     res.status(500).json({ error: 'Failed' });
   }
 });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
