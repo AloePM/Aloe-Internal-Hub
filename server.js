@@ -1623,27 +1623,9 @@ const address = normalizeAddr((locArr[0] && locArr[0].name) || (unitArr[0] && un
           open: open.length,
           unassigned: unassigned.length,
           avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
- byStage, workOrders: slim,
-        });
-        // Always scan for emergencies regardless of filter
-        const emergencyKeywords = /water.*leak|gas.*leak|no.*heat|no.*ac|flood|sewage|burst.*pipe|no power|electrical.*fire|fire/i;
-        const emergencies = slim.filter(function(wo) {
-          return emergencyKeywords.test(wo.issue || '') ||
-                 (wo.status || '').toLowerCase().includes('emergency');
-        });
-
-        return JSON.stringify({
-          total: withMetrics.length,
-          open: open.length,
-          unassigned: unassigned.length,
-          avgDaysOpen: open.length ? Math.round(open.reduce(function(s, c) { return s + (c.daysOpen || 0); }, 0) / open.length) : 0,
-          emergencyCount: emergencies.length,
-          emergencies: emergencies,
-          byStage, workOrders: slim,
-        });
+byStage, workOrders: slim,
         });
       }
-
       case 'aptly_get_applicant': {
         const q = (input.query || '').toLowerCase();
         const allCards = await getApplicantsCards();
