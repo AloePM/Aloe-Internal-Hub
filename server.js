@@ -4,8 +4,6 @@ import fetch from 'node-fetch';
 import Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'child_process';
 
-import { initPlaidRoutes } from './plaid-integration.js';
-
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -2331,8 +2329,7 @@ app.get('/sandbox', function(req, res) {
 app.get('/recon-bills', (req, res) =>
    res.sendFile(new URL('recon-bills.html', import.meta.url).pathname)
 );
-// Plaid
-initPlaidRoutes(app);
+
 app.get('/bank-setup', function(req, res) {
   res.sendFile(new URL('plaid-setup.html', import.meta.url).pathname);
 });
