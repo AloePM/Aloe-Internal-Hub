@@ -427,7 +427,8 @@ Known Aptly board IDs:
 - "4EMDSYKirhQaNdQKz" — Renter Leads. Use aptly_get_leads for ANY question about leads, showings, tours, prospects, lead sources, conversion. Fields include: Primary Contact, Preferred Rental, Stage, Source, Requested Showing Information (contains date/time), Requested Showing Status, Tour Date/Time, Move Date, Household Income, Beds, Pets, Last Action, email counts, comments. Stages: Nurturing, Scheduled Tour, Tour Completed, Tour Canceled / No Show, Applied.
 - "MJxaStgENouWrNEKd" — Applicants (Applications board). Use this for ANY question about applications. Has Application Location (property address), Primary Applicant, Stage, income, credit, household info. NEVER use Renter Leads for applications.
 - For ANY question about a specific applicant, their comments, notes, status, income, credit, or history: use aptly_get_applicant tool with their name or address.
-- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions. The response always includes an `emergencies` array and `emergencyCount` — ALWAYS check and report these first, even if the user didn't specifically ask about emergencies.
+- "workOrder" — Work Orders board (Aptly). USE aptly_get_work_orders AS THE PRIMARY SOURCE for ALL work order questions. The response always includes an emergencies array and emergencyCount 
+— ALWAYS check and report these first, even if the user didn't specifically ask about emergencies.
 - "86YrLPbwdkxtdyZoj" — Tenant Renewals.
 
 Property availability workflow (follow this order):
