@@ -992,7 +992,7 @@ async function buildMetricsData() {
     fetchAllPages('/properties/units/export', { isActive: true }, 5),
     fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 2 }, 5),
     fetchAllPages('/leases/export', { 'primaryLeaseStatusIDs[]': 3 }, 8),
-    fetchAllPages('/properties', { isActive: true }, 5),
+fetchAllPages('/properties/export', { isActive: true }, 5),
   ]);
 
   const propContractDatesMap = {};
