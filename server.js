@@ -4012,8 +4012,6 @@ app.get('/admin/sync-contract-dates', async function(req, res) {
 
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
-app.get('*', function(req, res) {
-  res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
