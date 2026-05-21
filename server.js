@@ -4011,6 +4011,8 @@ app.get('/admin/sync-contract-dates', async function(req, res) {
 });
 
 app.get('*', function(req, res) {
+    res.status(404).send('Not found');
+});
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
