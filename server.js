@@ -1446,11 +1446,23 @@ app.get('*', function(req, res) {
 <div class="section">
   <div class="section-label">Operations</div>
   <div class="tool-grid">
-    <a href="/resources/vendors" class="tool-card primary" data-name="vendor resources partner apply">
+  <a href="https://vendor.aloepm.com" class="tool-card primary" data-name="vendor resources partner apply public">
       <span class="badge badge-live">LIVE</span>
       <div class="tool-icon silver">🔨</div>
       <div class="tool-name">Vendor Resources</div>
-      <div class="tool-desc">Vendor partnership page — standards, requirements, application</div>
+      <div class="tool-desc">Public vendor page — standards, requirements, application</div>
+    </a>
+    <a href="https://resident.aloepm.com" class="tool-card primary" data-name="tenant resident resources portal help">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🏠</div>
+      <div class="tool-name">Tenant Resources</div>
+      <div class="tool-desc">Public tenant help portal — policies, maintenance, payments, move-out info</div>
+    </a>
+    <a href="https://owner.aloepm.com" class="tool-card primary" data-name="owner resources portal landlord help">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon silver">💼</div>
+      <div class="tool-name">Owner Resources</div>
+      <div class="tool-desc">Public owner portal — fees, disbursements, leasing, guarantees, FAQs</div>
     </a>
     <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
       <span class="badge badge-live">LIVE</span>
