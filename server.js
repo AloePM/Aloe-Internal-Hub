@@ -1328,7 +1328,6 @@ app.get('/', (req, res, next) => {
 });
 
 app.get('*', function(req, res) {
-app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
