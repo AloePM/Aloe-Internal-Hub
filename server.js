@@ -301,7 +301,7 @@ const RENTVINE_ACCOUNT    = process.env.RENTVINE_ACCOUNT;
 const APTLY_TOKEN         = process.env.APTLY_TOKEN;
 const ZINSPECTOR_API_KEY  = process.env.ZINSPECTOR_API_KEY;
 const SLACK_TOKEN         = process.env.SLACK_TOKEN;
-const KB_URL              = process.env.KB_URL || 'https://kb.aloepm.com/login';
+const KB_URL              = process.env.KB_URL || 'https://kb.aloepm.com';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
@@ -1532,8 +1532,8 @@ app.get('*', function(req, res) {
       <div class="tool-name">Quo / OpenPhone</div>
       <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
     </a>
-    <a href="https://aloe-knowledge-sync-git-1089452383500.us-west4.run.app/home" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training">
-      <span class="badge badge-live">LIVE</span>
+<a href="https://kb.aloepm.com" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training">
+<span class="badge badge-live">LIVE</span>
       <div class="tool-icon">📚</div>
       <div class="tool-name">Knowledge Base</div>
       <div class="tool-desc">SOPs, policies, training, vendor list, cost benchmarks</div>
