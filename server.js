@@ -1309,21 +1309,10 @@ setTimeout(async () => {
 }, 8000);
 app.get('/', (req, res, next) => {
   const host = req.hostname || '';
-  if (host.startsWith('chat.')) {
-    return res.redirect(302, '/chat');
-  }
-  if (host.startsWith('hoa.')) {
-    return res.redirect(302, '/hoa');
-  }
-  if (host.startsWith('hub.')) {
-    return res.redirect(302, '/');
-  }
-  if (host.startsWith('metrics.')) {
-    return res.redirect(302, '/metrics');
-  }
-  if (host.startsWith('vacancy.')) {
-    return res.redirect(302, '/vacancy');
-  }
+  if (host.startsWith('chat.')) return res.redirect(302, '/chat');
+  if (host.startsWith('hoa.')) return res.redirect(302, '/hoa');
+  if (host.startsWith('metrics.')) return res.redirect(302, '/metrics');
+  if (host.startsWith('vacancy.')) return res.redirect(302, '/vacancy');
   next();
 });
 
