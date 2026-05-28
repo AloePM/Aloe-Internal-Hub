@@ -5,10 +5,11 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
+    "@anthropic-ai/sdk": "^0.36.3",
     "cors": "^2.8.5",
+    "express": "^4.18.2",
     "node-fetch": "^3.3.2",
-    "@anthropic-ai/sdk": "^0.36.3"
+    "openai": "^6.39.0"
   },
   "type": "module"
 }

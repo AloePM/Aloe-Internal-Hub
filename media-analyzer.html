@@ -101,6 +101,8 @@ input[type=file]{display:none}
     <input type="file" id="video-input" accept="video/*">
     <video id="preview-video" class="preview-video" controls muted playsinline></video>
     <div id="video-badge" class="file-badge">📄 <span id="video-name"></span></div>
+    <div class="section-label">Transcript (optional)</div>
+    <textarea id="manual-transcript" rows="5" placeholder="Paste transcript here if you have one — otherwise audio will be auto-transcribed via Whisper AI."></textarea>
   </div>
 </div>
 
@@ -129,6 +131,8 @@ input[type=file]{display:none}
     <input type="file" id="video-input-both" accept="video/*">
     <video id="preview-video-both" class="preview-video" controls muted playsinline></video>
     <div id="video-badge-both" class="file-badge">📄 <span id="video-name-both"></span></div>
+    <div class="section-label">Transcript (optional)</div>
+    <textarea id="manual-transcript-both" rows="5" placeholder="Paste transcript here if you have one — otherwise audio will be auto-transcribed."></textarea>
   </div>
   <div class="card">
     <div class="drop-zone" id="drop-photos-both" onclick="document.getElementById('photo-input-both').click()">
@@ -307,13 +311,15 @@ analyzeBtn.addEventListener('click',async()=>{
   const notes=document.getElementById('notes').value;
   const roomLabel=document.getElementById('room-label').value;
   let transcript=null, photos=[];
+    const manualT=currentTab==='video'?document.getElementById('manual-transcript')?.value:currentTab==='both'?document.getElementById('manual-transcript-both')?.value:'';
+    if(manualT&&manualT.trim().length>10){transcript=manualT.trim();setProgress(50,'Using provided transcript ('+transcript.split(' ').length+' words)...');}
 
   try{
     const vid=currentTab==='video'?videoFile:currentTab==='both'?videoFileBoth:null;
     const pics=currentTab==='photos'?photoFiles:currentTab==='both'?photoFilesBoth:[];
 
     // Step 1: Transcribe video audio
-    if(vid){
+    if(vid&&!transcript){
       transcript=await extractAndTranscribeAudio(vid,5,50);
       if(transcript) setProgress(55,'Transcript ready ('+transcript.split(' ').length+' words)...');
       else setProgress(55,'No speech detected in video...');

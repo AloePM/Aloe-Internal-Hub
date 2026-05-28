@@ -1352,20 +1352,39 @@ app.post('/api/analyze-media', async (req, res) => {
   }
 });
 
+
+// --- Audio Transcription via OpenAI Whisper ---
 app.post('/api/transcribe-audio', async (req, res) => {
   try {
     const { audioBase64 } = req.body;
     if (!audioBase64) return res.json({ transcript: null });
-    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'audio/wav', data: audioBase64 } }, { type: 'text', text: 'Transcribe this audio recording from a property inspection. Write out everything the inspector says word for word. If there is no speech or audio is too unclear, respond with just: NO_SPEECH_DETECTED' }] }] }) });
+    const audioBuffer = Buffer.from(audioBase64, 'base64');
+    const FormData = (await import('node-fetch')).default ? null : null;
+    const { Blob } = await import('buffer');
+    const blob = new Blob([audioBuffer], { type: 'audio/wav' });
+    const formData = new globalThis.FormData();
+    formData.append('file', blob, 'audio.wav');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en');
+    formData.append('prompt', 'Property inspection walkthrough. Inspector is describing damage, maintenance issues, and condition of rooms including paint, carpet, flooring, blinds, plumbing, appliances, cleaning.');
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY },
+      body: formData
+    });
     const data = await response.json();
-    const text = data.content?.map(b => b.text || '').join('') || '';
-    if (text.includes('NO_SPEECH_DETECTED') || text.trim().length < 10) return res.json({ transcript: null });
-    res.json({ transcript: text.trim() });
+    if (data.text && data.text.trim().length > 5) {
+      res.json({ transcript: data.text.trim() });
+    } else {
+      res.json({ transcript: null });
+    }
   } catch (err) {
     console.error('transcribe-audio error:', err);
     res.json({ transcript: null });
   }
 });
+// --- End Audio Transcription ---
+
 // --- End Video Analyzer v2 ---
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
