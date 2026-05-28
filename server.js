@@ -1367,6 +1367,10 @@ app.post('/api/transcribe-audio', async (req, res) => {
   }
 });
 // --- End Video Analyzer v2 ---
+app.get('*', function(req, res) {
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+
 
 <head>
   <meta charset="UTF-8"/>
