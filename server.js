@@ -8,7 +8,7 @@ import { spawn } from 'child_process';
 import { initPlaidRoutes } from './plaid-integration.js';
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
 app.use(express.json({ limit: '10mb' }));
 app.use('/api/chat', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -25,6 +25,8 @@ app.get('/vacancy-risk', (req, res) => {
   res.sendFile(new URL('./vacancy-risk.html', import.meta.url).pathname);
 });
 // Route to serve the HOA filler UI
+app.get('/media-analyzer', (req, res) => res.sendFile(new URL('./media-analyzer.html', import.meta.url).pathname));
+
 app.get('/hoa', (req, res) =>
   res.sendFile(new URL('./hoa-filler.html', import.meta.url).pathname));
 

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Media Analyzer — Aloe PM</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F8FAFC; color: #1a1a1a; min-height: 100vh; }
+  .top-bar { background: white; border-bottom: 1px solid #e2e8f0; padding: 0 2rem; height: 56px; display: flex; align-items: center; gap: 12px; }
+  .top-bar .logo { width: 28px; height: 28px; background: #3CC3E1; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .top-bar .logo svg { width: 16px; height: 16px; fill: white; }
+  .top-bar h1 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
+  .top-bar span { font-size: 13px; color: #64748b; margin-left: 4px; }
+  .container { max-width: 760px; margin: 2rem auto; padding: 0 1.5rem 4rem; }
+  .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+  .drop-zone { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 3rem 1rem; text-align: center; cursor: pointer; transition: all 0.15s; background: #f8fafc; }
+  .drop-zone:hover, .drop-zone.drag { background: #e8f9fd; border-color: #3CC3E1; }
+  .drop-zone .icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-zone h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .drop-zone p { font-size: 13px; color: #64748b; }
+  #file-input { display: none; }
+  .section-label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.75rem; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  label { font-size: 13px; color: #475569; display: block; margin-bottom: 4px; }
+  input[type=text], select, textarea { width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit; background: white; color: #1a1a1a; outline: none; transition: border 0.15s; }
+  input[type=text]:focus, select:focus, textarea:focus { border-color: #3CC3E1; box-shadow: 0 0 0 3px rgba(60,195,225,0.1); }
+  textarea { resize: vertical; min-height: 72px; }
+  .frame-row { display: flex; align-items: center; gap: 12px; }
+  .frame-row input[type=range] { flex: 1; accent-color: #3CC3E1; }
+  .frame-badge { background: #e8f9fd; color: #4BB4D2; font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
+  .btn-primary { width: 100%; padding: 13px; background: #3CC3E1; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.15s; margin-top: 1rem; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { width: 100%; padding: 11px; background: white; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.15s; margin-top: 0.5rem; }
+  .btn-secondary:hover { background: #f8fafc; }
+  .progress-wrap { margin-top: 12px; display: none; }
+  .progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; }
+  .progress-fill { height: 100%; background: #3CC3E1; border-radius: 2px; width: 0%; transition: width 0.4s; }
+  .status-msg { font-size: 13px; color: #64748b; margin-top: 6px; }
+  .preview-video { width: 100%; border-radius: 8px; margin-top: 12px; max-height: 220px; background: #000; display: none; }
+  .preview-img { width: 100%; border-radius: 8px; margin-top: 12px; max-height: 220px; object-fit: cover; display: none; }
+  .file-badge { font-size: 13px; color: #64748b; margin-top: 8px; display: none; align-items: center; gap: 6px; }
+  .results { display: none; }
+  .result-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .result-card h3 { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px; }
+  .result-card h3 .icon { color: #3CC3E1; font-size: 18px; }
+  .result-card p, .result-card li { font-size: 14px; color: #475569; line-height: 1.65; }
+  .result-card ul { padding-left: 1.25rem; }
+  .result-card li { margin-bottom: 5px; }
+  .pill { display: inline-flex; align-items: center; font-size: 12px; padding: 4px 12px; border-radius: 20px; font-weight: 600; margin-right: 6px; }
+  .pill-high { background: #fee2e2; color: #b91c1c; }
+  .pill-med { background: #fef3c7; color: #92400e; }
+  .pill-low { background: #dcfce7; color: #166534; }
+  .pill-neutral { background: #f1f5f9; color: #475569; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 20px; padding: 5px 12px; font-size: 13px; color: #1a1a1a; margin: 4px 4px 4px 0; }
+  .frames-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+  .frame-thumb { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; position: relative; background: #f8fafc; }
+  .frame-thumb canvas { width: 100%; display: block; }
+  .frame-label { font-size: 11px; color: #94a3b8; padding: 4px 8px; }
+  .dl-btn { position: absolute; bottom: 28px; right: 6px; background: rgba(0,0,0,0.6); border: none; border-radius: 6px; padding: 5px 7px; cursor: pointer; color: white; font-size: 12px; }
+  .dl-btn:hover { background: rgba(0,0,0,0.8); }
+  @media (max-width: 560px) { .field-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+  </div>
+  <h1>Property Media Analyzer</h1>
+  <span>Aloe Property Management</span>
+</div>
+
+<div class="container">
+
+  <div class="card">
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">🎥</div>
+      <h3>Drop a video or photo here</h3>
+      <p>MP4, MOV, WebM &middot; JPG, PNG &middot; or click to browse</p>
+    </div>
+    <input type="file" id="file-input" accept="video/*,image/*">
+    <video id="preview-video" class="preview-video" controls muted playsinline></video>
+    <img id="preview-img" class="preview-img">
+    <div id="file-badge" class="file-badge">📄 <span id="file-name"></span></div>
+  </div>
+
+  <div class="card">
+    <div class="section-label">Context</div>
+    <div class="field-row">
+      <div>
+        <label>Property address</label>
+        <input type="text" id="prop-address" placeholder="e.g. 1234 E Main St, Gilbert">
+      </div>
+      <div>
+        <label>Media type</label>
+        <select id="media-type">
+          <option value="maintenance">Maintenance issue</option>
+          <option value="inspection">Property inspection / walkthrough</option>
+          <option value="move-in">Move-in documentation</option>
+          <option value="move-out">Move-out documentation</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label>Notes for the AI (optional)</label>
+      <textarea id="notes" placeholder="e.g. Tenant reported water damage under kitchen sink, unit vacant, lease ends March 2025..."></textarea>
+    </div>
+  </div>
+
+  <div class="card" id="frame-card" style="display:none;">
+    <div class="section-label">Frame Extraction</div>
+    <div class="frame-row">
+      <span style="font-size:13px;color:#475569;">Snapshots to extract</span>
+      <input type="range" id="frame-count" min="3" max="12" value="6" step="1" oninput="document.getElementById('frame-badge').textContent=this.value+' frames'">
+      <span class="frame-badge" id="frame-badge">6 frames</span>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="analyze-btn" disabled>
+    ✨ Analyze with AI
+  </button>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+    <div class="status-msg" id="status-msg"></div>
+  </div>
+
+  <div class="results" id="results">
+    <div style="margin-top:1.5rem; margin-bottom:0.75rem;" class="section-label">AI Analysis</div>
+
+    <div class="result-card">
+      <h3><span class="icon">📋</span> Summary</h3>
+      <p id="out-summary"></p>
+    </div>
+
+    <div class="result-card" id="card-severity" style="display:none;">
+      <h3><span class="icon">⚠️</span> Severity &amp; Type</h3>
+      <div id="out-severity"></div>
+    </div>
+
+    <div class="result-card">
+      <h3><span class="icon">✅</span> Recommended Next Steps</h3>
+      <ul id="out-steps"></ul>
+    </div>
+
+    <div class="result-card">
+      <h3><span class="icon">🔧</span> Vendors / Trades Needed</h3>
+      <div id="out-vendors"></div>
+    </div>
+
+    <div class="result-card" id="card-frames" style="display:none;">
+      <h3><span class="icon">📸</span> Extracted Frames</h3>
+      <p style="font-size:13px;color:#64748b;margin-bottom:10px;">Download frames and upload to the property's Google Drive folder or attach in Rentvine.</p>
+      <div class="frames-grid" id="frames-grid"></div>
+    </div>
+
+    <button class="btn-secondary" onclick="reset()">↩ Analyze Another File</button>
+  </div>
+
+</div>
+
+<script>
+  let mediaFile = null, isVideo = false;
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const analyzeBtn = document.getElementById('analyze-btn');
+  const previewVideo = document.getElementById('preview-video');
+  const previewImg = document.getElementById('preview-img');
+
+  function handleFile(f) {
+    mediaFile = f; isVideo = f.type.startsWith('video/');
+    document.getElementById('file-name').textContent = `${f.name} (${(f.size/1024/1024).toFixed(1)} MB)`;
+    document.getElementById('file-badge').style.display = 'flex';
+    if (isVideo) {
+      previewVideo.src = URL.createObjectURL(f); previewVideo.style.display = 'block'; previewImg.style.display = 'none';
+      document.getElementById('frame-card').style.display = 'block';
+    } else {
+      previewImg.src = URL.createObjectURL(f); previewImg.style.display = 'block'; previewVideo.style.display = 'none';
+      document.getElementById('frame-card').style.display = 'none';
+    }
+    analyzeBtn.disabled = false;
+  }
+
+  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+  function setProgress(pct, msg) {
+    document.getElementById('progress-wrap').style.display = 'block';
+    document.getElementById('prog-fill').style.width = pct + '%';
+    document.getElementById('status-msg').textContent = msg;
+  }
+
+  function extractFrames(video, count) {
+    return new Promise(resolve => {
+      const frames = [], duration = video.duration, interval = duration / (count + 1);
+      let captured = 0;
+      const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
+      const ctx = canvas.getContext('2d');
+      video.onseeked = () => {
+        ctx.drawImage(video, 0, 0, 640, 360);
+        frames.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.85), time: video.currentTime });
+        captured++;
+        if (captured < count) video.currentTime = interval * (captured + 1); else resolve(frames);
+      };
+      video.currentTime = interval;
+    });
+  }
+
+  function fmtTime(s) { return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
+
+  function renderFrames(frames) {
+    const grid = document.getElementById('frames-grid'); grid.innerHTML = '';
+    document.getElementById('card-frames').style.display = 'block';
+    frames.forEach((f, i) => {
+      const wrap = document.createElement('div'); wrap.className = 'frame-thumb';
+      const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
+      const ctx = canvas.getContext('2d'), img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0); img.src = f.dataUrl;
+      const label = document.createElement('div'); label.className = 'frame-label'; label.textContent = fmtTime(f.time);
+      const dlBtn = document.createElement('button'); dlBtn.className = 'dl-btn'; dlBtn.textContent = '⬇';
+      dlBtn.title = 'Download frame';
+      dlBtn.onclick = () => { const a = document.createElement('a'); a.href = f.dataUrl; a.download = `frame_${i+1}_${fmtTime(f.time).replace(':','m')}s.jpg`; a.click(); };
+      wrap.appendChild(canvas); wrap.appendChild(label); wrap.appendChild(dlBtn); grid.appendChild(wrap);
+    });
+  }
+
+  function fileToBase64(file) {
+    return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
+  }
+
+  analyzeBtn.addEventListener('click', async () => {
+    if (!mediaFile) return;
+    analyzeBtn.disabled = true;
+    document.getElementById('results').style.display = 'none';
+    const address = document.getElementById('prop-address').value;
+    const mediaType = document.getElementById('media-type').value;
+    const notes = document.getElementById('notes').value;
+    const frameCount = parseInt(document.getElementById('frame-count').value);
+    let frames = [], analysisImageB64 = null, mimeType = 'image/jpeg';
+
+    try {
+      if (isVideo) {
+        setProgress(15, 'Extracting frames from video...');
+        const vid = previewVideo;
+        await new Promise(r => { if (vid.readyState >= 2) r(); else vid.onloadeddata = r; });
+        frames = await extractFrames(vid, frameCount);
+        setProgress(40, 'Frames extracted — sending to AI...');
+        analysisImageB64 = frames[Math.floor(frames.length / 2)].dataUrl.split(',')[1];
+      } else {
+        setProgress(30, 'Reading image...');
+        analysisImageB64 = await fileToBase64(mediaFile);
+        mimeType = mediaFile.type;
+        setProgress(50, 'Sending to AI...');
+      }
+
+      setProgress(65, 'AI is analyzing the property media...');
+      const response = await fetch('/api/analyze-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: analysisImageB64, mediaType, address, notes, mimeType })
+      });
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+      setProgress(90, 'Building report...');
+
+      document.getElementById('out-summary').textContent = result.summary || '—';
+      const sevMap = { high: ['pill-high','High priority'], medium: ['pill-med','Medium priority'], low: ['pill-low','Low priority'] };
+      const [sevClass, sevLabel] = sevMap[result.severity] || ['pill-neutral', result.severity];
+      document.getElementById('out-severity').innerHTML = `<span class="pill ${sevClass}">${sevLabel}</span><span class="pill pill-neutral">${result.issue_type||''}</span><p style="margin-top:10px;font-size:14px;color:#475569;">${result.urgency_note||''}</p>`;
+      document.getElementById('card-severity').style.display = 'block';
+
+      const stepsList = document.getElementById('out-steps'); stepsList.innerHTML = '';
+      (result.next_steps || []).forEach(s => { const li = document.createElement('li'); li.textContent = s; stepsList.appendChild(li); });
+      document.getElementById('out-vendors').innerHTML = (result.vendors_needed || []).map(v => `<span class="chip">🔧 ${v}</span>`).join('');
+
+      if (isVideo && frames.length) renderFrames(frames);
+      setProgress(100, 'Done.');
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      setProgress(100, '❌ Error: ' + err.message);
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  function reset() {
+    mediaFile = null; isVideo = false; fileInput.value = '';
+    previewVideo.style.display = 'none'; previewImg.style.display = 'none';
+    document.getElementById('file-badge').style.display = 'none';
+    document.getElementById('progress-wrap').style.display = 'none';
+    document.getElementById('frame-card').style.display = 'none';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('card-frames').style.display = 'none';
+    document.getElementById('card-severity').style.display = 'none';
+    document.getElementById('frames-grid').innerHTML = '';
+    analyzeBtn.disabled = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+</body>
+</html>
