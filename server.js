@@ -1517,6 +1517,12 @@ app.get('*', function(req, res) {
       <div class="tool-name">HOA Form Filler</div>
       <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
     </a>
+    <a href="/media-analyzer" class="tool-card primary" data-name="media analyzer video photo inspection transcribe">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🎥</div>
+      <div class="tool-name">Property Media Analyzer</div>
+      <div class="tool-desc">Upload video or photos — AI transcription, inspection report, vendor list</div>
+    </a>
   </div>
 </div>
 
@@ -1792,6 +1798,12 @@ app.get('*', function(req, res) {
       <div class="tool-icon">📋</div>
       <div class="tool-name">HOA Form Filler</div>
       <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
+    </a>
+    <a href="/media-analyzer" class="tool-card primary" data-name="media analyzer video photo inspection transcribe">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🎥</div>
+      <div class="tool-name">Property Media Analyzer</div>
+      <div class="tool-desc">Upload video or photos — AI transcription, inspection report, vendor list</div>
     </a>
   </div>
 </div>
