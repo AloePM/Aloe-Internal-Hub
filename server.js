@@ -1316,6 +1316,47 @@ app.get('/', (req, res, next) => {
   next();
 });
 
+
+// --- Video Analyzer Proxy ---
+app.post('/api/analyze-media', async (req, res) => {
+  try {
+    const { imageBase64, mediaType, address, notes, mimeType } = req.body;
+    const mediaTypeLabel = { maintenance: 'maintenance issue', inspection: 'property inspection/walkthrough', 'move-in': 'move-in documentation', 'move-out': 'move-out documentation' }[mediaType] || mediaType;
+    const contextNote = notes ? `\n\nAdditional context: ${notes}` : '';
+    const addrNote = address ? `\n\nProperty: ${address}` : '';
+    const prompt = `You are an AI assistant for Aloe Property Management in the Phoenix metro area. You are analyzing a photo showing a ${mediaTypeLabel}.${addrNote}${contextNote}\n\nRespond ONLY with a valid JSON object (no markdown, no extra text):\n{\n  "summary": "2-3 sentence description of what you see",\n  "severity": "high|medium|low",\n  "issue_type": "e.g. Plumbing, HVAC, Electrical, Structural, Cleaning, General",\n  "next_steps": ["step 1", "step 2", "step 3", "step 4"],\n  "vendors_needed": ["trade/vendor type 1", "trade/vendor type 2"],\n  "urgency_note": "one sentence about timing/urgency"\n}`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: imageBase64 } }, { type: 'text', text: prompt }] }] }) });
+    const data = await response.json();
+    const text = data.content?.map(b => b.text || '').join('') || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    res.json(JSON.parse(clean));
+  } catch (err) {
+    console.error('analyze-media error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// --- End Video Analyzer Proxy ---
+
+
+// --- Video Analyzer Proxy ---
+app.post('/api/analyze-media', async (req, res) => {
+  try {
+    const { imageBase64, mediaType, address, notes, mimeType } = req.body;
+    const mediaTypeLabel = { maintenance: 'maintenance issue', inspection: 'property inspection/walkthrough', 'move-in': 'move-in documentation', 'move-out': 'move-out documentation' }[mediaType] || mediaType;
+    const contextNote = notes ? `\n\nAdditional context: ${notes}` : '';
+    const addrNote = address ? `\n\nProperty: ${address}` : '';
+    const prompt = `You are an AI assistant for Aloe Property Management in the Phoenix metro area. You are analyzing a photo showing a ${mediaTypeLabel}.${addrNote}${contextNote}\n\nRespond ONLY with a valid JSON object (no markdown, no extra text):\n{\n  "summary": "2-3 sentence plain-English description of what you see",\n  "severity": "high|medium|low",\n  "issue_type": "e.g. Plumbing, HVAC, Electrical, Structural, Cleaning, General",\n  "next_steps": ["step 1", "step 2", "step 3", "step 4"],\n  "vendors_needed": ["trade/vendor type 1", "trade/vendor type 2"],\n  "urgency_note": "one sentence about timing/urgency"\n}`;
+    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: imageBase64 } }, { type: 'text', text: prompt }] }] }) });
+    const data = await response.json();
+    const text = data.content?.map(b => b.text || '').join('') || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    res.json(JSON.parse(clean));
+  } catch (err) {
+    console.error('analyze-media error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// --- End Video Analyzer Proxy ---
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
