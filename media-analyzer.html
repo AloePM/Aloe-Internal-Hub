@@ -5,302 +5,70 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Property Media Analyzer — Aloe PM</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F8FAFC; color: #1a1a1a; min-height: 100vh; }
-  .top-bar { background: white; border-bottom: 1px solid #e2e8f0; padding: 0 2rem; height: 56px; display: flex; align-items: center; gap: 12px; }
-  .top-bar .logo { width: 28px; height: 28px; background: #3CC3E1; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
-  .top-bar .logo svg { width: 16px; height: 16px; fill: white; }
-  .top-bar h1 { font-size: 15px; font-weight: 600; color: #1a1a1a; }
-  .top-bar span { font-size: 13px; color: #64748b; margin-left: 4px; }
-  .container { max-width: 760px; margin: 2rem auto; padding: 0 1.5rem 4rem; }
-  .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
-  .drop-zone { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 3rem 1rem; text-align: center; cursor: pointer; transition: all 0.15s; background: #f8fafc; }
-  .drop-zone:hover, .drop-zone.drag { background: #e8f9fd; border-color: #3CC3E1; }
-  .drop-zone .icon { font-size: 40px; margin-bottom: 12px; }
-  .drop-zone h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
-  .drop-zone p { font-size: 13px; color: #64748b; }
-  #file-input { display: none; }
-  .section-label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.75rem; }
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-  label { font-size: 13px; color: #475569; display: block; margin-bottom: 4px; }
-  input[type=text], select, textarea { width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit; background: white; color: #1a1a1a; outline: none; transition: border 0.15s; }
-  input[type=text]:focus, select:focus, textarea:focus { border-color: #3CC3E1; box-shadow: 0 0 0 3px rgba(60,195,225,0.1); }
-  textarea { resize: vertical; min-height: 72px; }
-  .frame-row { display: flex; align-items: center; gap: 12px; }
-  .frame-row input[type=range] { flex: 1; accent-color: #3CC3E1; }
-  .frame-badge { background: #e8f9fd; color: #4BB4D2; font-size: 13px; font-weight: 600; padding: 4px 12px; border-radius: 20px; white-space: nowrap; }
-  .btn-primary { width: 100%; padding: 13px; background: #3CC3E1; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.15s; margin-top: 1rem; }
-  .btn-primary:hover { opacity: 0.88; }
-  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-secondary { width: 100%; padding: 11px; background: white; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.15s; margin-top: 0.5rem; }
-  .btn-secondary:hover { background: #f8fafc; }
-  .progress-wrap { margin-top: 12px; display: none; }
-  .progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; }
-  .progress-fill { height: 100%; background: #3CC3E1; border-radius: 2px; width: 0%; transition: width 0.4s; }
-  .status-msg { font-size: 13px; color: #64748b; margin-top: 6px; }
-  .preview-video { width: 100%; border-radius: 8px; margin-top: 12px; max-height: 220px; background: #000; display: none; }
-  .preview-img { width: 100%; border-radius: 8px; margin-top: 12px; max-height: 220px; object-fit: cover; display: none; }
-  .file-badge { font-size: 13px; color: #64748b; margin-top: 8px; display: none; align-items: center; gap: 6px; }
-  .results { display: none; }
-  .result-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
-  .result-card h3 { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 8px; }
-  .result-card h3 .icon { color: #3CC3E1; font-size: 18px; }
-  .result-card p, .result-card li { font-size: 14px; color: #475569; line-height: 1.65; }
-  .result-card ul { padding-left: 1.25rem; }
-  .result-card li { margin-bottom: 5px; }
-  .pill { display: inline-flex; align-items: center; font-size: 12px; padding: 4px 12px; border-radius: 20px; font-weight: 600; margin-right: 6px; }
-  .pill-high { background: #fee2e2; color: #b91c1c; }
-  .pill-med { background: #fef3c7; color: #92400e; }
-  .pill-low { background: #dcfce7; color: #166534; }
-  .pill-neutral { background: #f1f5f9; color: #475569; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 20px; padding: 5px 12px; font-size: 13px; color: #1a1a1a; margin: 4px 4px 4px 0; }
-  .frames-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
-  .frame-thumb { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; position: relative; background: #f8fafc; }
-  .frame-thumb canvas { width: 100%; display: block; }
-  .frame-label { font-size: 11px; color: #94a3b8; padding: 4px 8px; }
-  .dl-btn { position: absolute; bottom: 28px; right: 6px; background: rgba(0,0,0,0.6); border: none; border-radius: 6px; padding: 5px 7px; cursor: pointer; color: white; font-size: 12px; }
-  .dl-btn:hover { background: rgba(0,0,0,0.8); }
-  @media (max-width: 560px) { .field-row { grid-template-columns: 1fr; } }
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8FAFC;color:#1a1a1a;min-height:100vh}.top-bar{background:white;border-bottom:1px solid #e2e8f0;padding:0 2rem;height:56px;display:flex;align-items:center;gap:12px}.top-bar h1{font-size:15px;font-weight:600}.top-bar span{font-size:13px;color:#64748b}.logo{width:32px;height:32px;background:#3CC3E1;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:16px}.container{max-width:800px;margin:2rem auto;padding:0 1.5rem 4rem}.card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;margin-bottom:1.25rem}.drop-zone{border:2px dashed #cbd5e1;border-radius:10px;padding:2.5rem 1rem;text-align:center;cursor:pointer;transition:all .15s;background:#f8fafc}.drop-zone:hover,.drop-zone.drag{background:#e8f9fd;border-color:#3CC3E1}.drop-zone h3{font-size:15px;font-weight:600;margin:8px 0 4px}.drop-zone p{font-size:13px;color:#64748b}#file-input{display:none}.section-label{font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem}label{font-size:13px;color:#475569;display:block;margin-bottom:4px}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}input[type=text],select,textarea{width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#1a1a1a;outline:none}input:focus,select:focus,textarea:focus{border-color:#3CC3E1}textarea{resize:vertical;min-height:60px}.frame-row{display:flex;align-items:center;gap:12px}.frame-row input[type=range]{flex:1;accent-color:#3CC3E1}.badge{background:#e8f9fd;color:#0e7490;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap}.btn-primary{width:100%;padding:13px;background:#3CC3E1;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .15s;margin-top:1rem}.btn-primary:hover{opacity:.88}.btn-primary:disabled{opacity:.4;cursor:not-allowed}.btn-secondary{width:100%;padding:11px;background:white;color:#475569;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:.5rem}.btn-secondary:hover{background:#f8fafc}.progress-wrap{margin-top:12px;display:none}.progress-bar{height:4px;background:#e2e8f0;border-radius:2px}.progress-fill{height:100%;background:#3CC3E1;border-radius:2px;width:0%;transition:width .4s}.status-msg{font-size:13px;color:#64748b;margin-top:6px}.preview-video{width:100%;border-radius:8px;margin-top:12px;max-height:240px;background:#000;display:none}.preview-img{width:100%;border-radius:8px;margin-top:12px;max-height:240px;object-fit:cover;display:none}.file-badge{font-size:13px;color:#64748b;margin-top:8px;display:none;align-items:center;gap:6px}.results{display:none}.score-wrap{display:flex;align-items:center;gap:1.5rem;margin-bottom:1rem}.score-circle{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:700;font-size:28px;line-height:1;border:4px solid}.score-circle small{font-size:11px;font-weight:500;color:#64748b;margin-top:2px}.score-good{border-color:#22c55e;color:#166534;background:#f0fdf4}.score-fair{border-color:#eab308;color:#854d0e;background:#fefce8}.score-poor{border-color:#f97316;color:#9a3412;background:#fff7ed}.score-critical{border-color:#ef4444;color:#991b1b;background:#fef2f2}.cat-card{border:1px solid #e2e8f0;border-radius:10px;padding:1rem 1.25rem;margin-bottom:.75rem;background:white}.cat-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}.cat-header h4{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}.cat-body{font-size:13px;color:#475569;line-height:1.6}.cat-body .action{margin-top:6px;padding:6px 10px;background:#f0fdf4;border-radius:6px;font-size:13px;color:#166534;border-left:3px solid #22c55e}.cat-body .scope-badge{display:inline-block;margin-top:6px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:#f1f5f9;color:#475569}.pill{display:inline-flex;align-items:center;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;margin-right:4px}.pill-good{background:#dcfce7;color:#166534}.pill-fair{background:#fef3c7;color:#92400e}.pill-poor{background:#ffedd5;color:#9a3412}.pill-critical{background:#fee2e2;color:#991b1b}.pill-high{background:#fee2e2;color:#991b1b}.pill-med{background:#fef3c7;color:#92400e}.pill-low{background:#dcfce7;color:#166534}.pill-neutral{background:#f1f5f9;color:#475569}.result-card{background:white;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1rem}.result-card h3{font-size:14px;font-weight:600;color:#1a1a1a;margin-bottom:.75rem;display:flex;align-items:center;gap:8px}.result-card p,.result-card li{font-size:14px;color:#475569;line-height:1.65}.result-card ul{padding-left:1.25rem}.result-card li{margin-bottom:5px}.urgent-item{padding:8px 12px;background:#fef2f2;border-left:3px solid #ef4444;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:13px;color:#991b1b}.chargeback-item{padding:6px 12px;background:#eff6ff;border-left:3px solid #3b82f6;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:13px;color:#1e40af}.transcript-item{padding:8px 12px;background:#faf5ff;border-left:3px solid #8b5cf6;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:13px;color:#5b21b6}.transcript-item .spoken{font-style:italic;margin-bottom:4px}.transcript-item .ti-action{font-weight:500}.vendor-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}.vendor-table th{text-align:left;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-weight:600;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.05em}.vendor-table td{padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#1a1a1a}.frames-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px}.frame-thumb{border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;position:relative;background:#f8fafc}.frame-thumb canvas{width:100%;display:block}.frame-label{font-size:11px;color:#94a3b8;padding:3px 8px}.dl-btn{position:absolute;bottom:24px;right:6px;background:rgba(0,0,0,.6);border:none;border-radius:6px;padding:4px 6px;cursor:pointer;color:white;font-size:12px}.dl-btn:hover{background:rgba(0,0,0,.8)}.transcript-box{margin-top:8px;padding:10px 12px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;font-size:13px;color:#5b21b6;max-height:120px;overflow-y:auto;line-height:1.6;white-space:pre-wrap}.turnover-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;font-size:14px;font-weight:600}.turnover-light{background:#dcfce7;color:#166534}.turnover-standard{background:#fef3c7;color:#92400e}.turnover-heavy{background:#ffedd5;color:#9a3412}.turnover-full{background:#fee2e2;color:#991b1b}@media(max-width:560px){.field-row,.field-row-3{grid-template-columns:1fr}.score-wrap{flex-direction:column;align-items:flex-start}}
 </style>
 </head>
 <body>
-
-<div class="top-bar">
-  <div class="logo">
-    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-  </div>
-  <h1>Property Media Analyzer</h1>
-  <span>Aloe Property Management</span>
-</div>
-
+<div class="top-bar"><div class="logo">🏠</div><h1>Property Media Analyzer</h1><span>Aloe Property Management</span></div>
 <div class="container">
-
-  <div class="card">
-    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-      <div class="icon">🎥</div>
-      <h3>Drop a video or photo here</h3>
-      <p>MP4, MOV, WebM &middot; JPG, PNG &middot; or click to browse</p>
-    </div>
-    <input type="file" id="file-input" accept="video/*,image/*">
-    <video id="preview-video" class="preview-video" controls muted playsinline></video>
-    <img id="preview-img" class="preview-img">
-    <div id="file-badge" class="file-badge">📄 <span id="file-name"></span></div>
-  </div>
-
-  <div class="card">
-    <div class="section-label">Context</div>
-    <div class="field-row">
-      <div>
-        <label>Property address</label>
-        <input type="text" id="prop-address" placeholder="e.g. 1234 E Main St, Gilbert">
-      </div>
-      <div>
-        <label>Media type</label>
-        <select id="media-type">
-          <option value="maintenance">Maintenance issue</option>
-          <option value="inspection">Property inspection / walkthrough</option>
-          <option value="move-in">Move-in documentation</option>
-          <option value="move-out">Move-out documentation</option>
-        </select>
-      </div>
-    </div>
-    <div>
-      <label>Notes for the AI (optional)</label>
-      <textarea id="notes" placeholder="e.g. Tenant reported water damage under kitchen sink, unit vacant, lease ends March 2025..."></textarea>
-    </div>
-  </div>
-
-  <div class="card" id="frame-card" style="display:none;">
-    <div class="section-label">Frame Extraction</div>
-    <div class="frame-row">
-      <span style="font-size:13px;color:#475569;">Snapshots to extract</span>
-      <input type="range" id="frame-count" min="3" max="12" value="6" step="1" oninput="document.getElementById('frame-badge').textContent=this.value+' frames'">
-      <span class="frame-badge" id="frame-badge">6 frames</span>
-    </div>
-  </div>
-
-  <button class="btn-primary" id="analyze-btn" disabled>
-    ✨ Analyze with AI
-  </button>
-
-  <div class="progress-wrap" id="progress-wrap">
-    <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
-    <div class="status-msg" id="status-msg"></div>
-  </div>
-
-  <div class="results" id="results">
-    <div style="margin-top:1.5rem; margin-bottom:0.75rem;" class="section-label">AI Analysis</div>
-
-    <div class="result-card">
-      <h3><span class="icon">📋</span> Summary</h3>
-      <p id="out-summary"></p>
-    </div>
-
-    <div class="result-card" id="card-severity" style="display:none;">
-      <h3><span class="icon">⚠️</span> Severity &amp; Type</h3>
-      <div id="out-severity"></div>
-    </div>
-
-    <div class="result-card">
-      <h3><span class="icon">✅</span> Recommended Next Steps</h3>
-      <ul id="out-steps"></ul>
-    </div>
-
-    <div class="result-card">
-      <h3><span class="icon">🔧</span> Vendors / Trades Needed</h3>
-      <div id="out-vendors"></div>
-    </div>
-
-    <div class="result-card" id="card-frames" style="display:none;">
-      <h3><span class="icon">📸</span> Extracted Frames</h3>
-      <p style="font-size:13px;color:#64748b;margin-bottom:10px;">Download frames and upload to the property's Google Drive folder or attach in Rentvine.</p>
-      <div class="frames-grid" id="frames-grid"></div>
-    </div>
-
-    <button class="btn-secondary" onclick="reset()">↩ Analyze Another File</button>
-  </div>
-
+<div class="card"><div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"><div style="font-size:36px">🎥</div><h3>Drop a video or photo here</h3><p>MP4, MOV, WebM &middot; JPG, PNG &middot; or click to browse</p></div><input type="file" id="file-input" accept="video/*,image/*"><video id="preview-video" class="preview-video" controls muted playsinline></video><img id="preview-img" class="preview-img"><div id="file-badge" class="file-badge">📄 <span id="file-name"></span></div></div>
+<div class="card"><div class="section-label">Context</div><div class="field-row-3"><div><label>Property address</label><input type="text" id="prop-address" placeholder="e.g. 1234 E Main St"></div><div><label>Media type</label><select id="media-type"><option value="move-out">Move-out inspection</option><option value="maintenance">Maintenance issue</option><option value="inspection">General inspection</option><option value="move-in">Move-in documentation</option></select></div><div><label>Room / area (optional)</label><input type="text" id="room-label" placeholder="e.g. Master Bedroom"></div></div><div><label>Notes for the AI (optional)</label><textarea id="notes" placeholder="e.g. Tenant had 3 cats, lived here 2 years, heavy smoker..."></textarea></div></div>
+<div class="card" id="frame-card" style="display:none"><div class="section-label">Video Settings</div><div class="frame-row" style="margin-bottom:12px"><span style="font-size:13px;color:#475569">Frames to analyze</span><input type="range" id="frame-count" min="4" max="16" value="8" step="1" oninput="document.getElementById('frame-badge').textContent=this.value+' frames'"><span class="badge" id="frame-badge">8 frames</span></div><div style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="transcribe-check" checked style="width:auto;accent-color:#3CC3E1"><label for="transcribe-check" style="margin:0;cursor:pointer">Transcribe audio (captures what the inspector says)</label></div></div>
+<button class="btn-primary" id="analyze-btn" disabled>✨ Analyze with AI</button>
+<div class="progress-wrap" id="progress-wrap"><div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div><div class="status-msg" id="status-msg"></div></div>
+<div class="results" id="results">
+<div class="result-card" id="card-summary"><div class="score-wrap"><div class="score-circle" id="score-circle"><span id="score-num">—</span><small>/ 10</small></div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><h3 style="margin:0">Overall Condition</h3><span class="turnover-badge" id="turnover-badge"></span></div><p id="out-summary" style="font-size:14px;color:#475569;line-height:1.6"></p></div></div></div>
+<div class="result-card" id="card-transcript" style="display:none"><h3>🎙️ Inspector Audio Transcript</h3><div class="transcript-box" id="out-transcript"></div></div>
+<div class="result-card" id="card-transcript-issues" style="display:none"><h3>🎙️ Issues from Audio</h3><div id="out-transcript-issues"></div></div>
+<div class="result-card" id="card-urgent" style="display:none"><h3>🚨 Urgent Items</h3><div id="out-urgent"></div></div>
+<div style="margin-top:1.5rem;margin-bottom:.75rem" class="section-label">Detailed Category Breakdown</div>
+<div id="out-categories"></div>
+<div class="result-card"><h3>🔧 Vendor Summary</h3><table class="vendor-table" id="out-vendors"><thead><tr><th>Vendor / Trade</th><th>Scope</th><th>Priority</th></tr></thead><tbody></tbody></table></div>
+<div class="result-card" id="card-chargebacks" style="display:none"><h3>💰 Potential Tenant Chargebacks</h3><div id="out-chargebacks"></div></div>
+<div class="result-card" id="card-frames" style="display:none"><h3>📸 Extracted Frames</h3><p style="font-size:13px;color:#64748b;margin-bottom:8px">Download and upload to Google Drive or attach in Rentvine.</p><div class="frames-grid" id="frames-grid"></div></div>
+<div class="result-card" id="card-notes" style="display:none"><h3>📝 Additional Notes</h3><p id="out-notes"></p></div>
+<button class="btn-secondary" onclick="reset()">↩ Analyze Another File</button>
 </div>
-
+</div>
 <script>
-  let mediaFile = null, isVideo = false;
-  const dropZone = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('file-input');
-  const analyzeBtn = document.getElementById('analyze-btn');
-  const previewVideo = document.getElementById('preview-video');
-  const previewImg = document.getElementById('preview-img');
+let mediaFile=null,isVideo=false;const dropZone=document.getElementById('drop-zone'),fileInput=document.getElementById('file-input'),analyzeBtn=document.getElementById('analyze-btn'),previewVideo=document.getElementById('preview-video'),previewImg=document.getElementById('preview-img');
+function handleFile(f){mediaFile=f;isVideo=f.type.startsWith('video/');document.getElementById('file-name').textContent=f.name+' ('+(f.size/1048576).toFixed(1)+' MB)';document.getElementById('file-badge').style.display='flex';if(isVideo){previewVideo.src=URL.createObjectURL(f);previewVideo.style.display='block';previewImg.style.display='none';document.getElementById('frame-card').style.display='block';}else{previewImg.src=URL.createObjectURL(f);previewImg.style.display='block';previewVideo.style.display='none';document.getElementById('frame-card').style.display='none';}analyzeBtn.disabled=false;}
+fileInput.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+function setProgress(p,m){document.getElementById('progress-wrap').style.display='block';document.getElementById('prog-fill').style.width=p+'%';document.getElementById('status-msg').textContent=m;}
+function fmtTime(s){return Math.floor(s/60)+':'+Math.floor(s%60).toString().padStart(2,'0');}
+function fileToBase64(f){return new Promise((r,j)=>{const rd=new FileReader();rd.onload=()=>r(rd.result.split(',')[1]);rd.onerror=j;rd.readAsDataURL(f);});}
 
-  function handleFile(f) {
-    mediaFile = f; isVideo = f.type.startsWith('video/');
-    document.getElementById('file-name').textContent = `${f.name} (${(f.size/1024/1024).toFixed(1)} MB)`;
-    document.getElementById('file-badge').style.display = 'flex';
-    if (isVideo) {
-      previewVideo.src = URL.createObjectURL(f); previewVideo.style.display = 'block'; previewImg.style.display = 'none';
-      document.getElementById('frame-card').style.display = 'block';
-    } else {
-      previewImg.src = URL.createObjectURL(f); previewImg.style.display = 'block'; previewVideo.style.display = 'none';
-      document.getElementById('frame-card').style.display = 'none';
-    }
-    analyzeBtn.disabled = false;
-  }
+function extractFrames(video,count){return new Promise(resolve=>{const frames=[],dur=video.duration,int=dur/(count+1);let cap=0;const c=document.createElement('canvas');c.width=1280;c.height=720;const ctx=c.getContext('2d');video.onseeked=()=>{ctx.drawImage(video,0,0,1280,720);frames.push({base64:c.toDataURL('image/jpeg',.82).split(',')[1],time:video.currentTime,timestamp:fmtTime(video.currentTime)});cap++;if(cap<count)video.currentTime=int*(cap+1);else resolve(frames);};video.currentTime=int;});}
 
-  fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
-  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+function extractAudio(videoFile){return new Promise(async resolve=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});const ab=await videoFile.arrayBuffer();const buf=await ac.decodeAudioData(ab);const ch=buf.getChannelData(0);const wav=new ArrayBuffer(44+ch.length*2);const v=new DataView(wav);const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};ws(0,'RIFF');v.setUint32(4,36+ch.length*2,true);ws(8,'WAVE');ws(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,ch.length*2,true);for(let i=0;i<ch.length;i++){const s=Math.max(-1,Math.min(1,ch[i]));v.setInt16(44+i*2,s<0?s*0x8000:s*0x7FFF,true);}const blob=new Blob([wav],{type:'audio/wav'});const rd=new FileReader();rd.onload=()=>resolve(rd.result.split(',')[1]);rd.readAsDataURL(blob);}catch(e){console.error('Audio extract err:',e);resolve(null);}});}
 
-  function setProgress(pct, msg) {
-    document.getElementById('progress-wrap').style.display = 'block';
-    document.getElementById('prog-fill').style.width = pct + '%';
-    document.getElementById('status-msg').textContent = msg;
-  }
+async function transcribeAudio(b64){try{const r=await fetch('/api/transcribe-audio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({audioBase64:b64})});const d=await r.json();return d.transcript||null;}catch(e){return null;}}
 
-  function extractFrames(video, count) {
-    return new Promise(resolve => {
-      const frames = [], duration = video.duration, interval = duration / (count + 1);
-      let captured = 0;
-      const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
-      const ctx = canvas.getContext('2d');
-      video.onseeked = () => {
-        ctx.drawImage(video, 0, 0, 640, 360);
-        frames.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.85), time: video.currentTime });
-        captured++;
-        if (captured < count) video.currentTime = interval * (captured + 1); else resolve(frames);
-      };
-      video.currentTime = interval;
-    });
-  }
+function renderFrames(frames){const g=document.getElementById('frames-grid');g.innerHTML='';document.getElementById('card-frames').style.display='block';frames.forEach((f,i)=>{const w=document.createElement('div');w.className='frame-thumb';const c=document.createElement('canvas');c.width=1280;c.height=720;const ctx=c.getContext('2d'),img=new Image();img.onload=()=>ctx.drawImage(img,0,0);img.src='data:image/jpeg;base64,'+f.base64;const l=document.createElement('div');l.className='frame-label';l.textContent=f.timestamp;const d=document.createElement('button');d.className='dl-btn';d.textContent='⬇';d.onclick=()=>{const a=document.createElement('a');a.href='data:image/jpeg;base64,'+f.base64;a.download='frame_'+(i+1)+'_'+f.timestamp.replace(':','m')+'s.jpg';a.click();};w.appendChild(c);w.appendChild(l);w.appendChild(d);g.appendChild(w);});}
 
-  function fmtTime(s) { return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
+function renderResults(result,transcript,frames){
+const score=result.overall_condition_score||0;const se=document.getElementById('score-circle');document.getElementById('score-num').textContent=score;se.className='score-circle '+(score>=7?'score-good':score>=5?'score-fair':score>=3?'score-poor':'score-critical');
+const t=result.turnover_estimate||'';const tb=document.getElementById('turnover-badge');tb.textContent=t+' turnover';tb.className='turnover-badge turnover-'+(t.toLowerCase().includes('light')?'light':t.toLowerCase().includes('standard')?'standard':t.toLowerCase().includes('heavy')?'heavy':'full');
+document.getElementById('out-summary').textContent=result.overall_summary||'';
+if(transcript){document.getElementById('out-transcript').textContent=transcript;document.getElementById('card-transcript').style.display='block';}
+if(result.transcript_issues&&result.transcript_issues.length>0){const el=document.getElementById('out-transcript-issues');el.innerHTML='';result.transcript_issues.forEach(ti=>{el.innerHTML+='<div class="transcript-item"><div class="spoken">"'+(ti.spoken_observation||'')+'"</div><div><span class="pill pill-neutral">'+(ti.category||'')+'</span> <span class="ti-action">'+(ti.action_needed||'')+'</span></div></div>';});document.getElementById('card-transcript-issues').style.display='block';}
+if(result.urgent_items&&result.urgent_items.length>0){const el=document.getElementById('out-urgent');el.innerHTML='';result.urgent_items.forEach(u=>{el.innerHTML+='<div class="urgent-item">⚠️ '+u+'</div>';});document.getElementById('card-urgent').style.display='block';}
+const ce=document.getElementById('out-categories');ce.innerHTML='';const icons={Paint:'🎨',Flooring:'🟫',Carpet:'🟫',Walls:'🧱',Ceiling:'⬜',Fixtures:'🔩',Blinds:'🪟',Doors:'🚪',Appliances:'🏭',Plumbing:'🚿',HVAC:'❄️',Cleaning:'🧹',Cabinets:'🗄️',Electrical:'⚡',Safety:'🛡️',Exterior:'🏡',Odor:'👃',General:'📋'};
+(result.categories||[]).forEach(cat=>{const sev=cat.severity||'good';const ic=Object.entries(icons).find(([k])=>cat.category.toLowerCase().includes(k.toLowerCase()));ce.innerHTML+='<div class="cat-card"><div class="cat-header"><h4>'+(ic?ic[1]:'📋')+' '+cat.category+'</h4><span class="pill pill-'+sev+'">'+sev.charAt(0).toUpperCase()+sev.slice(1)+'</span></div><div class="cat-body"><div>'+(cat.findings||'')+'</div>'+(cat.action_needed?'<div class="action">→ '+cat.action_needed+'</div>':'')+(cat.estimated_scope?'<span class="scope-badge">'+cat.estimated_scope+'</span>':'')+(cat.vendor_type?' <span class="scope-badge">🔧 '+cat.vendor_type+'</span>':'')+'</div></div>';});
+const vt=document.getElementById('out-vendors').querySelector('tbody');vt.innerHTML='';(result.vendor_summary||[]).forEach(v=>{const pc=v.priority==='high'?'pill-high':v.priority==='medium'?'pill-med':'pill-low';vt.innerHTML+='<tr><td><strong>'+(v.vendor_type||'')+'</strong></td><td>'+(v.scope||'')+'</td><td><span class="pill '+pc+'">'+(v.priority||'')+'</span></td></tr>';});
+if(result.chargeback_items&&result.chargeback_items.length>0){const el=document.getElementById('out-chargebacks');el.innerHTML='';result.chargeback_items.forEach(c=>{el.innerHTML+='<div class="chargeback-item">💰 '+c+'</div>';});document.getElementById('card-chargebacks').style.display='block';}
+if(frames&&frames.length>0)renderFrames(frames);
+if(result.additional_notes){document.getElementById('out-notes').textContent=result.additional_notes;document.getElementById('card-notes').style.display='block';}
+document.getElementById('results').style.display='block';document.getElementById('results').scrollIntoView({behavior:'smooth'});}
 
-  function renderFrames(frames) {
-    const grid = document.getElementById('frames-grid'); grid.innerHTML = '';
-    document.getElementById('card-frames').style.display = 'block';
-    frames.forEach((f, i) => {
-      const wrap = document.createElement('div'); wrap.className = 'frame-thumb';
-      const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
-      const ctx = canvas.getContext('2d'), img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0); img.src = f.dataUrl;
-      const label = document.createElement('div'); label.className = 'frame-label'; label.textContent = fmtTime(f.time);
-      const dlBtn = document.createElement('button'); dlBtn.className = 'dl-btn'; dlBtn.textContent = '⬇';
-      dlBtn.title = 'Download frame';
-      dlBtn.onclick = () => { const a = document.createElement('a'); a.href = f.dataUrl; a.download = `frame_${i+1}_${fmtTime(f.time).replace(':','m')}s.jpg`; a.click(); };
-      wrap.appendChild(canvas); wrap.appendChild(label); wrap.appendChild(dlBtn); grid.appendChild(wrap);
-    });
-  }
+analyzeBtn.addEventListener('click',async()=>{if(!mediaFile)return;analyzeBtn.disabled=true;document.getElementById('results').style.display='none';const address=document.getElementById('prop-address').value,mediaType=document.getElementById('media-type').value,notes=document.getElementById('notes').value,roomLabel=document.getElementById('room-label').value,frameCount=parseInt(document.getElementById('frame-count').value),doTranscribe=document.getElementById('transcribe-check')?.checked;let frames=[],transcript=null;
+try{if(isVideo){setProgress(10,'Extracting frames from video...');const vid=previewVideo;await new Promise(r=>{if(vid.readyState>=2)r();else vid.onloadeddata=r;});frames=await extractFrames(vid,frameCount);setProgress(35,'Frames extracted ('+frames.length+')...');
+if(doTranscribe){setProgress(40,'Extracting audio for transcription...');const ab=await extractAudio(mediaFile);if(ab){setProgress(50,'Transcribing audio...');transcript=await transcribeAudio(ab);if(transcript)setProgress(60,'Transcript ready...');else setProgress(60,'No speech detected...');}else setProgress(60,'Audio extraction skipped...');}else setProgress(55,'Sending frames to AI...');
+setProgress(65,'AI is analyzing '+frames.length+' frames'+(transcript?' + transcript':'')+'...');const r=await fetch('/api/analyze-media',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames,mediaType,address,notes,roomLabel,transcript})});const result=await r.json();if(result.error)throw new Error(result.error);setProgress(95,'Building report...');renderResults(result,transcript,frames);setProgress(100,'Done.');}
+else{setProgress(30,'Reading image...');const ib=await fileToBase64(mediaFile);setProgress(50,'Sending to AI...');const r=await fetch('/api/analyze-media',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageBase64:ib,mediaType,address,notes,roomLabel,mimeType:mediaFile.type})});const result=await r.json();if(result.error)throw new Error(result.error);setProgress(95,'Building report...');renderResults(result,null,null);setProgress(100,'Done.');}}
+catch(e){setProgress(100,'❌ Error: '+e.message);analyzeBtn.disabled=false;}});
 
-  function fileToBase64(file) {
-    return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(file); });
-  }
-
-  analyzeBtn.addEventListener('click', async () => {
-    if (!mediaFile) return;
-    analyzeBtn.disabled = true;
-    document.getElementById('results').style.display = 'none';
-    const address = document.getElementById('prop-address').value;
-    const mediaType = document.getElementById('media-type').value;
-    const notes = document.getElementById('notes').value;
-    const frameCount = parseInt(document.getElementById('frame-count').value);
-    let frames = [], analysisImageB64 = null, mimeType = 'image/jpeg';
-
-    try {
-      if (isVideo) {
-        setProgress(15, 'Extracting frames from video...');
-        const vid = previewVideo;
-        await new Promise(r => { if (vid.readyState >= 2) r(); else vid.onloadeddata = r; });
-        frames = await extractFrames(vid, frameCount);
-        setProgress(40, 'Frames extracted — sending to AI...');
-        analysisImageB64 = frames[Math.floor(frames.length / 2)].dataUrl.split(',')[1];
-      } else {
-        setProgress(30, 'Reading image...');
-        analysisImageB64 = await fileToBase64(mediaFile);
-        mimeType = mediaFile.type;
-        setProgress(50, 'Sending to AI...');
-      }
-
-      setProgress(65, 'AI is analyzing the property media...');
-      const response = await fetch('/api/analyze-media', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: analysisImageB64, mediaType, address, notes, mimeType })
-      });
-      const result = await response.json();
-      if (result.error) throw new Error(result.error);
-      setProgress(90, 'Building report...');
-
-      document.getElementById('out-summary').textContent = result.summary || '—';
-      const sevMap = { high: ['pill-high','High priority'], medium: ['pill-med','Medium priority'], low: ['pill-low','Low priority'] };
-      const [sevClass, sevLabel] = sevMap[result.severity] || ['pill-neutral', result.severity];
-      document.getElementById('out-severity').innerHTML = `<span class="pill ${sevClass}">${sevLabel}</span><span class="pill pill-neutral">${result.issue_type||''}</span><p style="margin-top:10px;font-size:14px;color:#475569;">${result.urgency_note||''}</p>`;
-      document.getElementById('card-severity').style.display = 'block';
-
-      const stepsList = document.getElementById('out-steps'); stepsList.innerHTML = '';
-      (result.next_steps || []).forEach(s => { const li = document.createElement('li'); li.textContent = s; stepsList.appendChild(li); });
-      document.getElementById('out-vendors').innerHTML = (result.vendors_needed || []).map(v => `<span class="chip">🔧 ${v}</span>`).join('');
-
-      if (isVideo && frames.length) renderFrames(frames);
-      setProgress(100, 'Done.');
-      document.getElementById('results').style.display = 'block';
-      document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
-    } catch (err) {
-      setProgress(100, '❌ Error: ' + err.message);
-      analyzeBtn.disabled = false;
-    }
-  });
-
-  function reset() {
-    mediaFile = null; isVideo = false; fileInput.value = '';
-    previewVideo.style.display = 'none'; previewImg.style.display = 'none';
-    document.getElementById('file-badge').style.display = 'none';
-    document.getElementById('progress-wrap').style.display = 'none';
-    document.getElementById('frame-card').style.display = 'none';
-    document.getElementById('results').style.display = 'none';
-    document.getElementById('card-frames').style.display = 'none';
-    document.getElementById('card-severity').style.display = 'none';
-    document.getElementById('frames-grid').innerHTML = '';
-    analyzeBtn.disabled = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
+function reset(){mediaFile=null;isVideo=false;fileInput.value='';previewVideo.style.display='none';previewImg.style.display='none';document.getElementById('file-badge').style.display='none';document.getElementById('progress-wrap').style.display='none';document.getElementById('frame-card').style.display='none';document.getElementById('results').style.display='none';['card-frames','card-transcript','card-transcript-issues','card-urgent','card-chargebacks','card-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});document.getElementById('frames-grid').innerHTML='';document.getElementById('out-categories').innerHTML='';analyzeBtn.disabled=true;window.scrollTo({top:0,behavior:'smooth'});}
 </script>
 </body>
 </html>
