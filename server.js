@@ -9,7 +9,7 @@ import { initPlaidRoutes } from './plaid-integration.js';
 
 const app = express();
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 app.use('/api/chat', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -1319,16 +1319,30 @@ app.get('/', (req, res, next) => {
 });
 
 
-// --- Video Analyzer Proxy ---
+
+// --- Video Analyzer Proxy v2 (Multi-frame + Transcription) ---
 app.post('/api/analyze-media', async (req, res) => {
   try {
-    const { imageBase64, mediaType, address, notes, mimeType } = req.body;
-    const mediaTypeLabel = { maintenance: 'maintenance issue', inspection: 'property inspection/walkthrough', 'move-in': 'move-in documentation', 'move-out': 'move-out documentation' }[mediaType] || mediaType;
-    const contextNote = notes ? `\n\nAdditional context: ${notes}` : '';
-    const addrNote = address ? `\n\nProperty: ${address}` : '';
-    const prompt = `You are an AI assistant for Aloe Property Management in the Phoenix metro area. You are analyzing a photo showing a ${mediaTypeLabel}.${addrNote}${contextNote}\n\nRespond ONLY with a valid JSON object (no markdown, no extra text):\n{\n  "summary": "2-3 sentence description of what you see",\n  "severity": "high|medium|low",\n  "issue_type": "e.g. Plumbing, HVAC, Electrical, Structural, Cleaning, General",\n  "next_steps": ["step 1", "step 2", "step 3", "step 4"],\n  "vendors_needed": ["trade/vendor type 1", "trade/vendor type 2"],\n  "urgency_note": "one sentence about timing/urgency"\n}`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: imageBase64 } }, { type: 'text', text: prompt }] }] }) });
+    const { frames, imageBase64, mediaType, address, notes, mimeType, transcript, roomLabel } = req.body;
+    const mediaTypeLabel = { maintenance: 'maintenance issue documentation', inspection: 'property inspection / walkthrough', 'move-in': 'move-in condition documentation', 'move-out': 'move-out condition documentation' }[mediaType] || mediaType;
+    const contextNote = notes ? '\nProperty manager notes: ' + notes : '';
+    const addrNote = address ? '\nProperty: ' + address : '';
+    const roomNote = roomLabel ? '\nRoom/Area: ' + roomLabel : '';
+    const transcriptNote = transcript ? '\n\nAUDIO TRANSCRIPT FROM VIDEO (the inspector/PM said this while recording):\n"' + transcript + '"\n\nIMPORTANT: The transcript contains critical observations spoken by the inspector. Extract EVERY issue mentioned verbally. Cross-reference what is spoken with what is visible in the frames.' : '';
+    const prompt = 'You are a senior property inspector AI for Aloe Property Management in the Phoenix metro area. You are analyzing ' + (frames ? frames.length + ' frames from a video' : 'a photo') + ' showing a ' + mediaTypeLabel + '.' + addrNote + roomNote + contextNote + transcriptNote + '\n\nINSPECTION INSTRUCTIONS:\nExamine every frame carefully. Look for ALL of the following:\n- Paint condition (scuffs, marks, peeling, discoloration, nail holes, patching needed, full repaint needed)\n- Flooring condition (carpet stains, tears, pet damage, tile cracks, vinyl damage, needs replacement vs cleaning)\n- Walls and baseboards (damage, water stains, mold, pet damage, scratches)\n- Ceiling condition (stains, cracks, texture damage, fan/light condition)\n- Fixtures and hardware (outlet covers, light switches, door handles, hinges, towel bars)\n- Window coverings (blinds condition, missing slats, broken)\n- Doors (condition, operation, damage, stops)\n- Appliances (visible condition, age, damage)\n- Plumbing fixtures (faucets, toilets, sinks, tubs, caulking)\n- HVAC (vents, filters, thermostat)\n- Cleaning level (overall cleanliness, grease, grime, cobwebs, debris)\n- Odor evidence (staining patterns suggesting pet urine, smoke damage, mold)\n- Safety issues (missing covers, exposed wiring, trip hazards, smoke detectors)\n- Cabinets and countertops (condition, hardware, damage)\n- Exterior if visible (siding, patio, landscaping, fencing)\n\nBE EXHAUSTIVE. A good inspection catches 15-30 items.\n\nRespond ONLY with a valid JSON object (no markdown, no backticks):\n{\n  "overall_condition_score": 1-10,\n  "overall_summary": "3-4 sentence overview",\n  "categories": [{"category": "Paint", "severity": "good|fair|poor|critical", "findings": "detailed description", "action_needed": "specific action", "estimated_scope": "Touch-up|Partial|Full replacement", "vendor_type": "Painter|Handyman|etc"}],\n  "transcript_issues": [{"spoken_observation": "what inspector said", "category": "category", "action_needed": "action"}],\n  "urgent_items": ["items needing immediate attention"],\n  "vendor_summary": [{"vendor_type": "e.g. Painter", "scope": "brief scope", "priority": "high|medium|low"}],\n  "turnover_estimate": "Light|Standard|Heavy|Full renovation",\n  "chargeback_items": ["items chargeable to tenant vs normal wear"],\n  "additional_notes": "any other observations"\n}\n\nInclude ALL categories. If a category looks fine, include it with severity good.';
+    const contentParts = [];
+    if (frames && frames.length > 0) {
+      frames.forEach((frame, i) => {
+        contentParts.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frame.base64 } });
+        contentParts.push({ type: 'text', text: '[Frame ' + (i + 1) + ' of ' + frames.length + ' - timestamp ' + (frame.timestamp || 'unknown') + ']' });
+      });
+    } else if (imageBase64) {
+      contentParts.push({ type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: imageBase64 } });
+    }
+    contentParts.push({ type: 'text', text: prompt });
+    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, messages: [{ role: 'user', content: contentParts }] }) });
     const data = await response.json();
+    if (data.error) { console.error('Anthropic API error:', data.error); return res.status(500).json({ error: data.error.message || 'AI analysis failed' }); }
     const text = data.content?.map(b => b.text || '').join('') || '';
     const clean = text.replace(/```json|```/g, '').trim();
     res.json(JSON.parse(clean));
@@ -1337,28 +1351,296 @@ app.post('/api/analyze-media', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// --- End Video Analyzer Proxy ---
 
-
-// --- Video Analyzer Proxy ---
-app.post('/api/analyze-media', async (req, res) => {
+app.post('/api/transcribe-audio', async (req, res) => {
   try {
-    const { imageBase64, mediaType, address, notes, mimeType } = req.body;
-    const mediaTypeLabel = { maintenance: 'maintenance issue', inspection: 'property inspection/walkthrough', 'move-in': 'move-in documentation', 'move-out': 'move-out documentation' }[mediaType] || mediaType;
-    const contextNote = notes ? `\n\nAdditional context: ${notes}` : '';
-    const addrNote = address ? `\n\nProperty: ${address}` : '';
-    const prompt = `You are an AI assistant for Aloe Property Management in the Phoenix metro area. You are analyzing a photo showing a ${mediaTypeLabel}.${addrNote}${contextNote}\n\nRespond ONLY with a valid JSON object (no markdown, no extra text):\n{\n  "summary": "2-3 sentence plain-English description of what you see",\n  "severity": "high|medium|low",\n  "issue_type": "e.g. Plumbing, HVAC, Electrical, Structural, Cleaning, General",\n  "next_steps": ["step 1", "step 2", "step 3", "step 4"],\n  "vendors_needed": ["trade/vendor type 1", "trade/vendor type 2"],\n  "urgency_note": "one sentence about timing/urgency"\n}`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: imageBase64 } }, { type: 'text', text: prompt }] }] }) });
+    const { audioBase64 } = req.body;
+    if (!audioBase64) return res.json({ transcript: null });
+    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'base64', media_type: 'audio/wav', data: audioBase64 } }, { type: 'text', text: 'Transcribe this audio recording from a property inspection. Write out everything the inspector says word for word. If there is no speech or audio is too unclear, respond with just: NO_SPEECH_DETECTED' }] }] }) });
     const data = await response.json();
     const text = data.content?.map(b => b.text || '').join('') || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    res.json(JSON.parse(clean));
+    if (text.includes('NO_SPEECH_DETECTED') || text.trim().length < 10) return res.json({ transcript: null });
+    res.json({ transcript: text.trim() });
   } catch (err) {
-    console.error('analyze-media error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('transcribe-audio error:', err);
+    res.json({ transcript: null });
   }
 });
-// --- End Video Analyzer Proxy ---
+// --- End Video Analyzer v2 ---
+
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aloe PM — Internal Hub</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{--teal:#3CC3E1;--teal-dark:#4BB4D2;--teal-dim:rgba(60,195,225,0.12);--silver:#B4C3C3;--silver-dim:rgba(180,195,195,0.15);--bg:#F8FAFC;--bg2:#ffffff;--bg3:#f1f5f5;--border:rgba(180,195,195,0.3);--border2:rgba(60,195,225,0.25);--text:#1a2b2b;--text2:#4a6060;--text3:#8aa0a0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .logo-wrap{display:flex;align-items:center;gap:12px}
+    .logo-text{font-size:15px;font-weight:600;color:var(--text)}
+    .logo-sub{font-size:11px;color:var(--text3);margin-top:1px}
+    .pill{font-size:11px;padding:3px 10px;border-radius:20px;background:var(--teal-dim);color:var(--teal-dark);border:1px solid var(--border2);font-weight:500}
+    .hero{padding:48px 32px 32px;max-width:900px;margin:0 auto}
+    .hero-title{font-size:30px;font-weight:700;color:var(--text);margin-bottom:8px}
+    .hero-title span{color:var(--teal)}
+    .hero-sub{font-size:14px;color:var(--text2)}
+    .search-wrap{max-width:900px;margin:0 auto;padding:0 32px 32px}
+    .search-box{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px}
+    .search-box:focus-within{border-color:var(--teal)}
+    .search-box input{flex:1;border:none;outline:none;font-size:14px;color:var(--text);background:transparent;font-family:inherit}
+    .search-box input::placeholder{color:var(--text3)}
+    .section{max-width:900px;margin:0 auto;padding:0 32px 40px}
+    .section-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+    .tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .tool-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all 0.18s;text-decoration:none;color:inherit;display:block;position:relative;overflow:hidden}
+    .tool-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0;opacity:0;transition:opacity 0.18s}
+    .tool-card:hover{border-color:var(--teal);transform:translateY(-2px);box-shadow:0 6px 20px rgba(60,195,225,0.1)}
+    .tool-card:hover::before{opacity:1}
+    .tool-card.primary::before{background:var(--teal)}
+    .tool-card.purple-top::before{background:#a78bfa}
+    .tool-card.silver-top::before{background:var(--silver)}
+    .tool-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:18px;background:var(--teal-dim);border:1px solid var(--border2)}
+    .tool-icon.silver{background:var(--silver-dim);border-color:var(--border)}
+    .tool-icon.purple{background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.25)}
+    .tool-icon.green{background:rgba(74,222,128,0.1);border-color:rgba(74,222,128,0.25)}
+    .tool-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px}
+    .tool-desc{font-size:11px;color:var(--text3);line-height:1.5}
+    .badge{position:absolute;top:14px;right:14px;font-size:9px;font-weight:600;padding:2px 7px;border-radius:20px}
+    .badge-live{background:rgba(74,222,128,0.12);color:#16a34a;border:1px solid rgba(74,222,128,0.25)}
+    .badge-new{background:var(--teal-dim);color:var(--teal-dark);border:1px solid var(--border2)}
+    .badge-soon{background:var(--silver-dim);color:var(--text3);border:1px solid var(--border)}
+    .footer{max-width:900px;margin:0 auto;padding:0 32px 40px}
+    .footer-inner{border-top:1px solid var(--border);padding-top:20px;display:flex;align-items:center;justify-content:space-between}
+    .footer-left{font-size:11px;color:var(--text3)}
+    .source-pill{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--bg3);color:var(--text3);border:1px solid var(--border);margin-left:4px}
+    @media(max-width:640px){.tool-grid{grid-template-columns:1fr 1fr}.hero,.section,.search-wrap{padding-left:20px;padding-right:20px}}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo-wrap">
+    <div>
+      <div class="logo-text">Aloe PM Internal Hub</div>
+      <div class="logo-sub">Phoenix Metro · All systems live</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <span class="pill">AI-Powered</span>
+    <span class="pill" style="background:var(--silver-dim);color:var(--text2);border-color:var(--border)">Internal Only</span>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="hero-title">Welcome back to <span>Aloe PM</span></div>
+  <div class="hero-sub">Your internal command center for property management, AI agents, and team operations.</div>
+</div>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity=".4"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" placeholder="Search tools…" oninput="filterTools(this.value)"/>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">AI & Automation</div>
+  <div class="tool-grid">
+    <a href="/chat" class="tool-card primary" data-name="aloe assistant ai chat">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🤖</div>
+      <div class="tool-name">Aloe Assistant</div>
+      <div class="tool-desc">AI chat — Rentvine, Aptly, Knowledge Base, Slack all connected</div>
+    </a>
+    <a href="/sandbox" class="tool-card primary" data-name="sandbox agent training">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">✏️</div>
+      <div class="tool-name">Agent Sandbox</div>
+      <div class="tool-desc">Train and coach AI agents before going live</div>
+    </a>
+    <a href="/sms-queue" class="tool-card primary" data-name="sms queue drafts tenant messages">
+      <span class="badge badge-new">NEW</span>
+      <div class="tool-icon green">💬</div>
+      <div class="tool-name">SMS Draft Queue</div>
+      <div class="tool-desc">Review and approve AI-drafted responses before sending</div>
+    </a>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Accounting</div>
+  <div class="tool-grid">
+    <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🧾</div>
+      <div class="tool-name">Recon — Bills</div>
+      <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
+    </a>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Operations</div>
+  <div class="tool-grid">
+    <a href="https://vendor.aloepm.com" class="tool-card primary" data-name="vendor resources partner apply public">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon silver">🔨</div>
+      <div class="tool-name">Vendor Resources</div>
+      <div class="tool-desc">Public vendor page — standards, requirements, vendor application</div>
+    </a>
+    <a href="https://resident.aloepm.com" class="tool-card primary" data-name="tenant resident resources portal help">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🏠</div>
+      <div class="tool-name">Tenant Resources</div>
+      <div class="tool-desc">Public tenant help portal — policies, maintenance, payments, move-out info</div>
+    </a>
+    <a href="https://owner.aloepm.com" class="tool-card primary" data-name="owner resources portal landlord help">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon silver">💼</div>
+      <div class="tool-name">Owner Resources</div>
+      <div class="tool-desc">Public owner portal — fees, disbursements, leasing, guarantees, FAQs</div>
+    </a>
+    <a href="/renewals" class="tool-card primary" data-name="lease renewals persia renewal dashboard">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🔄</div>
+      <div class="tool-name">Lease Renewals</div>
+      <div class="tool-desc">Renewal pipeline, offers, calculator — Persia's dashboard</div>
+    </a>
+    <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration juan">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">📋</div>
+      <div class="tool-name">HOA Form Filler</div>
+      <div class="tool-desc">Auto-fill HOA registration PDFs with Rentvine tenant data</div>
+    </a>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Reports</div>
+  <div class="tool-grid">
+    <a href="/metrics" class="tool-card primary" data-name="metrics kpi dashboard portfolio occupancy">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">📊</div>
+      <div class="tool-name">KPI Metrics</div>
+      <div class="tool-desc">Portfolio changes, occupancy rate, move-ins, lease activity</div>
+    </a>
+    <a href="/vacancy" class="tool-card primary" data-name="vacancy risk market intelligence">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🏠</div>
+      <div class="tool-name">Vacancy Risk</div>
+      <div class="tool-desc">Risk scores, market comps, owner reports — all vacant units</div>
+    </a>
+    <a href="/owner-report" class="tool-card primary" data-name="owner report email generator vacancy">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">📬</div>
+      <div class="tool-name">Owner Report Generator</div>
+      <div class="tool-desc">AI-drafted vacancy update email per property — one click</div>
+    </a>
+    <a href="/rent-analysis" class="tool-card primary" data-name="rent analysis market comps zillow">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🏘️</div>
+      <div class="tool-name">Rent Analysis</div>
+      <div class="tool-desc">Live comps from Zillow, Redfin &amp; Realtor.com · STR/Airbnb</div>
+    </a>
+    <a href="/sale-analysis" class="tool-card purple-top" data-name="sale analysis comps zestimate owner equity">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon purple">🏡</div>
+      <div class="tool-name">Sale Analysis</div>
+      <div class="tool-desc">Zestimate + Redfin Estimate + sale comps · owner equity calculator</div>
+    </a>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Integrations</div>
+  <div class="tool-grid">
+    <a href="https://aloepm.rentvine.com" target="_blank" class="tool-card primary" data-name="rentvine property management tenants leases">
+      <div class="tool-icon silver">🤝</div>
+      <div class="tool-name">Rentvine</div>
+      <div class="tool-desc">Tenant data, leases, work orders, accounting</div>
+    </a>
+    <a href="https://app.getaptly.com" target="_blank" class="tool-card primary" data-name="aptly crm workflow boards leads">
+      <div class="tool-icon">📌</div>
+      <div class="tool-name">Aptly</div>
+      <div class="tool-desc">CRM, workflow boards, leads, move-ins, HOA</div>
+    </a>
+    <a href="https://my.quo.com/inbox/PNRRARIpQO" target="_blank" class="tool-card primary" data-name="quo openphone sms messaging calls">
+      <div class="tool-icon silver">📱</div>
+      <div class="tool-name">Quo / OpenPhone</div>
+      <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
+    </a>
+<a href="https://kb.aloepm.com" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training">
+<span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">📚</div>
+      <div class="tool-name">Knowledge Base</div>
+      <div class="tool-desc">SOPs, policies, training, vendor list, cost benchmarks</div>
+    </a>
+    <a href="https://drive.google.com" target="_blank" class="tool-card primary" data-name="google drive files documents leases">
+      <div class="tool-icon silver">📁</div>
+      <div class="tool-name">Google Drive</div>
+      <div class="tool-desc">Signed leases, inspection reports, owner docs</div>
+    </a>
+    <a href="https://slack.com" target="_blank" class="tool-card primary" data-name="slack team communications alerts">
+      <div class="tool-icon silver">💼</div>
+      <div class="tool-name">Slack</div>
+      <div class="tool-desc">Team communications and escalation alerts</div>
+    </a>
+    <a href="https://zinspector.com/" target="_blank" class="tool-card primary" data-name="zinspector inspections property condition">
+      <div class="tool-icon">🔎</div>
+      <div class="tool-name">Zinspector</div>
+      <div class="tool-desc">Property inspections and condition reports</div>
+    </a>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-inner">
+    <div class="footer-left">Aloe Property Management · Phoenix Metro · Internal use only</div>
+    <div>
+      <span class="source-pill">Rentvine</span>
+      <span class="source-pill">Aptly</span>
+      <span class="source-pill">Quo</span>
+      <span class="source-pill">Knowledge Base</span>
+      <span class="source-pill">Slack</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function filterTools(q) {
+  q = q.toLowerCase().trim();
+  document.querySelectorAll('.tool-card').forEach(function(card) {
+    var name = (card.dataset.name||'') + ' ' + card.querySelector('.tool-name').textContent + ' ' + card.querySelector('.tool-desc').textContent;
+    card.style.display = (!q || name.toLowerCase().includes(q)) ? 'block' : 'none';
+  });
+}
+</script>
+</body>
+</html>`);
+});
+// Vendor application form submission
+app.post('/api/vendor-apply', async (req, res) => {
+  try {
+    const { business, name, phone, email, trade, license, area, insurance, about, why, hourlyRate, employees, hasVehicle, hasTools, social, refs, additional } = req.body;
+    const slackText = `New Vendor Application\nBusiness: ${business}\nContact: ${name} - ${phone} - ${email}\nTrade: ${trade}\nInsurance: ${insurance}`;
+    let slackOk = false;
+    if (process.env.SLACK_TOKEN) {
+      try {
+        const slackResp = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { 'Authorization': `Bearer ${process.env.SLACK_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'C07CY9SSF7D', text: slackText }) });
+        const slackData = await slackResp.json();
+        slackOk = slackData.ok;
+      } catch(e) { console.error('Slack vendor error:', e.message); }
+    }
+    if (slackOk) return res.json({ ok: true });
+    res.status(500).json({ error: 'Failed to deliver application' });
+  } catch (err) {
+    console.error('Vendor apply error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Plaid
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
