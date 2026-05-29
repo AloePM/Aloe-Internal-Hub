@@ -1599,12 +1599,6 @@ app.get('*', function(req, res) {
       <div class="tool-name">Quo / OpenPhone</div>
       <div class="tool-desc">SMS inbox, tenant messaging, call logs</div>
     </a>
-<a href="https://kb.aloepm.com" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training">
-<span class="badge badge-live">LIVE</span>
-      <div class="tool-icon">📚</div>
-      <div class="tool-name">Knowledge Base</div>
-      <div class="tool-desc">SOPs, policies, training, vendor list, cost benchmarks</div>
-    </a>
     <a href="https://drive.google.com" target="_blank" class="tool-card primary" data-name="google drive files documents leases">
       <div class="tool-icon silver">📁</div>
       <div class="tool-name">Google Drive</div>
@@ -1788,6 +1782,12 @@ app.get('*', function(req, res) {
 <div class="section">
   <div class="section-label">Operations</div>
   <div class="tool-grid">
+  <a href="https://kb.aloepm.com" target="_blank" class="tool-card primary" data-name="knowledge base sops policies training">
+<span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">📚</div>
+      <div class="tool-name">Knowledge Base</div>
+      <div class="tool-desc">SOPs, policies, training, vendor list, cost benchmarks</div>
+    </a>
     <a href="https://vendor.aloepm.com" class="tool-card primary" data-name="vendor resources partner apply public">
       <span class="badge badge-live">LIVE</span>
       <div class="tool-icon silver">🔨</div>
