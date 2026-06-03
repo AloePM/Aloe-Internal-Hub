@@ -954,13 +954,15 @@ async function fetchAllAptlyClosedWOs() {
   }
   console.log('WO Sync: fetched ' + all.length + ' total Aptly WO cards');
 
+  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000); // 30 days
   return all.filter(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
     const stage = (c.stage || c.Stage || '').toLowerCase();
     const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage) && !/^(scheduled|requested|open|pending|waiting|home warranty|unit turn|internal)/.test(stage);
     const hasClosedDate = !!(c.dateClosed || c['Closed Date'] || (closedDateKey && c[closedDateKey]));
     const hasWONumber = !!(woNum && String(woNum).trim());
-    return hasWONumber && (isClosedStage || hasClosedDate);
+    const isRecent = c.updatedAt ? new Date(c.updatedAt).getTime() > cutoff : true;
+    return hasWONumber && isRecent && (isClosedStage || hasClosedDate);
   }).map(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
     return Object.assign({}, c, { _woNumber: String(woNum).trim() });
