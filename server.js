@@ -959,9 +959,8 @@ async function fetchAllAptlyClosedWOs() {
     const stage = (c.stage || c.Stage || '').toLowerCase();
     const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage) && !/^(scheduled|requested|open|pending|waiting|home warranty|unit turn|internal)/.test(stage);
     const hasClosedDate = !!(c.dateClosed || c['Closed Date'] || (closedDateKey && c[closedDateKey]));
-    const archived = c.archived === true;
     const hasWONumber = !!(woNum && String(woNum).trim());
-    return hasWONumber && (isClosedStage || hasClosedDate || archived);
+    return hasWONumber && (isClosedStage || hasClosedDate);
   }).map(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
     return Object.assign({}, c, { _woNumber: String(woNum).trim() });
