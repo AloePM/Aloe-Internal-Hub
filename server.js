@@ -1019,9 +1019,10 @@ async function runWOSync(dryRun) {
  aptlyClosed.forEach(card => {
     const rvWO = rvByNumber[card._woNumber];
     if (rvWO) {
-      const mirrorAddr = card.mirrorAddress || card['Mirror Address'] || {};
-      const addrStr = (mirrorAddr.address || '') + (mirrorAddr.city ? ', ' + mirrorAddr.city : '');
-      const address = rvWO._unitAddress || addrStr || card.Title || '';
+      const unitArr = Array.isArray(card.unit) ? card.unit : (card.unit ? [card.unit] : []);
+      const locArr = Array.isArray(card.location) ? card.location : (card.location ? [card.location] : []);
+      const aptlyAddr = (unitArr[0] && unitArr[0].name) || (locArr[0] && locArr[0].name) || card.name || '';
+      const address = rvWO._unitAddress || aptlyAddr || '';
       toClose.push({
         woNumber: card._woNumber,
         rvWorkOrderId: rvWO.workOrderID,
