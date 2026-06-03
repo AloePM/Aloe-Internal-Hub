@@ -1153,6 +1153,198 @@ function scheduleWOSync() {
   console.log(`WO Sync: scheduled, next run in ${Math.round(msUntilNext11pm()/60000)} min`);
 }
 scheduleWOSync();
+// ── WO Sync: Auto-close in Rentvine WOs that are closed/cancelled in Aptly ──
+async function fetchAllAptlyClosedWOs() {
+  const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+  const schemaResp = await fetch('https://core-api.getaptly.com/api/schema/workOrder', { headers: { 'x-token': APTLY_TOK } });
+  const schema = await schemaResp.json();
+  const schemaMap = {};
+  if (Array.isArray(schema)) schema.forEach(f => { schemaMap[f.key] = f.label; });
+  const woNumKey = Object.entries(schemaMap).find(([k,v]) => /work.?order.?num/i.test(v))?.[0] || null;
+  const isClosedKey = Object.entries(schemaMap).find(([k,v]) => /^is.?closed$/i.test(v))?.[0] || null;
+  const closedDateKey = Object.entries(schemaMap).find(([k,v]) => /^closed.?date$/i.test(v))?.[0] || null;
+  console.log('WO Sync schema keys:', { woNumKey, isClosedKey, closedDateKey });
+
+  let all = [];
+  for (const archived of ['false', 'true']) {
+    let page = 0;
+    while (page < 50) {
+      const resp = await fetch(
+        'https://core-api.getaptly.com/api/board/workOrder?page=' + page + '&pageSize=100&includeArchived=' + archived,
+        { headers: { 'x-token': APTLY_TOK } }
+      );
+      if (!resp.ok) break;
+      const raw = await resp.json();
+      const items = Array.isArray(raw) ? raw : (raw && raw.data) || (raw && raw.cards) || [];
+      if (!items.length) break;
+      const existingIds = new Set(all.map(c => c._id));
+      items.forEach(c => { if (!existingIds.has(c._id)) all.push(c); });
+      if (items.length < 100) break;
+      page++;
+    }
+  }
+  console.log('WO Sync: fetched ' + all.length + ' total Aptly WO cards');
+
+  return all.filter(c => {
+    const woNum = woNumKey ? c[woNumKey] : null;
+    const isClosed = (isClosedKey ? c[isClosedKey] : null) === true || c['Is Closed'] === true;
+    const stage = (c.stage || c.Stage || '').toLowerCase();
+    const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage);
+    const hasClosedDate = !!(closedDateKey ? c[closedDateKey] : null) || !!(c['Closed Date']);
+    const hasWONumber = !!(woNum && String(woNum).trim());
+    return hasWONumber && (isClosed || isClosedStage || hasClosedDate);
+  }).map(c => {
+    const woNum = woNumKey ? c[woNumKey] : c['Work Order Number'];
+    return Object.assign({}, c, { _woNumber: String(woNum).trim() });
+  });
+}
+
+async function fetchAllRVOpenWOs() {
+  let all = [], pg = 1;
+  while (pg <= 20) {
+    const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+    const rawBatch = Array.isArray(data) ? data : (data && data.data) || [];
+    if (!rawBatch.length) break;
+    rawBatch.forEach(rec => {
+      const wo = rec.workOrder || rec;
+      if (!wo.workOrderID) return;
+      wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || wo.unitAddress || '';
+      const sid = parseInt(wo.primaryWorkOrderStatusID || 0);
+      const isClosed = sid === 3 || sid === 4 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
+      if (!isClosed) all.push(wo);
+    });
+    if (rawBatch.length < 100) break;
+    pg++;
+  }
+  return all;
+}
+
+async function closeRVWorkOrder(workOrderId) {
+  const url = RENTVINE_BASE + '/maintenance/work-orders/' + workOrderId;
+  const resp = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Authorization': 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ primaryWorkOrderStatusID: 3 })
+  });
+  const text = await resp.text();
+  let json; try { json = JSON.parse(text); } catch(e) { json = { raw: text }; }
+  if (!resp.ok) {
+    const putResp = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primaryWorkOrderStatusID: 3 })
+    });
+    const putText = await putResp.text();
+    let putJson; try { putJson = JSON.parse(putText); } catch(e) { putJson = { raw: putText }; }
+    return { ok: putResp.ok, status: putResp.status, body: putJson };
+  }
+  return { ok: resp.ok, status: resp.status, body: json };
+}
+
+async function runWOSync(dryRun) {
+  dryRun = dryRun === true;
+  console.log('WO Sync: starting dryRun=' + dryRun);
+  const [aptlyClosed, rvOpen] = await Promise.all([fetchAllAptlyClosedWOs(), fetchAllRVOpenWOs()]);
+  const rvByNumber = {};
+  rvOpen.forEach(wo => { const n = String(wo.workOrderNumber || '').trim(); if (n) rvByNumber[n] = wo; });
+  const toClose = [];
+  aptlyClosed.forEach(card => {
+    const rvWO = rvByNumber[card._woNumber];
+    if (rvWO) toClose.push({
+      woNumber: card._woNumber,
+      rvWorkOrderId: rvWO.workOrderID,
+      address: rvWO._unitAddress || card.Title || '',
+      aptlyStage: card.stage || card.Stage || '',
+      aptlyClosedDate: card['Closed Date'] || card['Stage Changed'] || ''
+    });
+  });
+  console.log('WO Sync: ' + aptlyClosed.length + ' closed in Aptly, ' + rvOpen.length + ' open in RV, ' + toClose.length + ' to close');
+  if (dryRun) return { dryRun: true, aptlyClosedCount: aptlyClosed.length, rvOpenCount: rvOpen.length, wouldClose: toClose };
+
+  const results = { closed: [], failed: [] };
+  for (const item of toClose) {
+    try {
+      const result = await closeRVWorkOrder(item.rvWorkOrderId);
+      if (result.ok) { results.closed.push(item); console.log('WO Sync: closed RV WO ' + item.woNumber); }
+      else { results.failed.push(Object.assign({}, item, { error: 'HTTP ' + result.status, body: JSON.stringify(result.body).slice(0, 200) })); }
+    } catch(e) { results.failed.push(Object.assign({}, item, { error: e.message })); }
+  }
+
+  if (SLACK_TOKEN && (results.closed.length > 0 || results.failed.length > 0)) {
+    const closedLines = results.closed.map(r => '• WO #' + r.woNumber + ' — ' + r.address + ' _(closed in Aptly: ' + String(r.aptlyClosedDate).slice(0, 10) + ')_').join('\n');
+    const failedLines = results.failed.map(r => '• WO #' + r.woNumber + ' — ' + r.address + ' ❌ ' + r.error).join('\n');
+    const slackText = [
+      '*🔧 Rentvine WO Auto-Sync — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*',
+      results.closed.length > 0 ? '\n*✅ Auto-closed ' + results.closed.length + ' work order(s) in Rentvine:*\n' + closedLines : '',
+      results.failed.length > 0 ? '\n*⚠️ Failed to close ' + results.failed.length + ':*\n' + failedLines : '',
+      '\n_Matched by Work Order Number. Total checked: ' + toClose.length + '_'
+    ].filter(Boolean).join('\n');
+    try {
+      await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText })
+      });
+    } catch(e) { console.error('WO Sync Slack error:', e.message); }
+  }
+  return results;
+}
+
+app.get('/api/wo-sync/debug', async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    const schemaResp = await fetch('https://core-api.getaptly.com/api/schema/workOrder', { headers: { 'x-token': APTLY_TOK } });
+    const schema = await schemaResp.json();
+    const schemaMap = {};
+    if (Array.isArray(schema)) schema.forEach(f => { schemaMap[f.key] = f.label; });
+    const woNumKey = Object.entries(schemaMap).find(([k,v]) => /work.?order.?num/i.test(v))?.[0] || null;
+    const isClosedKey = Object.entries(schemaMap).find(([k,v]) => /^is.?closed$/i.test(v))?.[0] || null;
+    const closedDateKey = Object.entries(schemaMap).find(([k,v]) => /^closed.?date$/i.test(v))?.[0] || null;
+    const resp = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=0&pageSize=10&includeArchived=true', { headers: { 'x-token': APTLY_TOK } });
+    const raw = await resp.json();
+    const items = Array.isArray(raw) ? raw : (raw && raw.data) || (raw && raw.cards) || [];
+    const firstCardValues = items[0] ? Object.entries(items[0]).slice(0, 40).map(([k, v]) => ({
+      key: k, label: schemaMap[k] || '(no label)',
+      value: typeof v === 'object' ? JSON.stringify(v).slice(0, 60) : String(v).slice(0, 60)
+    })) : [];
+    const closed = await fetchAllAptlyClosedWOs();
+    const rvOpen = await fetchAllRVOpenWOs();
+    res.json({
+      schemaFieldCount: Object.keys(schemaMap).length,
+      woNumKey, isClosedKey, closedDateKey,
+      firstCardValues,
+      aptlyClosedCount: closed.length,
+      aptlyClosedSample: closed.slice(0, 5).map(c => ({ woNumber: c._woNumber, stage: c.stage || c.Stage, isClosed: c['Is Closed'], closedDate: c['Closed Date'] })),
+      rvOpenCount: rvOpen.length,
+      rvSample: rvOpen.slice(0, 3).map(wo => ({ workOrderNumber: wo.workOrderNumber, statusID: wo.primaryWorkOrderStatusID, address: wo._unitAddress }))
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/wo-sync/dry-run', async (req, res) => {
+  try { res.json(await runWOSync(true)); } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/wo-sync/run', async (req, res) => {
+  try { res.json(await runWOSync(false)); } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+function scheduleWOSync() {
+  function msUntilNext11pm() {
+    const now = new Date();
+    const az = new Date(now.toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
+    const next = new Date(az); next.setHours(23, 0, 0, 0);
+    if (az >= next) next.setDate(next.getDate() + 1);
+    return next - az;
+  }
+  setTimeout(function tick() {
+    runWOSync(false).catch(e => console.error('WO Sync nightly error:', e.message));
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }, msUntilNext11pm());
+  console.log('WO Sync: scheduled nightly at 11pm AZ time');
+}
+scheduleWOSync();
+// ── End WO Sync ──
 // ── End WO Sync ──
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
