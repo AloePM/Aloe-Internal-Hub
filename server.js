@@ -957,7 +957,7 @@ async function fetchAllAptlyClosedWOs() {
   return all.filter(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
     const stage = (c.stage || c.Stage || '').toLowerCase();
-    const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage);
+    const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage) && !/^(scheduled|requested|open|pending|waiting|home warranty|unit turn|internal)/.test(stage);
     const hasClosedDate = !!(c.dateClosed || c['Closed Date'] || (closedDateKey && c[closedDateKey]));
     const archived = c.archived === true;
     const hasWONumber = !!(woNum && String(woNum).trim());
