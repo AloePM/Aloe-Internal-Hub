@@ -1070,7 +1070,32 @@ async function runWOSync(dryRun = false) {
 
   return results;
 }
-
+app.get('/api/wo-sync/debug', async (req, res) => {
+  try {
+    const [aptlyClosed, rvOpen] = await Promise.all([
+      fetchAllAptlyClosedWOs(),
+      fetchAllRVOpenWOs()
+    ]);
+    const aptlySample = aptlyClosed.slice(0,5).map(c => ({
+      woNumber: c['Work Order Number'],
+      stage: c.Stage || c.stage,
+      isClosed: c['Is Closed'],
+      archived: c.Archived
+    }));
+    const rvSample = rvOpen.slice(0,5).map(wo => ({
+      workOrderNumber: wo.workOrderNumber,
+      workOrderID: wo.workOrderID,
+      statusID: wo.primaryWorkOrderStatusID,
+      address: wo._unitAddress
+    }));
+    res.json({
+      aptlyClosedCount: aptlyClosed.length,
+      rvOpenCount: rvOpen.length,
+      aptlySample,
+      rvSample
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 // Manual trigger + dry-run endpoints
 app.get('/api/wo-sync/dry-run', async (req, res) => {
   try { res.json(await runWOSync(true)); }
