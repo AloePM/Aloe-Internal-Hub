@@ -983,7 +983,8 @@ async function fetchAllRVOpenWOs() {
       wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || wo.unitAddress || '';
       const sid = parseInt(wo.primaryWorkOrderStatusID || 0);
       // 3=Closed only — keep Pending(1), Open(2), OnHold(4) as "open"
-      const isClosed = sid === 3 || !!wo.closedDate || !!wo.dateClosed;
+      // primaryWorkOrderStatusID: 3=Closed, 5=Cancelled — both are terminal
+      const isClosed = sid === 3 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
       if (!isClosed) all.push(wo);
     });
     if (rawBatch.length < 100) break;
