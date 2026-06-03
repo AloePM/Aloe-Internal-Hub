@@ -954,7 +954,7 @@ async function fetchAllAptlyClosedWOs() {
   }
   console.log('WO Sync: fetched ' + all.length + ' total Aptly WO cards');
 
-  const cutoff = Date.now() - (30 * 24 * 60 * 60 * 1000); // 30 days
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days
   return all.filter(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
     const stage = (c.stage || c.Stage || '').toLowerCase();
