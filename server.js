@@ -926,26 +926,37 @@ app.use('/api/rentvine', async function(req, res) {
 async function fetchAllAptlyClosedWOs() {
   const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
   let all = [], page = 0;
-  while (page < 30) {
-    const resp = await fetch(
-      `https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=true`,
-      { headers: { 'x-token': APTLY_TOK } }
-    );
-    if (!resp.ok) break;
-    const batch = await resp.json();
-    const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
-    if (!items.length) break;
-    all = all.concat(items);
-    if (items.length < 100) break;
-    page++;
+
+  // Fetch both non-archived and archived separately — Aptly behaves inconsistently
+  for (const archived of [false, true]) {
+    page = 0;
+    while (page < 30) {
+      const resp = await fetch(
+        `https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=${archived}`,
+        { headers: { 'x-token': APTLY_TOK } }
+      );
+      if (!resp.ok) break;
+      const batch = await resp.json();
+      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
+      if (!items.length) break;
+      // Dedupe by card ID
+      const existingIds = new Set(all.map(c => c._id));
+      items.forEach(c => { if (!existingIds.has(c._id)) all.push(c); });
+      if (items.length < 100) break;
+      page++;
+    }
   }
-  // Only cards that are truly closed/cancelled in Aptly AND have a WO number
+
+  console.log(`WO Sync: fetched ${all.length} total Aptly WO cards`);
+
+  // Filter to closed/cancelled with a WO number
   return all.filter(c => {
     const isClosed = c['Is Closed'] === true;
     const stage = (c.Stage || c.stage || '').toLowerCase();
     const isClosedStage = /completed|cancelled|closed|done/.test(stage);
+    const hasClosedDate = !!(c['Closed Date']);
     const hasWONumber = !!(c['Work Order Number'] && String(c['Work Order Number']).trim());
-    return (isClosed || isClosedStage) && hasWONumber;
+    return (isClosed || isClosedStage || hasClosedDate) && hasWONumber;
   });
 }
 
