@@ -927,19 +927,18 @@ async function fetchAllAptlyClosedWOs() {
   const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
   let all = [], page = 0;
 
-  // Fetch both non-archived and archived separately — Aptly behaves inconsistently
-  for (const archived of [false, true]) {
+  // Aptly: closed cards are NOT archived — fetch all active cards across all pages
+  // includeArchived=true catches genuinely archived ones too
+  for (const includeArchived of ['true', 'false']) {
     page = 0;
-    while (page < 30) {
-      const resp = await fetch(
-        `https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=${archived}`,
-        { headers: { 'x-token': APTLY_TOK } }
-      );
-      if (!resp.ok) break;
-      const batch = await resp.json();
-      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
+    while (page < 50) {
+      const url = `https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=${includeArchived}`;
+      const resp = await fetch(url, { headers: { 'x-token': APTLY_TOK } });
+      if (!resp.ok) { console.error('Aptly fetch error', resp.status); break; }
+      const raw = await resp.json();
+      // Handle both array response and {data:[]} response
+      const items = Array.isArray(raw) ? raw : (raw && raw.data) || (raw && raw.cards) || [];
       if (!items.length) break;
-      // Dedupe by card ID
       const existingIds = new Set(all.map(c => c._id));
       items.forEach(c => { if (!existingIds.has(c._id)) all.push(c); });
       if (items.length < 100) break;
@@ -947,17 +946,21 @@ async function fetchAllAptlyClosedWOs() {
     }
   }
 
-  console.log(`WO Sync: fetched ${all.length} total Aptly WO cards`);
+  console.log(`WO Sync: fetched ${all.length} total Aptly WO cards (all pages, both archived states)`);
 
-  // Filter to closed/cancelled with a WO number
-  return all.filter(c => {
+  // Closed = Is Closed true, OR stage is completed/cancelled/closed, OR has a Closed Date
+  // Must also have a Work Order Number to match against Rentvine
+  const closed = all.filter(c => {
     const isClosed = c['Is Closed'] === true;
     const stage = (c.Stage || c.stage || '').toLowerCase();
-    const isClosedStage = /completed|cancelled|closed|done/.test(stage);
+    const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage);
     const hasClosedDate = !!(c['Closed Date']);
     const hasWONumber = !!(c['Work Order Number'] && String(c['Work Order Number']).trim());
-    return (isClosed || isClosedStage || hasClosedDate) && hasWONumber;
+    return hasWONumber && (isClosed || isClosedStage || hasClosedDate);
   });
+
+  console.log(`WO Sync: ${closed.length} closed Aptly WOs with a WO number`);
+  return closed;
 }
 
 async function fetchAllRVOpenWOs() {
