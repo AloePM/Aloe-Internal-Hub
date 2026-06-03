@@ -1112,6 +1112,18 @@ function scheduleWOSync() {
 scheduleWOSync();
 // ── End WO Sync ──
 // ── End WO Sync ──
+app.get('/api/test-slack', async (req, res) => {
+  try {
+    const r = await fetch('https://hooks.slack.com/services/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', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'Test from Aloe server — webhook working!' })
+    });
+    const text = await r.text();
+    res.json({ status: r.status, response: text });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
   res.json({ cleared: true });
