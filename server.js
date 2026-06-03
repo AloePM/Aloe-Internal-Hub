@@ -1043,7 +1043,7 @@ async function runWOSync(dryRun) {
       '*' + toClose.length + ' work order(s) closed/cancelled in Aptly but still open in Rentvine:*\n' + lines +
       '\n\n_Click each link → open in Rentvine → close · Runs nightly 11pm AZ_';
     try {
-      await fetch('https://hooks.slack.com/services/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', {
+      await fetch('https://hooks.slack.com/services/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', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: slackText })
