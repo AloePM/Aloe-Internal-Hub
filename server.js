@@ -969,7 +969,7 @@ async function fetchAllRVOpenWOs() {
     rawBatch.forEach(rec => {
       const wo = rec.workOrder || rec;
       if (!wo.workOrderID) return;
-      wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || '';
+wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || wo.unitAddress || '';
       const sid = parseInt(wo.primaryWorkOrderStatusID || 0);
       const isClosed = sid === 3 || sid === 4 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
       if (!isClosed) all.push(wo);
