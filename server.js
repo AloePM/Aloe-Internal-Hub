@@ -961,7 +961,7 @@ async function fetchAllAptlyClosedWOs() {
     const isClosedStage = /^(completed|cancelled|closed|done)/.test(stage) && !/^(scheduled|requested|open|pending|waiting|home warranty|unit turn|internal)/.test(stage);
     const hasClosedDate = !!(c.dateClosed || c['Closed Date'] || (closedDateKey && c[closedDateKey]));
     const hasWONumber = !!(woNum && String(woNum).trim());
-    const isRecent = c.updatedAt ? new Date(c.updatedAt).getTime() > cutoff : true;
+    const isRecent = c.stageUpdatedAt ? new Date(c.stageUpdatedAt).getTime() > cutoff : (c.createdAt ? new Date(c.createdAt).getTime() > cutoff : true);
     return hasWONumber && isRecent && (isClosedStage || hasClosedDate);
   }).map(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
