@@ -1042,14 +1042,15 @@ async function runWOSync(dryRun) {
     const slackText = '*🔧 WO Sync — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*\n' +
       '*' + toClose.length + ' work order(s) closed/cancelled in Aptly but still open in Rentvine:*\n' + lines +
       '\n\n_Click each link → open in Rentvine → close · Runs nightly 11pm AZ_';
-    try {
-      await fetch('https://slack.com/api/chat.postMessage', {
+      try {
+      await fetch('https://hooks.slack.com/services/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', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: slackText })
       });
       console.log('WO Sync: Slack alert sent for ' + toClose.length + ' WOs');
     } catch(e) { console.error('WO Sync Slack error:', e.message); }
+      });
   } else if (toClose.length === 0) {
     console.log('WO Sync: systems in sync');
   }
