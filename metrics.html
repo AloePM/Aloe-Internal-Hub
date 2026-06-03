@@ -967,16 +967,96 @@ function renderPortfolio() {
 function renderMaintenance() {
   var wo=D.workOrders;
   var html = '<div class="main">' +
-    '<div class="page-header"><div class="page-title">Maintenance</div></div>' +
+    '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+      '<div><div class="page-title">Maintenance</div></div>' +
+      '<button class="btn btn-ghost" onclick="loadWOSync()" id="wo-sync-btn" style="font-size:12px">↺ Check Sync Status</button>' +
+    '</div>' +
     '<div class="kpi-grid g3">' +
-      kpi('Open Work Orders', fmt(wo.openTotal), 'all active stages', C.AMBER) +
+      kpi('Open Work Orders', fmt(wo.openTotal), 'all active stages (Aptly)', C.AMBER) +
       kpi('Unassigned', fmt(wo.unassigned), 'no vendor assigned', wo.unassigned>0?C.RED:C.GREEN) +
       kpi('Assigned', fmt(wo.openTotal-wo.unassigned), 'vendor assigned', C.GREEN) +
     '</div>' +
-    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Work Orders by Stage</div></div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Work Orders by Stage</div></div>' +
     ((wo.byStage||[]).length ? barRows((wo.byStage||[]).map(function(s){return {label:s.stage,count:s.count};}), C.AMBER) : '<div style="color:var(--ghost);font-size:13px">No open work orders</div>') +
-    '</div></div>';
+    '</div>' +
+    '<div id="wo-sync-section">' +
+      '<div style="color:var(--muted);font-size:13px;padding:12px 0">Click "Check Sync Status" to compare Aptly vs Rentvine work orders.</div>' +
+    '</div>' +
+  '</div>';
   document.getElementById('app').innerHTML = html;
+}
+
+async function loadWOSync() {
+  var btn = document.getElementById('wo-sync-btn');
+  var section = document.getElementById('wo-sync-section');
+  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
+  if (section) section.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Comparing Aptly vs Rentvine...</div>';
+  try {
+    var resp = await fetch('/api/wo-sync/dry-run');
+    var data = await resp.json();
+    var toClose = data.wouldClose || [];
+    var missing = data.missingInRentvine || [];
+    var aptlyOpen = data.aptlyClosedCount !== undefined ? data.rvOpenCount : '?';
+    var rvOpen = data.rvOpenCount || '?';
+    var diff = toClose.length + missing.length;
+
+    var syncHtml = '<div class="kpi-grid g3" style="margin-bottom:14px">' +
+      kpi('Aptly Open', data.rvOpenCount || '?', 'non-closed WOs', C.TEAL2) +
+      kpi('Sync Gap', diff, diff===0?'systems in sync':'mismatches found', diff===0?C.GREEN:C.RED) +
+      kpi('Need Action', toClose.length + missing.length, 'WOs to reconcile', diff>0?C.AMBER:C.GREEN) +
+    '</div>';
+
+    if (toClose.length > 0) {
+      syncHtml += '<div class="card" style="margin-bottom:14px">' +
+        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Cancelled in Aptly — Still Open in Rentvine</div>' +
+        '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+toClose.length+' WOs</span></div>' +
+        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
+        '<th style="padding:6px 12px;text-align:left">WO #</th>' +
+        '<th style="padding:6px 12px;text-align:left">Address</th>' +
+        '<th style="padding:6px 12px;text-align:left">Aptly Stage</th>' +
+        '<th style="padding:6px 12px;text-align:left">Action</th>' +
+        '</tr></thead><tbody>' +
+        toClose.map(function(r, i) {
+          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+            '<td style="padding:8px 12px;font-weight:700;font-family:\'DM Mono\',monospace">'+r.woNumber+'</td>' +
+            '<td style="padding:8px 12px;color:var(--ink2)">'+r.address+'</td>' +
+            '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">'+r.aptlyStage+'</span></td>' +
+            '<td style="padding:8px 12px"><a href="https://aloepm.rentvine.com/maintenance/work-orders/'+r.rvWorkOrderId+'" target="_blank" style="font-size:11px;color:var(--teal2);font-weight:600;text-decoration:none">Open in Rentvine →</a></td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+    }
+
+    if (missing.length > 0) {
+      syncHtml += '<div class="card" style="margin-bottom:14px">' +
+        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Open in Aptly — Missing from Rentvine</div>' +
+        '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--amber-d);color:var(--amber);border-radius:20px">'+missing.length+' WOs</span></div>' +
+        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
+        '<th style="padding:6px 12px;text-align:left">WO #</th>' +
+        '<th style="padding:6px 12px;text-align:left">Address</th>' +
+        '<th style="padding:6px 12px;text-align:left">Stage</th>' +
+        '</tr></thead><tbody>' +
+        missing.map(function(r, i) {
+          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+            '<td style="padding:8px 12px;font-weight:700;font-family:\'DM Mono\',monospace">'+r.woNumber+'</td>' +
+            '<td style="padding:8px 12px;color:var(--ink2)">'+r.address+'</td>' +
+            '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--amber-d);color:var(--amber);font-weight:600">'+r.aptlyStage+'</span></td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div></div>';
+    }
+
+    if (diff === 0) {
+      syncHtml += '<div style="padding:14px;background:var(--green-d);border:1px solid '+C.GREEN+'44;border-radius:var(--r2);color:var(--green);font-size:13px;font-weight:600">✓ Aptly and Rentvine are in sync — no action needed</div>';
+    }
+
+    if (section) section.innerHTML = syncHtml;
+  } catch(e) {
+    if (section) section.innerHTML = '<div style="color:var(--red);font-size:13px">Error loading sync status: '+e.message+'</div>';
+  }
+  if (btn) { btn.textContent = '↺ Check Sync Status'; btn.disabled = false; }
 }
 // ---- WORK ORDERS TAB ----
 var _woData = null;
