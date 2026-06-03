@@ -1043,10 +1043,10 @@ async function runWOSync(dryRun) {
       '*' + toClose.length + ' work order(s) closed/cancelled in Aptly but still open in Rentvine:*\n' + lines +
       '\n\n_Click each link → open in Rentvine → close · Runs nightly 11pm AZ_';
     try {
-      await fetch('https://hooks.slack.com/services/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', {
+      await fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: slackText })
+        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText })
       });
       console.log('WO Sync: Slack alert sent for ' + toClose.length + ' WOs');
     } catch(e) { console.error('WO Sync Slack error:', e.message); }
