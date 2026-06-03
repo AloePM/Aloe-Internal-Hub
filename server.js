@@ -1016,15 +1016,20 @@ async function runWOSync(dryRun) {
   const rvByNumber = {};
   rvOpen.forEach(wo => { const n = String(wo.workOrderNumber || '').trim(); if (n) rvByNumber[n] = wo; });
   const toClose = [];
-  aptlyClosed.forEach(card => {
+ aptlyClosed.forEach(card => {
     const rvWO = rvByNumber[card._woNumber];
-    if (rvWO) toClose.push({
-      woNumber: card._woNumber,
-      rvWorkOrderId: rvWO.workOrderID,
-      address: rvWO._unitAddress || card.Title || '',
-      aptlyStage: card.stage || card.Stage || '',
-      aptlyClosedDate: card['Closed Date'] || card['Stage Changed'] || ''
-    });
+    if (rvWO) {
+      const mirrorAddr = card.mirrorAddress || card['Mirror Address'] || {};
+      const addrStr = (mirrorAddr.address || '') + (mirrorAddr.city ? ', ' + mirrorAddr.city : '');
+      const address = rvWO._unitAddress || addrStr || card.Title || '';
+      toClose.push({
+        woNumber: card._woNumber,
+        rvWorkOrderId: rvWO.workOrderID,
+        address: address.slice(0, 60),
+        aptlyStage: card.stage || card.Stage || '',
+        aptlyClosedDate: card.dateClosed || card['Closed Date'] || card['Stage Changed'] || ''
+      });
+    }
   });
   console.log('WO Sync: ' + aptlyClosed.length + ' closed in Aptly, ' + rvOpen.length + ' open in RV, ' + toClose.length + ' to close');
   if (dryRun) return { dryRun: true, aptlyClosedCount: aptlyClosed.length, rvOpenCount: rvOpen.length, wouldClose: toClose };
