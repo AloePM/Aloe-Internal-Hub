@@ -962,7 +962,9 @@ async function fetchAllAptlyClosedWOs() {
     const hasClosedDate = !!(c.dateClosed || c['Closed Date'] || (closedDateKey && c[closedDateKey]));
     const hasWONumber = !!(woNum && String(woNum).trim());
     const isRecent = c.stageUpdatedAt ? new Date(c.stageUpdatedAt).getTime() > cutoff : (c.createdAt ? new Date(c.createdAt).getTime() > cutoff : true);
-    return hasWONumber && isRecent && (isClosedStage || hasClosedDate);
+    // Only use closedDate signal if stage is also terminal — avoids flagging Scheduled WOs with a closed date
+    const isTrulyDone = isClosedStage || (hasClosedDate && isClosedStage);
+    return hasWONumber && isRecent && isTrulyDone;
   }).map(c => {
     const woNum = c[woNumKey] || c.workOrderNumber;
     return Object.assign({}, c, { _woNumber: String(woNum).trim() });
