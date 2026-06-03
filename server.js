@@ -1053,7 +1053,58 @@ async function runWOSync(dryRun) {
   } else if (toClose.length === 0) {
     console.log('WO Sync: systems in sync');
   }
-  return { notified: toClose.length, items: toClose };
+  // Reverse check: Aptly open WOs missing from Rentvine entirely
+  const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+  const schemaResp2 = await fetch('https://core-api.getaptly.com/api/schema/workOrder', { headers: { 'x-token': APTLY_TOK } });
+  const schema2 = await schemaResp2.json();
+  const schemaMap2 = {};
+  if (Array.isArray(schema2)) schema2.forEach(f => { schemaMap2[f.key] = f.label; });
+  const woNumKey2 = Object.entries(schemaMap2).find(([k,v]) => /work.?order.?num/i.test(v))?.[0] || 'workOrderNumber';
+
+  let aptlyOpen = [], page2 = 0;
+  while (page2 < 50) {
+    const resp2 = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=' + page2 + '&pageSize=100&includeArchived=false', { headers: { 'x-token': APTLY_TOK } });
+    if (!resp2.ok) break;
+    const raw2 = await resp2.json();
+    const items2 = Array.isArray(raw2) ? raw2 : (raw2 && raw2.data) || [];
+    if (!items2.length) break;
+    aptlyOpen = aptlyOpen.concat(items2);
+    if (items2.length < 100) break;
+    page2++;
+  }
+
+  const rvNumbers = new Set(rvOpen.map(wo => String(wo.workOrderNumber || '').trim()));
+  const missingInRV = aptlyOpen.filter(c => {
+    const woNum = c[woNumKey2] || c.workOrderNumber;
+    const stage = (c.stage || c.Stage || '').toLowerCase();
+    const isActiveStage = !/^(completed|cancelled|closed|done)/.test(stage);
+    return woNum && isActiveStage && !rvNumbers.has(String(woNum).trim());
+  }).map(c => {
+    const woNum = c[woNumKey2] || c.workOrderNumber;
+    const unitArr = Array.isArray(c.unit) ? c.unit : (c.unit ? [c.unit] : []);
+    const locArr = Array.isArray(c.location) ? c.location : (c.location ? [c.location] : []);
+    const addr = (unitArr[0] && unitArr[0].name) || (locArr[0] && locArr[0].name) || c.name || '';
+    return { woNumber: String(woNum).trim(), address: addr.slice(0, 60), aptlyStage: c.stage || c.Stage || '' };
+  });
+
+  if (SLACK_TOKEN && missingInRV.length > 0) {
+    const lines2 = missingInRV.map(r =>
+      '• WO #' + r.woNumber + ' — ' + (r.address || 'see Aptly') + ' — _' + r.aptlyStage + ' in Aptly_'
+    ).join('\n');
+    const slackText2 = '*⚠️ WO Sync — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*\n' +
+      '*' + missingInRV.length + ' work order(s) open in Aptly but missing from Rentvine:*\n' + lines2 +
+      '\n\n_These WOs may need to be created in Rentvine · Runs nightly 11pm AZ_';
+    try {
+      await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText2 })
+      });
+      console.log('WO Sync: missing-in-RV alert sent for ' + missingInRV.length + ' WOs');
+    } catch(e) { console.error('WO Sync missing-in-RV Slack error:', e.message); }
+  }
+
+  return { notified: toClose.length, items: toClose, missingInRentvine: missingInRV };
   }
 
 app.get('/api/wo-sync/debug', async (req, res) => {
