@@ -151,8 +151,9 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   <button class="tab" data-tab="pipeline" onclick="switchTab('pipeline')">Owner Pipeline</button>
   <button class="tab" data-tab="renewals" onclick="switchTab('renewals')">Renewals</button>
   <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">Portfolio Growth</button>
-  <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')">Maintenance</button>
+ <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')">Maintenance</button>
   <button class="tab" data-tab="retention" onclick="switchTab('retention')">Retention</button>
+  <button class="tab" data-tab="workorders" onclick="switchTab('workorders')">Work Order Analytics</button>
 </div>
 
 <div id="loading" class="loading-wrap">
@@ -977,7 +978,341 @@ function renderMaintenance() {
     '</div></div>';
   document.getElementById('app').innerHTML = html;
 }
+// ---- WORK ORDERS TAB ----
+var _woData = null;
 
+function stripHtml(s) {
+  return (s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  var d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+function guessCategory(text) {
+  var t = (text||'').toLowerCase();
+  if (/hvac|ac |air.?cond|heat|furnace|cooling/.test(t)) return 'HVAC';
+  if (/plumb|leak|drain|toilet|faucet|pipe|water/.test(t)) return 'Plumbing';
+  if (/electric|outlet|breaker|wiring|panel|light/.test(t)) return 'Electrical';
+  if (/pest|scorpion|roach|termite|bee|ant/.test(t)) return 'Pest Control';
+  if (/appliance|dishwash|washer|dryer|refriger|oven|stove/.test(t)) return 'Appliance';
+  if (/paint|drywall|patch|wall/.test(t)) return 'Paint / Drywall';
+  if (/lawn|landscap|tree|weed|yard|grass/.test(t)) return 'Landscaping';
+  if (/clean|trash|junk|debris/.test(t)) return 'Cleaning';
+  if (/lock|key|door|window|garage/.test(t)) return 'Lock / Door / Window';
+  if (/roof|gutter|exterior|stucco/.test(t)) return 'Roof / Exterior';
+  return 'Other';
+}
+
+function isAptlyClosed(c) {
+  return c.archived || /^(closed|cancelled|completed|rejected|done)/i.test(c.stage||'');
+}
+
+function isRVClosed(wo) {
+  var sid = parseInt(wo.primaryWorkOrderStatusID||0);
+  return sid===3||sid===4||sid===5||!!wo.closedDate||!!wo.dateClosed;
+}
+
+function ageBadge(days) {
+  if (days===null||days===undefined) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#eef2f2;color:var(--muted)">?</span>';
+  var bg,fg;
+  if (days<=3){bg='var(--green-d)';fg='var(--green)';}
+  else if(days<=14){bg='var(--blue-d)';fg='var(--blue)';}
+  else if(days<=30){bg='var(--amber-d)';fg='var(--amber)';}
+  else{bg='var(--red-d)';fg='var(--red)';}
+  return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:'+bg+';color:'+fg+';font-weight:600">'+days+'d</span>';
+}
+
+async function fetchAptlyWOs() {
+  var all = [], page = 0;
+  while (page < 15) {
+    var resp = await fetch('https://core-api.getaptly.com/api/board/workOrder?page='+page+'&pageSize=100&includeArchived=false', {
+      headers: { 'x-token': 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=' }
+    });
+    if (!resp.ok) break;
+    var batch = await resp.json();
+    var items = Array.isArray(batch) ? batch : ((batch&&batch.data)||[]);
+    if (!items.length) break;
+    all = all.concat(items);
+    if (items.length < 100) break;
+    page++;
+  }
+  return all;
+}
+
+async function fetchRVWOs() {
+  var all = [], pg = 1;
+  while (pg <= 15) {
+    var resp = await fetch('/api/rentvine/maintenance/work-orders?pageSize=100&page='+pg);
+    if (!resp.ok) break;
+    var data = await resp.json();
+    var rawBatch = Array.isArray(data) ? data : ((data&&data.data)||[]);
+    if (!rawBatch.length) break;
+    rawBatch.forEach(function(rec) {
+      var wo = rec.workOrder || rec;
+      if (wo.workOrderID) {
+        wo._unitAddress = (rec.unit&&(rec.unit.address||rec.unit.name))||'';
+        wo._vendorName = (rec.contact&&rec.contact.name)||'';
+        all.push(wo);
+      }
+    });
+    if (rawBatch.length < 100) break;
+    pg++;
+  }
+  return all;
+}
+
+async function loadWOData(forceReload) {
+  if (_woData && !forceReload) return _woData;
+  var results = await Promise.all([fetchAptlyWOs(), fetchRVWOs()]);
+  _woData = { aptly: results[0], rv: results[1] };
+  return _woData;
+}
+
+async function renderWorkOrders() {
+  document.getElementById('app').innerHTML =
+    '<div class="main"><div class="loading-wrap"><div class="spinner"></div>' +
+    '<div class="loading-text">Loading work orders from Aptly and Rentvine...</div></div></div>';
+
+  var data;
+  try {
+    data = await loadWOData(false);
+  } catch(e) {
+    document.getElementById('app').innerHTML =
+      '<div class="main"><div class="error-wrap">Failed to load work order data: '+e.message+'</div></div>';
+    return;
+  }
+
+  var aptlyAll = data.aptly;
+  var rvAll = data.rv;
+  var aptlyOpen = aptlyAll.filter(function(c){ return !isAptlyClosed(c); });
+  var rvOpen = rvAll.filter(function(wo){ return !isRVClosed(wo); });
+  var diff = Math.abs(aptlyOpen.length - rvOpen.length);
+
+  // Sync bar
+  var syncColor = diff===0 ? C.GREEN : diff<=5 ? C.AMBER : C.RED;
+  var syncMsg = diff===0
+    ? 'Systems in sync — both show '+aptlyOpen.length+' open work orders'
+    : 'Sync gap: Aptly shows '+aptlyOpen.length+' open, Rentvine shows '+rvOpen.length+' ('+diff+' difference)';
+
+  // Age buckets
+  var ages = aptlyOpen.map(function(c){ return daysSince(c.createdAt)||0; });
+  var ageBuckets = {'0–3d':0,'4–7d':0,'8–14d':0,'15–30d':0,'31–60d':0,'60d+':0};
+  ages.forEach(function(d){
+    if(d<=3) ageBuckets['0–3d']++;
+    else if(d<=7) ageBuckets['4–7d']++;
+    else if(d<=14) ageBuckets['8–14d']++;
+    else if(d<=30) ageBuckets['15–30d']++;
+    else if(d<=60) ageBuckets['31–60d']++;
+    else ageBuckets['60d+']++;
+  });
+  var ageMax = Math.max.apply(null, Object.values(ageBuckets).concat([1]));
+  var ageColors = {'0–3d':C.GREEN,'4–7d':C.TEAL,'8–14d':C.AMBER,'15–30d':C.AMBER,'31–60d':C.RED,'60d+':C.RED};
+
+  // Category breakdown
+  var cats = {};
+  aptlyOpen.forEach(function(c){
+    var cat = guessCategory(stripHtml(c.description||c.name||''));
+    cats[cat] = (cats[cat]||0)+1;
+  });
+  var catSorted = Object.entries(cats).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+
+  // Vendor leaderboard
+  var byVendor = {};
+  aptlyOpen.forEach(function(c){
+    var vArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor?[c.vendor]:[]);
+    var vName = (vArr[0]&&(vArr[0].name||vArr[0]))||'Unassigned';
+    if (!byVendor[vName]) byVendor[vName]=[];
+    byVendor[vName].push(daysSince(c.createdAt)||0);
+  });
+  var vendorRows = Object.entries(byVendor)
+    .map(function(e){ return {vendor:e[0],count:e[1].length,avg:Math.round(e[1].reduce(function(a,b){return a+b;},0)/e[1].length),oldest:Math.max.apply(null,e[1])}; })
+    .sort(function(a,b){return b.count-a.count;})
+    .slice(0,12);
+
+  // Unassigned
+  var unassigned = aptlyOpen.filter(function(c){
+    var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]);
+    return v.length===0;
+  }).sort(function(a,b){return (daysSince(b.createdAt)||0)-(daysSince(a.createdAt)||0);}).slice(0,10);
+
+  // Oldest 30+
+  var oldest30 = aptlyOpen.map(function(c){
+    var loc=Array.isArray(c.location)?c.location:(c.location?[c.location]:[]);
+    var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
+    var vArr=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]);
+    return {
+      addr:((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'Unknown').slice(0,38),
+      vendor:((vArr[0]&&vArr[0].name)||'Unassigned').slice(0,22),
+      days:daysSince(c.createdAt)||0
+    };
+  }).filter(function(r){return r.days>=30;}).sort(function(a,b){return b.days-a.days;}).slice(0,10);
+
+  var avgAge = ages.length ? Math.round(ages.reduce(function(a,b){return a+b;},0)/ages.length) : 0;
+  var maxAge = ages.length ? Math.max.apply(null,ages) : 0;
+
+  // Stage breakdown
+  var stages = {};
+  aptlyOpen.forEach(function(c){ var s=c.stage||'No stage'; stages[s]=(stages[s]||0)+1; });
+  var stageSorted = Object.entries(stages).sort(function(a,b){return b[1]-a[1];});
+
+  var html = '<div class="main">' +
+    '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+      '<div><div class="page-title">Work Order Analytics</div>' +
+      '<div class="page-sub">Live from Aptly (workflow) and Rentvine (records)</div></div>' +
+      '<button class="btn btn-ghost" onclick="_woData=null;renderWorkOrders()" style="font-size:12px">↺ Reload WO Data</button>' +
+    '</div>' +
+
+    // Sync alert
+    '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:500;background:'+(diff===0?'var(--green-d)':'var(--amber-d)')+';color:'+syncColor+';border:1px solid '+(diff===0?C.GREEN+'44':C.AMBER+'44')+'">' +
+      '<span>'+(diff===0?'✓':'⚠')+'</span><span>'+syncMsg+'</span>' +
+    '</div>' +
+
+    // KPI row
+    '<div class="kpi-grid g5" style="margin-bottom:16px">' +
+      kpi('Aptly Open', aptlyOpen.length, 'active work orders', C.TEAL2) +
+      kpi('Rentvine Open', rvOpen.length, 'non-closed WOs', C.BLUE) +
+      kpi('Unassigned', unassigned.length+(unassigned.length<aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length?'':'')||aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length, 'no vendor yet', aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length>5?C.RED:C.GREEN) +
+      kpi('Avg Age (open)', avgAge+'d', 'days since created', avgAge>14?C.AMBER:C.GREEN) +
+      kpi('Oldest Open', maxAge+'d', 'longest open WO', maxAge>30?C.RED:C.AMBER) +
+    '</div>' +
+
+    // Source comparison
+    '<div class="grid g-2" style="margin-bottom:14px">' +
+      '<div class="card">' +
+        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Work Order Age Distribution</div></div>' +
+        Object.entries(ageBuckets).map(function(e){
+          var pct = Math.round((e[1]/ageMax)*100);
+          return '<div class="bar-row"><div class="bar-row-label">'+e[0]+'</div>' +
+            '<div class="bar-row-track"><div class="bar-row-fill" style="width:'+pct+'%;background:'+ageColors[e[0]]+'"></div></div>' +
+            '<div class="bar-row-count">'+e[1]+'</div></div>';
+        }).join('') +
+      '</div>' +
+      '<div class="card">' +
+        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Category Breakdown</div></div>' +
+        '<div class="chart-wrap" style="height:220px"><canvas id="wo-cat-chart" role="img" aria-label="Work orders by category"></canvas></div>' +
+      '</div>' +
+    '</div>' +
+
+    // Vendor leaderboard
+    '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL+'"></div>Vendor Leaderboard</div>' +
+      '<span style="font-size:11px;color:var(--muted)">Open work orders only</span></div>' +
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
+          '<th style="padding:6px 12px;text-align:left;font-weight:600">Vendor</th>' +
+          '<th style="padding:6px 12px;text-align:right;font-weight:600">Open WOs</th>' +
+          '<th style="padding:6px 12px;text-align:right;font-weight:600">Avg days open</th>' +
+          '<th style="padding:6px 12px;text-align:right;font-weight:600">Oldest (days)</th>' +
+          '<th style="padding:6px 12px;text-align:left;font-weight:600">Status</th>' +
+        '</tr></thead><tbody>' +
+        vendorRows.map(function(r,i){
+          var statusColor = r.vendor==='Unassigned'?C.AMBER:r.avg>30?C.RED:r.avg>14?C.AMBER:C.GREEN;
+          var statusLabel = r.vendor==='Unassigned'?'Needs assignment':r.avg>30?'Overdue':r.avg>14?'Active':'On track';
+          var statusBg = r.vendor==='Unassigned'?'var(--amber-d)':r.avg>30?'var(--red-d)':r.avg>14?'var(--amber-d)':'var(--green-d)';
+          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+            '<td style="padding:8px 12px;font-weight:500;color:var(--ink2)">'+r.vendor+'</td>' +
+            '<td style="padding:8px 12px;text-align:right;font-weight:700;font-family:\'DM Mono\',monospace">'+r.count+'</td>' +
+            '<td style="padding:8px 12px;text-align:right;font-family:\'DM Mono\',monospace;color:'+(r.avg>14?C.AMBER:C.GREEN)+'">'+r.avg+'d</td>' +
+            '<td style="padding:8px 12px;text-align:right;font-family:\'DM Mono\',monospace;color:'+(r.oldest>30?C.RED:C.AMBER)+'">'+r.oldest+'d</td>' +
+            '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+statusBg+';color:'+statusColor+';font-weight:600">'+statusLabel+'</span></td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+    '</div>' +
+
+    // Stage breakdown + unassigned side by side
+    '<div class="grid g-2" style="margin-bottom:14px">' +
+      '<div class="card">' +
+        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Stage Breakdown (Aptly)</div></div>' +
+        '<div class="chart-wrap" style="height:200px"><canvas id="wo-stage-chart" role="img" aria-label="Work orders by Aptly stage"></canvas></div>' +
+      '</div>' +
+      '<div class="card">' +
+        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Unassigned Work Orders</div>' +
+        '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length+'</span></div>' +
+        (unassigned.length===0
+          ? '<div style="color:var(--ghost);font-size:13px;padding:8px 0">All open WOs have vendors assigned</div>'
+          : '<div style="overflow-y:auto;max-height:220px">' +
+            '<div class="detail-header" style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px"><span>Property</span><span>Issue</span><span>Age</span></div>' +
+            unassigned.map(function(c){
+              var loc=Array.isArray(c.location)?c.location:(c.location?[c.location]:[]);
+              var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
+              var addr=((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'Unknown').slice(0,35);
+              var issue=stripHtml(c.description||c.name||'').slice(0,40);
+              return '<div class="detail-row"><div class="detail-addr">'+addr+'</div><div class="detail-city">'+issue+'</div>' +
+                '<div class="detail-meta">'+ageBadge(daysSince(c.createdAt))+'</div></div>';
+            }).join('') +
+          '</div>') +
+      '</div>' +
+    '</div>' +
+
+    // Oldest 30+
+    (oldest30.length ? '<div class="card" style="margin-bottom:14px">' +
+      '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Open 30+ Days</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+oldest30.length+' WOs</span></div>' +
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
+          '<th style="padding:6px 12px;text-align:left;font-weight:600">Property</th>' +
+          '<th style="padding:6px 12px;text-align:left;font-weight:600">Vendor</th>' +
+          '<th style="padding:6px 12px;text-align:right;font-weight:600">Days open</th>' +
+        '</tr></thead><tbody>' +
+        oldest30.map(function(r,i){
+          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+            '<td style="padding:8px 12px;color:var(--ink2);font-weight:500">'+r.addr+'</td>' +
+            '<td style="padding:8px 12px;color:var(--muted)">'+r.vendor+'</td>' +
+            '<td style="padding:8px 12px;text-align:right">'+ageBadge(r.days)+'</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table></div>' +
+    '</div>' : '') +
+
+    '<div class="data-note"><span>Aptly = workflow truth</span><span>Rentvine = record truth</span><span>Categories auto-detected from description text</span></div>' +
+  '</div>';
+
+  document.getElementById('app').innerHTML = html;
+
+  setTimeout(function() {
+    // Category chart
+    var catEl = document.getElementById('wo-cat-chart');
+    if (catEl && catSorted.length) {
+      var catPalette = [C.TEAL,C.GREEN,C.AMBER,C.BLUE,C.PURPLE,C.RED,C.GRAY,C.TEAL2];
+      if (charts['wo-cat']) charts['wo-cat'].destroy();
+      charts['wo-cat'] = new Chart(catEl, {
+        type: 'bar',
+        data: {
+          labels: catSorted.map(function(e){return e[0];}),
+          datasets: [{data:catSorted.map(function(e){return e[1];}),backgroundColor:catPalette.slice(0,catSorted.length),borderRadius:4,borderSkipped:false}]
+        },
+        options: Object.assign({},CD,{indexAxis:'y',scales:{
+          x:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}},
+          y:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}}
+        }})
+      });
+      catEl.parentElement.style.height = '220px';
+    }
+    // Stage chart
+    var stageEl = document.getElementById('wo-stage-chart');
+    if (stageEl && stageSorted.length) {
+      var stagePalette = [C.TEAL,C.AMBER,C.BLUE,C.GREEN,C.PURPLE,C.RED,C.GRAY];
+      if (charts['wo-stage']) charts['wo-stage'].destroy();
+      charts['wo-stage'] = new Chart(stageEl, {
+        type: 'bar',
+        data: {
+          labels: stageSorted.map(function(e){return e[0];}),
+          datasets: [{data:stageSorted.map(function(e){return e[1];}),backgroundColor:stagePalette.slice(0,stageSorted.length),borderRadius:4,borderSkipped:false}]
+        },
+        options: Object.assign({},CD,{scales:{
+          x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac',maxRotation:30,autoSkip:false},grid:{display:false},border:{display:false}},
+          y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
+        }})
+      });
+      stageEl.parentElement.style.height = '200px';
+    }
+  }, 50);
+}
 // ---- RETENTION TAB ----
 function renderRetention() {
   var ci=D.comprehensiveInspections, em=D.endManagement, l=D.leases;
@@ -1030,7 +1365,8 @@ var TABS = {
   renewals: renderRenewals,
   portfolio: renderPortfolio,
   maintenance: renderMaintenance,
-  retention: renderRetention
+  retention: renderRetention,
+  workorders: renderWorkOrders
 };
 
 var activeTab = 'trends';
