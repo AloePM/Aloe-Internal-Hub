@@ -922,7 +922,184 @@ app.use('/api/rentvine', async function(req, res) {
     res.json(await r.json());
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ── WO Sync: Auto-close in Rentvine WOs that are closed/cancelled in Aptly ──
+async function fetchAllAptlyClosedWOs() {
+  const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+  let all = [], page = 0;
+  while (page < 30) {
+    const resp = await fetch(
+      `https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=true`,
+      { headers: { 'x-token': APTLY_TOK } }
+    );
+    if (!resp.ok) break;
+    const batch = await resp.json();
+    const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
+    if (!items.length) break;
+    all = all.concat(items);
+    if (items.length < 100) break;
+    page++;
+  }
+  // Only cards that are truly closed/cancelled in Aptly AND have a WO number
+  return all.filter(c => {
+    const isClosed = c['Is Closed'] === true;
+    const stage = (c.Stage || c.stage || '').toLowerCase();
+    const isClosedStage = /completed|cancelled|closed|done/.test(stage);
+    const hasWONumber = !!(c['Work Order Number'] && String(c['Work Order Number']).trim());
+    return (isClosed || isClosedStage) && hasWONumber;
+  });
+}
 
+async function fetchAllRVOpenWOs() {
+  let all = [], pg = 1;
+  while (pg <= 20) {
+    const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+    const rawBatch = Array.isArray(data) ? data : (data && data.data) || [];
+    if (!rawBatch.length) break;
+    rawBatch.forEach(rec => {
+      const wo = rec.workOrder || rec;
+      if (!wo.workOrderID) return;
+      wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || '';
+      const sid = parseInt(wo.primaryWorkOrderStatusID || 0);
+      const isClosed = sid === 3 || sid === 4 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
+      if (!isClosed) all.push(wo);
+    });
+    if (rawBatch.length < 100) break;
+    pg++;
+  }
+  return all;
+}
+
+async function closeRVWorkOrder(workOrderId) {
+  const url = `${RENTVINE_BASE}/maintenance/work-orders/${workOrderId}`;
+  const resp = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Basic ${RENTVINE_AUTH}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ primaryWorkOrderStatusID: 3 }) // 3 = Closed
+  });
+  const text = await resp.text();
+  let json;
+  try { json = JSON.parse(text); } catch(e) { json = { raw: text }; }
+  return { ok: resp.ok, status: resp.status, body: json };
+}
+
+async function runWOSync(dryRun = false) {
+  console.log(`WO Sync: starting (dryRun=${dryRun})`);
+  const [aptlyClosed, rvOpen] = await Promise.all([
+    fetchAllAptlyClosedWOs(),
+    fetchAllRVOpenWOs()
+  ]);
+
+  // Build RV lookup by workOrderNumber (string)
+  const rvByNumber = {};
+  rvOpen.forEach(wo => {
+    const num = String(wo.workOrderNumber || '').trim();
+    if (num) rvByNumber[num] = wo;
+  });
+
+  const toClose = [];
+  aptlyClosed.forEach(card => {
+    const woNum = String(card['Work Order Number'] || '').trim();
+    const rvWO = rvByNumber[woNum];
+    if (rvWO) {
+      toClose.push({
+        woNumber: woNum,
+        rvWorkOrderId: rvWO.workOrderID,
+        address: rvWO._unitAddress || card['Title'] || '',
+        aptlyStage: card.Stage || card.stage || '',
+        aptlyClosedDate: card['Closed Date'] || card['Stage Changed'] || ''
+      });
+    }
+  });
+
+  console.log(`WO Sync: ${aptlyClosed.length} closed in Aptly, ${rvOpen.length} open in RV, ${toClose.length} to close`);
+
+  if (dryRun) return { dryRun: true, wouldClose: toClose };
+
+  const results = { closed: [], failed: [], skipped: [] };
+  for (const item of toClose) {
+    try {
+      const result = await closeRVWorkOrder(item.rvWorkOrderId);
+      if (result.ok) {
+        results.closed.push(item);
+        console.log(`WO Sync: closed RV WO ${item.woNumber} (${item.address})`);
+      } else {
+        // If PATCH not supported, try PUT
+        const putResp = await fetch(`${RENTVINE_BASE}/maintenance/work-orders/${item.rvWorkOrderId}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ primaryWorkOrderStatusID: 3 })
+        });
+        if (putResp.ok) {
+          results.closed.push(item);
+        } else {
+          results.failed.push({ ...item, error: `HTTP ${result.status}`, body: JSON.stringify(result.body).slice(0,200) });
+        }
+      }
+    } catch(e) {
+      results.failed.push({ ...item, error: e.message });
+    }
+  }
+
+  // Post Slack summary
+  if (SLACK_TOKEN && (results.closed.length > 0 || results.failed.length > 0)) {
+    const closedLines = results.closed.map(r =>
+      `• WO #${r.woNumber} — ${r.address} _(closed in Aptly: ${String(r.aptlyClosedDate).slice(0,10)})_`
+    ).join('\n');
+    const failedLines = results.failed.map(r =>
+      `• WO #${r.woNumber} — ${r.address} ❌ ${r.error}`
+    ).join('\n');
+
+    const slackText = [
+      `*🔧 Rentvine WO Auto-Sync — ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}*`,
+      results.closed.length > 0 ? `\n*✅ Auto-closed ${results.closed.length} work order(s) in Rentvine:*\n${closedLines}` : '',
+      results.failed.length > 0 ? `\n*⚠️ Failed to close ${results.failed.length}:*\n${failedLines}` : '',
+      `\n_Matched by Work Order Number. Total checked: ${toClose.length}_`
+    ].filter(Boolean).join('\n');
+
+    try {
+      await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SLACK_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'C07CY9SSF7D', text: slackText }) // maintenance channel
+      });
+    } catch(e) { console.error('WO Sync Slack error:', e.message); }
+  }
+
+  return results;
+}
+
+// Manual trigger + dry-run endpoints
+app.get('/api/wo-sync/dry-run', async (req, res) => {
+  try { res.json(await runWOSync(true)); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/wo-sync/run', async (req, res) => {
+  try { res.json(await runWOSync(false)); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Nightly schedule — runs at 11pm Arizona time (06:00 UTC, no DST)
+function scheduleWOSync() {
+  function msUntilNext11pm() {
+    const now = new Date();
+    const az = new Date(now.toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
+    const next = new Date(az);
+    next.setHours(23, 0, 0, 0);
+    if (az >= next) next.setDate(next.getDate() + 1);
+    return next - az;
+  }
+  setTimeout(function tick() {
+    runWOSync(false).catch(e => console.error('WO Sync nightly error:', e.message));
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }, msUntilNext11pm());
+  console.log(`WO Sync: scheduled, next run in ${Math.round(msUntilNext11pm()/60000)} min`);
+}
+scheduleWOSync();
+// ── End WO Sync ──
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
   res.json({ cleared: true });
