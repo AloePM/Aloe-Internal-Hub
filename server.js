@@ -1162,6 +1162,7 @@ function scheduleWOSync() {
   }
   setTimeout(function tick() {
     runWOSync(false).catch(e => console.error('WO Sync nightly error:', e.message));
+    runBillSync().catch(e => console.error('Bill sync nightly error:', e.message));
     setTimeout(tick, 24 * 60 * 60 * 1000);
   }, msUntilNext11pm());
   console.log('WO Sync: scheduled nightly at 11pm AZ time');
@@ -1180,7 +1181,74 @@ app.get('/api/test-slack', async (req, res) => {
     res.json({ status: r.status, response: text });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
+// ── Bill-to-WO Matcher ──
+async function findBillMatchedWOs() {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let allBills = [], pg = 1;
+  while (pg <= 5) {
+    const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, dateFrom: cutoff });
+    const batch = Array.isArray(data) ? data : (data && data.data) || [];
+    if (!batch.length) break;
+    allBills = allBills.concat(batch);
+    if (batch.length < 100) break;
+    pg++;
+  }
+  let openWOs = [], wpg = 1;
+  while (wpg <= 10) {
+    const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: wpg });
+    const batch = Array.isArray(data) ? data : (data && data.data) || [];
+    if (!batch.length) break;
+    batch.forEach(rec => {
+      const wo = rec.workOrder || rec;
+      if (!wo.workOrderID) return;
+      const sid = parseInt(wo.primaryWorkOrderStatusID || 0);
+      const isClosed = sid === 3 || sid === 5 || !!wo.closedDate || !!wo.dateClosed;
+      if (!isClosed) {
+        wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || '';
+        openWOs.push(wo);
+      }
+    });
+    if (batch.length < 100) break;
+    wpg++;
+  }
+  const matched = [];
+  allBills.forEach(function(billRec) {
+    const bill = billRec.bill || billRec;
+    const vendorID = String(bill.vendorContactID || bill.contactID || '');
+    const propertyID = String(bill.propertyID || '');
+    if (!vendorID || !propertyID) return;
+    openWOs.filter(wo => String(wo.vendorContactID || '') === vendorID && String(wo.propertyID || '') === propertyID).forEach(wo => {
+      const amt = bill.amount ? ('$' + parseFloat(bill.amount).toFixed(2)) : '';
+      matched.push({
+        woNumber: wo.workOrderNumber,
+        rvWorkOrderId: wo.workOrderID,
+        address: wo._unitAddress || '',
+        vendorName: (billRec.contact && billRec.contact.name) || '',
+        billAmount: amt,
+        billDate: (bill.date || bill.billDate || '').slice(0, 10)
+      });
+    });
+  });
+  const seen = new Set();
+  return matched.filter(r => { if (seen.has(r.woNumber)) return false; seen.add(r.woNumber); return true; });
+}
 
+app.get('/api/bill-matched-wos', async (req, res) => {
+  try { res.json({ total: 0, items: await findBillMatchedWOs() }); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+async function runBillSync() {
+  try {
+    const matched = await findBillMatchedWOs();
+    if (!SLACK_TOKEN || matched.length === 0) return;
+    const lines = matched.map(r => '• <https://aloepm.rentvine.com/maintenance/work-orders/' + r.rvWorkOrderId + '|WO #' + r.woNumber + '> — ' + r.address + ' — ' + r.vendorName + ' — Bill: ' + r.billAmount + ' (' + r.billDate + ')').join('\n');
+    const slackText = '*🧾 Invoice → WO Match — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*\n*' + matched.length + ' open WO(s) have invoices — likely complete, please close:*\n' + lines + '\n\n_Matched by vendor + property · Runs nightly 11pm AZ_';
+    await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText }) });
+    console.log('Bill sync: Slack alert sent for ' + matched.length + ' WOs');
+  } catch(e) { console.error('Bill sync error:', e.message); }
+}
+// ── End Bill-to-WO Matcher ──
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
   res.json({ cleared: true });
