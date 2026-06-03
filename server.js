@@ -1086,34 +1086,49 @@ async function runWOSync(dryRun = false) {
 }
 app.get('/api/wo-sync/debug', async (req, res) => {
   try {
-    const [aptlyClosed, rvOpen] = await Promise.all([
-      fetchAllAptlyClosedWOs(),
-      fetchAllRVOpenWOs()
-    ]);
-    const aptlySample = aptlyClosed.slice(0,5).map(c => ({
-      woNumber: c['Work Order Number'],
-      stage: c.Stage || c.stage,
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+
+    // Fetch page 0 with includeArchived=true
+    const resp = await fetch(
+      'https://core-api.getaptly.com/api/board/workOrder?page=0&pageSize=20&includeArchived=true',
+      { headers: { 'x-token': APTLY_TOK } }
+    );
+    const raw = await resp.json();
+    const items = Array.isArray(raw) ? raw : (raw && raw.data) || (raw && raw.cards) || [];
+
+    // Show ALL cards — their stage, isClosed, WO number so we can see what's there
+    const allCards = items.map(c => ({
+      woNumber: c['Work Order Number'] || '(none)',
+      stage: c.Stage || c.stage || '(none)',
       isClosed: c['Is Closed'],
-      archived: c.Archived
+      archived: c.Archived,
+      closedDate: c['Closed Date'] || null,
+      archivedDate: c['Archived Date'] || null
     }));
-    const rvSample = rvOpen.slice(0,5).map(wo => ({
-      workOrderNumber: wo.workOrderNumber,
-      workOrderID: wo.workOrderID,
-      statusID: wo.primaryWorkOrderStatusID,
-      address: wo._unitAddress
-    }));
+
+    // Also fetch the closed Aptly WOs using our function
+    const closed = await fetchAllAptlyClosedWOs();
+    const rvOpen = await fetchAllRVOpenWOs();
+
     res.json({
-      aptlyClosedCount: aptlyClosed.length,
+      aptlyRawCount: items.length,
+      aptlyRawSample: allCards,
+      aptlyClosedCount: closed.length,
+      aptlyClosedSample: closed.slice(0,5).map(c => ({
+        woNumber: c['Work Order Number'],
+        stage: c.Stage || c.stage,
+        isClosed: c['Is Closed'],
+        closedDate: c['Closed Date']
+      })),
       rvOpenCount: rvOpen.length,
-      aptlySample,
-      rvSample
+      rvOpenSample: rvOpen.slice(0,5).map(wo => ({
+        workOrderNumber: wo.workOrderNumber,
+        workOrderID: wo.workOrderID,
+        statusID: wo.primaryWorkOrderStatusID,
+        address: wo._unitAddress
+      }))
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
-});
-// Manual trigger + dry-run endpoints
-app.get('/api/wo-sync/dry-run', async (req, res) => {
-  try { res.json(await runWOSync(true)); }
-  catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/wo-sync/run', async (req, res) => {
