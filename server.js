@@ -1029,34 +1029,26 @@ async function runWOSync(dryRun) {
   console.log('WO Sync: ' + aptlyClosed.length + ' closed in Aptly, ' + rvOpen.length + ' open in RV, ' + toClose.length + ' to close');
   if (dryRun) return { dryRun: true, aptlyClosedCount: aptlyClosed.length, rvOpenCount: rvOpen.length, wouldClose: toClose };
 
-  const results = { closed: [], failed: [] };
-  for (const item of toClose) {
-    try {
-      const result = await closeRVWorkOrder(item.rvWorkOrderId);
-      if (result.ok) { results.closed.push(item); console.log('WO Sync: closed RV WO ' + item.woNumber); }
-      else { results.failed.push(Object.assign({}, item, { error: 'HTTP ' + result.status, body: JSON.stringify(result.body).slice(0, 200) })); }
-    } catch(e) { results.failed.push(Object.assign({}, item, { error: e.message })); }
-  }
-
-  if (SLACK_TOKEN && (results.closed.length > 0 || results.failed.length > 0)) {
-    const closedLines = results.closed.map(r => '• WO #' + r.woNumber + ' — ' + r.address + ' _(closed in Aptly: ' + String(r.aptlyClosedDate).slice(0, 10) + ')_').join('\n');
-    const failedLines = results.failed.map(r => '• WO #' + r.woNumber + ' — ' + r.address + ' ❌ ' + r.error).join('\n');
-    const slackText = [
-      '*🔧 Rentvine WO Auto-Sync — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*',
-      results.closed.length > 0 ? '\n*✅ Auto-closed ' + results.closed.length + ' work order(s) in Rentvine:*\n' + closedLines : '',
-      results.failed.length > 0 ? '\n*⚠️ Failed to close ' + results.failed.length + ':*\n' + failedLines : '',
-      '\n_Matched by Work Order Number. Total checked: ' + toClose.length + '_'
-    ].filter(Boolean).join('\n');
+ if (SLACK_TOKEN && toClose.length > 0) {
+    const lines = toClose.map(r =>
+      '• <https://aloepm.rentvine.com/maintenance/work-orders/' + r.rvWorkOrderId + '|WO #' + r.woNumber + '> — ' + (r.address || 'see link') + ' — _' + r.aptlyStage + ' in Aptly_'
+    ).join('\n');
+    const slackText = '*🔧 WO Sync — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*\n' +
+      '*' + toClose.length + ' work order(s) closed/cancelled in Aptly but still open in Rentvine:*\n' + lines +
+      '\n\n_Click each link → open in Rentvine → close · Runs nightly 11pm AZ_';
     try {
       await fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText })
       });
+      console.log('WO Sync: Slack alert sent for ' + toClose.length + ' WOs');
     } catch(e) { console.error('WO Sync Slack error:', e.message); }
+  } else if (toClose.length === 0) {
+    console.log('WO Sync: systems in sync');
   }
-  return results;
-}
+  return { notified: toClose.length, items: toClose };
+  }
 
 app.get('/api/wo-sync/debug', async (req, res) => {
   try {
