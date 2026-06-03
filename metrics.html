@@ -967,9 +967,11 @@ function renderPortfolio() {
 function renderMaintenance() {
   var wo=D.workOrders;
   var html = '<div class="main">' +
-    '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
-      '<div><div class="page-title">Maintenance</div></div>' +
-      '<button class="btn btn-ghost" onclick="loadWOSync()" id="wo-sync-btn" style="font-size:12px">↺ Check Sync Status</button>' +
+    '<div class="page-header">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">' +
+      '<div class="page-title">Maintenance</div>' +
+      '<button class="btn btn-teal" onclick="loadWOSync()" id="wo-sync-btn" style="font-size:13px;padding:8px 18px">↺ Check WO Sync</button>' +
+      '</div>' +
     '</div>' +
     '<div class="kpi-grid g3">' +
       kpi('Open Work Orders', fmt(wo.openTotal), 'all active stages (Aptly)', C.AMBER) +
