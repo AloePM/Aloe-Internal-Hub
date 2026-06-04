@@ -1391,8 +1391,8 @@ app.get('/api/wo-analytics', async (req, res) => {
       if (/hvac|ac |air.?cond|heat|furnace|cooling/.test(t)) return 'HVAC';
       if (/plumb|leak|drain|toilet|faucet|pipe|water/.test(t)) return 'Plumbing';
       if (/electric|outlet|breaker|wiring|panel|light/.test(t)) return 'Electrical';
-      if (/pest|scorpion|roach|termite|bee|ant/.test(t)) retur
-if (/appliance|dishwash|washer|dryer|refriger|oven|stove/.test(t)) return 'Appliance';
+      if (/pest|scorpion|roach|termite|bee|ant/.test(t)) return 'Pest Control';
+      if (/appliance|dishwash|washer|dryer|refriger|oven|stove/.test(t)) return 'Appliance';
       if (/paint|drywall|patch|wall/.test(t)) return 'Paint / Drywall';
       if (/lawn|landscap|tree|weed|yard|grass/.test(t)) return 'Landscaping';
       if (/clean|trash|junk|debris/.test(t)) return 'Cleaning';
