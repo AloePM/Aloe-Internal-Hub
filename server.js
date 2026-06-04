@@ -1215,7 +1215,20 @@ async function findBillMatchedWOs() {
       pg++;
     }
   }
-  console.log('Bill sync: ' + openWOs.length + ' open WOs, ' + allBills.length + ' bills fetched');
+  // Build address lookup from units export
+  const addrMap = {};
+  try {
+    const unitsData = await rvFetch('/properties/units/export', { pageSize: 200, page: 1 });
+    if (Array.isArray(unitsData)) {
+      unitsData.forEach(item => {
+        const u = item.unit || item;
+        const p = item.property || {};
+        if (u.unitID) addrMap[String(u.unitID)] = u.address || p.address || '';
+      });
+    }
+  } catch(e) { console.error('Bill sync addr lookup error:', e.message); }
+  openWOs.forEach(wo => { if (wo.unitID && addrMap[String(wo.unitID)]) wo._unitAddress = addrMap[String(wo.unitID)]; });
+  console.log('Bill sync: ' + openWOs.length + ' open WOs, ' + allBills.length + ' bills fetched, ' + Object.keys(addrMap).length + ' addresses loaded');
 
   const openWOMap = {};
   openWOs.forEach(wo => { openWOMap[String(wo.workOrderID)] = wo; });
