@@ -1384,7 +1384,7 @@ async function renderMaintenance() {
           var intensity=maxVal>0?v/maxVal:0;
           var bg=v===0?'transparent':'rgba(60,195,225,'+(0.15+intensity*0.75)+')';
           var color=intensity>0.6?'var(--ink)':'var(--ink2)';
-          return '<td style="padding:6px 8px;text-align:center;background:'+bg+';color:'+color+';font-weight:'+(v>0?'600':'400')+'">'+（v>0?v:''）+'</td>';
+          return '<td style="padding:6px 8px;text-align:center;background:'+bg+';color:'+color+';font-weight:'+(v>0?'600':'400')+'">'+(v>0?v:'')+'</td>';
         }).join('') +
       '</tr>';
     }).join('') +
