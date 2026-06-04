@@ -1367,6 +1367,22 @@ async function renderMaintenance() {
     '</tbody></table></div></div>' +
     '</div>' +
 
+
+    (analytics.weeklyStats && analytics.weeklyStats.length > 0 ?
+      '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Daily Work Orders — Last 4 Weeks</div>' +
+      '<span style="font-size:11px;color:var(--muted)">Mon to Sun · closed (top) vs opened (bottom) per day</span></div>' +
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase">' +
+      '<th style="padding:6px 12px;text-align:left">Week of</th>' +
+      '<th style="padding:6px 10px;text-align:center">Mon</th><th style="padding:6px 10px;text-align:center">Tue</th><th style="padding:6px 10px;text-align:center">Wed</th><th style="padding:6px 10px;text-align:center">Thu</th><th style="padding:6px 10px;text-align:center">Fri</th><th style="padding:6px 10px;text-align:center">Sat</th><th style="padding:6px 10px;text-align:center">Sun</th>' +
+      '<th style="padding:6px 12px;text-align:center">Week Total</th>' +
+      '</tr></thead><tbody>' +
+      (analytics.weeklyStats||[]).map(function(week,wi){var todayStr=new Date().toISOString().slice(0,10);return '<tr style="border-bottom:1px solid var(--rule)'+(wi%2===1?';background:var(--card2)':'')+'">' +'<td style="padding:8px 12px;font-size:11px;color:var(--muted);white-space:nowrap">'+week.weekStart.slice(5).replace(/-/,'/') +'</td>'+week.days.map(function(d){var isToday=d.date===todayStr,isFuture=d.date>todayStr,bg=isToday?'background:'+C.TEAL+'22;':'';return '<td style="padding:6px 10px;text-align:center;'+bg+'">'+(isFuture?'<span style="color:var(--ghost)">-</span>':'<div style="font-weight:700;font-size:13px;color:'+(d.closed>0?C.GREEN:'var(--ghost)')+'">'+d.closed+'</div><div style="font-size:10px;color:var(--muted)">'+d.opened+' in</div>')+'</td>';}).join('')+'<td style="padding:8px 12px;text-align:center;font-weight:700;color:'+(week.totalClosed>0?C.GREEN:'var(--ghost)')+'">'+week.totalClosed+'</td></tr>';}).join('') +
+      '</tbody></table>' +
+      '<div style="font-size:11px;color:var(--muted);padding:8px 4px">Bold = closed · small = opened · today highlighted</div>' +
+      '</div></div>'
+    : '') +
+
     // Seasonal HVAC heatmap
     '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Seasonal Category Trends — Last 12 Months</div>' +
     '<span style="font-size:11px;color:var(--muted)">Spot recurring seasonal patterns</span></div>' +
