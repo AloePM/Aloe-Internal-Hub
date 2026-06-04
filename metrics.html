@@ -1199,7 +1199,7 @@ async function renderMaintenance() {
             var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
             var addr=((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'Unknown').slice(0,40);
             return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
-              '<td style="padding:8px 12px;font-weight:700;font-family:'DM Mono',monospace">'+c.workOrderNumber+'</td>' +
+              '<td style="padding:8px 12px;font-weight:700;font-weight:700">'+c.workOrderNumber+'</td>' +
               '<td style="padding:8px 12px;color:var(--ink2)">'+addr+'</td>' +
               '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-d);color:var(--amber)">'+c.stage+'</span></td>' +
             '</tr>';
