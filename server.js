@@ -1527,6 +1527,45 @@ app.get('/api/wo-analytics', async (req, res) => {
       });
     }
 
+    // Daily closed for last 4 weeks (Mon-Sun)
+    function getWeekStart(d) {
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(d); mon.setDate(diff); mon.setHours(0,0,0,0);
+      return mon;
+    }
+    const today = new Date();
+    const weeklyDays = [];
+    for (let w = 3; w >= 0; w--) {
+      const weekStart = getWeekStart(new Date(today - w * 7 * 86400000));
+      const days = [];
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(weekStart); day.setDate(weekStart.getDate() + d);
+        const dayStr = day.toISOString().slice(0, 10);
+        days.push(dayStr);
+      }
+      weeklyDays.push(days);
+    }
+    const closedByDay = {};
+    const openedByDay = {};
+    allWOs.forEach(wo => {
+      const closed = wo.dateClosed ? wo.dateClosed.slice(0, 10) : null;
+      const created = (wo.dateTimeCreated || '').slice(0, 10);
+      if (closed) closedByDay[closed] = (closedByDay[closed] || 0) + 1;
+      if (created) openedByDay[created] = (openedByDay[created] || 0) + 1;
+    });
+    const weeklyStats = weeklyDays.map(function(days) {
+      const weekStart = days[0];
+      return {
+        weekStart,
+        days: days.map(function(d) {
+          return { date: d, closed: closedByDay[d] || 0, opened: openedByDay[d] || 0 };
+        }),
+        totalClosed: days.reduce(function(a, d) { return a + (closedByDay[d] || 0); }, 0),
+        totalOpened: days.reduce(function(a, d) { return a + (openedByDay[d] || 0); }, 0)
+      };
+    });
+
     res.json({
       totalWOs: allWOs.length,
       avgCloseTime,
@@ -1538,7 +1577,8 @@ app.get('/api/wo-analytics', async (req, res) => {
       closedByWeek: weeks.map(w => closedByWeek[w] || 0),
       categoryTrends,
       avgCloseByCategory,
-      suggestions
+      suggestions,
+      weeklyStats
     });
   } catch(e) {
     console.error('WO analytics error:', e.message);
