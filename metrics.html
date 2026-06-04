@@ -1214,7 +1214,7 @@ async function renderMaintenance() {
             return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
               '<td style="padding:8px 12px;font-weight:700">'+wo.workOrderNumber+'</td>' +
               '<td style="padding:8px 12px;color:var(--ink2)">'+wo._unitAddress+'</td>' +
-              '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--blue-d);color:var(--blue)">Status '+wo.primaryWorkOrderStatusID+'</span></td>' +
+              '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--blue-d);color:var(--blue)">'+ ({1:'Pending',2:'Open',3:'Closed',4:'On Hold',5:'Cancelled'}[parseInt(wo.primaryWorkOrderStatusID)]||'Status '+wo.primaryWorkOrderStatusID) +'</span></td>' +
             '</tr>';
           }).join('') + '</tbody></table></div>';
       }
