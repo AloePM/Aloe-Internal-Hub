@@ -1184,15 +1184,23 @@ app.get('/api/test-slack', async (req, res) => {
 // ── Bill-to-WO Matcher ──
 async function findBillMatchedWOs() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  let allBills = [], pg = 1;
-  while (pg <= 15) {
-    const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, startDate: cutoff });
-    const batch = Array.isArray(data) ? data : (data && data.data) || [];
-    if (!batch.length) break;
-    allBills = allBills.concat(batch);
-    if (batch.length < 100) break;
-    pg++;
+  // Get unique vendor IDs from open WOs first, then fetch only their bills
+  const uniqueVendorIDs = [...new Set(openWOs.map(wo => String(wo.vendorContactID || '')).filter(Boolean))];
+  console.log('Bill sync: fetching bills for ' + uniqueVendorIDs.length + ' vendors');
+
+  let allBills = [];
+  for (const vendorID of uniqueVendorIDs) {
+    let pg = 1;
+    while (pg <= 3) {
+      const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, contactID: vendorID, startDate: cutoff });
+      const batch = Array.isArray(data) ? data : (data && data.data) || [];
+      if (!batch.length) break;
+      allBills = allBills.concat(batch);
+      if (batch.length < 100) break;
+      pg++;
+    }
   }
+  console.log('Bill sync: fetched ' + allBills.length + ' bills across ' + uniqueVendorIDs.length + ' vendors');
   let openWOs = [], wpg = 1;
   while (wpg <= 10) {
     const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: wpg });
