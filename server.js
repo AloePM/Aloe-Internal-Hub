@@ -1202,6 +1202,21 @@ async function findBillMatchedWOs() {
     if (batch.length < 100) break;
     wpg++;
   }
+  const uniqueVendorIDs = [...new Set(openWOs.map(wo => String(wo.vendorContactID || '')).filter(Boolean))];
+  let allBills = [];
+  for (const vendorID of uniqueVendorIDs) {
+    let pg = 1;
+    while (pg <= 3) {
+      const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, contactID: vendorID, startDate: cutoff });
+      const batch = Array.isArray(data) ? data : (data && data.data) || [];
+      if (!batch.length) break;
+      allBills = allBills.concat(batch);
+      if (batch.length < 100) break;
+      pg++;
+    }
+  }
+  console.log('Bill sync: ' + openWOs.length + ' open WOs, ' + allBills.length + ' bills fetched');
+
   const openWOMap = {};
   openWOs.forEach(wo => { openWOMap[String(wo.workOrderID)] = wo; });
   const openWOsByVendorProp = {};
