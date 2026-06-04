@@ -1119,7 +1119,7 @@ async function renderMaintenance() {
   });
   var vendorRows = Object.entries(byVendor)
     .map(function(e){ return {vendor:e[0],count:e[1].length,avg:Math.round(e[1].reduce(function(a,b){return a+b;},0)/e[1].length),oldest:Math.max.apply(null,e[1])}; })
-    .sort(function(a,b){return b.count-a.count;}).slice(0,12);
+    .sort(function(a,b){return b.count-a.count;});
 
   // Unassigned
   var unassigned = aptlyOpen.filter(function(c){
@@ -1176,6 +1176,49 @@ async function renderMaintenance() {
     // Sync bar
     '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:500;background:'+syncBg+';color:'+syncColor+';border:1px solid '+syncColor+'44">' +
     (diff===0?'✓ ':'⚠ ') + syncMsg + '</div>' +
+
+    // Show which WOs are mismatched
+    (diff > 0 ? (function() {
+      var rvOpenNumbers = new Set(rvOpen.map(function(wo){ return String(wo.workOrderNumber||''); }));
+      var aptlyOpenNumbers = new Set(aptlyOpen.map(function(c){ return String(c.workOrderNumber||''); }));
+      var inAptlyNotRV = aptlyOpen.filter(function(c){
+        var n = String(c.workOrderNumber||'');
+        return n && !rvOpenNumbers.has(n);
+      });
+      var inRVNotAptly = rvOpen.filter(function(wo){
+        var n = String(wo.workOrderNumber||'');
+        return n && !aptlyOpenNumbers.has(n);
+      });
+      var html = '';
+      if (inAptlyNotRV.length > 0) {
+        html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>In Aptly but NOT in Rentvine open list</div>' +
+          '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--amber-d);color:var(--amber);border-radius:20px">'+inAptlyNotRV.length+'</span></div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px">WO #</th><th style="padding:6px 12px">Property</th><th style="padding:6px 12px">Stage</th></tr></thead><tbody>' +
+          inAptlyNotRV.map(function(c,i){
+            var loc=Array.isArray(c.location)?c.location:(c.location?[c.location]:[]);
+            var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
+            var addr=((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'Unknown').slice(0,40);
+            return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+              '<td style="padding:8px 12px;font-weight:700;font-family:'DM Mono',monospace">'+c.workOrderNumber+'</td>' +
+              '<td style="padding:8px 12px;color:var(--ink2)">'+addr+'</td>' +
+              '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-d);color:var(--amber)">'+c.stage+'</span></td>' +
+            '</tr>';
+          }).join('') + '</tbody></table></div>';
+      }
+      if (inRVNotAptly.length > 0) {
+        html += '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.BLUE+'"></div>In Rentvine but NOT in Aptly open list</div>' +
+          '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--blue-d);color:var(--blue);border-radius:20px">'+inRVNotAptly.length+'</span></div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px">WO #</th><th style="padding:6px 12px">Property</th><th style="padding:6px 12px">Status</th></tr></thead><tbody>' +
+          inRVNotAptly.map(function(wo,i){
+            return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+              '<td style="padding:8px 12px;font-weight:700;font-family:'DM Mono',monospace">'+wo.workOrderNumber+'</td>' +
+              '<td style="padding:8px 12px;color:var(--ink2)">'+wo._unitAddress+'</td>' +
+              '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--blue-d);color:var(--blue)">Status '+wo.primaryWorkOrderStatusID+'</span></td>' +
+            '</tr>';
+          }).join('') + '</tbody></table></div>';
+      }
+      return html;
+    })() : '') +
 
     // Age + Category
     '<div class="grid g-2" style="margin-bottom:14px">' +
