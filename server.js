@@ -1184,23 +1184,6 @@ app.get('/api/test-slack', async (req, res) => {
 // ── Bill-to-WO Matcher ──
 async function findBillMatchedWOs() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  // Get unique vendor IDs from open WOs first, then fetch only their bills
-  const uniqueVendorIDs = [...new Set(openWOs.map(wo => String(wo.vendorContactID || '')).filter(Boolean))];
-  console.log('Bill sync: fetching bills for ' + uniqueVendorIDs.length + ' vendors');
-
-  let allBills = [];
-  for (const vendorID of uniqueVendorIDs) {
-    let pg = 1;
-    while (pg <= 3) {
-      const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, contactID: vendorID, startDate: cutoff });
-      const batch = Array.isArray(data) ? data : (data && data.data) || [];
-      if (!batch.length) break;
-      allBills = allBills.concat(batch);
-      if (batch.length < 100) break;
-      pg++;
-    }
-  }
-  console.log('Bill sync: fetched ' + allBills.length + ' bills across ' + uniqueVendorIDs.length + ' vendors');
   let openWOs = [], wpg = 1;
   while (wpg <= 10) {
     const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: wpg });
@@ -1318,6 +1301,23 @@ async function runBillSync() {
     const slackText = '*🧾 Invoice → WO Match — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*\n*' + matched.length + ' open WO(s) have invoices — likely complete, please close:*\n' + lines + '\n\n_Matched by vendor + property · Runs nightly 11pm AZ_';
     await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText }) });
     console.log('Bill sync: Slack alert sent for ' + matched.length + ' WOs');
+    // Get unique vendor IDs from open WOs, then fetch only their bills
+  const uniqueVendorIDs = [...new Set(openWOs.map(wo => String(wo.vendorContactID || '')).filter(Boolean))];
+  console.log('Bill sync: fetching bills for ' + uniqueVendorIDs.length + ' vendors');
+
+  let allBills = [];
+  for (const vendorID of uniqueVendorIDs) {
+    let pg = 1;
+    while (pg <= 3) {
+      const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, contactID: vendorID, startDate: cutoff });
+      const batch = Array.isArray(data) ? data : (data && data.data) || [];
+      if (!batch.length) break;
+      allBills = allBills.concat(batch);
+      if (batch.length < 100) break;
+      pg++;
+    }
+  }
+  console.log('Bill sync: fetched ' + allBills.length + ' bills across ' + uniqueVendorIDs.length + ' vendors');
   } catch(e) { console.error('Bill sync error:', e.message); }
 }
 // ── End Bill-to-WO Matcher ──
