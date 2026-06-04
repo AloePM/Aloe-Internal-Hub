@@ -1074,10 +1074,12 @@ async function renderMaintenance() {
   // Load live data
   var aptlyAll, rvAll, billData;
   try {
-    var results = await Promise.all([loadWOData(false), fetch('/api/bill-matched-wos').then(function(r){return r.json();})]);
+    var results = await Promise.all([loadWOData(false), fetch('/api/bill-matched-wos').then(function(r){return r.json();}), fetch('/api/wo-analytics').then(function(r){return r.json();})]);
     aptlyAll = results[0].aptly;
     rvAll = results[0].rv;
     billData = results[1];
+    var analytics = results[2] || {};
+    var analytics = results[2];
   } catch(e) {
     document.getElementById('maint-live').innerHTML = '<div style="color:var(--red);font-size:13px">Error loading live data: '+e.message+'</div>';
     return;
@@ -1328,7 +1330,82 @@ async function renderMaintenance() {
       }).join('')+'</tbody></table></div>'
     : '') +
 
-    // WO Sync mismatches
+    // WO Analytics section
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Work Orders Opened vs Closed — 12 Months</div>' +
+    '<div style="display:flex;gap:16px;align-items:center">' +
+    '<span style="font-size:11px;color:var(--muted)">Avg close time: <strong style="color:var(--ink)">'+(analytics.avgCloseTime||'?')+'d</strong></span>' +
+    '<span style="font-size:11px;color:var(--muted)">Total (12mo): <strong style="color:var(--ink)">'+(analytics.totalWOs||0)+'</strong></span>' +
+    '</div></div>' +
+    '<div class="chart-wrap" style="height:220px"><canvas id="wo-monthly-chart"></canvas></div>' +
+    '<div class="legend" style="margin-top:8px">' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Opened</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Closed</div>' +
+    '</div></div>' +
+
+    '<div class="grid g-2" style="margin-bottom:14px">' +
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Weekly Opened vs Closed (12 weeks)</div></div>' +
+    '<div class="chart-wrap" style="height:180px"><canvas id="wo-weekly-chart"></canvas></div>' +
+    '<div class="legend" style="margin-top:8px">' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL+'"></div>Opened</div>' +
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Closed</div>' +
+    '</div></div>' +
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Avg Days to Close by Category</div></div>' +
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+    '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px;text-align:left">Category</th><th style="padding:6px 12px;text-align:right">Avg Days</th><th style="padding:6px 12px;text-align:right">WOs Closed</th><th style="padding:6px 12px">Rating</th></tr></thead><tbody>' +
+    Object.entries(analytics.avgCloseByCategory||{}).sort(function(a,b){return b[1].avg-a[1].avg;}).map(function(e,i){
+      var cat=e[0], avg=e[1].avg, cnt=e[1].count;
+      var sc=avg<=7?C.GREEN:avg<=14?C.AMBER:C.RED;
+      var sb=avg<=7?'var(--green-d)':avg<=14?'var(--amber-d)':'var(--red-d)';
+      var label=avg<=7?'Fast':avg<=14?'Normal':'Slow';
+      return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+        '<td style="padding:8px 12px;font-weight:500">'+cat+'</td>' +
+        '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+(avg>14?C.RED:avg>7?C.AMBER:C.GREEN)+'">'+avg+'d</td>' +
+        '<td style="padding:8px 12px;text-align:right;color:var(--muted)">'+cnt+'</td>' +
+        '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:'+sb+';color:'+sc+'">'+label+'</span></td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div></div>' +
+    '</div>' +
+
+    // Seasonal HVAC heatmap
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Seasonal Category Trends — Last 12 Months</div>' +
+    '<span style="font-size:11px;color:var(--muted)">Spot recurring seasonal patterns</span></div>' +
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">' +
+    '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase">' +
+    '<th style="padding:6px 12px;text-align:left;min-width:120px">Category</th>' +
+    (analytics.months||[]).map(function(m){ var mo=m.slice(5); var names={'01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun','07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec'}; return '<th style="padding:6px 8px;text-align:center">'+names[mo]+'</th>'; }).join('') +
+    '</tr></thead><tbody>' +
+    Object.entries(analytics.categoryTrends||{}).filter(function(e){ return e[1].some(function(v){return v>0;}); }).map(function(e,ri){
+      var cat=e[0], vals=e[1];
+      var maxVal=Math.max.apply(null,vals.concat([1]));
+      return '<tr style="border-bottom:1px solid var(--rule)'+(ri%2===1?';background:var(--card2)':'')+'">' +
+        '<td style="padding:6px 12px;font-weight:500;color:var(--ink2)">'+cat+'</td>' +
+        vals.map(function(v){
+          var intensity=maxVal>0?v/maxVal:0;
+          var bg=v===0?'transparent':'rgba(60,195,225,'+(0.15+intensity*0.75)+')';
+          var color=intensity>0.6?'var(--ink)':'var(--ink2)';
+          return '<td style="padding:6px 8px;text-align:center;background:'+bg+';color:'+color+';font-weight:'+(v>0?'600':'400')+'">'+（v>0?v:''）+'</td>';
+        }).join('') +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div></div>' +
+
+    // AI Suggestions
+    ((analytics.suggestions||[]).length > 0 ?
+      '<div class="card" style="margin-bottom:14px;border:1px solid var(--teal)44"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:var(--teal)"></div>AI Insights & Suggestions</div></div>' +
+      (analytics.suggestions||[]).map(function(s){
+        var icon=s.type==='warning'?'⚠':s.type==='success'?'✓':'ℹ';
+        var color=s.type==='warning'?C.AMBER:s.type==='success'?C.GREEN:C.BLUE;
+        var bg=s.type==='warning'?'var(--amber-d)':s.type==='success'?'var(--green-d)':'var(--blue-d)';
+        return '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--rule)">' +
+          '<span style="font-size:16px;flex-shrink:0">'+icon+'</span>' +
+          '<div><div style="font-size:12px;font-weight:600;color:'+color+';margin-bottom:2px">'+s.category+'</div>' +
+          '<div style="font-size:12px;color:var(--ink2)">'+s.message+'</div></div>' +
+        '</div>';
+      }).join('') +
+      '</div>'
+    : '') +
+
     '<div id="wo-sync-detail"></div>';
 
   document.getElementById('maint-live').outerHTML = liveHtml;
@@ -1345,6 +1422,12 @@ async function renderMaintenance() {
         options:Object.assign({},CD,{indexAxis:'y',scales:{x:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}},y:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}}}})
       });
       catEl.parentElement.style.height='220px';
+    }
+    if (analytics.months && analytics.months.length) {
+      var moLabels=analytics.months.map(function(m){return sm(m);});
+      mkBar('wo-monthly-chart',moLabels,[{label:'Opened',data:analytics.openedByMonth||[],backgroundColor:C.TEAL+'cc'},{label:'Closed',data:analytics.closedByMonth||[],backgroundColor:C.GREEN+'cc'}],220);
+      var wkLabels=(analytics.weeks||[]).map(function(w){return w.slice(5);});
+      mkBar('wo-weekly-chart',wkLabels,[{label:'Opened',data:analytics.openedByWeek||[],backgroundColor:C.TEAL+'cc'},{label:'Closed',data:analytics.closedByWeek||[],backgroundColor:C.GREEN+'cc'}],180);
     }
   }, 50);
 }
