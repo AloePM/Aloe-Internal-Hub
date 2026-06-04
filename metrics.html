@@ -995,11 +995,12 @@ async function loadWOSync() {
   if (section) section.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Comparing Aptly vs Rentvine...</div>';
   try {
     var resp = await fetch('/api/wo-sync/dry-run');
+    var billResp = await fetch('/api/bill-matched-wos');
     var data = await resp.json();
+    var billData = await billResp.json();
     var toClose = data.wouldClose || [];
     var missing = data.missingInRentvine || [];
-    var aptlyOpen = data.aptlyClosedCount !== undefined ? data.rvOpenCount : '?';
-    var rvOpen = data.rvOpenCount || '?';
+    var billMatched = billData.items || [];
     var diff = toClose.length + missing.length;
 
     var syncHtml = '<div class="kpi-grid g3" style="margin-bottom:14px">' +
