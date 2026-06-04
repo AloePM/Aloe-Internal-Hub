@@ -153,7 +153,6 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">Portfolio Growth</button>
  <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')">Maintenance</button>
   <button class="tab" data-tab="retention" onclick="switchTab('retention')">Retention</button>
-  <button class="tab" data-tab="workorders" onclick="switchTab('workorders')">Work Order Analytics</button>
 </div>
 
 <div id="loading" class="loading-wrap">
@@ -964,120 +963,17 @@ function renderPortfolio() {
 }
 
 // ---- MAINTENANCE TAB ----
-function renderMaintenance() {
-  var wo=D.workOrders;
-  var html = '<div class="main">' +
-    '<div class="page-header">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">' +
-      '<div class="page-title">Maintenance</div>' +
-      '<button class="btn btn-teal" onclick="loadWOSync()" id="wo-sync-btn" style="font-size:13px;padding:8px 18px">↺ Check WO Sync</button>' +
-      '</div>' +
-    '</div>' +
-    '<div class="kpi-grid g3">' +
-      kpi('Open Work Orders', fmt(wo.openTotal), 'all active stages (Aptly)', C.AMBER) +
-      kpi('Unassigned', fmt(wo.unassigned), 'no vendor assigned', wo.unassigned>0?C.RED:C.GREEN) +
-      kpi('Assigned', fmt(wo.openTotal-wo.unassigned), 'vendor assigned', C.GREEN) +
-    '</div>' +
-    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Work Orders by Stage</div></div>' +
-    ((wo.byStage||[]).length ? barRows((wo.byStage||[]).map(function(s){return {label:s.stage,count:s.count};}), C.AMBER) : '<div style="color:var(--ghost);font-size:13px">No open work orders</div>') +
-    '</div>' +
-    '<div id="wo-sync-section">' +
-      '<div style="color:var(--muted);font-size:13px;padding:12px 0">Click "Check Sync Status" to compare Aptly vs Rentvine work orders.</div>' +
-    '</div>' +
-  '</div>';
-  document.getElementById('app').innerHTML = html;
-}
-
-async function loadWOSync() {
-  var btn = document.getElementById('wo-sync-btn');
-  var section = document.getElementById('wo-sync-section');
-  if (btn) { btn.textContent = 'Loading...'; btn.disabled = true; }
-  if (section) section.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Comparing Aptly vs Rentvine...</div>';
-  try {
-    var resp = await fetch('/api/wo-sync/dry-run');
-    var billResp = await fetch('/api/bill-matched-wos');
-    var data = await resp.json();
-    var billData = await billResp.json();
-    var toClose = data.wouldClose || [];
-    var missing = data.missingInRentvine || [];
-    var billMatched = billData.items || [];
-    var diff = toClose.length + missing.length;
-
-    var syncHtml = '<div class="kpi-grid g3" style="margin-bottom:14px">' +
-      kpi('Aptly Open', data.rvOpenCount || '?', 'non-closed WOs', C.TEAL2) +
-      kpi('Sync Gap', diff, diff===0?'systems in sync':'mismatches found', diff===0?C.GREEN:C.RED) +
-      kpi('Need Action', toClose.length + missing.length, 'WOs to reconcile', diff>0?C.AMBER:C.GREEN) +
-    '</div>';
-
-    if (toClose.length > 0) {
-      syncHtml += '<div class="card" style="margin-bottom:14px">' +
-        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Cancelled in Aptly — Still Open in Rentvine</div>' +
-        '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+toClose.length+' WOs</span></div>' +
-        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
-        '<th style="padding:6px 12px;text-align:left">WO #</th>' +
-        '<th style="padding:6px 12px;text-align:left">Address</th>' +
-        '<th style="padding:6px 12px;text-align:left">Aptly Stage</th>' +
-        '<th style="padding:6px 12px;text-align:left">Action</th>' +
-        '</tr></thead><tbody>' +
-        toClose.map(function(r, i) {
-          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
-            '<td style="padding:8px 12px;font-weight:700;font-family:\'DM Mono\',monospace">'+r.woNumber+'</td>' +
-            '<td style="padding:8px 12px;color:var(--ink2)">'+r.address+'</td>' +
-            '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">'+r.aptlyStage+'</span></td>' +
-            '<td style="padding:8px 12px"><a href="https://aloepm.rentvine.com/maintenance/work-orders/'+r.rvWorkOrderId+'" target="_blank" style="font-size:11px;color:var(--teal2);font-weight:600;text-decoration:none">Open in Rentvine →</a></td>' +
-          '</tr>';
-        }).join('') +
-        '</tbody></table></div></div>';
-    }
-
-    if (missing.length > 0) {
-      syncHtml += '<div class="card" style="margin-bottom:14px">' +
-        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Open in Aptly — Missing from Rentvine</div>' +
-        '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--amber-d);color:var(--amber);border-radius:20px">'+missing.length+' WOs</span></div>' +
-        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
-        '<th style="padding:6px 12px;text-align:left">WO #</th>' +
-        '<th style="padding:6px 12px;text-align:left">Address</th>' +
-        '<th style="padding:6px 12px;text-align:left">Stage</th>' +
-        '</tr></thead><tbody>' +
-        missing.map(function(r, i) {
-          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
-            '<td style="padding:8px 12px;font-weight:700;font-family:\'DM Mono\',monospace">'+r.woNumber+'</td>' +
-            '<td style="padding:8px 12px;color:var(--ink2)">'+r.address+'</td>' +
-            '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--amber-d);color:var(--amber);font-weight:600">'+r.aptlyStage+'</span></td>' +
-          '</tr>';
-        }).join('') +
-        '</tbody></table></div></div>';
-    }
-
-    if (billMatched.length > 0) {
-      syncHtml += '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Invoice Received — WO Likely Complete</div><span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--green-d);color:var(--green);border-radius:20px">'+billMatched.length+' WOs</span></div><div style="font-size:12px;color:var(--muted);margin-bottom:10px">These open WOs have a vendor invoice — they may be complete and ready to close.</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px;text-align:left">WO #</th><th style="padding:6px 12px;text-align:left">Address</th><th style="padding:6px 12px;text-align:left">Vendor</th><th style="padding:6px 12px;text-align:left">Match</th><th style="padding:6px 12px;text-align:left">Bill</th><th style="padding:6px 12px;text-align:left">Action</th></tr></thead><tbody>'+billMatched.map(function(r,i){return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">'+'<td style="padding:8px 12px;font-weight:700">'+r.woNumber+'</td>'+'<td style="padding:8px 12px;color:var(--ink2)">'+r.address+'</td>'+'<td style="padding:8px 12px;color:var(--muted)">'+r.vendorName+'</td>'+'<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green)">'+r.matchType+'</span></td>'+'<td style="padding:8px 12px"><a href="'+(r.billUrl||'#')+'" target="_blank" style="color:var(--green);font-weight:600;font-size:11px;text-decoration:none">View Bill</a> <span style="color:var(--muted);font-size:11px">'+r.billDate+'</span></td>'+'<td style="padding:8px 12px"><a href="https://aloepm.rentvine.com/maintenance/work-orders/'+r.rvWorkOrderId+'" target="_blank" style="font-size:11px;color:var(--teal2);font-weight:600;text-decoration:none">Open WO</a></td>'+'</tr>';}).join('')+'</tbody></table></div></div>';
-    }
-    if (diff === 0 && billMatched.length === 0) {
-      syncHtml += '<div style="padding:14px;background:var(--green-d);border:1px solid '+C.GREEN+'44;border-radius:var(--r2);color:var(--green);font-size:13px;font-weight:600">✓ Aptly and Rentvine are in sync — no action needed</div>';
-    }
-
-    if (section) section.innerHTML = syncHtml;
-  } catch(e) {
-    if (section) section.innerHTML = '<div style="color:var(--red);font-size:13px">Error loading sync status: '+e.message+'</div>';
-  }
-  if (btn) { btn.textContent = '↺ Check Sync Status'; btn.disabled = false; }
-}
-// ---- WORK ORDERS TAB ----
 var _woData = null;
 
 function stripHtml(s) {
   return (s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 }
-
 function daysSince(dateStr) {
   if (!dateStr) return null;
   var d = new Date(dateStr);
   if (isNaN(d)) return null;
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
-
 function guessCategory(text) {
   var t = (text||'').toLowerCase();
   if (/hvac|ac |air.?cond|heat|furnace|cooling/.test(t)) return 'HVAC';
@@ -1092,18 +988,18 @@ function guessCategory(text) {
   if (/roof|gutter|exterior|stucco/.test(t)) return 'Roof / Exterior';
   return 'Other';
 }
+var HANDYMAN_CATS = ['Paint / Drywall','Lock / Door / Window','Cleaning','Other'];
+function isHandymanCat(cat) { return HANDYMAN_CATS.indexOf(cat) > -1; }
 
 function isAptlyClosed(c) {
   return c.archived || /^(closed|cancelled|completed|rejected|done)/i.test(c.stage||'');
 }
-
 function isRVClosed(wo) {
   var sid = parseInt(wo.primaryWorkOrderStatusID||0);
   return sid===3||sid===4||sid===5||!!wo.closedDate||!!wo.dateClosed;
 }
-
 function ageBadge(days) {
-  if (days===null||days===undefined) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:#eef2f2;color:var(--muted)">?</span>';
+  if (days===null||days===undefined) return '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--card2);color:var(--muted)">?</span>';
   var bg,fg;
   if (days<=3){bg='var(--green-d)';fg='var(--green)';}
   else if(days<=14){bg='var(--blue-d)';fg='var(--blue)';}
@@ -1128,7 +1024,6 @@ async function fetchAptlyWOs() {
   }
   return all;
 }
-
 async function fetchRVWOs() {
   var all = [], pg = 1;
   while (pg <= 15) {
@@ -1140,8 +1035,7 @@ async function fetchRVWOs() {
     rawBatch.forEach(function(rec) {
       var wo = rec.workOrder || rec;
       if (wo.workOrderID) {
-        wo._unitAddress = (rec.unit&&(rec.unit.address||rec.unit.name))||'';
-        wo._vendorName = (rec.contact&&rec.contact.name)||'';
+        wo._unitAddress = (rec.unit&&(rec.unit.address||rec.unit.name))||(rec.property&&rec.property.address)||wo.unitAddress||'';
         all.push(wo);
       }
     });
@@ -1150,7 +1044,6 @@ async function fetchRVWOs() {
   }
   return all;
 }
-
 async function loadWOData(forceReload) {
   if (_woData && !forceReload) return _woData;
   var results = await Promise.all([fetchAptlyWOs(), fetchRVWOs()]);
@@ -1158,31 +1051,41 @@ async function loadWOData(forceReload) {
   return _woData;
 }
 
-async function renderWorkOrders() {
-  document.getElementById('app').innerHTML =
-    '<div class="main"><div class="loading-wrap"><div class="spinner"></div>' +
-    '<div class="loading-text">Loading work orders from Aptly and Rentvine...</div></div></div>';
+async function renderMaintenance() {
+  var wo = D.workOrders;
 
-  var data;
+  // Show skeleton immediately with metrics cache data
+  var skelHtml = '<div class="main">' +
+    '<div class="page-header"><div class="page-title">Maintenance</div>' +
+    '<div class="page-sub">Live from Aptly + Rentvine</div></div>' +
+    '<div class="kpi-grid g3">' +
+      kpi('Open Work Orders', fmt(wo.openTotal), 'all active stages (Aptly)', C.AMBER) +
+      kpi('Unassigned', fmt(wo.unassigned), 'no vendor assigned', wo.unassigned>0?C.RED:C.GREEN) +
+      kpi('Assigned', fmt(wo.openTotal-wo.unassigned), 'vendor assigned', C.GREEN) +
+    '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Work Orders by Stage</div></div>' +
+    ((wo.byStage||[]).length ? barRows((wo.byStage||[]).map(function(s){return {label:s.stage,count:s.count};}), C.AMBER) : '<div style="color:var(--ghost);font-size:13px">No open work orders</div>') +
+    '</div>' +
+    '<div id="maint-live" style="text-align:center;padding:24px;color:var(--muted);font-size:13px"><div class="spinner" style="margin:0 auto 10px"></div>Loading live work order data...</div>' +
+  '</div>';
+  document.getElementById('app').innerHTML = skelHtml;
+
+  // Load live data
+  var aptlyAll, rvAll, billData;
   try {
-    data = await loadWOData(false);
+    var results = await Promise.all([loadWOData(false), fetch('/api/bill-matched-wos').then(function(r){return r.json();})]);
+    aptlyAll = results[0].aptly;
+    rvAll = results[0].rv;
+    billData = results[1];
   } catch(e) {
-    document.getElementById('app').innerHTML =
-      '<div class="main"><div class="error-wrap">Failed to load work order data: '+e.message+'</div></div>';
+    document.getElementById('maint-live').innerHTML = '<div style="color:var(--red);font-size:13px">Error loading live data: '+e.message+'</div>';
     return;
   }
 
-  var aptlyAll = data.aptly;
-  var rvAll = data.rv;
   var aptlyOpen = aptlyAll.filter(function(c){ return !isAptlyClosed(c); });
   var rvOpen = rvAll.filter(function(wo){ return !isRVClosed(wo); });
+  var billMatched = billData.items || [];
   var diff = Math.abs(aptlyOpen.length - rvOpen.length);
-
-  // Sync bar
-  var syncColor = diff===0 ? C.GREEN : diff<=5 ? C.AMBER : C.RED;
-  var syncMsg = diff===0
-    ? 'Systems in sync — both show '+aptlyOpen.length+' open work orders'
-    : 'Sync gap: Aptly shows '+aptlyOpen.length+' open, Rentvine shows '+rvOpen.length+' ('+diff+' difference)';
 
   // Age buckets
   var ages = aptlyOpen.map(function(c){ return daysSince(c.createdAt)||0; });
@@ -1209,15 +1112,14 @@ async function renderWorkOrders() {
   // Vendor leaderboard
   var byVendor = {};
   aptlyOpen.forEach(function(c){
-    var vArr = Array.isArray(c.vendor) ? c.vendor : (c.vendor?[c.vendor]:[]);
+    var vArr = Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]);
     var vName = (vArr[0]&&(vArr[0].name||vArr[0]))||'Unassigned';
     if (!byVendor[vName]) byVendor[vName]=[];
     byVendor[vName].push(daysSince(c.createdAt)||0);
   });
   var vendorRows = Object.entries(byVendor)
     .map(function(e){ return {vendor:e[0],count:e[1].length,avg:Math.round(e[1].reduce(function(a,b){return a+b;},0)/e[1].length),oldest:Math.max.apply(null,e[1])}; })
-    .sort(function(a,b){return b.count-a.count;})
-    .slice(0,12);
+    .sort(function(a,b){return b.count-a.count;}).slice(0,12);
 
   // Unassigned
   var unassigned = aptlyOpen.filter(function(c){
@@ -1237,165 +1139,168 @@ async function renderWorkOrders() {
     };
   }).filter(function(r){return r.days>=30;}).sort(function(a,b){return b.days-a.days;}).slice(0,10);
 
-  var avgAge = ages.length ? Math.round(ages.reduce(function(a,b){return a+b;},0)/ages.length) : 0;
-  var maxAge = ages.length ? Math.max.apply(null,ages) : 0;
+  // Duplicate WOs — same property + same vendor (or unassigned handyman-type)
+  var byPropVendor = {};
+  aptlyOpen.forEach(function(c){
+    var loc=Array.isArray(c.location)?c.location:(c.location?[c.location]:[]);
+    var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
+    var addr=((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'').trim();
+    var vArr=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]);
+    var vendor=(vArr[0]&&vArr[0].name)||'';
+    var cat=guessCategory(stripHtml(c.description||c.name||''));
+    var key;
+    if (vendor) {
+      key = addr + '||' + vendor;
+    } else if (isHandymanCat(cat)) {
+      key = addr + '||__HANDYMAN__';
+      vendor = 'Unassigned (handyman-type)';
+    } else {
+      return;
+    }
+    if (!addr) return;
+    if (!byPropVendor[key]) byPropVendor[key] = { addr: addr, vendor: vendor, wos: [], isHandyman: !vArr.length };
+    byPropVendor[key].wos.push({ num: c.workOrderNumber||'?', id: c._id, desc: stripHtml(c.description||c.name||'').slice(0,50), days: daysSince(c.createdAt)||0 });
+  });
+  var duplicates = Object.values(byPropVendor).filter(function(g){ return g.wos.length >= 2; })
+    .sort(function(a,b){ return b.wos.length - a.wos.length; });
 
-  // Stage breakdown
-  var stages = {};
-  aptlyOpen.forEach(function(c){ var s=c.stage||'No stage'; stages[s]=(stages[s]||0)+1; });
-  var stageSorted = Object.entries(stages).sort(function(a,b){return b[1]-a[1];});
+  // Sync status
+  var syncColor = diff===0 ? C.GREEN : C.RED;
+  var syncBg = diff===0 ? 'var(--green-d)' : 'var(--red-d)';
+  var syncMsg = diff===0
+    ? 'Aptly and Rentvine are in sync (' + aptlyOpen.length + ' open)'
+    : 'Sync gap: Aptly ' + aptlyOpen.length + ' open vs Rentvine ' + rvOpen.length + ' open (' + diff + ' difference)';
 
-  var html = '<div class="main">' +
-    '<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
-      '<div><div class="page-title">Work Order Analytics</div>' +
-      '<div class="page-sub">Live from Aptly (workflow) and Rentvine (records)</div></div>' +
-      '<button class="btn btn-ghost" onclick="_woData=null;renderWorkOrders()" style="font-size:12px">↺ Reload WO Data</button>' +
-    '</div>' +
+  var liveHtml =
 
-    // Sync alert
-    '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:500;background:'+(diff===0?'var(--green-d)':'var(--amber-d)')+';color:'+syncColor+';border:1px solid '+(diff===0?C.GREEN+'44':C.AMBER+'44')+'">' +
-      '<span>'+(diff===0?'✓':'⚠')+'</span><span>'+syncMsg+'</span>' +
-    '</div>' +
+    // Sync bar
+    '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:500;background:'+syncBg+';color:'+syncColor+';border:1px solid '+syncColor+'44">' +
+    (diff===0?'✓ ':'⚠ ') + syncMsg + '</div>' +
 
-    // KPI row
-    '<div class="kpi-grid g5" style="margin-bottom:16px">' +
-      kpi('Aptly Open', aptlyOpen.length, 'active work orders', C.TEAL2) +
-      kpi('Rentvine Open', rvOpen.length, 'non-closed WOs', C.BLUE) +
-      kpi('Unassigned', unassigned.length+(unassigned.length<aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length?'':'')||aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length, 'no vendor yet', aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length>5?C.RED:C.GREEN) +
-      kpi('Avg Age (open)', avgAge+'d', 'days since created', avgAge>14?C.AMBER:C.GREEN) +
-      kpi('Oldest Open', maxAge+'d', 'longest open WO', maxAge>30?C.RED:C.AMBER) +
-    '</div>' +
-
-    // Source comparison
+    // Age + Category
     '<div class="grid g-2" style="margin-bottom:14px">' +
-      '<div class="card">' +
-        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Work Order Age Distribution</div></div>' +
-        Object.entries(ageBuckets).map(function(e){
-          var pct = Math.round((e[1]/ageMax)*100);
-          return '<div class="bar-row"><div class="bar-row-label">'+e[0]+'</div>' +
-            '<div class="bar-row-track"><div class="bar-row-fill" style="width:'+pct+'%;background:'+ageColors[e[0]]+'"></div></div>' +
-            '<div class="bar-row-count">'+e[1]+'</div></div>';
-        }).join('') +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Work Order Age Distribution</div></div>' +
+      Object.entries(ageBuckets).map(function(e){
+        var pct=Math.round((e[1]/ageMax)*100);
+        return '<div class="bar-row"><div class="bar-row-label">'+e[0]+'</div><div class="bar-row-track"><div class="bar-row-fill" style="width:'+pct+'%;background:'+ageColors[e[0]]+'"></div></div><div class="bar-row-count">'+e[1]+'</div></div>';
+      }).join('') +
       '</div>' +
-      '<div class="card">' +
-        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Category Breakdown</div></div>' +
-        '<div class="chart-wrap" style="height:220px"><canvas id="wo-cat-chart" role="img" aria-label="Work orders by category"></canvas></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Category Breakdown</div></div>' +
+      '<div class="chart-wrap" style="height:220px"><canvas id="maint-cat-chart"></canvas></div>' +
       '</div>' +
     '</div>' +
 
     // Vendor leaderboard
-    '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL+'"></div>Vendor Leaderboard</div>' +
-      '<span style="font-size:11px;color:var(--muted)">Open work orders only</span></div>' +
-      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
-          '<th style="padding:6px 12px;text-align:left;font-weight:600">Vendor</th>' +
-          '<th style="padding:6px 12px;text-align:right;font-weight:600">Open WOs</th>' +
-          '<th style="padding:6px 12px;text-align:right;font-weight:600">Avg days open</th>' +
-          '<th style="padding:6px 12px;text-align:right;font-weight:600">Oldest (days)</th>' +
-          '<th style="padding:6px 12px;text-align:left;font-weight:600">Status</th>' +
-        '</tr></thead><tbody>' +
-        vendorRows.map(function(r,i){
-          var statusColor = r.vendor==='Unassigned'?C.AMBER:r.avg>30?C.RED:r.avg>14?C.AMBER:C.GREEN;
-          var statusLabel = r.vendor==='Unassigned'?'Needs assignment':r.avg>30?'Overdue':r.avg>14?'Active':'On track';
-          var statusBg = r.vendor==='Unassigned'?'var(--amber-d)':r.avg>30?'var(--red-d)':r.avg>14?'var(--amber-d)':'var(--green-d)';
-          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
-            '<td style="padding:8px 12px;font-weight:500;color:var(--ink2)">'+r.vendor+'</td>' +
-            '<td style="padding:8px 12px;text-align:right;font-weight:700;font-family:\'DM Mono\',monospace">'+r.count+'</td>' +
-            '<td style="padding:8px 12px;text-align:right;font-family:\'DM Mono\',monospace;color:'+(r.avg>14?C.AMBER:C.GREEN)+'">'+r.avg+'d</td>' +
-            '<td style="padding:8px 12px;text-align:right;font-family:\'DM Mono\',monospace;color:'+(r.oldest>30?C.RED:C.AMBER)+'">'+r.oldest+'d</td>' +
-            '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+statusBg+';color:'+statusColor+';font-weight:600">'+statusLabel+'</span></td>' +
-          '</tr>';
-        }).join('') +
-        '</tbody></table></div>' +
-    '</div>' +
+    '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL+'"></div>Vendor Leaderboard</div>' +
+    '<span style="font-size:11px;color:var(--muted)">Open WOs only</span></div>' +
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+    '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
+    '<th style="padding:6px 12px;text-align:left">Vendor</th><th style="padding:6px 12px;text-align:right">Open</th><th style="padding:6px 12px;text-align:right">Avg days</th><th style="padding:6px 12px;text-align:right">Oldest</th><th style="padding:6px 12px">Status</th>' +
+    '</tr></thead><tbody>' +
+    vendorRows.map(function(r,i){
+      var sc=r.vendor==='Unassigned'?C.AMBER:r.avg>30?C.RED:r.avg>14?C.AMBER:C.GREEN;
+      var sb=r.vendor==='Unassigned'?'var(--amber-d)':r.avg>30?'var(--red-d)':r.avg>14?'var(--amber-d)':'var(--green-d)';
+      var sl=r.vendor==='Unassigned'?'Needs assignment':r.avg>30?'Overdue':r.avg>14?'Active':'On track';
+      return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+        '<td style="padding:8px 12px;font-weight:500;color:var(--ink2)">'+r.vendor+'</td>' +
+        '<td style="padding:8px 12px;text-align:right;font-weight:700">'+r.count+'</td>' +
+        '<td style="padding:8px 12px;text-align:right;color:'+(r.avg>14?C.AMBER:C.GREEN)+'">'+r.avg+'d</td>' +
+        '<td style="padding:8px 12px;text-align:right;color:'+(r.oldest>30?C.RED:C.AMBER)+'">'+r.oldest+'d</td>' +
+        '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+sb+';color:'+sc+';font-weight:600">'+sl+'</span></td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody></table></div></div>' +
 
-    // Stage breakdown + unassigned side by side
+    // Duplicate WOs
+    (duplicates.length > 0 ?
+      '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.PURPLE+'"></div>Duplicate Work Orders — Consider Merging</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--purple-d);color:'+C.PURPLE+';border-radius:20px">'+duplicates.length+' groups</span></div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Same property + same vendor (or unassigned handyman-type). Roberto: merge these in Rentvine to reduce clutter.</div>' +
+      duplicates.map(function(g){
+        return '<div style="border:1px solid var(--rule);border-radius:8px;padding:12px;margin-bottom:10px">' +
+          '<div style="font-weight:600;color:var(--ink2);margin-bottom:6px">'+g.addr+'</div>' +
+          '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'+g.vendor+(g.isHandyman?' — can be combined into one WO for a handyman':'')+' · '+g.wos.length+' open WOs</div>' +
+          g.wos.map(function(w){
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;border-top:1px solid var(--rule)">' +
+              '<span style="font-weight:700;font-family:\'DM Mono\',monospace;color:var(--teal2)">#'+w.num+'</span>' +
+              '<span style="color:var(--ink3);flex:1">'+w.desc+'</span>' +
+              ageBadge(w.days) +
+            '</div>';
+          }).join('') +
+        '</div>';
+      }).join('') +
+      '</div>'
+    : '') +
+
+    // Unassigned + Oldest
     '<div class="grid g-2" style="margin-bottom:14px">' +
-      '<div class="card">' +
-        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Stage Breakdown (Aptly)</div></div>' +
-        '<div class="chart-wrap" style="height:200px"><canvas id="wo-stage-chart" role="img" aria-label="Work orders by Aptly stage"></canvas></div>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Unassigned Work Orders</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+unassigned.length+'</span></div>' +
+      (unassigned.length===0?'<div style="color:var(--ghost);font-size:13px">All WOs have vendors</div>':
+        '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px;text-align:left">Property</th><th style="padding:6px 12px;text-align:left">Issue</th><th style="padding:6px 12px;text-align:right">Age</th></tr></thead><tbody>' +
+        unassigned.map(function(c,i){
+          var loc=Array.isArray(c.location)?c.location:(c.location?[c.location]:[]);
+          var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
+          var addr=((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'Unknown').slice(0,35);
+          var issue=stripHtml(c.description||c.name||'').slice(0,40);
+          return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+            '<td style="padding:8px 12px;font-size:11px">'+addr+'</td>' +
+            '<td style="padding:8px 12px;font-size:11px">'+issue+'</td>' +
+            '<td style="padding:8px 12px;text-align:right">'+ageBadge(daysSince(c.createdAt))+'</td>' +
+          '</tr>';
+        }).join('')+'</tbody></table>') +
       '</div>' +
-      '<div class="card">' +
-        '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Unassigned Work Orders</div>' +
-        '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+aptlyOpen.filter(function(c){var v=Array.isArray(c.vendor)?c.vendor:(c.vendor?[c.vendor]:[]); return v.length===0;}).length+'</span></div>' +
-        (unassigned.length===0
-          ? '<div style="color:var(--ghost);font-size:13px;padding:8px 0">All open WOs have vendors assigned</div>'
-          : '<div style="overflow-y:auto;max-height:220px">' +
-            '<div class="detail-header" style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px"><span>Property</span><span>Issue</span><span>Age</span></div>' +
-            unassigned.map(function(c){
-              var loc=Array.isArray(c.location)?c.location:(c.location?[c.location]:[]);
-              var unit=Array.isArray(c.unit)?c.unit:(c.unit?[c.unit]:[]);
-              var addr=((loc[0]&&loc[0].name)||(unit[0]&&unit[0].name)||'Unknown').slice(0,35);
-              var issue=stripHtml(c.description||c.name||'').slice(0,40);
-              return '<div class="detail-row"><div class="detail-addr">'+addr+'</div><div class="detail-city">'+issue+'</div>' +
-                '<div class="detail-meta">'+ageBadge(daysSince(c.createdAt))+'</div></div>';
-            }).join('') +
-          '</div>') +
-      '</div>' +
-    '</div>' +
-
-    // Oldest 30+
-    (oldest30.length ? '<div class="card" style="margin-bottom:14px">' +
-      '<div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Open 30+ Days</div>' +
-      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+oldest30.length+' WOs</span></div>' +
-      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
-        '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
-          '<th style="padding:6px 12px;text-align:left;font-weight:600">Property</th>' +
-          '<th style="padding:6px 12px;text-align:left;font-weight:600">Vendor</th>' +
-          '<th style="padding:6px 12px;text-align:right;font-weight:600">Days open</th>' +
-        '</tr></thead><tbody>' +
+      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Open 30+ Days</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--red-d);color:var(--red);border-radius:20px">'+oldest30.length+'</span></div>' +
+      (oldest30.length===0?'<div style="color:var(--ghost);font-size:13px">No WOs older than 30 days</div>':
+        '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px;text-align:left">Property</th><th style="padding:6px 12px;text-align:left">Vendor</th><th style="padding:6px 12px;text-align:right">Days</th></tr></thead><tbody>' +
         oldest30.map(function(r,i){
           return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
-            '<td style="padding:8px 12px;color:var(--ink2);font-weight:500">'+r.addr+'</td>' +
-            '<td style="padding:8px 12px;color:var(--muted)">'+r.vendor+'</td>' +
+            '<td style="padding:8px 12px;font-size:11px">'+r.addr+'</td>' +
+            '<td style="padding:8px 12px;font-size:11px;color:var(--muted)">'+r.vendor+'</td>' +
             '<td style="padding:8px 12px;text-align:right">'+ageBadge(r.days)+'</td>' +
           '</tr>';
-        }).join('') +
-        '</tbody></table></div>' +
-    '</div>' : '') +
+        }).join('')+'</tbody></table>') +
+      '</div>' +
+    '</div>' +
 
-    '<div class="data-note"><span>Aptly = workflow truth</span><span>Rentvine = record truth</span><span>Categories auto-detected from description text</span></div>' +
-  '</div>';
+    // Invoice matched WOs
+    (billMatched.length > 0 ?
+      '<div class="card" style="margin-bottom:14px"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Invoice Received — WO Likely Complete</div>' +
+      '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--green-d);color:var(--green);border-radius:20px">'+billMatched.length+' WOs</span></div>' +
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">These open WOs have a vendor invoice in Rentvine — they may be complete and ready to close.</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">' +
+      '<th style="padding:6px 12px;text-align:left">WO #</th><th style="padding:6px 12px;text-align:left">Address</th><th style="padding:6px 12px;text-align:left">Vendor</th><th style="padding:6px 12px;text-align:left">Match</th><th style="padding:6px 12px;text-align:left">Bill</th><th style="padding:6px 12px;text-align:left">Action</th>' +
+      '</tr></thead><tbody>' +
+      billMatched.map(function(r,i){
+        return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
+          '<td style="padding:8px 12px;font-weight:700">'+r.woNumber+'</td>' +
+          '<td style="padding:8px 12px;color:var(--ink2)">'+r.address+'</td>' +
+          '<td style="padding:8px 12px;color:var(--muted)">'+r.vendorName+'</td>' +
+          '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green)">'+r.matchType+'</span></td>' +
+          '<td style="padding:8px 12px"><a href="'+(r.billUrl||'#')+'" target="_blank" style="color:var(--green);font-weight:600;font-size:11px;text-decoration:none">View Bill</a> <span style="color:var(--muted);font-size:11px">'+r.billDate+'</span></td>' +
+          '<td style="padding:8px 12px"><a href="https://aloepm.rentvine.com/maintenance/work-orders/'+r.rvWorkOrderId+'" target="_blank" style="font-size:11px;color:var(--teal2);font-weight:600;text-decoration:none">Open WO</a></td>' +
+        '</tr>';
+      }).join('')+'</tbody></table></div>'
+    : '') +
 
-  document.getElementById('app').innerHTML = html;
+    // WO Sync mismatches
+    '<div id="wo-sync-detail"></div>';
 
+  document.getElementById('maint-live').outerHTML = liveHtml;
+
+  // Draw category chart
   setTimeout(function() {
-    // Category chart
-    var catEl = document.getElementById('wo-cat-chart');
+    var catEl = document.getElementById('maint-cat-chart');
     if (catEl && catSorted.length) {
-      var catPalette = [C.TEAL,C.GREEN,C.AMBER,C.BLUE,C.PURPLE,C.RED,C.GRAY,C.TEAL2];
-      if (charts['wo-cat']) charts['wo-cat'].destroy();
-      charts['wo-cat'] = new Chart(catEl, {
-        type: 'bar',
-        data: {
-          labels: catSorted.map(function(e){return e[0];}),
-          datasets: [{data:catSorted.map(function(e){return e[1];}),backgroundColor:catPalette.slice(0,catSorted.length),borderRadius:4,borderSkipped:false}]
-        },
-        options: Object.assign({},CD,{indexAxis:'y',scales:{
-          x:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}},
-          y:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}}
-        }})
+      var palette=[C.TEAL,C.GREEN,C.AMBER,C.BLUE,C.PURPLE,C.RED,C.GRAY,C.TEAL2];
+      if (charts['maint-cat']) charts['maint-cat'].destroy();
+      charts['maint-cat'] = new Chart(catEl, {
+        type:'bar',
+        data:{labels:catSorted.map(function(e){return e[0];}),datasets:[{data:catSorted.map(function(e){return e[1];}),backgroundColor:palette.slice(0,catSorted.length),borderRadius:4,borderSkipped:false}]},
+        options:Object.assign({},CD,{indexAxis:'y',scales:{x:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}},y:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{display:false},border:{display:false}}}})
       });
-      catEl.parentElement.style.height = '220px';
-    }
-    // Stage chart
-    var stageEl = document.getElementById('wo-stage-chart');
-    if (stageEl && stageSorted.length) {
-      var stagePalette = [C.TEAL,C.AMBER,C.BLUE,C.GREEN,C.PURPLE,C.RED,C.GRAY];
-      if (charts['wo-stage']) charts['wo-stage'].destroy();
-      charts['wo-stage'] = new Chart(stageEl, {
-        type: 'bar',
-        data: {
-          labels: stageSorted.map(function(e){return e[0];}),
-          datasets: [{data:stageSorted.map(function(e){return e[1];}),backgroundColor:stagePalette.slice(0,stageSorted.length),borderRadius:4,borderSkipped:false}]
-        },
-        options: Object.assign({},CD,{scales:{
-          x:{ticks:{font:{size:10,family:'DM Mono'},color:'#94acac',maxRotation:30,autoSkip:false},grid:{display:false},border:{display:false}},
-          y:{beginAtZero:true,ticks:{font:{size:10,family:'DM Mono'},color:'#94acac'},grid:{color:'rgba(180,200,200,0.12)'},border:{display:false}}
-        }})
-      });
-      stageEl.parentElement.style.height = '200px';
+      catEl.parentElement.style.height='220px';
     }
   }, 50);
 }
@@ -1452,7 +1357,6 @@ var TABS = {
   portfolio: renderPortfolio,
   maintenance: renderMaintenance,
   retention: renderRetention,
-  workorders: renderWorkOrders
 };
 
 var activeTab = 'trends';
