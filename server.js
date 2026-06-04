@@ -1186,7 +1186,7 @@ async function findBillMatchedWOs() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   let allBills = [], pg = 1;
   while (pg <= 5) {
-    const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, dateFrom: cutoff });
+    const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, startDate: cutoff });
     const batch = Array.isArray(data) ? data : (data && data.data) || [];
     if (!batch.length) break;
     allBills = allBills.concat(batch);
@@ -1211,27 +1211,82 @@ async function findBillMatchedWOs() {
     if (batch.length < 100) break;
     wpg++;
   }
+  const openWOMap = {};
+  openWOs.forEach(wo => { openWOMap[String(wo.workOrderID)] = wo; });
+  const openWOsByVendorProp = {};
+  openWOs.forEach(wo => {
+    const key = String(wo.vendorContactID || '') + '_' + String(wo.propertyID || '');
+    if (key !== '_') { if (!openWOsByVendorProp[key]) openWOsByVendorProp[key] = []; openWOsByVendorProp[key].push(wo); }
+  });
+
+  const REIMBURSE_CONTACT_ID = '3229'; // Aloe Property Management - REIMBURSEMENTS
+  const TRADE_KEYWORDS = {
+    plumb: /plumb|toilet|faucet|pipe|drain|leak|water/i,
+    hvac: /hvac|ac |a\/c|air.?cond|heat|furnace|cool/i,
+    electric: /electric|outlet|breaker|wiring|panel/i,
+    locksmith: /rekey|lock|key|deadbolt/i,
+    appliance: /appliance|dishwash|washer|dryer|refriger|oven|stove/i,
+    landscaping: /landscap|lawn|tree|yard|weed|grass/i,
+    pest: /pest|scorpion|roach|termite|bee|ant/i,
+    paint: /paint|drywall|patch|wall/i,
+    clean: /clean|trash|junk|debris/i,
+  };
+
+  function descriptionCategory(text) {
+    const t = (text || '').toLowerCase();
+    for (const [cat, re] of Object.entries(TRADE_KEYWORDS)) { if (re.test(t)) return cat; }
+    return null;
+  }
+
   const matched = [];
   allBills.forEach(function(billRec) {
     const bill = billRec.bill || billRec;
-    const vendorID = String(bill.vendorContactID || bill.contactID || '');
-    const propertyID = String(bill.propertyID || '');
-    if (!vendorID || !propertyID) return;
-    openWOs.filter(wo => String(wo.vendorContactID || '') === vendorID && String(wo.propertyID || '') === propertyID).forEach(wo => {
-      const amt = bill.amount ? ('$' + parseFloat(bill.amount).toFixed(2)) : '';
-      matched.push({
-        woNumber: wo.workOrderNumber,
-        rvWorkOrderId: wo.workOrderID,
-        address: wo._unitAddress || '',
-        vendorName: (billRec.contact && billRec.contact.name) || '',
-        billAmount: amt,
-        billDate: (bill.date || bill.billDate || '').slice(0, 10)
+    const billDate = (bill.billDate || bill.date || '').slice(0, 10);
+    const vendorName = (billRec.contact && billRec.contact.name) || '';
+    const charges = billRec.charges || [];
+    const chargeDesc = charges.map(c => c.description || '').join(' ');
+
+    // Tier 1: direct workOrderID match
+    const woID = String(bill.workOrderID || '');
+    if (woID && woID !== 'null' && woID !== '0') {
+      const wo = openWOMap[woID];
+      if (wo) {
+        const amt = bill.totalAmount ? ('$' + parseFloat(bill.totalAmount).toFixed(2)) : '';
+        matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName, billAmount: amt, billDate, matchType: 'Direct WO link', billId: bill.billID });
+        return;
+      }
+    }
+
+    // Tier 2: fuzzy vendor + property match
+    const vendorID = String(bill.payeeContactID || '');
+    const propID = String(bill.propertyID || '');
+    if (vendorID && propID && propID !== 'null') {
+      const key = vendorID + '_' + propID;
+      const candidates = openWOsByVendorProp[key] || [];
+      candidates.forEach(wo => {
+        const amt = bill.totalAmount ? ('$' + parseFloat(bill.totalAmount).toFixed(2)) : '';
+        matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName, billAmount: amt, billDate, matchType: 'Vendor + property match', billId: bill.billID });
       });
-    });
+      if (candidates.length > 0) return;
+    }
+
+    // Tier 3: reimbursement match by property + description keywords
+    if (vendorID === REIMBURSE_CONTACT_ID && propID && propID !== 'null') {
+      const billCat = descriptionCategory(chargeDesc + ' ' + (bill.description || ''));
+      if (!billCat) return;
+      const propWOs = openWOs.filter(wo => String(wo.propertyID || '') === propID);
+      propWOs.forEach(wo => {
+        const woCat = descriptionCategory(wo.description || '');
+        if (woCat === billCat) {
+          const amt = bill.totalAmount ? ('$' + parseFloat(bill.totalAmount).toFixed(2)) : '';
+          matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName: 'Aloe Reimbursement', billAmount: amt, billDate, matchType: 'Reimbursement (' + billCat + ')', billId: bill.billID });
+        }
+      });
+    }
   });
+
   const seen = new Set();
   return matched.filter(r => { if (seen.has(r.woNumber)) return false; seen.add(r.woNumber); return true; });
-}
 
 app.get('/api/bill-matched-wos', async (req, res) => {
   try { res.json({ total: 0, items: await findBillMatchedWOs() }); }
