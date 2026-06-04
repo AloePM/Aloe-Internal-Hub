@@ -1218,8 +1218,15 @@ async function findBillMatchedWOs() {
   // Build address lookup from units export
   const addrMap = {};
   try {
-    const unitsData = await rvFetch('/properties/units/export', { pageSize: 200, page: 1 });
-    if (Array.isArray(unitsData)) {
+    let unitsData = [], upg = 1;
+    while (upg <= 5) {
+      const batch = await rvFetch('/properties/units/export', { pageSize: 200, page: upg });
+      if (!Array.isArray(batch) || !batch.length) break;
+      unitsData = unitsData.concat(batch);
+      if (batch.length < 200) break;
+      upg++;
+    }
+    if (unitsData.length) {
       unitsData.forEach(item => {
         const u = item.unit || item;
         const p = item.property || {};
