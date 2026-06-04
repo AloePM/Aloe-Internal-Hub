@@ -1185,7 +1185,7 @@ app.get('/api/test-slack', async (req, res) => {
 async function findBillMatchedWOs() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   let allBills = [], pg = 1;
-  while (pg <= 5) {
+  while (pg <= 15) {
     const data = await rvFetch('/accounting/bills', { pageSize: 100, page: pg, startDate: cutoff });
     const batch = Array.isArray(data) ? data : (data && data.data) || [];
     if (!batch.length) break;
