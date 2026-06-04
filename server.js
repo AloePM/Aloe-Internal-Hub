@@ -1354,6 +1354,199 @@ async function runBillSync() {
   } catch(e) { console.error('Bill sync error:', e.message); }
 }
 // ── End Bill-to-WO Matcher ──
+
+// ── WO Analytics: 12-month trends ──
+app.get('/api/wo-analytics', async (req, res) => {
+  try {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 12);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    let allWOs = [], pg = 1;
+    while (pg <= 40) {
+      const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+      const batch = Array.isArray(data) ? data : (data && data.data) || [];
+      if (!batch.length) break;
+      let hitCutoff = false;
+      batch.forEach(rec => {
+        const wo = rec.workOrder || rec;
+        if (!wo.workOrderID) return;
+        const created = (wo.dateTimeCreated || '').slice(0, 10);
+        if (created >= cutoffStr) {
+          wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || '';
+          wo._description = wo.description || '';
+          allWOs.push(wo);
+        } else {
+          hitCutoff = true;
+        }
+      });
+      if (hitCutoff && batch.length < 100) break;
+      if (batch.length < 100) break;
+      pg++;
+    }
+
+    // Category guesser
+    function guessCategory(text) {
+      const t = (text || '').replace(/<[^>]+>/g, ' ').toLowerCase();
+      if (/hvac|ac |air.?cond|heat|furnace|cooling/.test(t)) return 'HVAC';
+      if (/plumb|leak|drain|toilet|faucet|pipe|water/.test(t)) return 'Plumbing';
+      if (/electric|outlet|breaker|wiring|panel|light/.test(t)) return 'Electrical';
+      if (/pest|scorpion|roach|termite|bee|ant/.test(t)) retur
+if (/appliance|dishwash|washer|dryer|refriger|oven|stove/.test(t)) return 'Appliance';
+      if (/paint|drywall|patch|wall/.test(t)) return 'Paint / Drywall';
+      if (/lawn|landscap|tree|weed|yard|grass/.test(t)) return 'Landscaping';
+      if (/clean|trash|junk|debris/.test(t)) return 'Cleaning';
+      if (/lock|key|door|window|garage/.test(t)) return 'Lock / Door / Window';
+      if (/roof|gutter|exterior|stucco/.test(t)) return 'Roof / Exterior';
+      return 'Other';
+    }
+
+    function monthKey(dateStr) {
+      if (!dateStr) return null;
+      return dateStr.slice(0, 7);
+    }
+    function weekKey(dateStr) {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(d.setDate(diff));
+      return mon.toISOString().slice(0, 10);
+    }
+
+    // Build monthly and weekly buckets
+    const openedByMonth = {}, closedByMonth = {};
+    const openedByWeek = {}, closedByWeek = {};
+    const categoryByMonth = {};
+    const closeTimes = [];
+    const categoryCloseTimes = {};
+
+    allWOs.forEach(wo => {
+      const created = (wo.dateTimeCreated || '').slice(0, 10);
+      const closed = wo.dateClosed ? wo.dateClosed.slice(0, 10) : null;
+      const mk = monthKey(created);
+      const wk = weekKey(created);
+      const cat = guessCategory(wo._description);
+
+      if (mk) {
+        openedByMonth[mk] = (openedByMonth[mk] || 0) + 1;
+        if (!categoryByMonth[mk]) categoryByMonth[mk] = {};
+        categoryByMonth[mk][cat] = (categoryByMonth[mk][cat] || 0) + 1;
+      }
+      if (wk) openedByWeek[wk] = (openedByWeek[wk] || 0) + 1;
+
+      if (closed) {
+        const cmk = monthKey(closed);
+        const cwk = weekKey(closed);
+        if (cmk) closedByMonth[cmk] = (closedByMonth[cmk] || 0) + 1;
+        if (cwk) closedByWeek[cwk] = (closedByWeek[cwk] || 0) + 1;
+
+        // Avg close time
+        const openDate = new Date(created);
+        const closeDate = new Date(closed);
+        const days = Math.round((closeDate - openDate) / 86400000);
+        if (days >= 0 && days < 365) {
+          closeTimes.push({ days, cat });
+          if (!categoryCloseTimes[cat]) categoryCloseTimes[cat] = [];
+          categoryCloseTimes[cat].push(days);
+        }
+      }
+    });
+
+    // Build sorted month list for last 12 months
+    const months = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1);
+      d.setMonth(d.getMonth() - i);
+      months.push(d.toISOString().slice(0, 7));
+    }
+
+    // Seasonal category breakdown (by month across all data)
+    const allCategories = ['HVAC','Plumbing','Electrical','Pest Control','Appliance','Paint / Drywall','Landscaping','Cleaning','Lock / Door / Window','Roof / Exterior','Other'];
+    const categoryTrends = {};
+    allCategories.forEach(cat => {
+      categoryTrends[cat] = months.map(m => (categoryByMonth[m] && categoryByMonth[m][cat]) || 0);
+    });
+
+    // Avg close times by category
+    const avgCloseByCategory = {};
+    Object.entries(categoryCloseTimes).forEach(([cat, times]) => {
+      const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
+      avgCloseByCategory[cat] = { avg, count: times.length };
+    });
+
+    // Overall avg close time
+    const allTimes = closeTimes.map(x => x.days);
+    const avgCloseTime = allTimes.length ? Math.round(allTimes.reduce((a, b) => a + b, 0) / allTimes.length) : null;
+
+    // Weekly data for last 12 weeks
+    const weeks = [];
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - (i * 7));
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(d.setDate(diff));
+      weeks.push(mon.toISOString().slice(0, 10));
+    }
+
+    // AI suggestions based on trends
+    const suggestions = [];
+    const currentMonth = new Date().getMonth(); // 0-indexed
+    // HVAC seasonal check
+    const hvacThisMonth = months.map((m, i) => ({ m, v: (categoryByMonth[m] && categoryByMonth[m]['HVAC']) || 0 }));
+    const hvacRecent = hvacThisMonth.slice(-2).reduce((a, b) => a + b.v, 0);
+    const hvacPrevYear = hvacThisMonth.slice(0, 3).reduce((a, b) => a + b.v, 0);
+    if (currentMonth >= 4 && currentMonth <= 8 && hvacRecent > 3) {
+      suggestions.push({ type: 'warning', category: 'HVAC', message: 'HVAC work orders are elevated this month (' + hvacRecent + ' in last 2 months). Consider proactive AC filter checks and preventive maintenance before peak summer heat.' });
+    }
+    // Backlog check
+    const recentOpened = months.slice(-3).reduce((a, m) => a + (openedByMonth[m] || 0), 0);
+    const recentClosed = months.slice(-3).reduce((a, m) => a + (closedByMonth[m] || 0), 0);
+    const backlogTrend = recentOpened - recentClosed;
+    if (backlogTrend > 10) {
+      suggestions.push({ type: 'warning', category: 'Backlog', message: 'Work order backlog is growing — ' + recentOpened + ' opened vs ' + recentClosed + ' closed in last 3 months (' + backlogTrend + ' net increase). Consider adding vendor capacity.' });
+    } else if (backlogTrend < -5) {
+      suggestions.push({ type: 'success', category: 'Backlog', message: 'Great progress — more WOs closed than opened in last 3 months (' + Math.abs(backlogTrend) + ' net decrease in backlog).' });
+    }
+    // Slow close time
+    if (avgCloseTime && avgCloseTime > 14) {
+      suggestions.push({ type: 'warning', category: 'Response Time', message: 'Average close time is ' + avgCloseTime + ' days. Target is under 14 days. Review vendor performance and follow-up processes.' });
+    }
+    // Category spike vs last year same month
+    const prevYearMonth = months[0]; // 12 months ago
+    const currMonth = months[11];
+    if (categoryByMonth[prevYearMonth] && categoryByMonth[currMonth]) {
+      allCategories.forEach(cat => {
+        const prev = categoryByMonth[prevYearMonth][cat] || 0;
+        const curr = categoryByMonth[currMonth][cat] || 0;
+        if (prev > 0 && curr > prev * 1.5 && curr > 3) {
+          suggestions.push({ type: 'info', category: cat, message: cat + ' WOs are up ' + Math.round(((curr - prev) / prev) * 100) + '% vs same month last year (' + curr + ' this month vs ' + prev + ' last year). Watch for recurring pattern.' });
+        }
+      });
+    }
+
+    res.json({
+      totalWOs: allWOs.length,
+      avgCloseTime,
+      months,
+      weeks,
+      openedByMonth: months.map(m => openedByMonth[m] || 0),
+      closedByMonth: months.map(m => closedByMonth[m] || 0),
+      openedByWeek: weeks.map(w => openedByWeek[w] || 0),
+      closedByWeek: weeks.map(w => closedByWeek[w] || 0),
+      categoryTrends,
+      avgCloseByCategory,
+      suggestions
+    });
+  } catch(e) {
+    console.error('WO analytics error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+// ── End WO Analytics ──
+
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
   res.json({ cleared: true });
