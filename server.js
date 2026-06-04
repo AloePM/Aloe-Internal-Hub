@@ -1289,6 +1289,14 @@ async function findBillMatchedWOs() {
   return matched.filter(r => { if (seen.has(r.woNumber)) return false; seen.add(r.woNumber); return true; });
 }
 
+app.get('/api/bill-debug', async (req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const data = await rvFetch('/accounting/bills', { pageSize: 10, page: 1, startDate: cutoff });
+    res.json({ cutoff, count: Array.isArray(data) ? data.length : 0, sample: Array.isArray(data) ? data.slice(0,3).map(b => ({ billID: b.bill&&b.bill.billID, workOrderID: b.bill&&b.bill.workOrderID, payeeContactID: b.bill&&b.bill.payeeContactID, propertyID: b.bill&&b.bill.propertyID, billDate: b.bill&&b.bill.billDate, totalAmount: b.bill&&b.bill.totalAmount })) : data });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/bill-matched-wos', async (req, res) => {
   try { res.json({ total: 0, items: await findBillMatchedWOs() }); }
   catch(e) { res.status(500).json({ error: e.message }); }
