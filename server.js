@@ -1270,8 +1270,7 @@ async function findBillMatchedWOs() {
       const key = vendorID + '_' + propID;
       const candidates = openWOsByVendorProp[key] || [];
       candidates.forEach(wo => {
-        const amt = bill.totalAmount ? ('$' + parseFloat(bill.totalAmount).toFixed(2)) : '';
-        matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName, billAmount: amt, billDate, matchType: 'Vendor + property match', billId: bill.billID });
+        matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName, billAmount: '', billDate, matchType: 'Vendor + property match', billId: bill.billID, billUrl: 'https://aloepm.rentvine.com/accounting/payables/bills/' + bill.billID });
       });
       if (candidates.length > 0) return;
     }
@@ -1284,8 +1283,7 @@ async function findBillMatchedWOs() {
       propWOs.forEach(wo => {
         const woCat = descriptionCategory(wo.description || '');
         if (woCat === billCat) {
-          const amt = bill.totalAmount ? ('$' + parseFloat(bill.totalAmount).toFixed(2)) : '';
-          matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName: 'Aloe Reimbursement', billAmount: amt, billDate, matchType: 'Reimbursement (' + billCat + ')', billId: bill.billID });
+          matched.push({ woNumber: wo.workOrderNumber, rvWorkOrderId: wo.workOrderID, address: wo._unitAddress || '', vendorName: 'Aloe Reimbursement', billAmount: '', billDate, matchType: 'Reimbursement (' + billCat + ')', billId: bill.billID, billUrl: 'https://aloepm.rentvine.com/accounting/payables/bills/' + bill.billID });
         }
       });
     }
