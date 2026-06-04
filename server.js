@@ -1287,6 +1287,7 @@ async function findBillMatchedWOs() {
 
   const seen = new Set();
   return matched.filter(r => { if (seen.has(r.woNumber)) return false; seen.add(r.woNumber); return true; });
+}
 
 app.get('/api/bill-matched-wos', async (req, res) => {
   try { res.json({ total: 0, items: await findBillMatchedWOs() }); }
