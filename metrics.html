@@ -1211,7 +1211,7 @@ async function renderMaintenance() {
           '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase"><th style="padding:6px 12px">WO #</th><th style="padding:6px 12px">Property</th><th style="padding:6px 12px">Status</th></tr></thead><tbody>' +
           inRVNotAptly.map(function(wo,i){
             return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'">' +
-              '<td style="padding:8px 12px;font-weight:700;font-family:'DM Mono',monospace">'+wo.workOrderNumber+'</td>' +
+              '<td style="padding:8px 12px;font-weight:700">'+wo.workOrderNumber+'</td>' +
               '<td style="padding:8px 12px;color:var(--ink2)">'+wo._unitAddress+'</td>' +
               '<td style="padding:8px 12px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--blue-d);color:var(--blue)">Status '+wo.primaryWorkOrderStatusID+'</span></td>' +
             '</tr>';
