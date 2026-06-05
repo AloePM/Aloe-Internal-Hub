@@ -2011,10 +2011,21 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
       if (!dlResp.ok) { results.errors++; continue; }
       const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
 
-      const formData = new FormData();
-      formData.append('file', new Blob([imgBuffer], { type: 'image/jpeg' }), fileName);
+      // Build multipart/form-data manually for Node.js compatibility
+      const boundary = '----AloePMBoundary' + Date.now();
+      const ext = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+      const mimeType = 'image/' + ext;
+      const partHeader = Buffer.from(
+        '--' + boundary + '\r\n' +
+        'Content-Disposition: form-data; name="file"; filename="' + fileName + '"\r\n' +
+        'Content-Type: ' + mimeType + '\r\n\r\n'
+      );
+      const partFooter = Buffer.from('\r\n--' + boundary + '--\r\n');
+      const body = Buffer.concat([partHeader, imgBuffer, partFooter]);
       const upResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + aptlyCardId + '/file', {
-        method: 'POST', headers: { 'x-token': APTLY_TOK }, body: formData
+        method: 'POST',
+        headers: { 'x-token': APTLY_TOK, 'Content-Type': 'multipart/form-data; boundary=' + boundary, 'Content-Length': body.length },
+        body: body
       });
       if (upResp.ok) {
         PHOTO_SYNC_UPLOADED[logKey] = Date.now();
