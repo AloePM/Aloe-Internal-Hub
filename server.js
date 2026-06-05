@@ -2532,7 +2532,14 @@ app.use('/api/zinspector', async (req, res) => {
   const query = new URLSearchParams(req.query).toString();
   const url = `https://portfolio.zinspector.com${ziPath}${query ? '?' + query : ''}`;
   try {
-    const r = await fetch(url, { headers: { 'x-api-key': ziKey, 'Accept': 'application/json' } });
+    const r = await fetch(url, {
+  headers: {
+    'x-api-key': ziKey,
+    'Accept': 'application/json',
+    'Origin': 'https://aloe-internal-hub-git-1089452383500.us-west4.run.app',
+    'Referer': 'https://aloe-internal-hub-git-1089452383500.us-west4.run.app/'
+  }
+});
     res.status(r.status).json(await r.json());
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
