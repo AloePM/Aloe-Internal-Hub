@@ -2520,6 +2520,23 @@ app.post('/api/transcribe-audio', async (req, res) => {
 // --- End Audio Transcription ---
 
 // --- End Video Analyzer v2 ---
+// ── zInspector Proxy ──
+app.use('/api/zinspector', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  const ziKey = process.env.ZINSPECTOR_API_KEY;
+  if (!ziKey) return res.status(500).json({ error: 'ZINSPECTOR_API_KEY not set on server' });
+  const ziPath = req.path;
+  const query = new URLSearchParams(req.query).toString();
+  const url = `https://portfolio.zinspector.com${ziPath}${query ? '?' + query : ''}`;
+  try {
+    const r = await fetch(url, { headers: { 'x-api-key': ziKey, 'Accept': 'application/json' } });
+    res.status(r.status).json(await r.json());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// ── End zInspector Proxy ──
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
