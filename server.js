@@ -1973,6 +1973,90 @@ app.get('/api/wo-analytics', async (req, res) => {
 });
 // ── End WO Analytics ──
 
+
+// ── RV Work Order Webhook → Aptly Photo Sync ──
+const PHOTO_SYNC_UPLOADED = {};
+
+async function syncPhotosForWO(workOrderID, workOrderNumber) {
+  const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+  const results = { uploaded: 0, skipped: 0, errors: 0 };
+  try {
+    // Get files for this WO from Rentvine
+    const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: workOrderID });
+    const files = Array.isArray(filesData) ? filesData : [];
+    const photos = files.filter(f => f.file && f.file.isImage === '1');
+    if (!photos.length) { console.log('Photo sync WO#' + workOrderNumber + ': no photos'); return results; }
+
+    // Find matching Aptly card by workOrderNumber
+    let aptlyCardId = null;
+    for (let pg = 0; pg < 10; pg++) {
+      const resp = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=' + pg + '&pageSize=100&includeArchived=true', { headers: { 'x-token': APTLY_TOK } });
+      if (!resp.ok) break;
+      const batch = await resp.json();
+      const items = Array.isArray(batch) ? batch : (batch && batch.data) || [];
+      if (!items.length) break;
+      const match = items.find(c => String(c.workOrderNumber) === String(workOrderNumber));
+      if (match) { aptlyCardId = match._id; break; }
+      if (items.length < 100) break;
+    }
+    if (!aptlyCardId) { console.log('Photo sync WO#' + workOrderNumber + ': no Aptly card found'); return results; }
+
+    for (const fileRec of photos) {
+      const fileID = fileRec.file.fileID;
+      const fileName = fileRec.file.title || (fileID + '.jpg');
+      const logKey = 'f' + fileID + '_c' + aptlyCardId;
+      if (PHOTO_SYNC_UPLOADED[logKey]) { results.skipped++; continue; }
+
+      const dlResp = await fetch(RENTVINE_BASE + '/files/' + fileID + '/preview', { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+      if (!dlResp.ok) { results.errors++; continue; }
+      const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
+
+      const formData = new FormData();
+      formData.append('file', new Blob([imgBuffer], { type: 'image/jpeg' }), fileName);
+      const upResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + aptlyCardId + '/file', {
+        method: 'POST', headers: { 'x-token': APTLY_TOK }, body: formData
+      });
+      if (upResp.ok) {
+        PHOTO_SYNC_UPLOADED[logKey] = Date.now();
+        results.uploaded++;
+        console.log('Photo sync: uploaded', fileName, 'WO#' + workOrderNumber);
+      } else {
+        console.error('Photo sync upload failed WO#' + workOrderNumber + ':', (await upResp.text()).slice(0, 100));
+        results.errors++;
+      }
+    }
+  } catch(e) { console.error('Photo sync error WO#' + workOrderNumber + ':', e.message); results.errors++; }
+  return results;
+}
+
+app.post('/api/webhook/rv-wo-created', async (req, res) => {
+  res.sendStatus(200); // Acknowledge immediately
+  try {
+    const payload = req.body;
+    const wo = payload.workOrder || payload.data || payload;
+    const workOrderID = wo.workOrderID || wo.id;
+    const workOrderNumber = wo.workOrderNumber || wo.number;
+    if (!workOrderID || !workOrderNumber) { console.log('RV webhook: no WO ID/number in payload', JSON.stringify(payload).slice(0,200)); return; }
+    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') — syncing photos');
+    setTimeout(async () => {
+      const result = await syncPhotosForWO(workOrderID, workOrderNumber);
+      console.log('RV webhook photo sync WO#' + workOrderNumber + ':', result);
+    }, 3000); // 3s delay to let Rentvine finish saving photos
+  } catch(e) { console.error('RV webhook error:', e.message); }
+});
+
+app.post('/api/photo-sync/run', async (req, res) => {
+  try {
+    const { workOrderID, workOrderNumber } = req.body || {};
+    if (workOrderID && workOrderNumber) {
+      res.json(await syncPhotosForWO(workOrderID, workOrderNumber));
+    } else {
+      res.status(400).json({ error: 'workOrderID and workOrderNumber required' });
+    }
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+// ── End RV→Aptly Photo Sync ──
+
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
   res.json({ cleared: true });
