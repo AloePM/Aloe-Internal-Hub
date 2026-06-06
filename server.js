@@ -2078,10 +2078,7 @@ app.get('/api/photo-sync/test-upload', async (req, res) => {
     if (!card) return res.json({ error: 'no aptly card found', sample: items.slice(0,2).map(c=>({id:c._id,num:c.workOrderNumber})) });
     // Upload
     const boundary = '----AloePMBoundary' + Date.now();
-    const partHeader = Buffer.from('--' + boundary + '
-Content-Disposition: form-data; name="file"; filename="' + fileName + '"
-Content-Type: image/jpeg
-
+    const partHeader = Buffer.from('--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + fileName + '"\r\nContent-Type: image/jpeg\r\n\r\n');
 ');
     const partFooter = Buffer.from('
 --' + boundary + '--
