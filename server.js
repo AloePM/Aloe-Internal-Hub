@@ -2079,10 +2079,7 @@ app.get('/api/photo-sync/test-upload', async (req, res) => {
     // Upload
     const boundary = '----AloePMBoundary' + Date.now();
     const partHeader = Buffer.from('--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + fileName + '"\r\nContent-Type: image/jpeg\r\n\r\n');
-');
-    const partFooter = Buffer.from('
---' + boundary + '--
-');
+    const partFooter = Buffer.from('\r\n--' + boundary + '--\r\n');
     const body = Buffer.concat([partHeader, imgBuffer, partFooter]);
     const upResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + card._id + '/file', {
       method: 'POST',
