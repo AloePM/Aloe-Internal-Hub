@@ -2056,6 +2056,47 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
   } catch(e) { console.error('RV webhook error:', e.message); }
 });
 
+app.get('/api/photo-sync/test-upload', async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    // Get a real file from RV WO 7026
+    const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: '7026' });
+    const files = Array.isArray(filesData) ? filesData : [];
+    const photo = files.find(f => f.file && f.file.isImage === '1');
+    if (!photo) return res.json({ error: 'no photos found', filesData });
+    const fileID = photo.file.fileID;
+    const fileName = photo.file.title || (fileID + '.jpg');
+    // Download
+    const dlResp = await fetch(RENTVINE_BASE + '/files/' + fileID + '/preview', { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    if (!dlResp.ok) return res.json({ error: 'download failed', status: dlResp.status });
+    const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
+    // Find Aptly card
+    const aptlyResp = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=0&pageSize=100', { headers: { 'x-token': APTLY_TOK } });
+    const aptlyBatch = await aptlyResp.json();
+    const items = Array.isArray(aptlyBatch) ? aptlyBatch : (aptlyBatch && aptlyBatch.data) || [];
+    const card = items.find(c => String(c.workOrderNumber) === '107012');
+    if (!card) return res.json({ error: 'no aptly card found', sample: items.slice(0,2).map(c=>({id:c._id,num:c.workOrderNumber})) });
+    // Upload
+    const boundary = '----AloePMBoundary' + Date.now();
+    const partHeader = Buffer.from('--' + boundary + '
+Content-Disposition: form-data; name="file"; filename="' + fileName + '"
+Content-Type: image/jpeg
+
+');
+    const partFooter = Buffer.from('
+--' + boundary + '--
+');
+    const body = Buffer.concat([partHeader, imgBuffer, partFooter]);
+    const upResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + card._id + '/file', {
+      method: 'POST',
+      headers: { 'x-token': APTLY_TOK, 'Content-Type': 'multipart/form-data; boundary=' + boundary, 'Content-Length': String(body.length) },
+      body: body
+    });
+    const upText = await upResp.text();
+    res.json({ status: upResp.status, cardId: card._id, fileID, fileName, imgSize: imgBuffer.length, response: upText.slice(0,300) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/photo-sync/run', async (req, res) => {
   try {
     const { workOrderID, workOrderNumber } = req.body || {};
