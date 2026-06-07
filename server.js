@@ -1588,406 +1588,63 @@ app.get('/api/wo-analytics', async (req, res) => {
 // ── End WO Analytics ──
 
 
-// ── WO Analytics: 12-month trends ──
-app.get('/api/wo-analytics', async (req, res) => {
-  try {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - 12);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
 
-    let allWOs = [], pg = 1;
-    while (pg <= 40) {
-      const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
-      const batch = Array.isArray(data) ? data : (data && data.data) || [];
-      if (!batch.length) break;
-      let hitCutoff = false;
-      batch.forEach(rec => {
-        const wo = rec.workOrder || rec;
-        if (!wo.workOrderID) return;
-        const created = (wo.dateTimeCreated || '').slice(0, 10);
-        if (created >= cutoffStr) {
-          wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || '';
-          wo._description = wo.description || '';
-          allWOs.push(wo);
-        } else {
-          hitCutoff = true;
-        }
-      });
-      if (hitCutoff && batch.length < 100) break;
-      if (batch.length < 100) break;
-      pg++;
-    }
-
-    // Category guesser
-    function guessCategory(text) {
-      const t = (text || '').replace(/<[^>]+>/g, ' ').toLowerCase();
-      if (/hvac|ac |air.?cond|heat|furnace|cooling/.test(t)) return 'HVAC';
-      if (/plumb|leak|drain|toilet|faucet|pipe|water/.test(t)) return 'Plumbing';
-      if (/electric|outlet|breaker|wiring|panel|light/.test(t)) return 'Electrical';
-      if (/pest|scorpion|roach|termite|bee|ant/.test(t)) return 'Pest Control';
-      if (/appliance|dishwash|washer|dryer|refriger|oven|stove/.test(t)) return 'Appliance';
-      if (/paint|drywall|patch|wall/.test(t)) return 'Paint / Drywall';
-      if (/lawn|landscap|tree|weed|yard|grass/.test(t)) return 'Landscaping';
-      if (/clean|trash|junk|debris/.test(t)) return 'Cleaning';
-      if (/lock|key|door|window|garage/.test(t)) return 'Lock / Door / Window';
-      if (/roof|gutter|exterior|stucco/.test(t)) return 'Roof / Exterior';
-      return 'Other';
-    }
-
-    function monthKey(dateStr) {
-      if (!dateStr) return null;
-      return dateStr.slice(0, 7);
-    }
-    function weekKey(dateStr) {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const mon = new Date(d.setDate(diff));
-      return mon.toISOString().slice(0, 10);
-    }
-
-    // Build monthly and weekly buckets
-    const openedByMonth = {}, closedByMonth = {};
-    const openedByWeek = {}, closedByWeek = {};
-    const categoryByMonth = {};
-    const closeTimes = [];
-    const categoryCloseTimes = {};
-
-    allWOs.forEach(wo => {
-      const created = (wo.dateTimeCreated || '').slice(0, 10);
-      const closed = wo.dateClosed ? wo.dateClosed.slice(0, 10) : null;
-      const mk = monthKey(created);
-      const wk = weekKey(created);
-      const cat = guessCategory(wo._description);
-
-      if (mk) {
-        openedByMonth[mk] = (openedByMonth[mk] || 0) + 1;
-        if (!categoryByMonth[mk]) categoryByMonth[mk] = {};
-        categoryByMonth[mk][cat] = (categoryByMonth[mk][cat] || 0) + 1;
-      }
-      if (wk) openedByWeek[wk] = (openedByWeek[wk] || 0) + 1;
-
-      if (closed) {
-        const cmk = monthKey(closed);
-        const cwk = weekKey(closed);
-        if (cmk) closedByMonth[cmk] = (closedByMonth[cmk] || 0) + 1;
-        if (cwk) closedByWeek[cwk] = (closedByWeek[cwk] || 0) + 1;
-
-        // Avg close time
-        const openDate = new Date(created);
-        const closeDate = new Date(closed);
-        const days = Math.round((closeDate - openDate) / 86400000);
-        if (days >= 0 && days < 365) {
-          closeTimes.push({ days, cat });
-          if (!categoryCloseTimes[cat]) categoryCloseTimes[cat] = [];
-          categoryCloseTimes[cat].push(days);
-        }
-      }
-    });
-
-    // Build sorted month list for last 12 months
-    const months = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(1);
-      d.setMonth(d.getMonth() - i);
-      months.push(d.toISOString().slice(0, 7));
-    }
-
-    // Seasonal category breakdown (by month across all data)
-    const allCategories = ['HVAC','Plumbing','Electrical','Pest Control','Appliance','Paint / Drywall','Landscaping','Cleaning','Lock / Door / Window','Roof / Exterior','Other'];
-    const categoryTrends = {};
-    allCategories.forEach(cat => {
-      categoryTrends[cat] = months.map(m => (categoryByMonth[m] && categoryByMonth[m][cat]) || 0);
-    });
-
-    // Avg close times by category
-    const avgCloseByCategory = {};
-    Object.entries(categoryCloseTimes).forEach(([cat, times]) => {
-      const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-      avgCloseByCategory[cat] = { avg, count: times.length };
-    });
-
-    // Overall avg close time
-    const allTimes = closeTimes.map(x => x.days);
-    const avgCloseTime = allTimes.length ? Math.round(allTimes.reduce((a, b) => a + b, 0) / allTimes.length) : null;
-
-    // Weekly data for last 12 weeks
-    const weeks = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - (i * 7));
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const mon = new Date(d.setDate(diff));
-      weeks.push(mon.toISOString().slice(0, 10));
-    }
-
-    // AI suggestions based on trends
-    const suggestions = [];
-    const currentMonth = new Date().getMonth(); // 0-indexed
-    // HVAC seasonal check
-    const hvacThisMonth = months.map((m, i) => ({ m, v: (categoryByMonth[m] && categoryByMonth[m]['HVAC']) || 0 }));
-    const hvacRecent = hvacThisMonth.slice(-2).reduce((a, b) => a + b.v, 0);
-    const hvacPrevYear = hvacThisMonth.slice(0, 3).reduce((a, b) => a + b.v, 0);
-    if (currentMonth >= 4 && currentMonth <= 8 && hvacRecent > 3) {
-      suggestions.push({ type: 'warning', category: 'HVAC', message: 'HVAC work orders are elevated this month (' + hvacRecent + ' in last 2 months). Consider proactive AC filter checks and preventive maintenance before peak summer heat.' });
-    }
-    // Backlog check
-    const recentOpened = months.slice(-3).reduce((a, m) => a + (openedByMonth[m] || 0), 0);
-    const recentClosed = months.slice(-3).reduce((a, m) => a + (closedByMonth[m] || 0), 0);
-    const backlogTrend = recentOpened - recentClosed;
-    if (backlogTrend > 10) {
-      suggestions.push({ type: 'warning', category: 'Backlog', message: 'Work order backlog is growing — ' + recentOpened + ' opened vs ' + recentClosed + ' closed in last 3 months (' + backlogTrend + ' net increase). Consider adding vendor capacity.' });
-    } else if (backlogTrend < -5) {
-      suggestions.push({ type: 'success', category: 'Backlog', message: 'Great progress — more WOs closed than opened in last 3 months (' + Math.abs(backlogTrend) + ' net decrease in backlog).' });
-    }
-    // Slow close time
-    if (avgCloseTime && avgCloseTime > 14) {
-      suggestions.push({ type: 'warning', category: 'Response Time', message: 'Average close time is ' + avgCloseTime + ' days. Target is under 14 days. Review vendor performance and follow-up processes.' });
-    }
-    // Category spike vs last year same month
-    const prevYearMonth = months[0]; // 12 months ago
-    const currMonth = months[11];
-    if (categoryByMonth[prevYearMonth] && categoryByMonth[currMonth]) {
-      allCategories.forEach(cat => {
-        const prev = categoryByMonth[prevYearMonth][cat] || 0;
-        const curr = categoryByMonth[currMonth][cat] || 0;
-        if (prev > 0 && curr > prev * 1.5 && curr > 3) {
-          suggestions.push({ type: 'info', category: cat, message: cat + ' WOs are up ' + Math.round(((curr - prev) / prev) * 100) + '% vs same month last year (' + curr + ' this month vs ' + prev + ' last year). Watch for recurring pattern.' });
-        }
-      });
-    }
-
-    res.json({
-      totalWOs: allWOs.length,
-      avgCloseTime,
-      months,
-      weeks,
-      openedByMonth: months.map(m => openedByMonth[m] || 0),
-      closedByMonth: months.map(m => closedByMonth[m] || 0),
-      openedByWeek: weeks.map(w => openedByWeek[w] || 0),
-      closedByWeek: weeks.map(w => closedByWeek[w] || 0),
-      categoryTrends,
-      avgCloseByCategory,
-      suggestions
-    });
-  } catch(e) {
-    console.error('WO analytics error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-// ── End WO Analytics ──
-
-
-// ── WO Analytics: 12-month trends ──
-app.get('/api/wo-analytics', async (req, res) => {
-  try {
-    const cutoff = new Date();
-    cutoff.setMonth(cutoff.getMonth() - 12);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-
-    let allWOs = [], pg = 1;
-    while (pg <= 40) {
-      const data = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
-      const batch = Array.isArray(data) ? data : (data && data.data) || [];
-      if (!batch.length) break;
-      let hitCutoff = false;
-      batch.forEach(rec => {
-        const wo = rec.workOrder || rec;
-        if (!wo.workOrderID) return;
-        const created = (wo.dateTimeCreated || '').slice(0, 10);
-        if (created >= cutoffStr) {
-          wo._unitAddress = (rec.unit && (rec.unit.address || rec.unit.name)) || (rec.property && rec.property.address) || '';
-          wo._description = wo.description || '';
-          allWOs.push(wo);
-        } else {
-          hitCutoff = true;
-        }
-      });
-      if (hitCutoff && batch.length < 100) break;
-      if (batch.length < 100) break;
-      pg++;
-    }
-
-    // Category guesser
-    function guessCategory(text) {
-      const t = (text || '').replace(/<[^>]+>/g, ' ').toLowerCase();
-      if (/hvac|ac |air.?cond|heat|furnace|cooling/.test(t)) return 'HVAC';
-      if (/plumb|leak|drain|toilet|faucet|pipe|water/.test(t)) return 'Plumbing';
-      if (/electric|outlet|breaker|wiring|panel|light/.test(t)) return 'Electrical';
-      if (/pest|scorpion|roach|termite|bee|ant/.test(t)) return 'Pest Control';
-      if (/appliance|dishwash|washer|dryer|refriger|oven|stove/.test(t)) return 'Appliance';
-      if (/paint|drywall|patch|wall/.test(t)) return 'Paint / Drywall';
-      if (/lawn|landscap|tree|weed|yard|grass/.test(t)) return 'Landscaping';
-      if (/clean|trash|junk|debris/.test(t)) return 'Cleaning';
-      if (/lock|key|door|window|garage/.test(t)) return 'Lock / Door / Window';
-      if (/roof|gutter|exterior|stucco/.test(t)) return 'Roof / Exterior';
-      return 'Other';
-    }
-
-    function monthKey(dateStr) {
-      if (!dateStr) return null;
-      return dateStr.slice(0, 7);
-    }
-    function weekKey(dateStr) {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const mon = new Date(d.setDate(diff));
-      return mon.toISOString().slice(0, 10);
-    }
-
-    // Build monthly and weekly buckets
-    const openedByMonth = {}, closedByMonth = {};
-    const openedByWeek = {}, closedByWeek = {};
-    const categoryByMonth = {};
-    const closeTimes = [];
-    const categoryCloseTimes = {};
-
-    allWOs.forEach(wo => {
-      const created = (wo.dateTimeCreated || '').slice(0, 10);
-      const closed = wo.dateClosed ? wo.dateClosed.slice(0, 10) : null;
-      const mk = monthKey(created);
-      const wk = weekKey(created);
-      const cat = guessCategory(wo._description);
-
-      if (mk) {
-        openedByMonth[mk] = (openedByMonth[mk] || 0) + 1;
-        if (!categoryByMonth[mk]) categoryByMonth[mk] = {};
-        categoryByMonth[mk][cat] = (categoryByMonth[mk][cat] || 0) + 1;
-      }
-      if (wk) openedByWeek[wk] = (openedByWeek[wk] || 0) + 1;
-
-      if (closed) {
-        const cmk = monthKey(closed);
-        const cwk = weekKey(closed);
-        if (cmk) closedByMonth[cmk] = (closedByMonth[cmk] || 0) + 1;
-        if (cwk) closedByWeek[cwk] = (closedByWeek[cwk] || 0) + 1;
-
-        // Avg close time
-        const openDate = new Date(created);
-        const closeDate = new Date(closed);
-        const days = Math.round((closeDate - openDate) / 86400000);
-        if (days >= 0 && days < 365) {
-          closeTimes.push({ days, cat });
-          if (!categoryCloseTimes[cat]) categoryCloseTimes[cat] = [];
-          categoryCloseTimes[cat].push(days);
-        }
-      }
-    });
-
-    // Build sorted month list for last 12 months
-    const months = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(1);
-      d.setMonth(d.getMonth() - i);
-      months.push(d.toISOString().slice(0, 7));
-    }
-
-    // Seasonal category breakdown (by month across all data)
-    const allCategories = ['HVAC','Plumbing','Electrical','Pest Control','Appliance','Paint / Drywall','Landscaping','Cleaning','Lock / Door / Window','Roof / Exterior','Other'];
-    const categoryTrends = {};
-    allCategories.forEach(cat => {
-      categoryTrends[cat] = months.map(m => (categoryByMonth[m] && categoryByMonth[m][cat]) || 0);
-    });
-
-    // Avg close times by category
-    const avgCloseByCategory = {};
-    Object.entries(categoryCloseTimes).forEach(([cat, times]) => {
-      const avg = Math.round(times.reduce((a, b) => a + b, 0) / times.length);
-      avgCloseByCategory[cat] = { avg, count: times.length };
-    });
-
-    // Overall avg close time
-    const allTimes = closeTimes.map(x => x.days);
-    const avgCloseTime = allTimes.length ? Math.round(allTimes.reduce((a, b) => a + b, 0) / allTimes.length) : null;
-
-    // Weekly data for last 12 weeks
-    const weeks = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - (i * 7));
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const mon = new Date(d.setDate(diff));
-      weeks.push(mon.toISOString().slice(0, 10));
-    }
-
-    // AI suggestions based on trends
-    const suggestions = [];
-    const currentMonth = new Date().getMonth(); // 0-indexed
-    // HVAC seasonal check
-    const hvacThisMonth = months.map((m, i) => ({ m, v: (categoryByMonth[m] && categoryByMonth[m]['HVAC']) || 0 }));
-    const hvacRecent = hvacThisMonth.slice(-2).reduce((a, b) => a + b.v, 0);
-    const hvacPrevYear = hvacThisMonth.slice(0, 3).reduce((a, b) => a + b.v, 0);
-    if (currentMonth >= 4 && currentMonth <= 8 && hvacRecent > 3) {
-      suggestions.push({ type: 'warning', category: 'HVAC', message: 'HVAC work orders are elevated this month (' + hvacRecent + ' in last 2 months). Consider proactive AC filter checks and preventive maintenance before peak summer heat.' });
-    }
-    // Backlog check
-    const recentOpened = months.slice(-3).reduce((a, m) => a + (openedByMonth[m] || 0), 0);
-    const recentClosed = months.slice(-3).reduce((a, m) => a + (closedByMonth[m] || 0), 0);
-    const backlogTrend = recentOpened - recentClosed;
-    if (backlogTrend > 10) {
-      suggestions.push({ type: 'warning', category: 'Backlog', message: 'Work order backlog is growing — ' + recentOpened + ' opened vs ' + recentClosed + ' closed in last 3 months (' + backlogTrend + ' net increase). Consider adding vendor capacity.' });
-    } else if (backlogTrend < -5) {
-      suggestions.push({ type: 'success', category: 'Backlog', message: 'Great progress — more WOs closed than opened in last 3 months (' + Math.abs(backlogTrend) + ' net decrease in backlog).' });
-    }
-    // Slow close time
-    if (avgCloseTime && avgCloseTime > 14) {
-      suggestions.push({ type: 'warning', category: 'Response Time', message: 'Average close time is ' + avgCloseTime + ' days. Target is under 14 days. Review vendor performance and follow-up processes.' });
-    }
-    // Category spike vs last year same month
-    const prevYearMonth = months[0]; // 12 months ago
-    const currMonth = months[11];
-    if (categoryByMonth[prevYearMonth] && categoryByMonth[currMonth]) {
-      allCategories.forEach(cat => {
-        const prev = categoryByMonth[prevYearMonth][cat] || 0;
-        const curr = categoryByMonth[currMonth][cat] || 0;
-        if (prev > 0 && curr > prev * 1.5 && curr > 3) {
-          suggestions.push({ type: 'info', category: cat, message: cat + ' WOs are up ' + Math.round(((curr - prev) / prev) * 100) + '% vs same month last year (' + curr + ' this month vs ' + prev + ' last year). Watch for recurring pattern.' });
-        }
-      });
-    }
-
-    res.json({
-      totalWOs: allWOs.length,
-      avgCloseTime,
-      months,
-      weeks,
-      openedByMonth: months.map(m => openedByMonth[m] || 0),
-      closedByMonth: months.map(m => closedByMonth[m] || 0),
-      openedByWeek: weeks.map(w => openedByWeek[w] || 0),
-      closedByWeek: weeks.map(w => closedByWeek[w] || 0),
-      categoryTrends,
-      avgCloseByCategory,
-      suggestions
-    });
-  } catch(e) {
-    console.error('WO analytics error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-// ── End WO Analytics ──
-
-
-// ── RV Work Order Webhook → Aptly Photo Sync ──
+// ── RV Work Order Webhook → Files Tab + Aptly Photo Sync ──
 const PHOTO_SYNC_UPLOADED = {};
+
+// Build a multipart body buffer (helper used in multiple upload calls)
+function buildMultipart(boundary, fieldName, fileName, mimeType, dataBuffer) {
+  const header = Buffer.from(
+    '--' + boundary + '\r\n' +
+    'Content-Disposition: form-data; name="' + fieldName + '"; filename="' + fileName + '"\r\n' +
+    'Content-Type: ' + mimeType + '\r\n\r\n'
+  );
+  const footer = Buffer.from('\r\n--' + boundary + '--\r\n');
+  return Buffer.concat([header, dataBuffer, footer]);
+}
+
+// Upload a buffer to Rentvine Files tab for a given objectType + objectID
+// POST /api/manager/files  (proven working — returns 200 + file record)
+async function uploadToRVFiles(fileName, mimeType, imgBuffer, objectTypeID, objectID) {
+  // Proven working: POST /api/manager/files with Basic auth (file-specific key/secret)
+  // objectTypeID=16 (WorkOrder), objectID=workOrderID
+  const RV_FILE_KEY    = process.env.RENTVINE_FILE_KEY    || '2586bdded08f499bb2057e373fd662f7';
+  const RV_FILE_SECRET = process.env.RENTVINE_FILE_SECRET || '81f3aa4cb0434162aab8a27702f089b8';
+  const RV_FILE_AUTH   = Buffer.from(RV_FILE_KEY + ':' + RV_FILE_SECRET).toString('base64');
+
+  const boundary = '----AloePMFileBoundary' + Date.now();
+  const body = buildMultipart(boundary, 'file', fileName, mimeType, imgBuffer);
+  // Pass objectTypeID + objectID as query params (cleaner than form fields)
+  const url = RENTVINE_BASE + '/files?objectTypeID=' + objectTypeID + '&objectID=' + objectID;
+
+  const upResp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + RV_FILE_AUTH,
+      'Content-Type': 'multipart/form-data; boundary=' + boundary,
+      'Content-Length': String(body.length)
+    },
+    body
+  });
+  return { ok: upResp.ok, status: upResp.status, text: (await upResp.text()).slice(0, 300) };
+}
 
 async function syncPhotosForWO(workOrderID, workOrderNumber) {
   const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
-  const results = { uploaded: 0, skipped: 0, errors: 0 };
+  const results = { rvUploaded: 0, aptlyUploaded: 0, skipped: 0, errors: 0 };
   try {
-    // Get files for this WO from Rentvine
+    // 1. Get Issue Photos for this WO from Rentvine
     const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: workOrderID });
     const files = Array.isArray(filesData) ? filesData : [];
+    // isImage === '1' flags photos; category "Issue Photo" is set by Rentvine on WO creation
     const photos = files.filter(f => f.file && f.file.isImage === '1');
-    if (!photos.length) { console.log('Photo sync WO#' + workOrderNumber + ': no photos'); return results; }
+    if (!photos.length) {
+      console.log('Photo sync WO#' + workOrderNumber + ': no photos found yet');
+      return results;
+    }
+    console.log('Photo sync WO#' + workOrderNumber + ': found', photos.length, 'photos');
 
-    // Find matching Aptly card by workOrderNumber
+    // 2. Find matching Aptly card (for Aptly sync)
     let aptlyCardId = null;
     for (let pg = 0; pg < 10; pg++) {
       const resp = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=' + pg + '&pageSize=100&includeArchived=true', { headers: { 'x-token': APTLY_TOK } });
@@ -1999,41 +1656,57 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
       if (match) { aptlyCardId = match._id; break; }
       if (items.length < 100) break;
     }
-    if (!aptlyCardId) { console.log('Photo sync WO#' + workOrderNumber + ': no Aptly card found'); return results; }
+    if (!aptlyCardId) console.log('Photo sync WO#' + workOrderNumber + ': no Aptly card found — will still upload to RV Files tab');
 
+    // 3. Process each photo
     for (const fileRec of photos) {
       const fileID = fileRec.file.fileID;
-      const fileName = fileRec.file.title || (fileID + '.jpg');
-      const logKey = 'f' + fileID + '_c' + aptlyCardId;
-      if (PHOTO_SYNC_UPLOADED[logKey]) { results.skipped++; continue; }
-
-      const dlResp = await fetch(RENTVINE_BASE + '/files/' + fileID + '/preview', { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
-      if (!dlResp.ok) { results.errors++; continue; }
-      const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
-
-      // Build multipart/form-data manually for Node.js compatibility
-      const boundary = '----AloePMBoundary' + Date.now();
+      const fileName = fileRec.file.title || ('WO' + workOrderNumber + '_' + fileID + '.jpg');
       const ext = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
       const mimeType = 'image/' + ext;
-      const partHeader = Buffer.from(
-        '--' + boundary + '\r\n' +
-        'Content-Disposition: form-data; name="file"; filename="' + fileName + '"\r\n' +
-        'Content-Type: ' + mimeType + '\r\n\r\n'
-      );
-      const partFooter = Buffer.from('\r\n--' + boundary + '--\r\n');
-      const body = Buffer.concat([partHeader, imgBuffer, partFooter]);
-      const upResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + aptlyCardId + '/file', {
-        method: 'POST',
-        headers: { 'x-token': APTLY_TOK, 'Content-Type': 'multipart/form-data; boundary=' + boundary, 'Content-Length': body.length },
-        body: body
-      });
-      if (upResp.ok) {
-        PHOTO_SYNC_UPLOADED[logKey] = Date.now();
-        results.uploaded++;
-        console.log('Photo sync: uploaded', fileName, 'WO#' + workOrderNumber);
-      } else {
-        console.error('Photo sync upload failed WO#' + workOrderNumber + ':', (await upResp.text()).slice(0, 100));
+      const rvLogKey = 'rv_f' + fileID + '_wo' + workOrderID;
+      const aptlyLogKey = 'aptly_f' + fileID + '_c' + (aptlyCardId || 'none');
+
+      // Download from Rentvine
+      const dlResp = await fetch(RENTVINE_BASE + '/files/' + fileID + '/preview', { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+      if (!dlResp.ok) {
+        console.error('Photo sync: download failed for fileID', fileID, 'status', dlResp.status);
         results.errors++;
+        continue;
+      }
+      const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
+
+      // ── Upload to Rentvine Files tab (PRIMARY) ──
+      if (!PHOTO_SYNC_UPLOADED[rvLogKey]) {
+        const rvResult = await uploadToRVFiles(fileName, mimeType, imgBuffer, 16, workOrderID);
+        if (rvResult.ok) {
+          PHOTO_SYNC_UPLOADED[rvLogKey] = Date.now();
+          results.rvUploaded++;
+          console.log('Photo sync → RV Files: uploaded', fileName, 'to WO#' + workOrderNumber, '| status:', rvResult.status);
+        } else {
+          console.error('Photo sync → RV Files FAILED WO#' + workOrderNumber, 'status:', rvResult.status, rvResult.text);
+          results.errors++;
+        }
+      } else {
+        results.skipped++;
+      }
+
+      // ── Upload to Aptly card (SECONDARY, if card found) ──
+      if (aptlyCardId && !PHOTO_SYNC_UPLOADED[aptlyLogKey]) {
+        const boundary2 = '----AloePMAptlyBoundary' + Date.now();
+        const aptlyBody = buildMultipart(boundary2, 'file', fileName, mimeType, imgBuffer);
+        const aptlyResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + aptlyCardId + '/file', {
+          method: 'POST',
+          headers: { 'x-token': APTLY_TOK, 'Content-Type': 'multipart/form-data; boundary=' + boundary2, 'Content-Length': String(aptlyBody.length) },
+          body: aptlyBody
+        });
+        if (aptlyResp.ok) {
+          PHOTO_SYNC_UPLOADED[aptlyLogKey] = Date.now();
+          results.aptlyUploaded++;
+          console.log('Photo sync → Aptly: uploaded', fileName, 'to card', aptlyCardId);
+        } else {
+          console.error('Photo sync → Aptly FAILED WO#' + workOrderNumber, (await aptlyResp.text()).slice(0, 100));
+        }
       }
     }
   } catch(e) { console.error('Photo sync error WO#' + workOrderNumber + ':', e.message); results.errors++; }
@@ -2047,50 +1720,50 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
     const wo = payload.workOrder || payload.data || payload;
     const workOrderID = wo.workOrderID || wo.id;
     const workOrderNumber = wo.workOrderNumber || wo.number;
-    if (!workOrderID || !workOrderNumber) { console.log('RV webhook: no WO ID/number in payload', JSON.stringify(payload).slice(0,200)); return; }
-    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') — syncing photos');
+    if (!workOrderID || !workOrderNumber) {
+      console.log('RV webhook: missing WO ID/number in payload', JSON.stringify(payload).slice(0, 200));
+      return;
+    }
+    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') received — scheduling photo sync');
+    // Delay 5s to give Rentvine time to save photos before we fetch them
     setTimeout(async () => {
       const result = await syncPhotosForWO(workOrderID, workOrderNumber);
-      console.log('RV webhook photo sync WO#' + workOrderNumber + ':', result);
-    }, 3000); // 3s delay to let Rentvine finish saving photos
+      console.log('RV webhook photo sync complete WO#' + workOrderNumber + ':', result);
+      // Post to Slack #maintenance if there were any uploads
+      if (SLACK_TOKEN && (result.rvUploaded > 0 || result.aptlyUploaded > 0)) {
+        const msg = ':camera: *WO #' + workOrderNumber + '* — auto-copied ' + result.rvUploaded + ' photo(s) to Rentvine Files tab' +
+          (result.aptlyUploaded > 0 ? ', ' + result.aptlyUploaded + ' to Aptly' : '') +
+          (result.errors > 0 ? ' (' + result.errors + ' errors)' : '') +
+          '\n<https://aloepm.rentvine.com/maintenance/work-orders/' + workOrderID + '|View in Rentvine>';
+        fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: 'C06BWVACZQF', text: msg })
+        }).catch(e => console.error('Slack notify error:', e.message));
+      }
+    }, 5000);
   } catch(e) { console.error('RV webhook error:', e.message); }
 });
 
-app.get('/api/photo-sync/test-upload', async (req, res) => {
+// Test: upload a photo from WO 7026 → its own Rentvine Files tab (to verify UI visibility)
+app.get('/api/photo-sync/test-rv-upload', async (req, res) => {
   try {
-    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
-    // Get a real file from RV WO 7026
-    const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: '7026' });
+    const testWOID = req.query.woID || '7026';
+    const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: testWOID });
     const files = Array.isArray(filesData) ? filesData : [];
     const photo = files.find(f => f.file && f.file.isImage === '1');
-    if (!photo) return res.json({ error: 'no photos found', filesData });
+    if (!photo) return res.json({ error: 'no photos found on WO ' + testWOID, filesData });
     const fileID = photo.file.fileID;
-    const fileName = photo.file.title || (fileID + '.jpg');
-    // Download
+    const fileName = 'TEST_COPY_' + (photo.file.title || fileID + '.jpg');
     const dlResp = await fetch(RENTVINE_BASE + '/files/' + fileID + '/preview', { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
     if (!dlResp.ok) return res.json({ error: 'download failed', status: dlResp.status });
     const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
-    // Find Aptly card
-    const aptlyResp = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=0&pageSize=100', { headers: { 'x-token': APTLY_TOK } });
-    const aptlyBatch = await aptlyResp.json();
-    const items = Array.isArray(aptlyBatch) ? aptlyBatch : (aptlyBatch && aptlyBatch.data) || [];
-    const card = items.find(c => String(c.workOrderNumber) === '107012');
-    if (!card) return res.json({ error: 'no aptly card found', sample: items.slice(0,2).map(c=>({id:c._id,num:c.workOrderNumber})) });
-    // Upload
-    const boundary = '----AloePMBoundary' + Date.now();
-    const partHeader = Buffer.from('--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + fileName + '"\r\nContent-Type: image/jpeg\r\n\r\n');
-    const partFooter = Buffer.from('\r\n--' + boundary + '--\r\n');
-    const body = Buffer.concat([partHeader, imgBuffer, partFooter]);
-    const upResp = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + card._id + '/file', {
-      method: 'POST',
-      headers: { 'x-token': APTLY_TOK, 'Content-Type': 'multipart/form-data; boundary=' + boundary, 'Content-Length': String(body.length) },
-      body: body
-    });
-    const upText = await upResp.text();
-    res.json({ status: upResp.status, cardId: card._id, fileID, fileName, imgSize: imgBuffer.length, response: upText.slice(0,300) });
+    const result = await uploadToRVFiles(fileName, 'image/jpeg', imgBuffer, 16, testWOID);
+    res.json({ woID: testWOID, sourceFileID: fileID, fileName, imgBytes: imgBuffer.length, uploadStatus: result.status, uploadOk: result.ok, uploadResponse: result.text });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// Manual trigger: POST { workOrderID, workOrderNumber }
 app.post('/api/photo-sync/run', async (req, res) => {
   try {
     const { workOrderID, workOrderNumber } = req.body || {};
@@ -2101,7 +1774,7 @@ app.post('/api/photo-sync/run', async (req, res) => {
     }
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
-// ── End RV→Aptly Photo Sync ──
+// ── End RV WO Webhook / Photo Sync ──
 
 app.get('/reload-kb-cache', function(req, res) {
   Object.keys(KB_TOPIC_CACHE).forEach(k => delete KB_TOPIC_CACHE[k]);
