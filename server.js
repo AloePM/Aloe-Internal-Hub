@@ -1723,24 +1723,9 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
       console.log('RV webhook: missing WO ID/number in payload', JSON.stringify(payload).slice(0, 200));
       return;
     }
-    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') received — scheduling photo sync');
-    // Delay 5s to give Rentvine time to save photos before we fetch them
-    setTimeout(async () => {
-      const result = await syncPhotosForWO(workOrderID, workOrderNumber);
-      console.log('RV webhook photo sync complete WO#' + workOrderNumber + ':', result);
-      // Post to Slack #maintenance if there were any uploads
-      if (SLACK_TOKEN && (result.rvUploaded > 0 || result.aptlyUploaded > 0)) {
-        const msg = ':camera: *WO #' + workOrderNumber + '* — auto-copied ' + result.rvUploaded + ' photo(s) to Rentvine Files tab' +
-          (result.aptlyUploaded > 0 ? ', ' + result.aptlyUploaded + ' to Aptly' : '') +
-          (result.errors > 0 ? ' (' + result.errors + ' errors)' : '') +
-          '\n<https://aloepm.rentvine.com/maintenance/work-orders/' + workOrderID + '|View in Rentvine>';
-        fetch('https://slack.com/api/chat.postMessage', {
-          method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ channel: 'C06BWVACZQF', text: msg })
-        }).catch(e => console.error('Slack notify error:', e.message));
-      }
-    }, 5000);
+    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') received — photo sync PAUSED (issue photo source under investigation)');
+    // TEMP DISABLED: syncPhotosForWO uploads wrong files until we confirm issue photo endpoint
+    // Re-enable once debug-wo confirms the correct source for issue photos
   } catch(e) { console.error('RV webhook error:', e.message); }
 });
 
@@ -1759,6 +1744,57 @@ app.get('/api/photo-sync/test-rv-upload', async (req, res) => {
     const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
     const result = await uploadToRVFiles(fileName, 'image/jpeg', imgBuffer, 16, testWOID);
     res.json({ woID: testWOID, sourceFileID: fileID, fileName, imgBytes: imgBuffer.length, uploadStatus: result.status, uploadOk: result.ok, uploadResponse: result.text });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Debug: inspect all files + issue photos on a WO
+app.get('/api/photo-sync/debug-wo', async (req, res) => {
+  try {
+    const woID = req.query.woID || '7026';
+
+    // Test 1: /files with objectTypeID + objectID - does it actually filter?
+    const filesRaw = await rvFetch('/files', { objectTypeID: 16, objectID: woID });
+    const allFiles = Array.isArray(filesRaw) ? filesRaw : [];
+    // Filter client-side to only files that actually match this WO
+    const matchedFiles = allFiles.filter(f => String(f.fileAttachment?.objectID) === String(woID) || String(f.objectID) === String(woID));
+
+    // Test 2: WO detail - does it embed photos?
+    const woDetail = await rvFetch('/maintenance/work-orders/' + woID);
+
+    // Test 3: issues sub-endpoint
+    let issuesData = null;
+    try { issuesData = await rvFetch('/maintenance/work-orders/' + woID + '/issues'); } catch(e) { issuesData = { error: e.message }; }
+
+    // Test 4: media sub-endpoint
+    let mediaData = null;
+    try { mediaData = await rvFetch('/maintenance/work-orders/' + woID + '/media'); } catch(e) { mediaData = { error: e.message }; }
+
+    // Test 5: photos sub-endpoint
+    let photosData = null;
+    try { photosData = await rvFetch('/maintenance/work-orders/' + woID + '/photos'); } catch(e) { photosData = { error: e.message }; }
+
+    res.json({
+      woID,
+      // Show first 3 raw file records so we can see full structure
+      rawFileSample: allFiles.slice(0, 3),
+      allFilesCount: allFiles.length,
+      matchedFilesCount: matchedFiles.length,
+      matchedFiles: matchedFiles.map(f => ({
+        fileID: f.file?.fileID || f.fileID,
+        title: f.file?.title || f.title,
+        isImage: f.file?.isImage || f.isImage,
+        objectID: f.fileAttachment?.objectID || f.objectID,
+        objectTypeID: f.fileAttachment?.objectTypeID || f.objectTypeID,
+        category: f.file?.category,
+        pathID: f.file?.pathID,
+      })),
+      // Show keys on the WO detail so we know what fields exist
+      woDetailKeys: woDetail && !woDetail.error ? Object.keys(woDetail) : woDetail,
+      // Sub-endpoints
+      issuesData,
+      mediaData,
+      photosData,
+    });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
