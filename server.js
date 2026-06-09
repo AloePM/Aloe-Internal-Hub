@@ -1633,10 +1633,14 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
   const results = { rvUploaded: 0, aptlyUploaded: 0, skipped: 0, errors: 0 };
   try {
     // 1. Get Issue Photos for this WO from Rentvine
-    const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: workOrderID });
-    const files = Array.isArray(filesData) ? filesData : [];
-    // isImage === '1' flags photos; category "Issue Photo" is set by Rentvine on WO creation
-    const photos = files.filter(f => f.file && f.file.isImage === '1');
+    // Use /files/attachments (not /files) — the latter ignores objectID filter
+    // /files/attachments correctly returns only files attached to this specific WO
+    const filesData = await rvFetch('/files/attachments', { objectTypeID: 16, objectID: workOrderID });
+    const files = Array.isArray(filesData) ? filesData : (filesData && filesData.data) || [];
+    const photos = files.filter(f => {
+      const f2 = f.file || f;
+      return f2.isImage === '1' || f2.isImage === true || (f2.fileType||'').match(/jpe?g|png|gif|webp/i);
+    });
     if (!photos.length) {
       console.log('Photo sync WO#' + workOrderNumber + ': no photos found yet');
       return results;
@@ -1723,9 +1727,31 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
       console.log('RV webhook: missing WO ID/number in payload', JSON.stringify(payload).slice(0, 200));
       return;
     }
-    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') received — photo sync PAUSED (issue photo source under investigation)');
-    // TEMP DISABLED: syncPhotosForWO uploads wrong files until we confirm issue photo endpoint
-    // Re-enable once debug-wo confirms the correct source for issue photos
+    console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') received');
+    // Log full payload to Slack so we can see what Rentvine sends (do we get photo file IDs?)
+    if (SLACK_TOKEN) {
+      fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'C06BWVACZQF', text: ':hook: *RV Webhook WO#' + workOrderNumber + '*\n```' + JSON.stringify(payload, null, 2).slice(0, 2900) + '```' })
+      }).catch(e => console.error('Slack log error:', e.message));
+    }
+    // Delay 5s then try to fetch + copy photos
+    setTimeout(async () => {
+      const result = await syncPhotosForWO(workOrderID, workOrderNumber);
+      console.log('RV webhook photo sync complete WO#' + workOrderNumber + ':', result);
+      if (SLACK_TOKEN && (result.rvUploaded > 0 || result.aptlyUploaded > 0)) {
+        const msg = ':camera: *WO #' + workOrderNumber + '* — auto-copied ' + result.rvUploaded + ' photo(s) to Rentvine Files tab' +
+          (result.aptlyUploaded > 0 ? ', ' + result.aptlyUploaded + ' to Aptly' : '') +
+          (result.errors > 0 ? ' (' + result.errors + ' errors)' : '') +
+          '\n<https://aloepm.rentvine.com/maintenance/work-orders/' + workOrderID + '|View in Rentvine>';
+        fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: 'C06BWVACZQF', text: msg })
+        }).catch(e => console.error('Slack notify error:', e.message));
+      }
+    }, 5000);
   } catch(e) { console.error('RV webhook error:', e.message); }
 });
 
@@ -1733,9 +1759,9 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
 app.get('/api/photo-sync/test-rv-upload', async (req, res) => {
   try {
     const testWOID = req.query.woID || '7026';
-    const filesData = await rvFetch('/files', { objectTypeID: 16, objectID: testWOID });
-    const files = Array.isArray(filesData) ? filesData : [];
-    const photo = files.find(f => f.file && f.file.isImage === '1');
+    const filesData = await rvFetch('/files/attachments', { objectTypeID: 16, objectID: testWOID });
+    const files = Array.isArray(filesData) ? filesData : (filesData && filesData.data) || [];
+    const photo = files.find(f => (f.file||f).isImage === '1' || (f.file||f).fileType?.match(/jpe?g|png/i));
     if (!photo) return res.json({ error: 'no photos found on WO ' + testWOID, filesData });
     const fileID = photo.file.fileID;
     const fileName = 'TEST_COPY_' + (photo.file.title || fileID + '.jpg');
@@ -1752,8 +1778,8 @@ app.get('/api/photo-sync/debug-wo', async (req, res) => {
   try {
     const woID = req.query.woID || '7026';
 
-    // Test 1: /files with objectTypeID + objectID - does it actually filter?
-    const filesRaw = await rvFetch('/files', { objectTypeID: 16, objectID: woID });
+    // Test 1: /files/attachments (correct endpoint) vs /files (broken - ignores objectID)
+    const filesRaw = await rvFetch('/files/attachments', { objectTypeID: 16, objectID: woID });
     const allFiles = Array.isArray(filesRaw) ? filesRaw : [];
     // Filter client-side to only files that actually match this WO
     const matchedFiles = allFiles.filter(f => String(f.fileAttachment?.objectID) === String(woID) || String(f.objectID) === String(woID));
@@ -1788,8 +1814,15 @@ app.get('/api/photo-sync/debug-wo', async (req, res) => {
         category: f.file?.category,
         pathID: f.file?.pathID,
       })),
-      // Show keys on the WO detail so we know what fields exist
-      woDetailKeys: woDetail && !woDetail.error ? Object.keys(woDetail) : woDetail,
+      // Show full WO detail to find nested photo fields
+      woDetail: woDetail && !woDetail.error ? {
+        topKeys: Object.keys(woDetail),
+        workOrderKeys: woDetail.workOrder ? Object.keys(woDetail.workOrder) : null,
+        issuesSample: woDetail.workOrder?.issues ? woDetail.workOrder.issues.slice(0,2) : null,
+        photosSample: woDetail.workOrder?.photos ? woDetail.workOrder.photos.slice(0,2) : null,
+        attachmentsSample: woDetail.workOrder?.attachments ? woDetail.workOrder.attachments.slice(0,2) : null,
+        filesSample: woDetail.workOrder?.files ? woDetail.workOrder.files.slice(0,2) : null,
+      } : woDetail,
       // Sub-endpoints
       issuesData,
       mediaData,
