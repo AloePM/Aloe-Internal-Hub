@@ -451,7 +451,7 @@ async function rvFetch(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
   });
-  const r = await fetch(url.toString(), { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
+  const r = await fetch(url.toString(), { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
   if (!r.ok) {
     const txt = await r.text();
     console.error('Rentvine error', r.status, txt.slice(0, 200));
@@ -1620,6 +1620,7 @@ async function uploadToRVFiles(fileName, mimeType, imgBuffer, objectTypeID, obje
     method: 'POST',
     headers: {
       'Authorization': 'Basic ' + RV_FILE_AUTH,
+      'X-Rentvine-Account': RENTVINE_ACCOUNT,
       'Content-Type': 'multipart/form-data; boundary=' + boundary,
       'Content-Length': String(body.length)
     },
@@ -1720,8 +1721,8 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
   res.sendStatus(200); // Acknowledge immediately
   try {
     const payload = req.body;
-    const wo = payload.workOrder || payload.data || payload;
-    const workOrderID = wo.workOrderID || wo.id;
+    const wo = payload.data || payload.workOrder || payload;
+    const workOrderID = wo.workOrderID || wo.id || payload.event?.objectID;
     const workOrderNumber = wo.workOrderNumber || wo.number;
     if (!workOrderID || !workOrderNumber) {
       console.log('RV webhook: missing WO ID/number in payload', JSON.stringify(payload).slice(0, 200));
