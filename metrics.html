@@ -582,10 +582,9 @@ function renderOccupancy() {
       // Move-out reasons card
       '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Tenant Move-Out Reasons</div></div>'+
       (moveOutReasons.length ?
-        '<div class="chart-wrap" style="height:200px"><canvas id="occ-reasons"></canvas></div>' :
-        '<div style="padding:16px"><div style="font-size:13px;color:var(--text);margin-bottom:8px;font-weight:600">No move-out reasons on file</div>'+
-        '<div style="font-size:12px;color:var(--muted);line-height:1.6">The <strong>Reason for Vacating</strong> field in Rentvine is currently not being filled in when processing move-outs. Once your team starts selecting a reason when closing leases in Rentvine, this chart will automatically populate.</div></div>')+
-      '</div>'+
+'<div class="chart-wrap" style="height:' + Math.max(200, moveOutReasons.length * 44) + 'px"><canvas id="occ-reasons"></canvas></div>' :
+       '<div style="padding:16px"><div style="font-size:13px;color:var(--text);margin-bottom:8px;font-weight:600">No move-out reasons on file</div>'+
+'<div style="font-size:12px;color:var(--muted);line-height:1.6">Move-out reasons come from the tenant-written <strong>Reason for Vacating</strong> field in Rentvine. Data will appear here once the backend changes are deployed.</div></div>')+      '</div>'+
 
     // Past due tenants
     '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
@@ -623,9 +622,30 @@ function renderOccupancy() {
       {label:'Move-Outs',data:moveOuts,backgroundColor:C.RED+'cc'}
     ], 200);
     if (moveOutReasons.length) {
-      mkBar('occ-reasons', reasonLabels, [
-        {label:'Count',data:reasonCounts,backgroundColor:C.AMBER+'cc'}
-      ], 200, true); // horizontal
+      var reasonPalette = [C.TEAL, C.GREEN, C.AMBER, C.BLUE, C.PURPLE, C.RED, C.GRAY, C.TEAL2];
+      var reasonColors = reasonCounts.map(function(_, i) { return reasonPalette[i % reasonPalette.length] + 'cc'; });
+      var chartH = Math.max(200, moveOutReasons.length * 44);
+      var el = document.getElementById('occ-reasons');
+      if (el) {
+        if (charts['occ-reasons']) charts['occ-reasons'].destroy();
+        charts['occ-reasons'] = new Chart(el, {
+          type: 'bar',
+          data: { labels: reasonLabels, datasets: [{ data: reasonCounts, backgroundColor: reasonColors, borderRadius: 4, borderSkipped: false }] },
+          options: Object.assign({}, CD, {
+            indexAxis: 'y',
+            plugins: Object.assign({}, CD.plugins, {
+              tooltip: Object.assign({}, CD.plugins.tooltip, {
+                callbacks: { label: function(ctx) { return ' ' + ctx.parsed.x + ' move-outs'; } }
+              })
+            }),
+            scales: {
+              x: { beginAtZero: true, ticks: { font: { size: 10, family: 'DM Mono' }, color: '#94acac', stepSize: 1 }, grid: { color: 'rgba(180,200,200,0.12)' }, border: { display: false } },
+              y: { ticks: { font: { size: 11, family: 'DM Sans' }, color: '#3a5050' }, grid: { display: false }, border: { display: false } }
+            }
+          })
+        });
+        el.parentElement.style.height = chartH + 'px';
+      }
     }
   }, 50);
 }
