@@ -2066,22 +2066,42 @@ fetchAllPages('/properties/export', { isActive: true }, 5),
   let moveInsMTD = 0, moveOutsMTD = 0;
   const pastDueTenants = [];
   let totalPastDue = 0;
+const moveOutReasons = {};
+const moveOutReasonRaw = [];
 
+function categorizeMoveOutReason(text) {
+  if (!text) return 'Not Specified';
+  const t = text.toLowerCase();
+  if (/buy|purchas|home|house/.test(t)) return 'Buying a Home';
+  if (/work|job|employ|relocat|transfer|state/.test(t)) return 'Job / Relocation';
+  if (/sell|owner sell/.test(t)) return 'Owner Selling';
+  if (/afford|financial|money|rent too|price/.test(t)) return 'Financial';
+  if (/family|personal|divorce|marriage|child/.test(t)) return 'Personal / Family';
+  if (/evict|violation|non.?pay/.test(t)) return 'Eviction / Non-Payment';
+  if (/downsize|upsize|bigger|smaller|bedroom/.test(t)) return 'Different Size Needed';
+  return 'Other';
+}
   allLeases.forEach(l => {
     const mk = monthKey(l.moveInDate || l.startDate);
     if (mk && moveInsByMonth[mk] !== undefined) moveInsByMonth[mk]++;
     if (mk === TMK) moveInsMTD++;
 
-    if (parseInt(l.primaryLeaseStatusID||0) === 3) {
-      const unitStillActive = activeUnitIDs.has(String(l.unitID));
-      const moveOutDate = l.expectedMoveOutDate || (l.moveOutDate && unitStillActive ? l.moveOutDate : null);
-      const mok = monthKey(moveOutDate);
-      if (moveOutDate && mok) {
-        if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
-        if (mok === TMK) moveOutsMTD++;
-      }
-    }
-
+   if (parseInt(l.primaryLeaseStatusID||0) === 3) {
+  const unitStillActive = activeUnitIDs.has(String(l.unitID));
+  const moveOutDate = l.expectedMoveOutDate || (l.moveOutDate && unitStillActive ? l.moveOutDate : null);
+  const mok = monthKey(moveOutDate);
+  if (moveOutDate && mok) {
+    if (moveOutsByMonth[mok] !== undefined) moveOutsByMonth[mok]++;
+    if (mok === TMK) moveOutsMTD++;
+  }
+  // Capture move-out reasons (tenant-written field)
+  const reason = (l.moveOutTenantReason || '').trim();
+  if (reason) {
+    const cat = categorizeMoveOutReason(reason);
+    moveOutReasons[cat] = (moveOutReasons[cat] || 0) + 1;
+    moveOutReasonRaw.push({ reason, category: cat, address: l._unit?.address || l._property?.address || '', moveOutDate: moveOutDate || '' });
+  }
+}
     if (parseInt(l.primaryLeaseStatusID||0) === 2 && l._balances) {
       const pastDueRent = parseFloat(l._balances.pastDueRentAmount || 0);
       if (pastDueRent > 0 && parseInt(l.leaseStatusID||0) !== 10) {
@@ -2273,12 +2293,14 @@ fetchAllPages('/properties/export', { isActive: true }, 5),
       propTrend, vacantUnitsList,
     },
     leases: {
-      active: activeLeases.length, moveInsMTD, moveOutsMTD, upcomingExpirations,
-      moveInsByMonth: formatTrend(moveInsByMonth),
-      moveOutsByMonth: formatTrend(moveOutsByMonth),
-      expirationsByMonth: formatTrend(expirationsByMonth),
-      renewalsDetail: renewalCardDetails.sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||'')),
-    },
+  active: activeLeases.length, moveInsMTD, moveOutsMTD, upcomingExpirations,
+  moveInsByMonth: formatTrend(moveInsByMonth),
+  moveOutsByMonth: formatTrend(moveOutsByMonth),
+  expirationsByMonth: formatTrend(expirationsByMonth),
+  renewalsDetail: renewalCardDetails.sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||'')),
+  moveOutReasons: Object.entries(moveOutReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
+  moveOutReasonRaw: moveOutReasonRaw.sort((a,b)=>(b.moveOutDate||'').localeCompare(a.moveOutDate||'')),
+},
     applications: {
       totalMTD: appsMTD, approvedMTD: appsApprovedMTD,
       revenueMTD: Math.round(appRevenueMTD*100)/100,
