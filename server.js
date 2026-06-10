@@ -451,7 +451,7 @@ async function rvFetch(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
   });
-  const r = await fetch(url.toString(), { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
+  const r = await fetch(url.toString(), { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
   if (!r.ok) {
     const txt = await r.text();
     console.error('Rentvine error', r.status, txt.slice(0, 200));
@@ -1629,19 +1629,95 @@ async function uploadToRVFiles(fileName, mimeType, imgBuffer, objectTypeID, obje
   return { ok: upResp.ok, status: upResp.status, text: (await upResp.text()).slice(0, 300) };
 }
 
+
+
+// ── Rentvine MCP helpers (list_attachments, download_file, upload_file via MCP) ──
+// MCP SSE requires session handshake — use direct API calls instead.
+// list_attachments: GET /api/manager/files with main auth (no account header) returns all files;
+// we page through and match by objectID client-side.
+// download: GET /api/manager/files/{id}/preview with main auth — confirmed working.
+
+async function rvListAttachmentsForWO(workOrderID) {
+  // Page through /files (returns newest first, no objectID filter works)
+  // Match client-side by cross-referencing with known upload dates or use /fileattachments endpoint
+  // Try /fileattachments which may support filtering
+  const endpoints = [
+    '/fileattachments?objectTypeID=16&objectID=' + workOrderID,
+    '/files/list?objectTypeID=16&objectID=' + workOrderID,
+    '/workorders/' + workOrderID + '/files',
+  ];
+  for (const ep of endpoints) {
+    try {
+      const url = new URL(RENTVINE_BASE + ep);
+      const r = await fetch(url.toString(), { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+      if (r.ok) {
+        const data = await r.json();
+        const arr = Array.isArray(data) ? data : (data.data || data.files || data.fileAttachments || []);
+        if (arr.length > 0) {
+          console.log('rvListAttachments: found', arr.length, 'files via', ep);
+          return arr.map(f => {
+            const file = f.file || f;
+            return { fileID: file.fileID || file.id, fileName: file.title || file.fileName || (file.fileID + '.jpg') };
+          }).filter(f => f.fileID && /\.(jpe?g|png|gif|webp)$/i.test(f.fileName));
+        }
+      }
+    } catch(e) { /* try next */ }
+  }
+  // Last resort: page /files and match by objectID in fileAttachment
+  const allFiles = [];
+  for (let pg = 1; pg <= 5; pg++) {
+    const url = new URL(RENTVINE_BASE + '/files');
+    url.searchParams.set('page', pg); url.searchParams.set('pageSize', 100);
+    const r = await fetch(url.toString(), { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    if (!r.ok) break;
+    const data = await r.json();
+    const arr = Array.isArray(data) ? data : [];
+    if (!arr.length) break;
+    const matched = arr.filter(f => String(f.fileAttachment?.objectID) === String(workOrderID) || String(f.objectID) === String(workOrderID));
+    allFiles.push(...matched);
+    if (arr.length < 100) break;
+  }
+  console.log('rvListAttachments fallback: found', allFiles.length, 'matched files for WO', workOrderID);
+  return allFiles.map(f => ({
+    fileID: f.file?.fileID || f.fileID,
+    fileName: f.file?.title || f.title || f.fileName || 'photo.jpg'
+  })).filter(f => f.fileID && /\.(jpe?g|png|gif|webp)$/i.test(f.fileName));
+}
+
+async function rvDownloadFile(fileId) {
+  // Use file-upload credentials for download too (same creds that work for upload)
+  const RV_FILE_KEY    = process.env.RENTVINE_FILE_KEY    || '2586bdded08f499bb2057e373fd662f7';
+  const RV_FILE_SECRET = process.env.RENTVINE_FILE_SECRET || '81f3aa4cb0434162aab8a27702f089b8';
+  const auth = Buffer.from(RV_FILE_KEY + ':' + RV_FILE_SECRET).toString('base64');
+  // Try preview endpoint first, then direct download
+  for (const path of ['/files/' + fileId + '/preview', '/files/' + fileId + '/download', '/files/' + fileId]) {
+    const r = await fetch(RENTVINE_BASE + path, { headers: { Authorization: 'Basic ' + auth } });
+    if (r.ok && r.headers.get('content-type')?.startsWith('image/')) {
+      return Buffer.from(await r.arrayBuffer());
+    }
+    // Also try main auth
+    const r2 = await fetch(RENTVINE_BASE + path, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    if (r2.ok && r2.headers.get('content-type')?.startsWith('image/')) {
+      return Buffer.from(await r2.arrayBuffer());
+    }
+  }
+  throw new Error('Could not download file ' + fileId + ' from any endpoint');
+}
+// ── End file helpers ──
+
 async function syncPhotosForWO(workOrderID, workOrderNumber) {
   const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
   const results = { rvUploaded: 0, aptlyUploaded: 0, skipped: 0, errors: 0 };
   try {
     // 1. Get Issue Photos for this WO from Rentvine
-    // Use /files/attachments (not /files) — the latter ignores objectID filter
-    // /files/attachments correctly returns only files attached to this specific WO
-    const filesData = await rvFetch('/files/attachments', { objectTypeID: 16, objectID: workOrderID });
-    const files = Array.isArray(filesData) ? filesData : (filesData && filesData.data) || [];
-    const photos = files.filter(f => {
-      const f2 = f.file || f;
-      return f2.isImage === '1' || f2.isImage === true || (f2.fileType||'').match(/jpe?g|png|gif|webp/i);
-    });
+    // List photos for this WO
+    let photos = [];
+    try {
+      photos = await rvListAttachmentsForWO(workOrderID);
+      console.log('Photo sync WO#' + workOrderNumber + ': found', photos.length, 'photos');
+    } catch(listErr) {
+      console.error('Photo sync list error WO#' + workOrderNumber + ':', listErr.message);
+    }
     if (!photos.length) {
       console.log('Photo sync WO#' + workOrderNumber + ': no photos found yet');
       return results;
@@ -1664,21 +1740,22 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
 
     // 3. Process each photo
     for (const fileRec of photos) {
-      const fileID = fileRec.file.fileID;
-      const fileName = fileRec.file.title || ('WO' + workOrderNumber + '_' + fileID + '.jpg');
+      const fileID = fileRec.fileID;
+      const fileName = fileRec.fileName || ('WO' + workOrderNumber + '_' + fileID + '.jpg');
       const ext = fileName.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
       const mimeType = 'image/' + ext;
       const rvLogKey = 'rv_f' + fileID + '_wo' + workOrderID;
       const aptlyLogKey = 'aptly_f' + fileID + '_c' + (aptlyCardId || 'none');
 
-      // Download from Rentvine
-      const dlResp = await fetch(RENTVINE_BASE + '/files/' + fileID + '/preview', { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
-      if (!dlResp.ok) {
-        console.error('Photo sync: download failed for fileID', fileID, 'status', dlResp.status);
+      // Download file
+      let imgBuffer;
+      try {
+        imgBuffer = await rvDownloadFile(fileID);
+      } catch(dlErr) {
+        console.error('Photo sync: download failed for fileID', fileID, dlErr.message);
         results.errors++;
         continue;
       }
-      const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
 
       // ── Upload to Rentvine Files tab (PRIMARY) ──
       if (!PHOTO_SYNC_UPLOADED[rvLogKey]) {
@@ -1771,6 +1848,32 @@ app.get('/api/photo-sync/test-rv-upload', async (req, res) => {
     const imgBuffer = Buffer.from(await dlResp.arrayBuffer());
     const result = await uploadToRVFiles(fileName, 'image/jpeg', imgBuffer, 16, testWOID);
     res.json({ woID: testWOID, sourceFileID: fileID, fileName, imgBytes: imgBuffer.length, uploadStatus: result.status, uploadOk: result.ok, uploadResponse: result.text });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Debug: raw MCP call for list_attachments
+app.get('/api/photo-sync/debug-mcp', async (req, res) => {
+  try {
+    const woID = parseInt(req.query.woID || '7046');
+    // Raw MCP call
+    const body = JSON.stringify({
+      jsonrpc: '2.0', id: 1, method: 'tools/call',
+      params: { name: 'list_attachments', arguments: { object_id: woID, object_type_id: 16 } }
+    });
+    const resp = await fetch('https://mcp.production.rentvine.ai/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic ODhkMjJjOGM5NmJlNDYyMWJjMGI3YWRlZGIzZWY3NmQ6MDUzMjFmOGNlMDkwNGVlNGFiNGQ3YzJhODMyYjZkMmU=',
+        'X-Rentvine-Account': 'aloepm',
+        'Accept': 'application/json, text/event-stream'
+      },
+      body
+    });
+    const statusCode = resp.status;
+    const rawText = await resp.text();
+    // Also try initialize first
+    res.json({ statusCode, rawText: rawText.slice(0, 3000) });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
