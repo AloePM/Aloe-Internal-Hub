@@ -1954,7 +1954,7 @@ app.get('/rent-analysis', (req, res) => res.sendFile(new URL('./rent-analysis.ht
 app.get('/sale-analysis', (req, res) => res.sendFile(new URL('./sale-analysis.html', import.meta.url).pathname));
 app.get('/owner-report', (req, res) => res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 app.get('/metrics', (req, res) => res.sendFile(new URL('./metrics.html', import.meta.url).pathname));
-
+app.get('/expense-log', (req, res) => res.sendFile(new URL('./expense-log.html', import.meta.url).pathname));
 // ── Metrics helpers ────────────────────────────────────────────────────────
 function monthKey(dateStr) {
   if (!dateStr) return null;
