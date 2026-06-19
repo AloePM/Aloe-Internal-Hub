@@ -1,537 +1,331 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<title>Aloe PM · Log a Payment</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap');
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --teal:#3CC3E1;--teal-dk:#0891B2;--teal-light:#E0F2FE;--teal-border:#7DD3FC;
-  --bg:#F0F6F8;--panel:#fff;--border:#CBD5E1;--border-light:#E2E8F0;
-  --text:#0F172A;--text2:#475569;--muted:#94A3B8;
-  --green:#059669;--green-light:#D1FAE5;--green-border:#6EE7B7;
-  --red:#DC2626;--red-light:#FEE2E2;--amber:#D97706;--amber-light:#FEF3C7;
-}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px;}
-.hdr{background:#0C1929;border-bottom:3px solid var(--teal);padding:0 20px;height:52px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:10;}
-.hdr-logo{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;color:#94A3B8;letter-spacing:.1em;}
-.hdr-logo span{color:var(--teal)}
-.hdr-title{font-size:12px;font-weight:600;color:#E2E8F0;margin-left:4px;}
-.page{max-width:520px;margin:0 auto;padding:24px 16px;}
-.intro{background:var(--teal-light);border:1px solid var(--teal-border);border-radius:10px;padding:14px 16px;font-size:12px;color:var(--teal-dk);line-height:1.6;margin-bottom:20px;}
-.intro strong{color:#0C4A6E}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
-.card-hdr{background:#F8FAFC;border-bottom:1px solid var(--border-light);padding:11px 16px;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px;}
-.card-body{padding:16px;}
-.field{margin-bottom:14px;}
-.field:last-child{margin-bottom:0}
-.label{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px;letter-spacing:.02em;}
-.label .req{color:var(--red);margin-left:2px}
-.label .hint{font-weight:400;color:var(--muted);font-size:10px;margin-left:4px}
-.inp,.sel,.textarea{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:11px 13px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--text);background:#fff;transition:border-color .12s,box-shadow .12s;appearance:none;-webkit-appearance:none;}
-.inp:focus,.sel:focus,.textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(60,195,225,.15);}
-.inp::placeholder{color:var(--muted)}
-.textarea{min-height:72px;resize:vertical;line-height:1.5}
-.amt-wrap{position:relative}
-.amt-wrap .dollar{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:600;color:var(--text2);pointer-events:none;}
-.amt-wrap .inp{padding-left:26px;font-family:'DM Mono',monospace;font-size:15px;font-weight:500;}
-/* PROPERTY SEARCH */
-.prop-wrap{position:relative}
-.prop-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;max-height:220px;overflow-y:auto;display:none;}
-.prop-results.open{display:block}
-.prop-item{padding:10px 13px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border-light);line-height:1.4;}
-.prop-item:last-child{border-bottom:none}
-.prop-item:hover{background:var(--teal-light);color:var(--teal-dk)}
-.prop-item .prop-owner{font-size:10px;color:var(--muted);margin-top:2px;font-family:'DM Mono',monospace}
-.prop-loading{padding:12px 13px;font-size:12px;color:var(--muted);text-align:center}
-.prop-selected{background:var(--teal-light);border:1.5px solid var(--teal);border-radius:8px;padding:10px 13px;font-size:13px;font-weight:600;color:var(--teal-dk);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
-.prop-selected-info{flex:1;line-height:1.4}
-.prop-selected-owner{font-size:10px;color:var(--teal-dk);margin-top:2px;font-family:'DM Mono',monospace;font-weight:400}
-.prop-clear{background:none;border:none;color:var(--teal);font-size:16px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;margin-top:1px;}
-/* TYPE GRID */
-.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.type-btn{border:1.5px solid var(--border);border-radius:8px;padding:11px 10px;font-size:12px;font-weight:500;color:var(--text2);background:#fff;cursor:pointer;text-align:left;line-height:1.35;transition:all .12s;font-family:'DM Sans',sans-serif;}
-.type-btn:hover{border-color:var(--teal);color:var(--teal-dk);background:var(--teal-light)}
-.type-btn.selected{border-color:var(--teal);background:var(--teal-light);color:var(--teal-dk);font-weight:600;}
-.type-icon{font-size:16px;display:block;margin-bottom:4px}
-/* HW AUTO BILL NOTICE */
-.auto-bill-notice{background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:10px 13px;font-size:11px;color:#92400E;line-height:1.6;margin-top:10px;display:none;}
-.auto-bill-notice.visible{display:block}
-.auto-bill-notice strong{color:#78350F;}
-/* REPAIR TYPE */
-.repair-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-.repair-btn{border:1.5px solid var(--border);border-radius:8px;padding:8px 6px;font-size:11px;font-weight:500;color:var(--text2);background:#fff;cursor:pointer;text-align:center;transition:all .12s;font-family:'DM Sans',sans-serif;line-height:1.3;}
-.repair-btn:hover{border-color:var(--teal);color:var(--teal-dk);background:var(--teal-light)}
-.repair-btn.selected{border-color:var(--teal);background:var(--teal-light);color:var(--teal-dk);font-weight:600;}
-/* WHO GRID */
-.who-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;}
-.who-btn{border:1.5px solid var(--border);border-radius:8px;padding:9px 6px;font-size:11px;font-weight:500;color:var(--text2);background:#fff;cursor:pointer;text-align:center;transition:all .12s;font-family:'DM Sans',sans-serif;}
-.who-btn:hover{border-color:var(--teal);color:var(--teal-dk);background:var(--teal-light)}
-.who-btn.selected{border-color:var(--teal);background:var(--teal-light);color:var(--teal-dk);font-weight:600;}
-/* SUBMIT */
-.submit-btn{width:100%;background:var(--teal);border:none;border-radius:10px;padding:15px;font-size:15px;font-weight:600;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;}
-.submit-btn:hover{background:var(--teal-dk)}
-.submit-btn:disabled{background:#CBD5E1;color:#94A3B8;cursor:not-allowed;}
-/* SUCCESS */
-.success-screen{display:none;text-align:center;padding:40px 20px;}
-.success-screen.visible{display:block}
-.success-icon{font-size:56px;margin-bottom:16px}
-.success-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px}
-.success-sub{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px;}
-.success-bill{background:var(--green-light);border:1px solid var(--green-border);border-radius:8px;padding:12px 16px;font-size:12px;color:var(--green);margin-bottom:10px;text-align:left;line-height:1.8;}
-.another-btn{background:none;border:1.5px solid var(--teal);border-radius:8px;padding:11px 24px;font-size:14px;font-weight:600;color:var(--teal);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .12s;margin-top:8px;}
-.another-btn:hover{background:var(--teal-light)}
-/* ERROR */
-.err-banner{background:var(--red-light);border:1px solid #FCA5A5;border-radius:8px;padding:10px 14px;font-size:12px;color:var(--red);margin-bottom:14px;display:none;line-height:1.5;}
-.err-banner.visible{display:block}
-.field-err{font-size:10px;color:var(--red);margin-top:4px;display:none;}
-.field-err.visible{display:block}
-.inp.invalid{border-color:var(--red)}
-</style>
-</head>
-<body>
-<div class="hdr">
-  <span class="hdr-logo"><span>Aloe</span> PM</span>
-  <span class="hdr-title">Log a Payment</span>
-</div>
-<div class="page">
-  <div class="intro">
-    <strong>Paid something on behalf of an owner?</strong><br>
-    Fill this out immediately — the bill will be created in Rentvine automatically. No Slack message needed.
-  </div>
-  <div class="err-banner" id="err-banner"></div>
-  <div id="form-view">
+// ============================================================
+// EXPENSE LOG ROUTE  —  add to server.js
+//
+// POST /api/expense-log
+// 1. Looks up the property ledger in Rentvine
+// 2. Creates reimbursement bill (payee: contact 3229)
+// 3. If Home Warranty Trade Fee: also creates $10 admin bill (payee: contact 1)
+// 4. Appends row(s) to Google Sheet audit log
+// 5. Posts Slack notification showing both bills
+//
+// ENV VARS NEEDED:
+//   SLACK_WEBHOOK_URL
+//   GOOGLE_SHEETS_SPREADSHEET_ID
+//   GOOGLE_SERVICE_ACCOUNT_KEY   (JSON string of service account credentials)
+//   RV_API_KEY / RV_API_SECRET   (already set in your hub)
+//
+// Paste this block in server.js ABOVE the app.get('*',...) catch-all.
+// ============================================================
 
-    <!-- PROPERTY -->
-    <div class="card">
-      <div class="card-hdr">📍 Property</div>
-      <div class="card-body">
-        <div class="field">
-          <label class="label">Property Address <span class="req">*</span></label>
-          <div class="prop-wrap" id="prop-wrap">
-            <div id="prop-selected-view" style="display:none"></div>
-            <div id="prop-search-view">
-              <input class="inp" id="prop-input" placeholder="Start typing an address…" autocomplete="off" autocorrect="off"/>
-              <div class="prop-results" id="prop-results"></div>
-            </div>
-          </div>
-          <div class="field-err" id="prop-err">Please select a property</div>
-        </div>
-      </div>
-    </div>
+import { google } from 'googleapis';
 
-    <!-- EXPENSE TYPE -->
-    <div class="card">
-      <div class="card-hdr">📋 Type of Payment</div>
-      <div class="card-body">
-        <div class="field">
-          <div class="type-grid" id="type-grid">
-            <button class="type-btn" data-type="hoa_reg" data-gl="80" data-label="HOA Registration Fee">
-              <span class="type-icon">🏘️</span>HOA Registration Fee
-            </button>
-            <button class="type-btn" data-type="trade_fee" data-gl="86" data-label="Home Warranty Trade Fee">
-              <span class="type-icon">🔧</span>Home Warranty Trade Fee
-            </button>
-            <button class="type-btn" data-type="hw_vendor" data-gl="86" data-label="Home Warranty Vendor">
-              <span class="type-icon">🏠</span>Home Warranty Vendor
-            </button>
-            <button class="type-btn" data-type="vendor_call" data-gl="108" data-label="Vendor Called for Payment">
-              <span class="type-icon">📞</span>Vendor Called for Payment
-            </button>
-            <button class="type-btn" data-type="cleaning" data-gl="82" data-label="Cleaning">
-              <span class="type-icon">🧹</span>Cleaning
-            </button>
-            <button class="type-btn" data-type="key_lock" data-gl="106" data-label="Key / Lock / Rekey">
-              <span class="type-icon">🔑</span>Key / Lock / Rekey
-            </button>
-            <button class="type-btn" data-type="pest" data-gl="77" data-label="Pest Control">
-              <span class="type-icon">🐛</span>Pest Control
-            </button>
-            <button class="type-btn" data-type="other" data-gl="108" data-label="Other">
-              <span class="type-icon">📝</span>Other
-            </button>
-          </div>
-          <div class="field-err" id="type-err">Please select a payment type</div>
-        </div>
+// ── CONFIG ────────────────────────────────────────────────────────────────────
 
-        <!-- Vendor name — for vendor-related types -->
-        <div class="field" id="vendor-field" style="display:none">
-          <label class="label">Vendor / Company Name <span class="req">*</span></label>
-          <input class="inp" id="vendor-name" placeholder="e.g. AHS, Choice Home Warranty, ABC Plumbing…"/>
-          <div class="field-err" id="vendor-err">Please enter the vendor name</div>
-        </div>
+const CONTACT_REIMBURSEMENTS  = 3229;  // Aloe Property Management - REIMBURSEMENTS
+const CONTACT_MGMT_COMPANY    = 1;     // Aloe Property Management (management co.)
+const GL_OWNER_ADMIN_FEE      = 136;   // Owner Administrative Charge
+const ADMIN_TRADE_FEE_AMOUNT  = 10.00; // $10 per home warranty trade
 
-        <!-- Repair type — ONLY for Home Warranty Trade Fee -->
-        <div id="repair-section" style="display:none">
-          <div class="field">
-            <label class="label">Type of Repair <span class="req">*</span><span class="hint">What did the technician work on?</span></label>
-            <div class="repair-grid" id="repair-grid">
-              <button class="repair-btn" data-repair="Water Heater">🚿 Water Heater</button>
-              <button class="repair-btn" data-repair="HVAC">❄️ HVAC</button>
-              <button class="repair-btn" data-repair="Plumbing">🔧 Plumbing</button>
-              <button class="repair-btn" data-repair="Appliance">🍽️ Appliance</button>
-              <button class="repair-btn" data-repair="Electrical">⚡ Electrical</button>
-              <button class="repair-btn" data-repair="Garage Door">🚗 Garage Door</button>
-              <button class="repair-btn" data-repair="Roof">🏠 Roof</button>
-              <button class="repair-btn" data-repair="Pool / Spa">🏊 Pool / Spa</button>
-              <button class="repair-btn" data-repair="Other">📝 Other</button>
-            </div>
-            <div class="field-err" id="repair-err">Please select the type of repair</div>
-          </div>
-          <!-- Auto $10 admin fee notice -->
-          <div class="auto-bill-notice visible" id="hw-notice">
-            <strong>⚡ Auto: $10 Admin Fee will also be created</strong><br>
-            A second bill for $10.00 to Aloe Property Management (Owner Admin Fee) will be created automatically in Rentvine. You don't need to do anything — it will be referenced as "Home Warranty Trade Fee — [repair type]" and included in the Slack notification.
-          </div>
-        </div>
-      </div>
-    </div>
+const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK_URL;
+const SHEET_ID      = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
+const SHEET_TAB     = 'Expense Log';
 
-    <!-- AMOUNT + DATE -->
-    <div class="card">
-      <div class="card-hdr">💰 Amount & Date</div>
-      <div class="card-body">
-        <div class="field">
-          <label class="label">Amount Paid <span class="req">*</span></label>
-          <div class="amt-wrap">
-            <span class="dollar">$</span>
-            <input class="inp" id="amount" type="number" min="0.01" step="0.01" placeholder="0.00" inputmode="decimal"/>
-          </div>
-          <div class="field-err" id="amt-err">Please enter a valid amount</div>
-        </div>
-        <div class="field">
-          <label class="label">Date Paid <span class="req">*</span></label>
-          <input class="inp" id="pay-date" type="date"/>
-        </div>
-        <div class="field">
-          <label class="label">Reference / Invoice # <span class="hint">optional — becomes payment memo</span></label>
-          <input class="inp" id="reference" placeholder="WO#, invoice number, confirmation #…"/>
-        </div>
-      </div>
-    </div>
-
-    <!-- WHO PAID -->
-    <div class="card">
-      <div class="card-hdr">👤 Who Paid</div>
-      <div class="card-body">
-        <div class="field">
-          <div class="who-grid" id="who-grid">
-            <button class="who-btn" data-who="Randi">Randi</button>
-            <button class="who-btn" data-who="Alexes">Alexes</button>
-            <button class="who-btn" data-who="Teri">Teri</button>
-            <button class="who-btn" data-who="Persia">Persia</button>
-            <button class="who-btn" data-who="Roberto">Roberto</button>
-            <button class="who-btn" data-who="Juan">Juan</button>
-            <button class="who-btn" data-who="Rita">Rita</button>
-            <button class="who-btn" data-who="Norman">Norman</button>
-            <button class="who-btn" data-who="Hannah">Hannah</button>
-            <button class="who-btn" data-who="Dhyana">Dhyana</button>
-          </div>
-          <div class="field-err" id="who-err">Please select who paid</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- NOTES -->
-    <div class="card">
-      <div class="card-hdr">📝 Notes <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;margin-left:4px">(optional)</span></div>
-      <div class="card-body">
-        <textarea class="textarea" id="notes" placeholder="HOA name, home warranty company, work order number, any extra context…"></textarea>
-      </div>
-    </div>
-
-    <button class="submit-btn" id="submit-btn">
-      <span id="submit-label">Create Bill in Rentvine →</span>
-    </button>
-  </div>
-
-  <!-- SUCCESS -->
-  <div class="success-screen" id="success-view">
-    <div class="success-icon">✅</div>
-    <div class="success-title">Bills Created!</div>
-    <div class="success-sub">Rentvine has been updated and the team has been notified in Slack.</div>
-    <div id="success-details"></div>
-    <button class="another-btn" id="another-btn">Log another payment</button>
-  </div>
-</div>
-
-<script>
-const S = {
-  property: null,
-  expType: null,
-  repairType: null,
-  who: null,
-  searchTimer: null,
-  allProperties: [],
-  propertiesLoaded: false,
+const RV_BASE = 'https://aloepm.rentvine.com/api/manager';
+const RV_HEADERS = {
+  Authorization: 'Basic ' + Buffer.from(
+    `${process.env.RV_API_KEY}:${process.env.RV_API_SECRET}`
+  ).toString('base64'),
+  'X-Rentvine-Account': 'aloepm',
+  'Content-Type': 'application/json',
 };
 
-const NEEDS_VENDOR  = ['hw_vendor','vendor_call','other'];
-const IS_TRADE_FEE  = ['trade_fee','hw_vendor'];
+// GL account IDs — keyed by expense type from the form
+const GL_MAP = {
+  hoa_reg:     80,   // HOA Dues
+  trade_fee:   86,   // Home Warranty Trade Fee
+  hw_vendor:   86,   // Home Warranty Trade Fee (vendor)
+  vendor_call: 108,  // Repairs - Other
+  cleaning:    82,   // Cleaning Reimbursement
+  key_lock:    106,  // Key / Lock Replacement
+  pest:        77,   // Pest Control
+  other:       108,  // Repairs - Other
+};
 
-// ── PROPERTY SEARCH ──────────────────────────────────────────────────────────
-async function loadProperties(){
-  if(S.propertiesLoaded) return;
-  try{
-    const r = await fetch('/api/rentvine/properties/export');
-    const data = await r.json();
-    const rows = Array.isArray(data) ? data : (data?.data ?? []);
-    S.allProperties = rows
-      .filter(row => (row.property||row).isActive !== false)
-      .map(row => {
-        const p = row.property || row;
-        const port = row.portfolio || {};
-        return {
-          propertyID:    p.propertyID || p.id,
-          address:       [p.address, p.city, p.stateID||'AZ'].filter(Boolean).join(', '),
-          portfolioName: port.name || p.portfolioName || '',
-          portfolioID:   p.portfolioID || port.portfolioID,
-        };
-      })
-      .filter(p => p.address)
-      .sort((a,b) => a.address.localeCompare(b.address));
-    S.propertiesLoaded = true;
-  } catch(e){ console.error('Property load failed', e); }
+// ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
+
+function getSheetsClient() {
+  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (!keyJson) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY not set');
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(keyJson),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  return google.sheets({ version: 'v4', auth });
 }
 
-function searchProperties(q){
-  return S.allProperties.filter(p => p.address.toLowerCase().includes(q.toLowerCase())).slice(0,12);
+const SHEET_HEADERS = [
+  'Date Submitted', 'Date Paid', 'Paid By',
+  'Property Address', 'Owner / Portfolio',
+  'Expense Type', 'Repair Type / Vendor Detail',
+  'Amount', 'GL Account', 'Reference / Memo',
+  'Notes', 'Rentvine Bill ID', 'Admin Bill ID ($10)',
+  'Bill Created At', 'Status',
+];
+
+async function ensureSheetTab(sheets) {
+  try {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+    const tabs = meta.data.sheets.map(s => s.properties.title);
+    if (!tabs.includes(SHEET_TAB)) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        resource: { requests: [{ addSheet: { properties: { title: SHEET_TAB } } }] },
+      });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `'${SHEET_TAB}'!A1`,
+        valueInputOption: 'RAW',
+        resource: { values: [SHEET_HEADERS] },
+      });
+    }
+  } catch (e) {
+    console.error('[expense-log] Sheet setup error:', e.message);
+  }
 }
 
-function showPropResults(results){
-  const el = document.getElementById('prop-results');
-  if(!results.length){
-    el.innerHTML = `<div class="prop-loading">No properties found</div>`;
-  } else {
-    el.innerHTML = results.map(p =>
-      `<div class="prop-item" data-id="${p.propertyID}">
-        ${esc(p.address)}
-        ${p.portfolioName ? `<div class="prop-owner">${esc(p.portfolioName)}</div>` : ''}
-      </div>`
-    ).join('');
-    el.querySelectorAll('.prop-item').forEach(item =>
-      item.addEventListener('mousedown', e => {
-        e.preventDefault();
-        selectProperty(S.allProperties.find(p => String(p.propertyID) === item.dataset.id));
-      })
+async function appendSheetRow(sheets, row) {
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `'${SHEET_TAB}'!A1`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    resource: { values: [row] },
+  });
+}
+
+// ── RENTVINE: LOOK UP PROPERTY LEDGER ────────────────────────────────────────
+// Bills are charged to the property ledger — Rentvine rolls it up to the owner.
+// We search /properties/export for the propertyID, then get its ledger.
+
+async function getPropertyLedgerID(propertyID) {
+  if (!propertyID) return null;
+  try {
+    // Property ledger: ledger type 3 = Property
+    const r = await fetch(
+      `${RV_BASE}/ledgers/search?ledgerTypeID=3&objectID=${propertyID}&pageSize=5`,
+      { headers: RV_HEADERS }
     );
+    if (!r.ok) return null;
+    const data = await r.json();
+    const ledgers = Array.isArray(data) ? data : (data?.data ?? data?.ledgers ?? []);
+    return ledgers[0]?.ledgerID || ledgers[0]?.id || null;
+  } catch (e) {
+    console.warn('[expense-log] Property ledger lookup failed:', e.message);
+    return null;
   }
-  el.classList.add('open');
 }
 
-function selectProperty(prop){
-  if(!prop) return;
-  S.property = { ...prop };
-  document.getElementById('prop-search-view').style.display = 'none';
-  const view = document.getElementById('prop-selected-view');
-  view.style.display = 'block';
-  view.innerHTML = `<div class="prop-selected">
-    <div class="prop-selected-info">
-      <div>${esc(prop.address)}</div>
-      ${prop.portfolioName ? `<div class="prop-selected-owner">${esc(prop.portfolioName)}</div>` : ''}
-    </div>
-    <button class="prop-clear" id="prop-clear-btn">✕</button>
-  </div>`;
-  document.getElementById('prop-clear-btn').addEventListener('click', clearProperty);
-  document.getElementById('prop-err').classList.remove('visible');
+// ── RENTVINE: BUILD BILL PAYLOAD ──────────────────────────────────────────────
+// Reference = Payment Memo (same value in both fields)
+// Due date  = Bill date (paid date)
+// Line item description: "{label} {address} ({portfolioName})"
+
+function buildBillPayload({ contactID, payDate, reference, lineDescription, ledgerID, glAccountID, amount }) {
+  return {
+    payeeContactID:      String(contactID),
+    billDate:            payDate,
+    dateDue:             payDate,           // due date = paid date
+    reference:           reference,
+    paymentMemo:         reference,         // memo = reference (same)
+    description:         lineDescription,
+    charges: [{
+      ...(ledgerID ? { ledgerID: String(ledgerID) } : {}),
+      description:       lineDescription,
+      chargeAccountID:   String(glAccountID),
+      amount:            String(Number(amount).toFixed(2)),
+      salesTaxAmount:    '0.00',
+      leaseID:           null,
+    }],
+    leaseCharges:        [],
+    overrideBankAccount: false,
+  };
 }
 
-function clearProperty(){
-  S.property = null;
-  document.getElementById('prop-selected-view').style.display = 'none';
-  document.getElementById('prop-search-view').style.display = 'block';
-  document.getElementById('prop-input').value = '';
-  document.getElementById('prop-input').focus();
+// ── RENTVINE: POST BILL ───────────────────────────────────────────────────────
+
+async function postBill(payload) {
+  const r = await fetch(`${RV_BASE}/accounting/bills`, {
+    method:  'POST',
+    headers: RV_HEADERS,
+    body:    JSON.stringify(payload),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.message || data?.error || `Rentvine API ${r.status}`);
+  return data;
 }
 
-const propInput = document.getElementById('prop-input');
-propInput.addEventListener('input', () => {
-  clearTimeout(S.searchTimer);
-  const q = propInput.value.trim();
-  if(q.length < 2){ document.getElementById('prop-results').classList.remove('open'); return; }
-  document.getElementById('prop-results').innerHTML = `<div class="prop-loading">Searching…</div>`;
-  document.getElementById('prop-results').classList.add('open');
-  S.searchTimer = setTimeout(() => showPropResults(searchProperties(q)), 180);
-});
-propInput.addEventListener('focus', async () => {
-  if(!S.propertiesLoaded){
-    document.getElementById('prop-results').innerHTML = `<div class="prop-loading">Loading properties…</div>`;
-    document.getElementById('prop-results').classList.add('open');
-    await loadProperties();
-    if(propInput.value.trim().length >= 2) showPropResults(searchProperties(propInput.value.trim()));
-    else document.getElementById('prop-results').classList.remove('open');
-  }
-});
-propInput.addEventListener('blur', () => setTimeout(() => document.getElementById('prop-results').classList.remove('open'), 200));
+// ── SLACK ─────────────────────────────────────────────────────────────────────
 
-// ── EXPENSE TYPE ─────────────────────────────────────────────────────────────
-document.getElementById('type-grid').addEventListener('click', e => {
-  const btn = e.target.closest('.type-btn');
-  if(!btn) return;
-  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  S.expType = { type: btn.dataset.type, gl: parseInt(btn.dataset.gl), label: btn.dataset.label };
-  S.repairType = null;
-  document.querySelectorAll('.repair-btn').forEach(b => b.classList.remove('selected'));
-
-  // Vendor name field
-  const isVendor = NEEDS_VENDOR.includes(btn.dataset.type);
-  document.getElementById('vendor-field').style.display = isVendor ? 'block' : 'none';
-
-  // Repair type section — only for Home Warranty Trade Fee
-  const isTrade = btn.dataset.type === 'trade_fee';
-  document.getElementById('repair-section').style.display = isTrade ? 'block' : 'none';
-
-  document.getElementById('type-err').classList.remove('visible');
-
-  // Update submit label
-  document.getElementById('submit-label').textContent = isTrade
-    ? 'Create 2 Bills in Rentvine →'
-    : 'Create Bill in Rentvine →';
-});
-
-// ── REPAIR TYPE ───────────────────────────────────────────────────────────────
-document.getElementById('repair-grid').addEventListener('click', e => {
-  const btn = e.target.closest('.repair-btn');
-  if(!btn) return;
-  document.querySelectorAll('.repair-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  S.repairType = btn.dataset.repair;
-  document.getElementById('repair-err').classList.remove('visible');
-});
-
-// ── WHO PAID ─────────────────────────────────────────────────────────────────
-document.getElementById('who-grid').addEventListener('click', e => {
-  const btn = e.target.closest('.who-btn');
-  if(!btn) return;
-  document.querySelectorAll('.who-btn').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  S.who = btn.dataset.who;
-  document.getElementById('who-err').classList.remove('visible');
-});
-
-// ── VALIDATE ─────────────────────────────────────────────────────────────────
-function validate(){
-  let ok = true;
-  if(!S.property){ document.getElementById('prop-err').classList.add('visible'); ok=false; }
-  if(!S.expType){ document.getElementById('type-err').classList.add('visible'); ok=false; }
-  if(S.expType?.type === 'trade_fee' && !S.repairType){
-    document.getElementById('repair-err').classList.add('visible'); ok=false;
-  }
-  if(NEEDS_VENDOR.includes(S.expType?.type) && !document.getElementById('vendor-name').value.trim()){
-    document.getElementById('vendor-err').classList.add('visible'); ok=false;
-  }
-  const amt = parseFloat(document.getElementById('amount').value);
-  if(!amt||amt<=0){
-    document.getElementById('amt-err').classList.add('visible');
-    document.getElementById('amount').classList.add('invalid');
-    ok=false;
-  } else {
-    document.getElementById('amt-err').classList.remove('visible');
-    document.getElementById('amount').classList.remove('invalid');
-  }
-  if(!S.who){ document.getElementById('who-err').classList.add('visible'); ok=false; }
-  return ok;
+async function postSlack(msg) {
+  if (!SLACK_WEBHOOK) return;
+  await fetch(SLACK_WEBHOOK, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ text: msg }),
+  }).catch(e => console.error('[expense-log] Slack error:', e.message));
 }
 
-// ── SUBMIT ───────────────────────────────────────────────────────────────────
-document.getElementById('submit-btn').addEventListener('click', async () => {
-  document.getElementById('err-banner').classList.remove('visible');
-  if(!validate()) return;
+function buildSlackMessage({ who, property, expType, repairType, vendorName, amount, payDate, reference, notes, billID, adminBillID, payMethod }) {
+  const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  const isTradeFee = expType.type === 'trade_fee';
 
-  const amount    = parseFloat(document.getElementById('amount').value);
-  const payDate   = document.getElementById('pay-date').value;
-  const reference = document.getElementById('reference').value.trim();
-  const notes     = document.getElementById('notes').value.trim();
-  const vendorName= document.getElementById('vendor-name').value.trim();
-  const isTradeFee= S.expType.type === 'trade_fee';
+  const lines = [
+    `💳 *New Expense Logged — Bill${isTradeFee ? 's' : ''} Created in Rentvine*`,
+    `*Paid by:* ${who}  |  *Method:* ${payMethod||'Credit Card'}  |  *Date:* ${payDate}  |  *Amount:* ${fmt(amount)}`,
+    `*Type:* ${expType.label}${repairType ? ` — ${repairType}` : ''}${vendorName ? ` (${vendorName})` : ''}`,
+    `*Property:* ${property.address}`,
+    property.portfolioName ? `*Owner:* ${property.portfolioName}` : '',
+    reference ? `*Reference:* ${reference}` : '',
+    notes ? `*Notes:* ${notes}` : '',
+    payMethod === 'Check' ? `⚠️ *Check payment — manual reconciliation needed*` : '',
+    ``,
+    `✅ *Bill 1 created:* ${fmt(amount)} → Aloe PM Reimbursements  |  Bill ID: ${billID}`,
+  ];
 
-  const btn = document.getElementById('submit-btn');
-  btn.disabled = true;
-  document.getElementById('submit-label').textContent = 'Creating bills…';
+  if (isTradeFee && adminBillID) {
+    lines.push(`✅ *Bill 2 created:* ${fmt(ADMIN_TRADE_FEE_AMOUNT)} → Aloe PM (Owner Admin Fee — ${repairType || 'Home Warranty Trade Fee'})  |  Bill ID: ${adminBillID}`);
+  }
 
-  try{
-    const r = await fetch('/api/expense-log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        property:    S.property,
-        expType:     S.expType,
-        repairType:  S.repairType,
-        amount, payDate, reference, notes, vendorName,
-        who:         S.who,
-        isTradeFee,
-      }),
+  return lines.filter(l => l !== null && l !== undefined).join('\n');
+}
+
+// ── THE ROUTE ─────────────────────────────────────────────────────────────────
+
+app.post('/api/expense-log', async (req, res) => {
+  const {
+    property,     // { propertyID, address, portfolioName }
+    expType,      // { type, gl, label }
+    amount,
+    payDate,
+    reference,
+    notes,
+    vendorName,
+    repairType,   // only present for trade_fee — e.g. "Water Heater"
+    who,
+  } = req.body;
+
+  if (!property || !expType || !amount || !who || !payDate) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const isTradeFee = expType.type === 'trade_fee';
+  const glAccountID = GL_MAP[expType.type] || 108;
+  const now = new Date().toISOString();
+
+  // Build the reference string
+  // For trade fee: "Home Warranty Trade Fee — Water Heater" (or just type label)
+  const refString = isTradeFee && repairType
+    ? `Home Warranty Trade Fee — ${repairType}`
+    : (reference || expType.label);
+
+  // Build line item description: "{label} {address} ({portfolioName})"
+  const lineDesc = [
+    expType.label,
+    vendorName ? `— ${vendorName}` : '',
+    property.address,
+    property.portfolioName ? `(${property.portfolioName})` : '',
+  ].filter(Boolean).join(' ');
+
+  try {
+    // 1. Resolve property ledger ID
+    const ledgerID = await getPropertyLedgerID(property.propertyID);
+
+    // 2. Create main reimbursement bill
+    const bill1Payload = buildBillPayload({
+      contactID:       CONTACT_REIMBURSEMENTS,
+      payDate,
+      reference:       refString,
+      lineDescription: lineDesc,
+      ledgerID,
+      glAccountID,
+      amount,
     });
-    const result = await r.json();
-    if(!r.ok) throw new Error(result.error || 'Server error');
+    const bill1 = await postBill(bill1Payload);
+    const billID = bill1?.billID || bill1?.id || '';
 
-    const fmt = n => '$' + Number(n).toLocaleString('en-US',{minimumFractionDigits:2});
-    let detailHtml = `<div class="success-bill">
-      <strong>✓ Bill 1 — Reimbursement</strong><br>
-      ${S.expType.label}${vendorName ? ` — ${vendorName}` : ''}${S.repairType ? ` — ${S.repairType}` : ''}<br>
-      ${S.property.address}<br>
-      <strong>${fmt(amount)}</strong> · Due ${payDate}<br>
-      ${reference ? `Ref / Memo: ${reference}<br>` : ''}
-      ${result.billID ? `Rentvine Bill ID: ${result.billID}` : ''}
-    </div>`;
+    // 3. If Home Warranty Trade Fee — create $10 admin bill automatically
+    let adminBillID = null;
+    if (isTradeFee) {
+      const adminRef = `Home Warranty Trade Fee — ${repairType || 'Trade Fee'}`;
+      const adminLineDesc = [
+        'Home Warranty Trade Fee',
+        repairType ? `— ${repairType}` : '',
+        property.address,
+        property.portfolioName ? `(${property.portfolioName})` : '',
+      ].filter(Boolean).join(' ');
 
-    if(isTradeFee){
-      detailHtml += `<div class="success-bill" style="background:#EFF6FF;border-color:#93C5FD;color:#1E40AF;">
-        <strong>✓ Bill 2 — $10 Admin Fee (auto-created)</strong><br>
-        Owner Administrative Charge — Home Warranty Trade Fee — ${S.repairType}<br>
-        ${S.property.address}<br>
-        <strong>$10.00</strong> · Due ${payDate}<br>
-        ${result.adminBillID ? `Rentvine Bill ID: ${result.adminBillID}` : ''}
-      </div>`;
+      const bill2Payload = buildBillPayload({
+        contactID:       CONTACT_MGMT_COMPANY,
+        payDate,
+        reference:       adminRef,
+        lineDescription: adminLineDesc,
+        ledgerID,
+        glAccountID:     GL_OWNER_ADMIN_FEE,
+        amount:          ADMIN_TRADE_FEE_AMOUNT,
+      });
+      const bill2 = await postBill(bill2Payload);
+      adminBillID = bill2?.billID || bill2?.id || '';
     }
 
-    detailHtml += `<div style="background:var(--teal-light);border:1px solid var(--teal-border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--teal-dk);text-align:left;line-height:1.6;">
-      📣 Slack notification sent
-    </div>`;
+    // 4. Google Sheet (non-blocking — bill already created, don't fail)
+    if (SHEET_ID) {
+      try {
+        const sheets = getSheetsClient();
+        await ensureSheetTab(sheets);
+        await appendSheetRow(sheets, [
+          now,
+          payDate,
+          who,
+          property.address,
+          property.portfolioName || '',
+          expType.label,
+          repairType || vendorName || '',
+          Number(amount).toFixed(2),
+          String(glAccountID),
+          refString,
+          notes || '',
+          String(billID),
+          adminBillID ? String(adminBillID) : '',
+          now,
+          'Created',
+        ]);
+      } catch (sheetErr) {
+        console.error('[expense-log] Sheet write failed:', sheetErr.message);
+      }
+    }
 
-    document.getElementById('success-details').innerHTML = detailHtml;
-    document.getElementById('form-view').style.display = 'none';
-    document.getElementById('success-view').classList.add('visible');
+    // 5. Slack notification
+    const slackMsg = buildSlackMessage({
+      who, property, expType, repairType, vendorName,
+      amount, payDate, reference: refString, notes,
+      billID, adminBillID,
+    });
+    await postSlack(slackMsg);
 
-  } catch(e){
-    const errBanner = document.getElementById('err-banner');
-    errBanner.textContent = '⚠ ' + e.message;
-    errBanner.classList.add('visible');
-    btn.disabled = false;
-    document.getElementById('submit-label').textContent = S.expType?.type==='trade_fee'
-      ? 'Create 2 Bills in Rentvine →' : 'Create Bill in Rentvine →';
-    window.scrollTo({top:0,behavior:'smooth'});
+    return res.json({
+      success:    true,
+      billID,
+      adminBillID,
+      message:    isTradeFee ? 'Two bills created successfully' : 'Bill created successfully',
+    });
+
+  } catch (e) {
+    console.error('[expense-log] Error:', e.message);
+    return res.status(500).json({ error: e.message });
   }
 });
 
-// ── RESET ────────────────────────────────────────────────────────────────────
-document.getElementById('another-btn').addEventListener('click', () => {
-  S.property=null; S.expType=null; S.repairType=null; S.who=null;
-  document.getElementById('form-view').style.display='block';
-  document.getElementById('success-view').classList.remove('visible');
-  document.querySelectorAll('.type-btn,.who-btn,.repair-btn').forEach(b=>b.classList.remove('selected'));
-  document.getElementById('prop-selected-view').style.display='none';
-  document.getElementById('prop-search-view').style.display='block';
-  document.getElementById('prop-input').value='';
-  document.getElementById('amount').value='';
-  document.getElementById('reference').value='';
-  document.getElementById('notes').value='';
-  document.getElementById('vendor-name').value='';
-  document.getElementById('vendor-field').style.display='none';
-  document.getElementById('repair-section').style.display='none';
-  document.getElementById('pay-date').value=today();
-  document.getElementById('submit-label').textContent='Create Bill in Rentvine →';
-  window.scrollTo({top:0});
-});
-
-function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function today(){ return new Date().toISOString().slice(0,10); }
-
-document.getElementById('pay-date').value = today();
-loadProperties();
-</script>
-</body>
-</html>
+// Serve the form page
+// app.get('/expense-log', (req, res) =>
+//   res.sendFile(path.join(__dirname, 'public', 'expense-log.html'))
+// );
