@@ -1806,14 +1806,7 @@ app.post('/api/webhook/rv-wo-created', async (req, res) => {
       return;
     }
     console.log('RV webhook: WO#' + workOrderNumber + ' (ID:' + workOrderID + ') received');
-    // Log full payload to Slack so we can see what Rentvine sends (do we get photo file IDs?)
-    if (SLACK_TOKEN) {
-      fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'C06BWVACZQF', text: ':hook: *RV Webhook WO#' + workOrderNumber + '*\n```' + JSON.stringify(payload, null, 2).slice(0, 2900) + '```' })
-      }).catch(e => console.error('Slack log error:', e.message));
-    }
+  
     // Delay 5s then try to fetch + copy photos
     setTimeout(async () => {
       const result = await syncPhotosForWO(workOrderID, workOrderNumber);
