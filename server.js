@@ -3164,11 +3164,17 @@ app.get('*', function(req, res) {
 <div class="section">
   <div class="section-label">Accounting</div>
   <div class="tool-grid">
-    <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile">
+  <a href="/recon-bills" class="tool-card primary" data-name="recon bills invoices accounting reconcile">
       <span class="badge badge-live">LIVE</span>
       <div class="tool-icon">🧾</div>
       <div class="tool-name">Recon — Bills</div>
       <div class="tool-desc">Reconcile vendor invoices against approved work orders</div>
+    </a>
+    <a href="/expense-log" class="tool-card primary" data-name="expense log payment reimbursement hoa trade fee">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">💳</div>
+      <div class="tool-name">Log a Payment</div>
+      <div class="tool-desc">Log owner expenses — bill created in Rentvine automatically</div>
     </a>
   </div>
 </div>
