@@ -39,7 +39,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .amt-wrap .inp{padding-left:26px;font-family:'DM Mono',monospace;font-size:15px;font-weight:500;}
 /* PROPERTY SEARCH */
 .prop-wrap{position:relative}
-.prop-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:50;max-height:220px;overflow-y:auto;display:none;}
+.prop-results{
+  position:fixed;left:auto;right:auto;
+  background:#fff;border:1.5px solid var(--teal);border-radius:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.25);
+  z-index:9999;max-height:300px;overflow-y:auto;
+  display:none;
+  width:calc(100vw - 64px);
+  max-width:488px;
+}
 .prop-results.open{display:block}
 .prop-item{padding:10px 13px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border-light);line-height:1.4;}
 .prop-item:last-child{border-bottom:none}
@@ -306,6 +314,11 @@ function searchProperties(q){
 
 function showPropResults(results){
   const el = document.getElementById('prop-results');
+  const input = document.getElementById('prop-input');
+  const rect = input.getBoundingClientRect();
+  el.style.top = (rect.bottom + 4) + 'px';
+  el.style.left = rect.left + 'px';
+  el.style.width = rect.width + 'px';
   if(!results.length){
     el.innerHTML = `<div class="prop-loading">No properties found</div>`;
   } else {
