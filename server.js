@@ -1955,6 +1955,24 @@ app.get('/sale-analysis', (req, res) => res.sendFile(new URL('./sale-analysis.ht
 app.get('/owner-report', (req, res) => res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 app.get('/metrics', (req, res) => res.sendFile(new URL('./metrics.html', import.meta.url).pathname));
 app.get('/expense-log', (req, res) => res.sendFile(new URL('./expense-log.html', import.meta.url).pathname));
+app.get('/api/properties-search', async (req, res) => {
+  try {
+    let all = [], page = 1;
+    while(page <= 20){
+      const batch = await rvFetch('/properties/export', { pageSize: 200, page, isActive: true });
+      const rows = Array.isArray(batch) ? batch : (batch?.data ?? []);
+      if(!rows.length) break;
+      all = all.concat(rows);
+      if(rows.length < 200) break;
+      page++;
+    }
+    res.json(all.filter(row => (row.property||row).isActive !== false).map(row => {
+      const p = row.property || row;
+      const port = row.portfolio || {};
+      return { propertyID: p.propertyID||p.id, address: [p.address,p.city,p.stateID||'AZ'].filter(Boolean).join(', '), portfolioName: port.name||p.portfolioName||'', portfolioID: p.portfolioID||port.portfolioID };
+    }).filter(p=>p.address).sort((a,b)=>a.address.localeCompare(b.address)));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 // ── Metrics helpers ────────────────────────────────────────────────────────
 function monthKey(dateStr) {
   if (!dateStr) return null;

@@ -293,36 +293,13 @@ const IS_TRADE_FEE  = ['trade_fee','hw_vendor'];
 async function loadProperties(){
   if(S.propertiesLoaded) return;
   try{
-    let all = [], page = 1;
-    while(page <= 20){
-      const r = await fetch(`/api/rentvine/properties/export?pageSize=200&page=${page}&isActive=true`);
-      if(!r.ok) break;
-      const data = await r.json();
-      const rows = Array.isArray(data) ? data : (data?.data ?? []);
-      if(!rows.length) break;
-      all = all.concat(rows);
-      if(rows.length < 200) break;
-      page++;
-    }
-    S.allProperties = all
-      .filter(row => (row.property||row).isActive !== false)
-      .map(row => {
-        const p = row.property || row;
-        const port = row.portfolio || {};
-        return {
-          propertyID:    p.propertyID || p.id,
-          address:       [p.address, p.city, p.stateID||'AZ'].filter(Boolean).join(', '),
-          portfolioName: port.name || p.portfolioName || '',
-          portfolioID:   p.portfolioID || port.portfolioID,
-        };
-      })
-      .filter(p => p.address)
-      .sort((a,b) => a.address.localeCompare(b.address));
+    const r = await fetch('/api/properties-search');
+    if(!r.ok) throw new Error('Failed');
+    S.allProperties = await r.json();
     S.propertiesLoaded = true;
     console.log(`[expense-log] Loaded ${S.allProperties.length} properties`);
   } catch(e){ console.error('Property load failed', e); }
 }
-
 function searchProperties(q){
   return S.allProperties.filter(p => p.address.toLowerCase().includes(q.toLowerCase())).slice(0,12);
 }
