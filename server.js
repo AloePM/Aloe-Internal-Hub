@@ -915,7 +915,7 @@ app.use('/api/rentvine', async function(req, res) {
   const query = new URLSearchParams(req.query).toString();
   const url = `${RENTVINE_BASE}${rvPath}${query ? '?' + query : ''}`;
   try {
-    const opts = { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json' } };
+const opts = { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json', 'X-Rentvine-Account': RENTVINE_ACCOUNT } };
     if (req.method === 'POST') { opts.method = 'POST'; opts.body = JSON.stringify(req.body); }
     const r = await fetch(url, opts);
     res.json(await r.json());
