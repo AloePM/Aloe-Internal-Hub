@@ -419,6 +419,10 @@ document.getElementById('type-grid').addEventListener('click', e => {
   // Update submit label
   document.getElementById('submit-label').textContent = 'Create Bill in Rentvine →';
   document.getElementById('submit-btn').disabled = false;
+  document.getElementById('receipt-file').value = '';
+  document.getElementById('receipt-label').textContent = '📷 Choose photo or PDF';
+  document.getElementById('upload-btn').style.display = 'none';
+  document.getElementById('upload-status').style.display = 'none';
 });
 
 // ── REPAIR TYPE ───────────────────────────────────────────────────────────────
