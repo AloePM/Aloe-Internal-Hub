@@ -1629,6 +1629,52 @@ async function uploadToRVFiles(fileName, mimeType, imgBuffer, objectTypeID, obje
   return { ok: upResp.ok, status: upResp.status, text: (await upResp.text()).slice(0, 300) };
 }
 
+// ── EXPENSE LOG: Upload receipt to Rentvine bill ─────────────────────────────
+app.post('/api/expense-log/upload', async (req, res) => {
+  try {
+    const billID = req.query.billID;
+    if (!billID) return res.status(400).json({ error: 'billID required' });
+    const chunks = [];
+    await new Promise((resolve, reject) => {
+      req.on('data', chunk => chunks.push(chunk));
+      req.on('end', resolve);
+      req.on('error', reject);
+    });
+    const buffer = Buffer.concat(chunks);
+    const contentType = req.headers['content-type'] || '';
+    const boundaryMatch = contentType.match(/boundary=([^\s;]+)/);
+    if (!boundaryMatch) return res.status(400).json({ error: 'No boundary' });
+    const boundary = boundaryMatch[1];
+    const headerSection = buffer.slice(0, Math.min(600, buffer.length)).toString('utf8');
+    const nameMatch = headerSection.match(/filename="([^"]+)"/);
+    const fileName = nameMatch ? nameMatch[1] : 'receipt.jpg';
+    const ctMatch = headerSection.match(/Content-Type: ([^\r\n]+)/);
+    const mimeType = ctMatch ? ctMatch[1].trim() : 'application/octet-stream';
+    const sep = Buffer.from('\r\n\r\n');
+    let start = -1;
+    for (let i = 0; i < buffer.length - sep.length; i++) {
+      if (buffer.slice(i, i + sep.length).equals(sep)) { start = i + sep.length; break; }
+    }
+    if (start < 0) return res.status(400).json({ error: 'Could not parse file' });
+    const endMarker = Buffer.from('\r\n--' + boundary);
+    let end = buffer.length;
+    for (let i = start; i < buffer.length - endMarker.length; i++) {
+      if (buffer.slice(i, i + endMarker.length).equals(endMarker)) { end = i; break; }
+    }
+    const fileBuffer = buffer.slice(start, end);
+    const result = await uploadToRVFiles(fileName, mimeType, fileBuffer, 5, billID);
+    console.log('[expense-log] Receipt upload to bill', billID, ':', result.status);
+    if (result.ok) {
+      res.json({ success: true, message: 'Receipt uploaded to bill ' + billID });
+    } else {
+      res.status(500).json({ error: 'Upload failed: ' + result.text });
+    }
+  } catch (e) {
+    console.error('[expense-log] Upload error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 
 // ── Rentvine MCP helpers (list_attachments, download_file, upload_file via MCP) ──
@@ -2781,7 +2827,7 @@ const SHEET_TAB     = 'Expense Log';
 const RV_BASE = 'https://aloepm.rentvine.com/api/manager';
 const RV_HEADERS = {
   Authorization: 'Basic ' + Buffer.from(
-    `${process.env.RV_API_KEY}:${process.env.RV_API_SECRET}`
+    `${process.env.RENTVINE_API_KEY}:${process.env.RENTVINE_API_SECRET}`
   ).toString('base64'),
   'X-Rentvine-Account': 'aloepm',
   'Content-Type': 'application/json',
@@ -2802,10 +2848,7 @@ const GL_MAP = {
 // ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 
 function getSheetsClient() {
-  const keyJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!keyJson) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY not set');
   const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(keyJson),
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   return google.sheets({ version: 'v4', auth });
@@ -2855,18 +2898,21 @@ async function appendSheetRow(sheets, row) {
 // Bills are charged to the property ledger — Rentvine rolls it up to the owner.
 // We search /properties/export for the propertyID, then get its ledger.
 
-async function getPropertyLedgerID(propertyID) {
-  if (!propertyID) return null;
+async function getPropertyLedgerID(propertyID, address) {
+  if (!address) return null;
   try {
-    // Property ledger: ledger type 3 = Property
+    // Search by street address — returns the property ledger
+    const street = address.split(',')[0].trim();
     const r = await fetch(
-      `${RV_BASE}/ledgers/search?ledgerTypeID=3&objectID=${propertyID}&pageSize=5`,
+      `${RV_BASE}/accounting/ledgers?search=${encodeURIComponent(street)}&pageSize=5`,
       { headers: RV_HEADERS }
     );
     if (!r.ok) return null;
     const data = await r.json();
     const ledgers = Array.isArray(data) ? data : (data?.data ?? data?.ledgers ?? []);
-    return ledgers[0]?.ledgerID || ledgers[0]?.id || null;
+    const ledger = ledgers[0]?.ledger || ledgers[0];
+    console.log('[expense-log] Ledger lookup for', street, ':', ledger?.ledgerID, ledger?.name);
+    return ledger?.ledgerID || ledger?.id || null;
   } catch (e) {
     console.warn('[expense-log] Property ledger lookup failed:', e.message);
     return null;
@@ -2908,7 +2954,8 @@ async function postBill(payload) {
     body:    JSON.stringify(payload),
   });
   const data = await r.json();
-  if (!r.ok) throw new Error(data?.message || data?.error || `Rentvine API ${r.status}`);
+  if (!r.ok) { console.error('[expense-log] 400 detail:', JSON.stringify(data)); console.error('[expense-log] payload sent:', JSON.stringify(payload)); throw new Error(data?.message || data?.error || `Rentvine API ${r.status}`); }
+  console.log('[expense-log] Bill created response:', JSON.stringify(data).slice(0,300));
   return data;
 }
 
@@ -2985,7 +3032,7 @@ app.post('/api/expense-log', async (req, res) => {
 
   try {
     // 1. Resolve property ledger ID
-    const ledgerID = await getPropertyLedgerID(property.propertyID);
+    const ledgerID = await getPropertyLedgerID(property.propertyID, property.address);
 
     // 2. Create main reimbursement bill
     const bill1Payload = buildBillPayload({
@@ -2998,7 +3045,7 @@ app.post('/api/expense-log', async (req, res) => {
       amount,
     });
     const bill1 = await postBill(bill1Payload);
-    const billID = bill1?.billID || bill1?.id || '';
+    const billID = bill1?.bill?.billID || bill1?.billID || bill1?.id || '';
 
     // 3. If Home Warranty Trade Fee — create $10 admin bill automatically
     let adminBillID = null;
@@ -3021,7 +3068,7 @@ app.post('/api/expense-log', async (req, res) => {
         amount:          ADMIN_TRADE_FEE_AMOUNT,
       });
       const bill2 = await postBill(bill2Payload);
-      adminBillID = bill2?.billID || bill2?.id || '';
+      adminBillID = bill2?.bill?.billID || bill2?.billID || bill2?.id || '';
     }
 
     // 4. Google Sheet (non-blocking — bill already created, don't fail)
@@ -3038,7 +3085,7 @@ app.post('/api/expense-log', async (req, res) => {
           expType.label,
           repairType || vendorName || '',
           Number(amount).toFixed(2),
-          String(glAccountID),
+          (() => { const glNames = {80:'HOA Dues',86:'Home Warranty Trade Fee',82:'Cleaning Reimbursement',106:'Key/Lock Replacement',79:'Landscaping',77:'Pest Control',102:'Painting',103:'Plumbing',104:'Flooring',105:'HVAC',110:'Electrical',108:'Repairs - Other',81:'Cleaning and Maintenance - Other',78:'General Maintenance Labor',83:'Pool Services',144:'Inspection',143:'Irrigation',111:'Supplies',136:'Owner Administrative Charge'}; return glNames[glAccountID] || String(glAccountID); })(),
           refString,
           notes || '',
           String(billID),

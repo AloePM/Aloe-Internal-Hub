@@ -278,6 +278,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
     <div class="success-title">Bills Created!</div>
     <div class="success-sub">Rentvine has been updated and the team has been notified in Slack.</div>
     <div id="success-details"></div>
+
+    <!-- RECEIPT UPLOAD -->
+    <div id="upload-section" style="margin:12px 0;width:100%;max-width:480px">
+      <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">📎 Attach Receipt (optional)</div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--teal-light);border:1.5px dashed var(--teal-border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--teal-dk);">
+        <input type="file" id="receipt-file" accept="image/*,.pdf" style="display:none"/>
+        <span id="receipt-label">📷 Choose photo or PDF</span>
+      </label>
+      <button id="upload-btn" style="display:none;margin-top:8px;width:100%;background:var(--teal);border:none;border-radius:7px;padding:9px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Upload to Rentvine →</button>
+      <div id="upload-status" style="font-size:11px;margin-top:6px;display:none"></div>
+    </div>
+
     <button class="another-btn" id="another-btn">Log another payment</button>
   </div>
 </div>
@@ -286,6 +298,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 const S = {
   property: null,
   expType: null,
+  lastBillID: null,
   repairType: null,
   who: null,
   payMethod: 'Credit Card',
@@ -522,6 +535,7 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
 
     document.getElementById('success-details').innerHTML = detailHtml;
     document.getElementById('form-view').style.display = 'none';
+    S.lastBillID = result.billID || null;
     document.getElementById('success-view').classList.add('visible');
 
   } catch(e){
@@ -535,9 +549,48 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
   }
 });
 
+// ── RECEIPT UPLOAD ───────────────────────────────────────────────────────────
+document.getElementById('receipt-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+  document.getElementById('receipt-label').textContent = '📄 ' + file.name;
+  document.getElementById('upload-btn').style.display = 'block';
+});
+
+document.getElementById('upload-btn').addEventListener('click', async () => {
+  const file = document.getElementById('receipt-file').files[0];
+  const billID = S.lastBillID;
+  if(!file || !billID) return;
+  const statusEl = document.getElementById('upload-status');
+  const btn = document.getElementById('upload-btn');
+  btn.textContent = 'Uploading…';
+  btn.disabled = true;
+  statusEl.style.display = 'none';
+  try {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    const r = await fetch(`/api/expense-log/upload?billID=${billID}`, {
+      method: 'POST',
+      body: formData,
+    });
+    const result = await r.json();
+    if(!r.ok) throw new Error(result.error || 'Upload failed');
+    statusEl.textContent = '✅ Receipt uploaded to Rentvine';
+    statusEl.style.color = 'var(--green)';
+    statusEl.style.display = 'block';
+    btn.style.display = 'none';
+  } catch(e) {
+    statusEl.textContent = '⚠ ' + e.message;
+    statusEl.style.color = 'var(--red)';
+    statusEl.style.display = 'block';
+    btn.textContent = 'Upload to Rentvine →';
+    btn.disabled = false;
+  }
+});
+
 // ── RESET ────────────────────────────────────────────────────────────────────
 document.getElementById('another-btn').addEventListener('click', () => {
-  S.property=null; S.expType=null; S.repairType=null; S.who=null; S.payMethod='Credit Card';
+  S.property=null; S.expType=null; S.repairType=null; S.who=null; S.payMethod='Credit Card'; S.lastBillID=null;
   document.getElementById('form-view').style.display='block';
   document.getElementById('success-view').classList.remove('visible');
   document.querySelectorAll('.type-btn,.repair-btn').forEach(b=>b.classList.remove('selected'));
