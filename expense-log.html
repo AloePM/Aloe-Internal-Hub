@@ -484,7 +484,7 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
   document.getElementById('err-banner').classList.remove('visible');
   if(!validate()) return;
 
-  const amount    = parseFloat(document.getElementById('amount').value);
+const amount = parseFloat(parseFloat(document.getElementById('amount').value).toFixed(2));
   const payDate   = document.getElementById('pay-date').value;
   const reference = document.getElementById('reference').value.trim();
   const notes     = document.getElementById('notes').value.trim();
