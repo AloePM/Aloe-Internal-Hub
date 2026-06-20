@@ -417,9 +417,8 @@ document.getElementById('type-grid').addEventListener('click', e => {
   document.getElementById('type-err').classList.remove('visible');
 
   // Update submit label
-  document.getElementById('submit-label').textContent = isTrade
-    ? 'Create 2 Bills in Rentvine →'
-    : 'Create Bill in Rentvine →';
+  document.getElementById('submit-label').textContent = 'Create Bill in Rentvine →';
+  document.getElementById('submit-btn').disabled = false;
 });
 
 // ── REPAIR TYPE ───────────────────────────────────────────────────────────────
