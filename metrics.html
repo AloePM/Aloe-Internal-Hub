@@ -1656,47 +1656,52 @@ function renderMoveOuts() {
     html += '</tbody></table></div></div>';
   }
 
-  // 6000/6070 recon cards
+  // 6070 bills recon cards (acct 74 = Tenant Cleaning, 75 = Tenant Repair Charges)
   var reconData = D._moveOutCharges || {};
   var allChargeRows = [];
+  var seenKeys = {};
   recentMoveOuts.concat(accountingMoveOuts).forEach(function(m) {
     var addrNum = (m.address||'').match(/^(\d+)/);
     var key = addrNum ? addrNum[1] : '';
-    var charges = (reconData.tenantCharges && key && reconData.tenantCharges[key]) || [];
-    var bills = (reconData.propertyBills && key && reconData.propertyBills[key]) || [];
-    if (charges.length > 0 && !allChargeRows.find(function(r){ return r.key === key; })) {
+    if (!key || seenKeys[key]) return;
+    var bills = (reconData.propertyBills && reconData.propertyBills[key]) || [];
+    if (bills.length > 0 && !allChargeRows.find(function(r){ return r.key === key; })) {
       var moTime = m.moveOutDate ? new Date(m.moveOutDate).getTime() : null;
       var filteredBills = moTime ? bills.filter(function(b){ var bt = b.date ? new Date(b.date).getTime() : 0; return bt >= moTime - 5*86400000 && bt <= moTime + 30*86400000; }) : bills;
-      var filteredCharges = moTime ? charges.filter(function(c){ var ct = c.date ? new Date(c.date).getTime() : 0; return ct >= moTime - 5*86400000 && ct <= moTime + 30*86400000; }) : charges;
-      if (filteredCharges.length > 0) allChargeRows.push({ address: m.address, moveOutDate: m.moveOutDate, charges: filteredCharges, bills: filteredBills, key: key });
+      seenKeys[key] = true;
+      if (filteredBills.length > 0) allChargeRows.push({ address: m.address, moveOutDate: m.moveOutDate, bills: filteredBills, key: key });
     }
   });
   if (allChargeRows.length > 0) {
     html += '<div class="trend-section-label" style="margin-top:20px">6000 vs 6070 Charge Reconciliation</div>';
     allChargeRows.forEach(function(r) {
-      var tcTotal = r.charges.reduce(function(a,c){return a+Math.abs(c.amount);},0);
       var pbTotal = r.bills.reduce(function(a,b){return a+Math.abs(b.amount);},0);
-      var diff = Math.abs(tcTotal - pbTotal);
-      var exact = r.bills.length > 0 && diff < 1;
-      var partial = r.bills.length > 0 && diff >= 1;
-      var hc = exact ? 'var(--green)' : partial ? 'var(--amber)' : 'var(--red)';
-      var hb = exact ? 'var(--green-d)' : partial ? 'var(--amber-d)' : 'var(--red-d)';
-      var sl = exact ? '\u2713 Balanced' : partial ? '\u26a0 $' + Number(diff).toFixed(2) + ' diff' : '\u2717 No bills';
+      var cleaning = r.bills.filter(function(b){ return b.account && b.account.indexOf('Cleaning') >= 0; });
+      var repairs = r.bills.filter(function(b){ return b.account && b.account.indexOf('Repair') >= 0; });
+      var cleanTotal = cleaning.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+      var repairTotal = repairs.reduce(function(a,b){return a+Math.abs(b.amount);},0);
       html += '<div class="card" style="margin-bottom:14px">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--rule)">';
-      html += '<div style="font-size:14px;font-weight:700">' + r.address + '<div style="font-size:11px;color:var(--muted);font-weight:400">Move-out: ' + (r.moveOutDate?r.moveOutDate.slice(0,10):'--') + '</div></div>';
-      html += '<span style="font-size:11px;padding:4px 12px;border-radius:20px;background:' + hb + ';color:' + hc + ';font-weight:700">' + sl + '</span></div>';
+      html += '<div><div style="font-size:14px;font-weight:700">' + r.address + '</div>';
+      html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">Move-out: ' + (r.moveOutDate?r.moveOutDate.slice(0,10):'--') + '</div></div>';
+      html += '<span style="font-size:12px;font-weight:700;color:var(--teal2)">Total: $' + Number(pbTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</span></div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
-      html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:8px">6000 \u2014 Tenant Charges</div>';
-      html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--blue-d)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--blue)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--blue)">Amount</th></tr></thead><tbody>';
-      r.charges.forEach(function(c,ci){ html += '<tr style="border-bottom:1px solid var(--rule)' + (ci%2===1?';background:var(--card2)':'') + '"><td style="padding:6px 8px">' + c.description + '</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$' + Number(Math.abs(c.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>'; });
-      html += '<tr style="background:var(--blue-d)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$' + Number(tcTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr></tbody></table></div>';
-      html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--teal2);margin-bottom:8px">6070 \u2014 Property Bills</div>';
-      if (!r.bills.length) { html += '<div style="padding:20px;text-align:center;background:var(--red-d);border-radius:8px;color:var(--red);font-size:12px;font-weight:600">No matching bills found.</div>'; }
+      // 6070-1 Tenant Cleaning
+      html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--teal2);margin-bottom:8px">6070-1 \u2014 Tenant Cleaning</div>';
+      if (!cleaning.length) { html += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No cleaning bills</div>'; }
       else {
         html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--teal-dim)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--teal2)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--teal2)">Amount</th></tr></thead><tbody>';
-        r.bills.forEach(function(b,bi){ html += '<tr style="border-bottom:1px solid var(--rule)' + (bi%2===1?';background:var(--card2)':'') + '"><td style="padding:6px 8px">' + b.description + '</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$' + Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>'; });
-        html += '<tr style="background:var(--teal-dim)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$' + Number(pbTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr></tbody></table>';
+        cleaning.forEach(function(b,bi){ html += '<tr style="border-bottom:1px solid var(--rule)' + (bi%2===1?';background:var(--card2)':'') + '"><td style="padding:6px 8px">' + b.description + '</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$' + Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>'; });
+        html += '<tr style="background:var(--teal-dim)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$' + Number(cleanTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr></tbody></table>';
+      }
+      html += '</div>';
+      // 6070-2 Tenant Repair Charges
+      html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:8px">6070-2 \u2014 Tenant Repair Charges</div>';
+      if (!repairs.length) { html += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No repair bills</div>'; }
+      else {
+        html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--blue-d)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--blue)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--blue)">Amount</th></tr></thead><tbody>';
+        repairs.forEach(function(b,bi){ html += '<tr style="border-bottom:1px solid var(--rule)' + (bi%2===1?';background:var(--card2)':'') + '"><td style="padding:6px 8px">' + b.description + '</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$' + Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>'; });
+        html += '<tr style="background:var(--blue-d)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$' + Number(repairTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr></tbody></table>';
       }
       html += '</div></div></div>';
     });
