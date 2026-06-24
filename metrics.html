@@ -557,86 +557,88 @@ function renderOccupancy() {
       kpi('Active Listings',fmt(p.activeListings||0),'published for rent',C.BLUE)+
     '</div>'+
 
-    // KPI row 2 - financials
-    '<div class="kpi-grid g4">'+
+    // KPI row 2 - financials (past due moved to Delinquency tab)
+    '<div class="kpi-grid g3">'+
       kpi('Avg Rent','$'+Number(avgRent).toLocaleString(),'per unit across portfolio',C.TEAL2)+
       kpi('Total Rent (Owners)','$'+Number(totalRent).toLocaleString(),'sum of rent for occupied units',C.GREEN)+
-      kpi('Vacancy Loss (Mgmt)','$'+Number(vacLoss).toLocaleString(),'vacant × $85 mgmt fee per month',C.RED)+
-      kpi('Past Due Rent','$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),(pastDue.length||0)+' tenants with past due rent',totalPastDue>0?C.RED:C.GREEN)+
+      kpi('Vacancy Loss (Mgmt)','$'+Number(vacLoss).toLocaleString(),'vacant units x $85 mgmt fee',C.RED)+
     '</div>'+
 
-    '<div class="grid g-2">'+
-      // Move activity
-      '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
-      '<div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Occupancy vs Vacancy (24 months)</div></div>'+
-      '<div class="chart-wrap" style="height:220px"><canvas id="occ-trend"></canvas></div>'+
-      '<div class="legend">'+
-      '<div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Occupied</div>'+
-      '<div class="legend-item"><div class="legend-dot" style="background:'+C.AMBER+'"></div>Vacant</div>'+
-      '</div></div>'+
+    // Move-In vs Move-Out trend chart with net
+    '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
+    '<div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move-In vs Move-Out (24 months)</div>'+
+    '<span id="occ-net-badge" style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:20px"></span></div>'+
+    '<div class="chart-wrap" style="height:200px"><canvas id="occ-trend"></canvas></div>'+
+    '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.TEAL2+'"></div>Move-Ins</div>'+
+    '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Move-Outs</div></div>'+
+    '<div style="height:0.5px;background:var(--rule);margin:10px 0 8px"></div>'+
+    '<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Net per month</div>'+
+    '<div id="occ-net-chips" style="display:flex;gap:4px;flex-wrap:wrap"></div>'+
+    '</div>'+
 
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.TEAL2+'"></div>Move Activity (24 months)</div></div>'+
-      '<div class="chart-wrap" style="height:200px"><canvas id="occ-moves"></canvas></div>'+
-      '<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:'+C.GREEN+'"></div>Move-Ins</div>'+
-      '<div class="legend-item"><div class="legend-dot" style="background:'+C.RED+'"></div>Move-Outs</div></div></div>'+
+    '<div class="trend-section-label">Move Activity — 24 Months</div>'+
+    '<div class="grid g-2" style="margin-bottom:14px">'+
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Move-Ins Month over Month</div></div>'+
+    '<div style="max-height:400px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+
+    '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:6px 12px;text-align:left">Month</th><th style="padding:6px 12px;text-align:right">Move-Ins</th><th style="padding:6px 12px">Volume</th><th style="padding:6px 12px;text-align:right">vs Prior</th></tr></thead><tbody>'+
+    (function(){ var rows='',arr=(l.moveInsByMonth||[]).slice().reverse(),mx=Math.max.apply(null,arr.map(function(x){return x.value||0;}).concat([1])); arr.forEach(function(row,i){ var prev=arr[i+1]?arr[i+1].value:null; var delta=prev!==null?row.value-prev:null; var dHtml=delta===null?'':(delta>0?'<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">+'+delta+'</span>':delta<0?'<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">'+delta+'</span>':'<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--card2);color:var(--muted)">&#8212;</span>'); var pct=Math.round(((row.value||0)/mx)*100); var isMTD=i===0; rows+='<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'"><td style="padding:8px 12px;font-weight:'+(isMTD?'700':'400')+'">'+sm(row.month)+(isMTD?' <span style="font-size:9px;padding:1px 6px;border-radius:20px;background:var(--blue-d);color:var(--blue);font-weight:600">MTD</span>':'')+' </td><td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">'+(row.value||0)+'</td><td style="padding:8px 12px"><div style="width:80px;height:6px;background:var(--card2);border-radius:3px;overflow:hidden"><div style="width:'+pct+'%;height:6px;border-radius:3px;background:var(--green)"></div></div></td><td style="padding:8px 12px;text-align:right">'+dHtml+'</td></tr>'; }); return rows; })()+
+    '</tbody></table></div></div>'+
+    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Move-Outs Month over Month</div></div>'+
+    '<div style="max-height:400px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+
+    '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:6px 12px;text-align:left">Month</th><th style="padding:6px 12px;text-align:right">Move-Outs</th><th style="padding:6px 12px">Volume</th><th style="padding:6px 12px;text-align:right">vs Prior</th></tr></thead><tbody>'+
+    (function(){ var rows='',arr=(l.moveOutsByMonth||[]).slice().reverse(),mx=Math.max.apply(null,arr.map(function(x){return x.value||0;}).concat([1])); arr.forEach(function(row,i){ var prev=arr[i+1]?arr[i+1].value:null; var delta=prev!==null?row.value-prev:null; var dHtml=delta===null?'':(delta>0?'<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">+'+delta+'</span>':delta<0?'<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">'+delta+'</span>':'<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--card2);color:var(--muted)">&#8212;</span>'); var pct=Math.round(((row.value||0)/mx)*100); var isMTD=i===0; rows+='<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'"><td style="padding:8px 12px;font-weight:'+(isMTD?'700':'400')+'">'+sm(row.month)+(isMTD?' <span style="font-size:9px;padding:1px 6px;border-radius:20px;background:var(--blue-d);color:var(--blue);font-weight:600">MTD</span>':'')+' </td><td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--red)">'+(row.value||0)+'</td><td style="padding:8px 12px"><div style="width:80px;height:6px;background:var(--card2);border-radius:3px;overflow:hidden"><div style="width:'+pct+'%;height:6px;border-radius:3px;background:var(--red)"></div></div></td><td style="padding:8px 12px;text-align:right">'+dHtml+'</td></tr>'; }); return rows; })()+
+    '</tbody></table></div></div>'+
+    '</div>'+
 
-      // Move-out reasons card
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Tenant Move-Out Reasons</div></div>'+
-      (moveOutReasons.length ?
-'<div class="chart-wrap" style="height:' + Math.max(200, moveOutReasons.length * 44) + 'px"><canvas id="occ-reasons"></canvas></div>' :
-       '<div style="padding:16px"><div style="font-size:13px;color:var(--text);margin-bottom:8px;font-weight:600">No move-out reasons on file</div>'+
-'<div style="font-size:12px;color:var(--muted);line-height:1.6">Move-out reasons come from the tenant-written <strong>Reason for Vacating</strong> field in Rentvine. Data will appear here once the backend changes are deployed.</div></div>')+      '</div>'+
-
-    // Past due tenants
-    
-
+    '<div class="trend-section-label">Tenant Move-Out Reasons</div>'+
+    '<div class="card">'+
+    (moveOutReasons.length ?
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+      '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em"><th style="padding:6px 12px;text-align:left">Reason</th><th style="padding:6px 12px;text-align:right">Count</th><th style="padding:6px 12px;text-align:right">Share</th><th style="padding:6px 12px">Risk</th></tr></thead><tbody>'+
+      (function(){ var total=moveOutReasons.reduce(function(a,r){return a+(r.count||0);},0); var riskMap={'Buying a Home':{label:'Low - natural',bg:'var(--green-d)',color:'var(--green)'},'Job / Relocation':{label:'Low - natural',bg:'var(--green-d)',color:'var(--green)'},'Personal / Family':{label:'Low - natural',bg:'var(--green-d)',color:'var(--green)'},'Owner Selling':{label:'Medium - watch',bg:'var(--amber-d)',color:'var(--amber)'},'Financial':{label:'High - actionable',bg:'var(--red-d)',color:'var(--red)'},'Eviction / Non-Payment':{label:'High - actionable',bg:'var(--red-d)',color:'var(--red)'},'Different Size Needed':{label:'Low - natural',bg:'var(--green-d)',color:'var(--green)'},'Other':{label:'Needs review',bg:'var(--card2)',color:'var(--muted)'}}; return moveOutReasons.map(function(r,i){ var pct=total>0?Math.round(((r.count||0)/total)*100):0; var risk=riskMap[r.reason]||{label:'Needs review',bg:'var(--card2)',color:'var(--muted)'}; return '<tr style="border-bottom:1px solid var(--rule)'+(i%2===1?';background:var(--card2)':'')+'"><td style="padding:8px 12px;font-weight:500">'+r.reason+'</td><td style="padding:8px 12px;text-align:right;font-weight:700">'+(r.count||0)+'</td><td style="padding:8px 12px;text-align:right;color:var(--muted)">'+pct+'%</td><td style="padding:8px 12px"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+risk.bg+';color:'+risk.color+';font-weight:600">'+risk.label+'</span></td></tr>'; }).join(''); })()+
+      '</tbody></table>' :
+      '<div style="padding:16px;font-size:13px;color:var(--ghost)">No move-out reasons on file.</div>')+
+    '</div>'+
     '</div>';
 
   var moveLabels=(l.moveInsByMonth||[]).map(function(x){return sm(x.month);});
   var moveIns=(l.moveInsByMonth||[]).map(function(x){return x.value;});
   var moveOuts=(l.moveOutsByMonth||[]).map(function(x){return x.value;});
-
   document.getElementById('app').innerHTML = html;
   setTimeout(function() {
-    // Occupancy trend line chart
-    var occTrendLabels=(p.occupancyByMonth||[]).map(function(x){return sm(x.month);});
-    var occData=(p.occupancyByMonth||[]).map(function(x){return x.value;});
-    var vacData=(p.vacancyByMonth||[]).map(function(x){return x.value;});
-    if (occTrendLabels.length) {
-      mkLine('occ-trend', occTrendLabels, [
-        {label:'Occupied',data:occData,borderColor:C.GREEN,backgroundColor:C.GREEN+'22',fill:true,tension:0.3,pointRadius:2},
-        {label:'Vacant',data:vacData,borderColor:C.AMBER,backgroundColor:C.AMBER+'22',fill:true,tension:0.3,pointRadius:2}
-      ], 220);
+    // Grouped bar + net line chart
+    var occNet = moveIns.map(function(v,i){ return v - (moveOuts[i]||0); });
+    var totalNet = occNet.reduce(function(a,b){ return a+b; }, 0);
+    var el = document.getElementById('occ-trend');
+    if (el) {
+      if (charts['occ-trend']) charts['occ-trend'].destroy();
+      charts['occ-trend'] = new Chart(el, {
+        type: 'bar',
+        data: { labels: moveLabels, datasets: [
+          { label: 'Move-Ins', data: moveIns, backgroundColor: C.TEAL2+'cc', borderRadius: 3, borderSkipped: false, order: 2 },
+          { label: 'Move-Outs', data: moveOuts, backgroundColor: C.RED+'cc', borderRadius: 3, borderSkipped: false, order: 2 },
+          { label: 'Net', data: occNet, type: 'line', borderColor: C.AMBER, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: C.AMBER, tension: 0.3, fill: false, order: 1 }
+        ]},
+        options: Object.assign({}, CD, { scales: {
+          x: { ticks: { font: { size: 10, family: 'DM Mono' }, color: '#94acac', maxRotation: 0, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false }, border: { display: false } },
+          y: { beginAtZero: true, ticks: { font: { size: 10, family: 'DM Mono' }, color: '#94acac' }, grid: { color: 'rgba(180,200,200,0.12)' }, border: { display: false } }
+        }})
+      });
+      el.parentElement.style.height = '200px';
     }
-    mkBar('occ-moves', moveLabels, [
-      {label:'Move-Ins',data:moveIns,backgroundColor:C.GREEN+'cc'},
-      {label:'Move-Outs',data:moveOuts,backgroundColor:C.RED+'cc'}
-    ], 200);
-    if (moveOutReasons.length) {
-      var reasonPalette = [C.TEAL, C.GREEN, C.AMBER, C.BLUE, C.PURPLE, C.RED, C.GRAY, C.TEAL2];
-      var reasonColors = reasonCounts.map(function(_, i) { return reasonPalette[i % reasonPalette.length] + 'cc'; });
-      var chartH = Math.max(200, moveOutReasons.length * 44);
-      var el = document.getElementById('occ-reasons');
-      if (el) {
-        if (charts['occ-reasons']) charts['occ-reasons'].destroy();
-        charts['occ-reasons'] = new Chart(el, {
-          type: 'bar',
-          data: { labels: reasonLabels, datasets: [{ data: reasonCounts, backgroundColor: reasonColors, borderRadius: 4, borderSkipped: false }] },
-          options: Object.assign({}, CD, {
-            indexAxis: 'y',
-            plugins: Object.assign({}, CD.plugins, {
-              tooltip: Object.assign({}, CD.plugins.tooltip, {
-                callbacks: { label: function(ctx) { return ' ' + ctx.parsed.x + ' move-outs'; } }
-              })
-            }),
-            scales: {
-              x: { beginAtZero: true, ticks: { font: { size: 10, family: 'DM Mono' }, color: '#94acac', stepSize: 1 }, grid: { color: 'rgba(180,200,200,0.12)' }, border: { display: false } },
-              y: { ticks: { font: { size: 11, family: 'DM Sans' }, color: '#3a5050' }, grid: { display: false }, border: { display: false } }
-            }
-          })
-        });
-        el.parentElement.style.height = chartH + 'px';
-      }
+    // Net badge
+    var badge = document.getElementById('occ-net-badge');
+    if (badge) { badge.textContent = (totalNet>=0?'+':'')+totalNet+' net'; badge.style.background = totalNet>=0?'var(--green-d)':'var(--red-d)'; badge.style.color = totalNet>=0?'var(--green)':'var(--red)'; }
+    // Net chips
+    var chipsEl = document.getElementById('occ-net-chips');
+    if (chipsEl) {
+      chipsEl.innerHTML = occNet.map(function(v,i) {
+        var bg=v>=0?'var(--green-d)':'var(--red-d)', col=v>=0?'var(--green)':'var(--red)';
+        return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:36px;flex:1">'+
+          '<div style="font-size:9px;color:var(--muted)">'+moveLabels[i]+'</div>'+
+          '<div style="font-size:11px;font-weight:700;padding:2px 5px;border-radius:5px;background:'+bg+';color:'+col+'">'+
+          (v>0?'+':'')+v+'</div></div>';
+      }).join('');
     }
   }, 50);
 }
