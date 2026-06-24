@@ -2065,8 +2065,16 @@ app.get('/api/metrics', async (req, res) => {
 
 app.get('/api/moveout-charges', async (req, res) => {
   try {
-    const propsRaw = await fetchAllPages('/properties/export', { isActive: '' }, 3);
-    const props = propsRaw.map(function(i){ return i.property || i; });
+    // Fetch properties to build propertyID->streetNum map
+    const props = [];
+    for (let pg = 1; pg <= 5; pg++) {
+      const r = await fetch(RENTVINE_BASE + '/properties/export?pageSize=200&page=' + pg, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+      if (!r.ok) break;
+      const d = await r.json();
+      const batch = Array.isArray(d) ? d : (d.data || []);
+      batch.forEach(function(i){ props.push(i.property || i); });
+      if (batch.length < 200) break;
+    }
     const data = await fetchMoveOutChargeRecon(props);
     res.json(data);
   } catch(e) { res.status(500).json({ error: e.message }); }
