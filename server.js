@@ -2411,7 +2411,10 @@ const moveOutReasonRaw = [];
     return dt >= new Date(Date.now() - 90*24*60*60*1000) && dt <= new Date(Date.now() + 90*24*60*60*1000);
   }).sort((a,b) => ((a['Mirror Expected Move-Out Date']||a['Mirror Move-Out Date']||'')).localeCompare((b['Mirror Expected Move-Out Date']||b['Mirror Move-Out Date']||''))).map(c => {
     const addr = c['Mirror Address'];
-    const addrStr = addr ? (addr.address || addr.name || '') : '';
+    const unit = Array.isArray(c.unit) ? c.unit[0] : null;
+    const addrStr = (addr ? (addr.address || addr.name || '') : '') ||
+      (unit ? unit.name || '' : '') ||
+      (c.name ? c.name.replace(/^\d{2}\/\d{2}\/\d{4}\s+/, '') : '');
     return {
       address: addrStr.replace(/^\d{2}\/\d{2}\/\d{4}\s+/, ''),
       owners: '',
