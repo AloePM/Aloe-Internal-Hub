@@ -2056,6 +2056,19 @@ app.get('/api/metrics/refresh', (req, res) => {
 });
 
 
+function categorizeMoveOutReason(text) {
+  if (!text) return 'Not Specified';
+  const t = text.toLowerCase();
+  if (/buy|purchas|home|house/.test(t)) return 'Buying a Home';
+  if (/work|job|employ|relocat|transfer|state/.test(t)) return 'Job / Relocation';
+  if (/sell|owner sell/.test(t)) return 'Owner Selling';
+  if (/afford|financial|money|rent too|price/.test(t)) return 'Financial';
+  if (/family|personal|divorce|marriage|child/.test(t)) return 'Personal / Family';
+  if (/evict|violation|non.?pay/.test(t)) return 'Eviction / Non-Payment';
+  if (/downsize|upsize|bigger|smaller|bedroom/.test(t)) return 'Different Size Needed';
+  return 'Other';
+}
+
 async function fetchMoveOutReasons() {
   const reasons = {};
   try {
@@ -2167,18 +2180,7 @@ fetchAllPages('/properties/export', { isActive: true }, 5),
 const moveOutReasons = {};
 const moveOutReasonRaw = [];
 
-function categorizeMoveOutReason(text) {
-  if (!text) return 'Not Specified';
-  const t = text.toLowerCase();
-  if (/buy|purchas|home|house/.test(t)) return 'Buying a Home';
-  if (/work|job|employ|relocat|transfer|state/.test(t)) return 'Job / Relocation';
-  if (/sell|owner sell/.test(t)) return 'Owner Selling';
-  if (/afford|financial|money|rent too|price/.test(t)) return 'Financial';
-  if (/family|personal|divorce|marriage|child/.test(t)) return 'Personal / Family';
-  if (/evict|violation|non.?pay/.test(t)) return 'Eviction / Non-Payment';
-  if (/downsize|upsize|bigger|smaller|bedroom/.test(t)) return 'Different Size Needed';
-  return 'Other';
-}
+
   allLeases.forEach(l => {
     const mk = monthKey(l.moveInDate || l.startDate);
     if (mk && moveInsByMonth[mk] !== undefined) moveInsByMonth[mk]++;
