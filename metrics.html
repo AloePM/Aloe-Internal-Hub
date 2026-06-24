@@ -1586,29 +1586,71 @@ function renderMoveOuts() {
 
   // Accounting checklist - next 30 days
   if (accountingMoveOuts.length) {
-    html += '<div class="trend-section-label" style="margin-top:20px">Move-Out Accounting Checklist — Next 30 Days</div>';
-    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Review before distributing owner funds · Day 1-14 move-out = may need prorated mgmt fee</div>';
-    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<div class="trend-section-label" style="margin-top:20px">Accounting — Move-Out Distribution Review</div>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Review before distributing owner funds · Day 1-19 move-out = Full Month mgmt fee may apply</div>';
+    html += '<div class="card" style="margin-bottom:14px"><div class="card-header">';
+    html += '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Move-Out Accounting Checklist</div>';
+    html += '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--amber-d);color:var(--amber);border-radius:20px">'+accountingMoveOuts.length+' properties</span></div>';
+    html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
     html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
-    html += '<th style="padding:6px 12px">Property</th>';
+    html += '<th style="padding:6px 12px">Property / Owner</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Move-Out</th>';
     html += '<th style="padding:6px 12px;text-align:center">Type</th>';
-    html += '<th style="padding:6px 12px;text-align:center">Expected Move-Out</th>';
-    html += '<th style="padding:6px 12px;text-align:right">Deposit</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Mgmt Fee</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Security Dep (2100)</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Held By</th>';
     html += '<th style="padding:6px 12px;text-align:right">Tenant Balance</th>';
-    html += '<th style="padding:6px 12px;text-align:center">Stage</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Distribution</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Comp. Insp.</th>';
+    html += '<th style="padding:6px 12px">Action Needed</th>';
     html += '</tr></thead><tbody>';
     accountingMoveOuts.forEach(function(m, i) {
+      var moDate = m.moveOutDate ? m.moveOutDate.slice(0,10) : '--';
+      // Mgmt fee badge: move-out day 1-19 = Full Month, 20+ = Prorated
+      var feeType = m.mgmtFeeType || (m.moveOutDate ? (new Date(m.moveOutDate).getDate() < 20 ? 'Full Month' : 'Prorated') : '--');
+      var feeBg = feeType === 'Full Month' ? 'var(--green-d)' : 'var(--amber-d)';
+      var feeColor = feeType === 'Full Month' ? 'var(--green)' : 'var(--amber)';
+      // Deposit
       var deposit = m.depositAmount > 0 ? '$' + Number(m.depositAmount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '--';
-      var balance = m.tenantBalance ? '$' + Number(m.tenantBalance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '--';
-      var typeBg = m.moveOutType === 'Eviction' ? 'var(--red-d)' : m.moveOutType === 'Lease Break' ? 'var(--purple-d)' : 'var(--teal-dim)';
-      var typeColor = m.moveOutType === 'Eviction' ? 'var(--red)' : m.moveOutType === 'Lease Break' ? 'var(--purple)' : 'var(--teal2)';
+      var depositColor = m.depositAmount > 0 ? 'var(--blue)' : 'var(--muted)';
+      // Held By
+      var heldBy = m.depositAmount > 0 ? 'Aloe (2100)' : 'None/Owner';
+      var heldByBg = m.depositAmount > 0 ? 'var(--blue-d)' : 'var(--card2)';
+      var heldByColor = m.depositAmount > 0 ? 'var(--blue)' : 'var(--muted)';
+      // Tenant balance
+      var balance = m.tenantBalance != null && m.tenantBalance !== 0 ? '$' + Number(Math.abs(m.tenantBalance)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '$0.00';
+      var balanceColor = m.tenantBalance > 0 ? 'var(--red)' : 'var(--green)';
+      // Distribution: Hold if deposit > 0 AND tenant has balance OR repairs pending
+      var canDistribute = m.depositAmount <= 0 || (m.tenantBalance <= 0 && m.stage === 'Complete');
+      var distBg = canDistribute ? 'var(--green-d)' : 'var(--red-d)';
+      var distColor = canDistribute ? 'var(--green)' : 'var(--red)';
+      var distLabel = canDistribute ? 'OK to Distribute' : 'Hold';
+      // Comp inspection
+      var compInsp = m.comprehensiveInspection;
+      var compBg = compInsp === true || compInsp === 'Yes' || compInsp === 'yes' ? 'var(--green-d)' : 'var(--card2)';
+      var compColor = compInsp === true || compInsp === 'Yes' || compInsp === 'yes' ? 'var(--green)' : 'var(--muted)';
+      var compLabel = compInsp === true || compInsp === 'Yes' || compInsp === 'yes' ? 'Yes' : 'No';
+      // Move-out type badge
+      var typeBg = m.moveOutType === 'Eviction' ? 'var(--red-d)' : m.moveOutType === 'Lease Break' ? 'var(--amber-d)' : 'var(--teal-dim)';
+      var typeColor = m.moveOutType === 'Eviction' ? 'var(--red)' : m.moveOutType === 'Lease Break' ? 'var(--amber)' : 'var(--teal2)';
+      // Action needed
+      var actions = [];
+      if (!canDistribute) actions.push('Hold distribution');
+      if (m.depositAmount > 0 && m.tenantBalance > 0) actions.push('Tenant owes $' + Number(m.tenantBalance).toLocaleString());
+      if (m.stage !== 'Complete') actions.push('Stage: ' + (m.stage||'--'));
+      if (!m.forwardingAddress) actions.push('No fwd address');
+      var actionHtml = actions.length ? actions.map(function(a){ return '<div style="font-size:10px;color:var(--amber)">&#9679; '+a+'</div>'; }).join('') : '<span style="font-size:10px;color:var(--green)">&#10003; Ready</span>';
       html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
-      html += '<td style="padding:8px 12px;font-weight:500">' + (m.address||'--') + '<div style="font-size:10px;color:var(--ghost)">' + (m.owners||'') + '</div></td>';
-      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + typeBg + ';color:' + typeColor + ';font-weight:600">' + (m.moveOutType||'Standard') + '</span></td>';
-      html += '<td style="padding:8px 12px;text-align:center;font-size:11px">' + (m.moveOutDate?m.moveOutDate.slice(0,10):'--') + '</td>';
-      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--blue)">' + deposit + '</td>';
-      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--red)">' + balance + '</td>';
-      html += '<td style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted)">' + (m.stage||'--') + '</td>';
+      html += '<td style="padding:8px 12px"><div style="font-weight:500">' + (m.address||'--') + '</div><div style="font-size:10px;color:var(--muted)">' + (m.owners||'') + '</div></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted)">' + moDate + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+typeBg+';color:'+typeColor+';font-weight:600">' + (m.moveOutType||'Standard') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+feeBg+';color:'+feeColor+';font-weight:600">' + feeType + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+depositColor+'">' + deposit + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+heldByBg+';color:'+heldByColor+';font-weight:600">' + heldBy + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:'+balanceColor+'">' + balance + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+distBg+';color:'+distColor+';font-weight:600">' + distLabel + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+compBg+';color:'+compColor+';font-weight:600">' + compLabel + '</span></td>';
+      html += '<td style="padding:8px 12px">' + actionHtml + '</td>';
       html += '</tr>';
     });
     html += '</tbody></table></div></div>';
