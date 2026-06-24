@@ -1525,7 +1525,7 @@ function renderMoveOuts() {
   var allMoveOuts = l.moveOutsDetail || [];
   var today = new Date(); today.setHours(0,0,0,0);
   var in30 = new Date(); in30.setDate(in30.getDate()+30);
-  var d30ago = new Date(); d30ago.setDate(d30ago.getDate()-90); // match full 90-day bill window
+  var d30ago = new Date(); d30ago.setDate(d30ago.getDate()-30);
   var upcomingMoveOuts = allMoveOuts.filter(function(m){
     if (!m.moveOutDate) return false;
     var d = new Date(m.moveOutDate); d.setHours(0,0,0,0);
@@ -1679,28 +1679,44 @@ function renderMoveOuts() {
           if (fb.length && !rows2.find(function(r){return r.key===key;})) rows2.push({address:m.address,moveOutDate:m.moveOutDate,bills:fb,key:key});
         });
         if (rows2.length) {
-          var rhtml = '<div class="trend-section-label" style="margin-top:20px">6070 Charge Reconciliation — by Property</div>';
+          var rhtml = '<div class="trend-section-label" style="margin-top:20px">6000 vs 6070 Charge Reconciliation — by Property</div>';
+          var reconData2 = D._moveOutCharges || {};
           rows2.forEach(function(r) {
-            var pbTotal = r.bills.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+            var charges = (reconData2.tenantCharges && reconData2.tenantCharges[r.key]) || [];
+            var moTime = r.moveOutDate ? new Date(r.moveOutDate).getTime() : null;
+            var filteredCharges = moTime ? charges.filter(function(c){ var ct=c.date?new Date(c.date).getTime():0; return ct>=moTime-5*86400000&&ct<=moTime+30*86400000; }) : charges;
+            var tcTotal = filteredCharges.reduce(function(a,c){return a+Math.abs(c.amount);},0);
             var cleaning = r.bills.filter(function(b){return b.account&&b.account.indexOf('Cleaning')>=0;});
             var repairs = r.bills.filter(function(b){return b.account&&b.account.indexOf('Repair')>=0;});
             var cleanTotal = cleaning.reduce(function(a,b){return a+Math.abs(b.amount);},0);
             var repairTotal = repairs.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+            var pbTotal = cleanTotal + repairTotal;
             rhtml += '<div class="card" style="margin-bottom:14px">';
             rhtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--rule)">';
             rhtml += '<div><div style="font-size:14px;font-weight:700">'+r.address+'</div>';
             rhtml += '<div style="font-size:11px;color:var(--muted);margin-top:2px">Move-out: '+(r.moveOutDate?r.moveOutDate.slice(0,10):'--')+'</div></div>';
-            rhtml += '<span style="font-size:12px;font-weight:700;color:var(--teal2)">Total: $'+Number(pbTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>';
+            rhtml += '<div style="text-align:right"><span style="font-size:11px;color:var(--blue);font-weight:700">6000: $'+Number(tcTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span><span style="font-size:11px;color:var(--muted);margin:0 8px">/</span><span style="font-size:11px;color:var(--teal2);font-weight:700">6070: $'+Number(pbTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div></div>';
             rhtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
-            rhtml += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--teal2);margin-bottom:8px">6070-1 — Tenant Cleaning</div>';
-            if (!cleaning.length) { rhtml += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No cleaning bills</div>'; }
+            // LEFT: 6000 Tenant Charges
+            rhtml += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:8px">6000 — Tenant Charges</div>';
+            if (!filteredCharges.length) { rhtml += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No charges found</div>'; }
             else {
-              rhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--teal-dim)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--teal2)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--teal2)">Amount</th><th style="padding:5px 8px;text-align:center;font-size:10px;color:var(--teal2)">Date</th></tr></thead><tbody>';
+              rhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--blue-d)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--blue)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--blue)">Amount</th><th style="padding:5px 8px;text-align:center;font-size:10px;color:var(--blue)">Date</th></tr></thead><tbody>';
+              filteredCharges.forEach(function(c,ci){ rhtml += '<tr style="border-bottom:1px solid var(--rule)'+(ci%2===1?';background:var(--card2)':'')+'"><td style="padding:6px 8px">'+c.description+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$'+Number(Math.abs(c.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--muted)">'+(c.date?c.date.slice(0,10):'')+'</td></tr>'; });
+              rhtml += '<tr style="background:var(--blue-d)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$'+Number(tcTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td></td></tr></tbody></table>';
+            }
+            rhtml += '</div>';
+            // RIGHT: 6070-1 + 6070-2
+            rhtml += '<div>';
+            rhtml += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--teal2);margin-bottom:6px">6070-1 — Tenant Cleaning</div>';
+            if (!cleaning.length) { rhtml += '<div style="padding:8px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px;margin-bottom:10px">No cleaning bills</div>'; }
+            else {
+              rhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px"><thead><tr style="background:var(--teal-dim)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--teal2)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--teal2)">Amount</th><th style="padding:5px 8px;text-align:center;font-size:10px;color:var(--teal2)">Date</th></tr></thead><tbody>';
               cleaning.forEach(function(b,bi){ rhtml += '<tr style="border-bottom:1px solid var(--rule)'+(bi%2===1?';background:var(--card2)':'')+'"><td style="padding:6px 8px">'+b.description+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$'+Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--muted)">'+(b.date?b.date.slice(0,10):'')+'</td></tr>'; });
               rhtml += '<tr style="background:var(--teal-dim)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$'+Number(cleanTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td></td></tr></tbody></table>';
             }
-            rhtml += '</div><div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:8px">6070-2 — Tenant Repair Charges</div>';
-            if (!repairs.length) { rhtml += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No repair bills</div>'; }
+            rhtml += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:6px">6070-2 — Tenant Repair Charges</div>';
+            if (!repairs.length) { rhtml += '<div style="padding:8px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No repair bills</div>'; }
             else {
               rhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--blue-d)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--blue)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--blue)">Amount</th><th style="padding:5px 8px;text-align:center;font-size:10px;color:var(--blue)">Date</th></tr></thead><tbody>';
               repairs.forEach(function(b,bi){ rhtml += '<tr style="border-bottom:1px solid var(--rule)'+(bi%2===1?';background:var(--card2)':'')+'"><td style="padding:6px 8px">'+b.description+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$'+Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--muted)">'+(b.date?b.date.slice(0,10):'')+'</td></tr>'; });

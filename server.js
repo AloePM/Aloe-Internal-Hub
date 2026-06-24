@@ -2553,39 +2553,70 @@ app.get('/api/walkthrough-schedule', async (req, res) => {
 // ---- Move-Out Charge Recon ----
 async function fetchMoveOutChargeRecon(allPropsArg) {
   try {
-    // Build propertyID -> street number map
+    const cutoff = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+
+    // Build propertyID -> streetNum map
     const propIdToStreet = {};
-    const propIdToAddr = {};
     if (allPropsArg && allPropsArg.length) {
       allPropsArg.forEach(function(item) {
         const p = item.property || item;
         const pid = String(p.propertyID || p.id || '');
         const addr = (p.address || '').toLowerCase();
         const numMatch = addr.match(/^(\d+)/);
-        if (pid && numMatch) {
-          propIdToStreet[pid] = numMatch[1];
-          propIdToAddr[pid] = addr;
-        }
+        if (pid && numMatch) propIdToStreet[pid] = numMatch[1];
       });
     }
     console.log('ChargeRecon: propertyID map has', Object.keys(propIdToStreet).length, 'entries');
 
-    // Fetch 6070-1 (acct 74 = Tenant Cleaning) and 6070-2 (acct 75 = Tenant Repair Charges)
-    // Using general-ledger report filtered by accountID in [74, 75]
-    const cutoff = new Date(Date.now() - 120*86400000).toISOString().slice(0,10);
-    const reportBody = {
+    // 1. Tenant charges (6000 / account 135) from lease-charges report - last 30 days
+    const MOVEOUT_PAT = /clean|repair|paint|carpet|trash|removal|touch.?up|damage|flooring|patch|drywall|haul|junk|debris|rekey|lock/i;
+    const EXCLUDE_PAT = /rent|rbp|resident benefit|insurance|late fee|hoa|admin|utility|pool|pest|landscap|lease break|security deposit|mgmt|renewal/i;
+    const chargeReport = {
+      displayColumns: ['leaseID', 'unitAddress', 'datePosted', 'amount', 'description'],
+      filters: [
+        { name: 'primaryLeaseStatusID', comparator: 'in', values: [3] },
+        { name: 'datePosted', comparator: 'last30Days' }
+      ]
+    };
+    const cUrl = RENTVINE_BASE + '/reports/lease-charges?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(chargeReport));
+    const cRes = await fetch(cUrl, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    const tenantCharges = {};
+    if (cRes.ok) {
+      const cd = await cRes.json();
+      const rows = cd.rows || [];
+      console.log('ChargeRecon: lease-charges returned', rows.length, 'rows');
+      rows.forEach(function(row) {
+        const d = row.data || {};
+        const desc = d.description || '';
+        const amt = parseFloat(d.amount || 0);
+        if (!MOVEOUT_PAT.test(desc) || EXCLUDE_PAT.test(desc)) return;
+        if (amt <= 0 || amt > 5000) return;
+        const addr = (d.unitAddress || '').toLowerCase();
+        const numMatch = addr.match(/^(\d+)/);
+        const key = numMatch ? numMatch[1] : '';
+        if (!key) return;
+        if (!tenantCharges[key]) tenantCharges[key] = [];
+        tenantCharges[key].push({ date: d.datePosted || '', amount: amt, description: desc.slice(0,80) });
+      });
+    } else {
+      console.error('ChargeRecon: lease-charges error', cRes.status);
+    }
+    console.log('ChargeRecon: tenant charges for', Object.keys(tenantCharges).length, 'properties');
+
+    // 2. Property bills (6070-1 acct 74 = Tenant Cleaning, 6070-2 acct 75 = Tenant Repair Charges) - last 30 days
+    const glReport = {
       displayColumns: ['propertyID', 'propertyAddress', 'datePosted', 'debit', 'description', 'accountName'],
       filters: [
         { name: 'account', comparator: 'in', values: [74, 75] },
-        { name: 'datePosted', comparator: 'last90Days' }
+        { name: 'datePosted', comparator: 'last30Days' }
       ]
     };
-    const url = RENTVINE_BASE + '/reports/general-ledger?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(reportBody));
-    const r = await fetch(url, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    const gUrl = RENTVINE_BASE + '/reports/general-ledger?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(glReport));
+    const gRes = await fetch(gUrl, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
     const propertyBills = {};
-    if (r.ok) {
-      const data = await r.json();
-      const rows = data.rows || [];
+    if (gRes.ok) {
+      const gd = await gRes.json();
+      const rows = gd.rows || [];
       console.log('ChargeRecon: general-ledger returned', rows.length, 'rows for accts 74/75');
       rows.forEach(function(row) {
         const d = row.data || {};
@@ -2594,17 +2625,16 @@ async function fetchMoveOutChargeRecon(allPropsArg) {
         if (!key) return;
         const amt = parseFloat(d.debit || 0);
         if (amt <= 0) return;
-        const dateStr = d.datePosted || '';
-        const desc = (d.description || '').slice(0,80);
         const acctName = (d.accountName || '').indexOf('Cleaning') >= 0 ? '6070-1 Tenant Cleaning' : '6070-2 Tenant Repair Charges';
         if (!propertyBills[key]) propertyBills[key] = [];
-        propertyBills[key].push({ date: dateStr, amount: amt, description: desc, account: acctName, propertyAddress: d.propertyAddress || '' });
+        propertyBills[key].push({ date: d.datePosted || '', amount: amt, description: (d.description || '').slice(0,80), account: acctName, propertyAddress: d.propertyAddress || '' });
       });
     } else {
-      console.error('ChargeRecon: general-ledger report error', r.status);
+      console.error('ChargeRecon: general-ledger error', gRes.status);
     }
     console.log('ChargeRecon: bills for', Object.keys(propertyBills).length, 'properties');
-    return { tenantCharges: {}, propertyBills };
+
+    return { tenantCharges, propertyBills };
   } catch(e) {
     console.error('fetchMoveOutChargeRecon error:', e.message);
     return { tenantCharges: {}, propertyBills: {} };
@@ -2612,266 +2642,6 @@ async function fetchMoveOutChargeRecon(allPropsArg) {
 }
 
 
-async function ensureSheetTab(sheets) {
-  try {
-    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-    const tabs = meta.data.sheets.map(s => s.properties.title);
-    if (!tabs.includes(SHEET_TAB)) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        resource: { requests: [{ addSheet: { properties: { title: SHEET_TAB } } }] },
-      });
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `'${SHEET_TAB}'!A1`,
-        valueInputOption: 'RAW',
-        resource: { values: [SHEET_HEADERS] },
-      });
-    }
-  } catch (e) {
-    console.error('[expense-log] Sheet setup error:', e.message);
-  }
-}
-
-async function appendSheetRow(sheets, row) {
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: `'${SHEET_TAB}'!A1`,
-    valueInputOption: 'RAW',
-    insertDataOption: 'INSERT_ROWS',
-    resource: { values: [row] },
-  });
-}
-
-// ── RENTVINE: LOOK UP PROPERTY LEDGER ────────────────────────────────────────
-// Bills are charged to the property ledger — Rentvine rolls it up to the owner.
-// We search /properties/export for the propertyID, then get its ledger.
-
-async function getPropertyLedgerID(propertyID, address) {
-  if (!address) return null;
-  try {
-    // Search by street address — returns the property ledger
-    const street = address.split(',')[0].trim();
-    const r = await fetch(
-      `${RV_BASE}/accounting/ledgers?search=${encodeURIComponent(street)}&pageSize=5`,
-      { headers: RV_HEADERS }
-    );
-    if (!r.ok) return null;
-    const data = await r.json();
-    const ledgers = Array.isArray(data) ? data : (data?.data ?? data?.ledgers ?? []);
-    const ledger = ledgers[0]?.ledger || ledgers[0];
-    console.log('[expense-log] Ledger lookup for', street, ':', ledger?.ledgerID, ledger?.name);
-    return ledger?.ledgerID || ledger?.id || null;
-  } catch (e) {
-    console.warn('[expense-log] Property ledger lookup failed:', e.message);
-    return null;
-  }
-}
-
-// ── RENTVINE: BUILD BILL PAYLOAD ──────────────────────────────────────────────
-// Reference = Payment Memo (same value in both fields)
-// Due date  = Bill date (paid date)
-// Line item description: "{label} {address} ({portfolioName})"
-
-function buildBillPayload({ contactID, payDate, reference, lineDescription, ledgerID, glAccountID, amount }) {
-  return {
-    payeeContactID:      String(contactID),
-    billDate:            payDate,
-    dateDue:             payDate,           // due date = paid date
-    reference:           reference,
-    paymentMemo:         reference,         // memo = reference (same)
-    description:         lineDescription,
-    charges: [{
-      ...(ledgerID ? { ledgerID: String(ledgerID) } : {}),
-      description:       lineDescription,
-      chargeAccountID:   String(glAccountID),
-      amount:            String(Number(amount).toFixed(2)),
-      salesTaxAmount:    '0.00',
-      leaseID:           null,
-    }],
-    leaseCharges:        [],
-    overrideBankAccount: false,
-  };
-}
-
-// ── RENTVINE: POST BILL ───────────────────────────────────────────────────────
-
-async function postBill(payload) {
-  const r = await fetch(`${RV_BASE}/accounting/bills`, {
-    method:  'POST',
-    headers: RV_HEADERS,
-    body:    JSON.stringify(payload),
-  });
-  const data = await r.json();
-  if (!r.ok) { console.error('[expense-log] 400 detail:', JSON.stringify(data)); console.error('[expense-log] payload sent:', JSON.stringify(payload)); throw new Error(data?.message || data?.error || `Rentvine API ${r.status}`); }
-  console.log('[expense-log] Bill created response:', JSON.stringify(data).slice(0,300));
-  return data;
-}
-
-// ── SLACK ─────────────────────────────────────────────────────────────────────
-
-async function postSlack(msg) {
-  if (!SLACK_WEBHOOK) return;
-  await fetch(SLACK_WEBHOOK, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ text: msg }),
-  }).catch(e => console.error('[expense-log] Slack error:', e.message));
-}
-
-function buildSlackMessage({ who, property, expType, repairType, vendorName, amount, payDate, reference, notes, billID, adminBillID }) {
-  const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 });
-  const isTradeFee = expType.type === 'trade_fee';
-
-  const lines = [
-    `💳 *New Expense Logged — Bill${isTradeFee ? 's' : ''} Created in Rentvine*`,
-    `*Paid by:* ${who}  |  *Date:* ${payDate}  |  *Amount:* ${fmt(amount)}`,
-    `*Type:* ${expType.label}${repairType ? ` — ${repairType}` : ''}${vendorName ? ` (${vendorName})` : ''}`,
-    `*Property:* ${property.address}`,
-    property.portfolioName ? `*Owner:* ${property.portfolioName}` : '',
-    reference ? `*Reference:* ${reference}` : '',
-    notes ? `*Notes:* ${notes}` : '',
-    ``,
-    `✅ *Bill 1 created:* ${fmt(amount)} → Aloe PM Reimbursements  |  Bill ID: ${billID}`,
-  ];
-
-  if (isTradeFee && adminBillID) {
-    lines.push(`✅ *Bill 2 created:* ${fmt(ADMIN_TRADE_FEE_AMOUNT)} → Aloe PM (Owner Admin Fee — ${repairType || 'Home Warranty Trade Fee'})  |  Bill ID: ${adminBillID}`);
-  }
-
-  return lines.filter(l => l !== null && l !== undefined).join('\n');
-}
-
-// ── THE ROUTE ─────────────────────────────────────────────────────────────────
-
-app.post('/api/expense-log', async (req, res) => {
-  const {
-    property,     // { propertyID, address, portfolioName }
-    expType,      // { type, gl, label }
-    amount,
-    payDate,
-    reference,
-    notes,
-    vendorName,
-    repairType,   // only present for trade_fee — e.g. "Water Heater"
-    who,
-  } = req.body;
-
-  if (!property || !expType || !amount || !who || !payDate) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  const isTradeFee = expType.type === 'trade_fee';
-  const glAccountID = GL_MAP[expType.type] || 108;
-  const now = new Date().toISOString();
-
-  // Build the reference string
-  // For trade fee: "Home Warranty Trade Fee — Water Heater" (or just type label)
-  const refString = isTradeFee && repairType
-    ? `Home Warranty Trade Fee — ${repairType}`
-    : (reference || expType.label);
-
-  // Build line item description: "{label} {address} ({portfolioName})"
-  const lineDesc = [
-    expType.label,
-    vendorName ? `— ${vendorName}` : '',
-    property.address,
-    property.portfolioName ? `(${property.portfolioName})` : '',
-  ].filter(Boolean).join(' ');
-
-  try {
-    // 1. Resolve property ledger ID
-    const ledgerID = await getPropertyLedgerID(property.propertyID, property.address);
-
-    // 2. Create main reimbursement bill
-    const bill1Payload = buildBillPayload({
-      contactID:       CONTACT_REIMBURSEMENTS,
-      payDate,
-      reference:       refString,
-      lineDescription: lineDesc,
-      ledgerID,
-      glAccountID,
-      amount,
-    });
-    const bill1 = await postBill(bill1Payload);
-    const billID = bill1?.bill?.billID || bill1?.billID || bill1?.id || '';
-
-    // 3. If Home Warranty Trade Fee — create $10 admin bill automatically
-    let adminBillID = null;
-    if (isTradeFee) {
-      const adminRef = `Home Warranty Trade Fee — ${repairType || 'Trade Fee'}`;
-      const adminLineDesc = [
-        'Home Warranty Trade Fee',
-        repairType ? `— ${repairType}` : '',
-        property.address,
-        property.portfolioName ? `(${property.portfolioName})` : '',
-      ].filter(Boolean).join(' ');
-
-      const bill2Payload = buildBillPayload({
-        contactID:       CONTACT_MGMT_COMPANY,
-        payDate,
-        reference:       adminRef,
-        lineDescription: adminLineDesc,
-        ledgerID,
-        glAccountID:     GL_OWNER_ADMIN_FEE,
-        amount:          ADMIN_TRADE_FEE_AMOUNT,
-      });
-      const bill2 = await postBill(bill2Payload);
-      adminBillID = bill2?.bill?.billID || bill2?.billID || bill2?.id || '';
-    }
-
-    // 4. Google Sheet (non-blocking — bill already created, don't fail)
-    if (SHEET_ID) {
-      try {
-        const sheets = getSheetsClient();
-        await ensureSheetTab(sheets);
-        await appendSheetRow(sheets, [
-          now,
-          payDate,
-          who,
-          property.address,
-          property.portfolioName || '',
-          expType.label,
-          repairType || vendorName || '',
-          Number(amount).toFixed(2),
-          (() => { const glNames = {80:'HOA Dues',86:'Home Warranty Trade Fee',82:'Cleaning Reimbursement',106:'Key/Lock Replacement',79:'Landscaping',77:'Pest Control',102:'Painting',103:'Plumbing',104:'Flooring',105:'HVAC',110:'Electrical',108:'Repairs - Other',81:'Cleaning and Maintenance - Other',78:'General Maintenance Labor',83:'Pool Services',144:'Inspection',143:'Irrigation',111:'Supplies',136:'Owner Administrative Charge'}; return glNames[glAccountID] || String(glAccountID); })(),
-          refString,
-          notes || '',
-          String(billID),
-          adminBillID ? String(adminBillID) : '',
-          now,
-          'Created',
-        ]);
-      } catch (sheetErr) {
-        console.error('[expense-log] Sheet write failed:', sheetErr.message);
-      }
-    }
-
-    // 5. Slack notification
-    const slackMsg = buildSlackMessage({
-      who, property, expType, repairType, vendorName,
-      amount, payDate, reference: refString, notes,
-      billID, adminBillID,
-    });
-    await postSlack(slackMsg);
-
-    return res.json({
-      success:    true,
-      billID,
-      adminBillID,
-      message:    isTradeFee ? 'Two bills created successfully' : 'Bill created successfully',
-    });
-
-  } catch (e) {
-    console.error('[expense-log] Error:', e.message);
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-// Serve the form page
-// app.get('/expense-log', (req, res) =>
-//   res.sendFile(path.join(__dirname, 'public', 'expense-log.html'))
-// );
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
