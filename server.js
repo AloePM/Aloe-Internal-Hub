@@ -2080,6 +2080,37 @@ app.get('/api/moveout-charges', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/moveins-placement', async (req, res) => {
+  try {
+    const reportBody = {
+      displayColumns: ['propertyID', 'propertyAddress', 'datePosted', 'debit', 'description'],
+      filters: [
+        { name: 'account', comparator: 'in', values: [94] },
+        { name: 'datePosted', comparator: 'last30Days' }
+      ]
+    };
+    const url = RENTVINE_BASE + '/reports/general-ledger?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(reportBody));
+    const r = await fetch(url, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    if (!r.ok) return res.status(500).json({ error: 'GL report error: ' + r.status });
+    const data = await r.json();
+    const rows = data.rows || [];
+    const result = {};
+    rows.forEach(function(row) {
+      const d = row.data || {};
+      const amt = parseFloat(d.debit || 0);
+      if (amt <= 0) return;
+      const addr = (d.propertyAddress || '').toLowerCase();
+      const numMatch = addr.match(/^(\d+)/);
+      const key = numMatch ? numMatch[1] : '';
+      if (!key) return;
+      if (!result[key]) result[key] = [];
+      result[key].push({ date: d.datePosted || '', amount: amt, description: d.description || 'Placement Fee' });
+    });
+    console.log('Placement fees: found', Object.keys(result).length, 'properties');
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/metrics/refresh', (req, res) => {
   _metricsCache = null; _metricsCacheTime = 0;
   res.json({ cleared: true });
