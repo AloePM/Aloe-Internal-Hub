@@ -2295,7 +2295,7 @@ const moveOutReasonRaw = [];
     fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
     fetchAptlyBoard('QySZ8yRWJ5KeYFcZt', { maxPages: 15, params: { includeArchived: true } }),
     fetchAptlyBoard('BaMiriNFDZBtWd5rR', { maxPages: 2, params: { includeArchived: true } }),
-    fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),
+    fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 5, params: { includeArchived: true } }),
     fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),
     fetchAptlyBoard('86YrLPbwdkxtdyZoj', { maxPages: 5, params: { includeArchived: true } }),
     (async () => { const mi2=[]; for(let p2=0;p2<5;p2++){try{const r2=await fetch('https://core-api.getaptly.com/api/board/K9mMGGjKgQPqDykaa?page='+p2+'&pageSize=100&includeArchived=false',{headers:{'x-token':'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso='}});const b2=await r2.json();const it2=Array.isArray(b2)?b2:(b2&&b2.data||[]);if(!it2.length)break;mi2.push(...it2);if(it2.length<100)break;}catch(e){break;}}console.log('MoveIns:',mi2.length);return mi2;})(),

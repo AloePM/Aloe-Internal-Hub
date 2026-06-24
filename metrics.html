@@ -1525,7 +1525,7 @@ function renderMoveOuts() {
   var allMoveOuts = l.moveOutsDetail || [];
   var today = new Date(); today.setHours(0,0,0,0);
   var in30 = new Date(); in30.setDate(in30.getDate()+30);
-  var d30ago = new Date(); d30ago.setDate(d30ago.getDate()-30);
+  var d30ago = new Date(); d30ago.setDate(d30ago.getDate()-90); // match full 90-day bill window
   var upcomingMoveOuts = allMoveOuts.filter(function(m){
     if (!m.moveOutDate) return false;
     var d = new Date(m.moveOutDate); d.setHours(0,0,0,0);
