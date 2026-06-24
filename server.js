@@ -1841,6 +1841,7 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
 }
 
 app.post('/api/webhook/rv-wo-created', async (req, res) => {
+  res.sendStatus(200); return; // Disabled
   res.sendStatus(200); // Acknowledge immediately
   try {
     const payload = req.body;
@@ -2202,10 +2203,12 @@ function categorizeMoveOutReason(text) {
     } catch(e) { return {}; }
   }
 
-  const [offboardSchema, pmaSchema, renewalSchema] = await Promise.all([
+  const [offboardSchema, pmaSchema, renewalSchema, moveOutSchema, moveInSchema] = await Promise.all([
     fetchAptlySchema2('BaMiriNFDZBtWd5rR'),
     fetchAptlySchema2('QySZ8yRWJ5KeYFcZt'),
     fetchAptlySchema2('86YrLPbwdkxtdyZoj'),
+    fetchAptlySchema2('YA3QWmPebvMwLwbB3'),
+    fetchAptlySchema2('K9mMGGjKgQPqDykaa'),
   ]);
 
   const resolveFields = (card, schemaMap) => {
@@ -2214,7 +2217,7 @@ function categorizeMoveOutReason(text) {
     return resolved;
   };
 
-  const [allApps, unitsCards, allLeadsRaw, allPMARaw, allOffboardRaw, allMoveOuts, allWOsRaw, allRenewalsRaw] = await Promise.all([
+  const [allApps, unitsCards, allLeadsRaw, allPMARaw, allOffboardRaw, allMoveOuts, allWOsRaw, allRenewalsRaw, allMoveIns] = await Promise.all([
     fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 10, params: { includeArchived: true } }),
     getUnitsCards(),
     fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
@@ -2223,6 +2226,7 @@ function categorizeMoveOutReason(text) {
     fetchAptlyBoard('YA3QWmPebvMwLwbB3', { maxPages: 2, params: { includeArchived: true } }),
     fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),
     fetchAptlyBoard('86YrLPbwdkxtdyZoj', { maxPages: 5, params: { includeArchived: true } }),
+    (async () => { const mi2=[]; for(let p2=0;p2<5;p2++){try{const r2=await fetch('https://core-api.getaptly.com/api/board/K9mMGGjKgQPqDykaa?page='+p2+'&pageSize=100&includeArchived=false',{headers:{'x-token':'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso='}});const b2=await r2.json();const it2=Array.isArray(b2)?b2:(b2&&b2.data||[]);if(!it2.length)break;mi2.push(...it2);if(it2.length<100)break;}catch(e){break;}}console.log('MoveIns:',mi2.length);return mi2;})(),
   ]);
 
   const allPMA = allPMARaw.map(c => resolveFields(c, pmaSchema));
@@ -2357,6 +2361,24 @@ function categorizeMoveOutReason(text) {
   renewalsDetail: renewalCardDetails.sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||'')),
   moveOutReasons: Object.entries(moveOutReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
   moveOutReasonRaw: moveOutReasonRaw.sort((a,b)=>(b.moveOutDate||'').localeCompare(a.moveOutDate||'')),
+  moveOutsDetail: allMoveOuts.map(c => resolveFields(c, moveOutSchema || {})).filter(c => {
+    const d = c['Mirror Expected Move-Out Date'] || c['Mirror Move-Out Date'] || c.moveOutDate || '';
+    if (!d) return false;
+    const dt = new Date(d);
+    return dt >= new Date(Date.now() - 90*24*60*60*1000) && dt <= new Date(Date.now() + 90*24*60*60*1000);
+  }).sort((a,b) => ((a['Mirror Expected Move-Out Date']||a['Mirror Move-Out Date']||'')).localeCompare((b['Mirror Expected Move-Out Date']||b['Mirror Move-Out Date']||''))).map(c => {
+    const addr = c['Mirror Address'];
+    const addrStr = addr ? (addr.address || addr.name || '') : '';
+    return {
+      address: addrStr.replace(/^\d{2}\/\d{2}\/\d{4}\s+/, ''),
+      owners: '',
+      moveOutDate: c['Mirror Expected Move-Out Date'] || c['Mirror Move-Out Date'] || c['qzxyfAG7v7W9ECSAT'] || '',
+      stage: c.Stage || c.stage || '',
+      moveOutType: c['Move-Out Type'] || 'Standard',
+      depositAmount: c['Mirror Deposit Balance'] && c['Mirror Deposit Balance'].amount ? parseFloat(c['Mirror Deposit Balance'].amount) : 0,
+      tenantBalance: c['Mirror Current Balance'] && c['Mirror Current Balance'].amount ? parseFloat(c['Mirror Current Balance'].amount) : 0,
+    };
+  }),
 },
     applications: {
       totalMTD: appsMTD, approvedMTD: appsApprovedMTD,
@@ -2380,12 +2402,181 @@ function categorizeMoveOutReason(text) {
       reasons: Object.entries(endMgmtReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
     },
     comprehensiveInspections: { yes: comprehensiveInspYes, no: comprehensiveInspNo, total: comprehensiveInspYes+comprehensiveInspNo },
+    moveIns: {
+      detail: (allMoveIns || []).map(c => {
+        const addr = c['RAvYxpMZhecrfhHix'];
+        const addrStr = addr ? (addr.address || addr.formattedAddress || '') : '';
+        const residents = Array.isArray(c['7WazLLghdLMuB7ZbH']) ? c['7WazLLghdLMuB7ZbH'].map(r=>r.name).join(', ') : '';
+        const rent = c['ywKZ6NWs4prtxMdFg'] ? parseFloat(c['ywKZ6NWs4prtxMdFg'].amount||0) : 0;
+        const deposit = c['ZKHT9oAr2yKrjdzTn'] ? parseFloat(c['ZKHT9oAr2yKrjdzTn'].amount||0) : 0;
+        const tasks = Array.isArray(c.checklist) ? c.checklist : [];
+        const owners = Array.isArray(c['NhjeRjuM9c7kBX3mr']) ? c['NhjeRjuM9c7kBX3mr'].map(p=>p.name).join(', ') : '';
+        const miDate = c['c6jX35soCHuxpuE7w'] || '';
+        return {
+          address: addrStr,
+          city: addr ? addr.city : '',
+          moveInDate: miDate,
+          leaseEndDate: c['5hwxgTSsW8j9WZ8HJ'] || '',
+          stage: c.stage || '',
+          residents: residents,
+          rent: rent,
+          deposit: deposit,
+          depositPaid: c['4XNqffNAGTT3AfTdz'] || false,
+          leaseSigned: c['atJaeXPXKTg38EgEx'] || false,
+          insuranceCompany: c['b5WBGadm45xMK3kxR'] || '',
+          insuranceExpDate: c['Sn8WvCo9WiXYdNMf9'] || '',
+          electricConfirmed: c['neRBuyDSMBQnkNKRR'] || false,
+          waterConfirmed: c['9JZkLsAkzjbdZZwje'] || false,
+          trashConfirmed: c['YokyGKYwSdi39dAco'] || false,
+          gasStatus: c['jyFfk3FSqEBRy2yTv'] || '',
+          keys: c['xQS4Wqc4fCHrGYjCx'] || '',
+          pets: c['aBLz2M8vReHoceSCX'] || 'No pets',
+          pool: c['Jw5gRfbcJNk7PdmAu'] || 'No',
+          tasksTotal: tasks.length,
+          tasksDone: tasks.filter(t=>t.checked).length,
+          owners: owners,
+          mgmtFeeType: miDate ? (new Date(miDate).getDate() <= 14 ? 'Full Month' : 'Prorated') : 'Unknown',
+        };
+      }).sort((a,b) => (a.moveInDate||'').localeCompare(b.moveInDate||'')),
+    },
     workOrders: {
       openTotal: allWOs.length, unassigned: unassignedWOs,
       byStage: Object.entries(woByStage).sort((a,b)=>b[1]-a[1]).map(([stage,count])=>({stage,count})),
     },
   };
 }
+
+
+// ---- Walkthrough Schedule ----
+let _walkCache = null, _walkCacheTime = 0;
+app.get('/api/walkthrough-schedule', async (req, res) => {
+  try {
+    const now = Date.now();
+    if (_walkCache && (now - _walkCacheTime) < 15*60*1000) return res.json(_walkCache);
+    const r = await fetch('https://docs.google.com/spreadsheets/d/1b5qlwlEo8avsSRbm2id1ocN0Eh5KmvvKPHsiEoDWngk/export?format=csv&gid=0');
+    const csv = await r.text();
+    const walks = [];
+    csv.split('\n').slice(1).forEach(line => {
+      if (!line.trim()) return;
+      const cols = line.split(',').map(c => c.replace(/^"|"$/g,'').trim());
+      const addr = cols[0]||'', walkDate = cols[2]||'', walkType = cols[5]||'';
+      const m = addr.match(/^(\d+)/);
+      if (m && walkDate) walks.push({ address: addr, streetNum: m[1], walkDate, walkType, isMoveOut: /move.?out|comprehensive|vacating/i.test(walkType) });
+    });
+    _walkCache = { walks, updatedAt: new Date().toISOString() };
+    _walkCacheTime = now;
+    res.json(_walkCache);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Move-Out Charge Recon ----
+async function fetchMoveOutChargeRecon(allPropsArg) {
+  try {
+    const MOVEOUT_PAT = /clean|repair|paint|carpet|trash|removal|touch.?up|damage|flooring|patch|drywall|haul|junk|debris|rekey|lock/i;
+    const EXCLUDE_PAT = /rent|rbp|insurance|late fee|hoa|admin|utility|pool|pest|landscap|lease break|security deposit|mgmt|renewal/i;
+    const BILL_PAT = /move.?out|moveout|clean|carpet|paint|touch.?up|patch|drywall|rekey|blind|screen|debris|haul|flooring|vinyl/i;
+    const BILL_EXCLUDE = /management fee|resident benefit|rbp|admin|landscap|pool|pest|hvac|plumb|electric|roof/i;
+    const now = Date.now();
+    const cutoffDate = new Date(now - 120*86400000).toISOString().slice(0,10);
+    const pidToStreet = {};
+    if (allPropsArg && allPropsArg.length) {
+      allPropsArg.forEach(item => {
+        const p = item.property || item;
+        const pid = String(p.propertyID || '');
+        const m = (p.address||'').toLowerCase().match(/^(\d+)/);
+        if (pid && m) pidToStreet[pid] = m[1];
+      });
+    }
+    const tenantCharges = {};
+    let cpg = 1;
+    while (cpg <= 5) {
+      const data = await rvFetch('/accounting/transactions', { pageSize: 200, page: cpg, transactionTypeID: 1, startDate: cutoffDate });
+      const rows = Array.isArray(data) ? data : (data.data || []);
+      if (!rows.length) break;
+      rows.forEach(t => {
+        const txn = t.transaction || t;
+        const desc = txn.description || txn.memo || '';
+        const amt = parseFloat(txn.amount || 0);
+        if (!MOVEOUT_PAT.test(desc) || EXCLUDE_PAT.test(desc)) return;
+        if (Math.abs(amt) > 2000 || Math.abs(amt) < 10) return;
+        const pid = String(txn.propertyID || '');
+        const key = pidToStreet[pid] || '';
+        if (!key) return;
+        if (!tenantCharges[key]) tenantCharges[key] = [];
+        tenantCharges[key].push({ date: txn.datePosted, amount: Math.abs(amt), description: desc.slice(0,80) });
+      });
+      if (rows.length < 200) break;
+      cpg++;
+    }
+    const propertyBills = {};
+    let pg = 1;
+    while (pg <= 10) {
+      const data = await rvFetch('/accounting/transactions', { pageSize: 200, page: pg, transactionTypeID: 7, startDate: cutoffDate });
+      const txns = Array.isArray(data) ? data : (data.data || []);
+      if (!txns.length) break;
+      txns.forEach(t => {
+        const txn = t.transaction || t;
+        const desc = (txn.description || txn.memo || '').toLowerCase();
+        if (!BILL_PAT.test(desc) || BILL_EXCLUDE.test(desc)) return;
+        const pid = String(txn.propertyID || '');
+        const key = pidToStreet[pid] || '';
+        if (!key) return;
+        if (!propertyBills[key]) propertyBills[key] = [];
+        propertyBills[key].push({ date: txn.datePosted || '', amount: parseFloat(txn.amount||0), description: desc.slice(0,80) });
+      });
+      if (txns.length < 200) break;
+      pg++;
+    }
+    return { tenantCharges, propertyBills };
+  } catch(e) { console.error('fetchMoveOutChargeRecon error:', e.message); return { tenantCharges: {}, propertyBills: {} }; }
+}
+
+app.get('/api/moveout-charges', async (req, res) => {
+  try {
+    const propsData = await rvFetch('/properties/export', { pageSize: 500, page: 1 });
+    const props = Array.isArray(propsData) ? propsData : (propsData.data || []);
+    const data = await fetchMoveOutChargeRecon(props);
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/moveins-placement', async (req, res) => {
+  try {
+    const PLACEMENT_PAT = /lease.?fee|placement fee|leasing.?fee|new.?lease|tenant.?placement/i;
+    const EXCLUDE_PAT = /management fee|resident benefit|rbp|admin|renewal|ceiling|patio|repair|hvac|pool|landscap/i;
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const pidToStreet = {};
+    const propsData = await rvFetch('/properties/export', { pageSize: 500, page: 1 });
+    const props = Array.isArray(propsData) ? propsData : (propsData.data || []);
+    props.forEach(item => {
+      const p = item.property || item;
+      const pid = String(p.propertyID || '');
+      const m = (p.address||'').toLowerCase().match(/^(\d+)/);
+      if (pid && m) pidToStreet[pid] = m[1];
+    });
+    const result = {};
+    let pg = 1;
+    while (pg <= 10) {
+      const data = await rvFetch('/accounting/transactions', { pageSize: 200, page: pg, transactionTypeID: 7, startDate: cutoffStr });
+      const txns = Array.isArray(data) ? data : (data.data || []);
+      if (!txns.length) break;
+      txns.forEach(t => {
+        const txn = t.transaction || t;
+        const desc = (txn.description || txn.memo || '');
+        if (!PLACEMENT_PAT.test(desc) || EXCLUDE_PAT.test(desc)) return;
+        const pid = String(txn.propertyID || '');
+        const streetNum = pidToStreet[pid] || '';
+        if (!streetNum) return;
+        if (!result[streetNum]) result[streetNum] = [];
+        result[streetNum].push({ amount: parseFloat(txn.amount||0), description: desc.slice(0,80), date: txn.datePosted||'' });
+      });
+      if (txns.length < 200) break;
+      pg++;
+    }
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/metrics', async (req, res) => {
   try {
