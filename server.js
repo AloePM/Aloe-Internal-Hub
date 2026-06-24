@@ -2050,6 +2050,19 @@ let _metricsCache = null;
 let _metricsCacheTime = 0;
 const METRICS_CACHE_TTL = 15 * 60 * 1000;
 
+app.get('/api/metrics', async (req, res) => {
+  try {
+    if (_metricsCache) return res.json(_metricsCache);
+    const data = await buildMetricsData();
+    _metricsCache = data;
+    _metricsCacheTime = Date.now();
+    res.json(data);
+  } catch(e) {
+    console.error('Metrics API error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/metrics/refresh', (req, res) => {
   _metricsCache = null; _metricsCacheTime = 0;
   res.json({ cleared: true });
