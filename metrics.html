@@ -153,6 +153,9 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">Portfolio Growth</button>
  <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')">Maintenance</button>
   <button class="tab" data-tab="retention" onclick="switchTab('retention')">Retention</button>
+  <button class="tab" data-tab="moveouts" onclick="switchTab('moveouts')">Move-Outs</button>
+  <button class="tab" data-tab="moveins" onclick="switchTab('moveins')">Move-Ins</button>
+  <button class="tab" data-tab="delinquency" onclick="switchTab('delinquency')">Delinquency</button>
 </div>
 
 <div id="loading" class="loading-wrap">
@@ -1520,9 +1523,339 @@ var TABS = {
   portfolio: renderPortfolio,
   maintenance: renderMaintenance,
   retention: renderRetention,
+  moveouts: renderMoveOuts,
+  moveins: renderMoveIns,
+  delinquency: renderDelinquency,
 };
 
 var activeTab = 'trends';
+
+
+// ---- MOVE-OUTS TAB ----
+function renderMoveOuts() {
+  var l = D.leases || {};
+  var allMoveOuts = l.moveOutsDetail || [];
+  var today = new Date(); today.setHours(0,0,0,0);
+  var in30 = new Date(); in30.setDate(in30.getDate()+30);
+  var d30ago = new Date(); d30ago.setDate(d30ago.getDate()-30);
+  var upcomingMoveOuts = allMoveOuts.filter(function(m){
+    if (!m.moveOutDate) return false;
+    var d = new Date(m.moveOutDate); d.setHours(0,0,0,0);
+    return d > today;
+  }).sort(function(a,b){ return (a.moveOutDate||'').localeCompare(b.moveOutDate||''); });
+  var accountingMoveOuts = allMoveOuts.filter(function(m){
+    if (!m.moveOutDate) return false;
+    var d = new Date(m.moveOutDate); d.setHours(0,0,0,0);
+    return d >= today && d <= in30;
+  }).sort(function(a,b){ return (a.moveOutDate||'').localeCompare(b.moveOutDate||''); });
+  var recentMoveOuts = allMoveOuts.filter(function(m){
+    if (!m.moveOutDate) return false;
+    var d = new Date(m.moveOutDate); d.setHours(0,0,0,0);
+    return d >= d30ago && d <= today;
+  });
+  var overdueCount = recentMoveOuts.filter(function(m){ return m.stage !== 'Complete'; }).length;
+
+  var html = '<div class="main">';
+  html += '<div class="page-header"><div class="page-title">Move-Outs</div>';
+  html += '<div class="page-sub">Active move-out processing · disposition tracking · charge reconciliation</div></div>';
+  html += '<div class="kpi-grid g4">';
+  html += kpi('Total Active', fmt(allMoveOuts.length), 'in pipeline', C.AMBER);
+  html += kpi('Upcoming', fmt(upcomingMoveOuts.length), 'not yet vacated', C.BLUE);
+  html += kpi('Recent (30 days)', fmt(recentMoveOuts.length), 'move-outs', C.TEAL2);
+  html += kpi('Overdue Disposition', fmt(overdueCount), 'past 30 days, not complete', overdueCount > 0 ? C.RED : C.GREEN);
+  html += '</div>';
+
+  // Upcoming Move-Outs
+  html += '<div class="trend-section-label" style="margin-top:4px">Upcoming Move-Outs — Not Yet Vacated</div>';
+  if (!upcomingMoveOuts.length) {
+    html += '<div class="card"><div style="color:var(--ghost);font-size:13px">No upcoming move-outs.</div></div>';
+  } else {
+    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
+    html += '<th style="padding:6px 12px">Property</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Type</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Expected Move-Out</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Days Until</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Stage</th>';
+    html += '</tr></thead><tbody>';
+    upcomingMoveOuts.forEach(function(m, i) {
+      var d = new Date(m.moveOutDate); d.setHours(0,0,0,0);
+      var daysUntil = Math.ceil((d - today) / 86400000);
+      var daysBg = daysUntil <= 7 ? 'var(--red-d)' : daysUntil <= 14 ? 'var(--amber-d)' : 'var(--blue-d)';
+      var daysColor = daysUntil <= 7 ? 'var(--red)' : daysUntil <= 14 ? 'var(--amber)' : 'var(--blue)';
+      var typeBg = m.moveOutType === 'Eviction' ? 'var(--red-d)' : m.moveOutType === 'Lease Break' ? 'var(--purple-d)' : 'var(--teal-dim)';
+      var typeColor = m.moveOutType === 'Eviction' ? 'var(--red)' : m.moveOutType === 'Lease Break' ? 'var(--purple)' : 'var(--teal2)';
+      html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
+      html += '<td style="padding:8px 12px;font-weight:500">' + (m.address||'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + typeBg + ';color:' + typeColor + ';font-weight:600">' + (m.moveOutType||'Standard') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px">' + (m.moveOutDate?m.moveOutDate.slice(0,10):'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:' + daysBg + ';color:' + daysColor + '">' + daysUntil + 'd</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted)">' + (m.stage||'--') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  // Accounting checklist - next 30 days
+  if (accountingMoveOuts.length) {
+    html += '<div class="trend-section-label" style="margin-top:20px">Move-Out Accounting Checklist — Next 30 Days</div>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Review before distributing owner funds · Day 1-14 move-out = may need prorated mgmt fee</div>';
+    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
+    html += '<th style="padding:6px 12px">Property</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Type</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Expected Move-Out</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Deposit</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Tenant Balance</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Stage</th>';
+    html += '</tr></thead><tbody>';
+    accountingMoveOuts.forEach(function(m, i) {
+      var deposit = m.depositAmount > 0 ? '$' + Number(m.depositAmount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '--';
+      var balance = m.tenantBalance ? '$' + Number(m.tenantBalance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '--';
+      var typeBg = m.moveOutType === 'Eviction' ? 'var(--red-d)' : m.moveOutType === 'Lease Break' ? 'var(--purple-d)' : 'var(--teal-dim)';
+      var typeColor = m.moveOutType === 'Eviction' ? 'var(--red)' : m.moveOutType === 'Lease Break' ? 'var(--purple)' : 'var(--teal2)';
+      html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
+      html += '<td style="padding:8px 12px;font-weight:500">' + (m.address||'--') + '<div style="font-size:10px;color:var(--ghost)">' + (m.owners||'') + '</div></td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + typeBg + ';color:' + typeColor + ';font-weight:600">' + (m.moveOutType||'Standard') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px">' + (m.moveOutDate?m.moveOutDate.slice(0,10):'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--blue)">' + deposit + '</td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--red)">' + balance + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px;color:var(--muted)">' + (m.stage||'--') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  // 6000/6070 recon cards
+  var reconData = D._moveOutCharges || {};
+  var allChargeRows = [];
+  recentMoveOuts.concat(accountingMoveOuts).forEach(function(m) {
+    var addrNum = (m.address||'').match(/^(\d+)/);
+    var key = addrNum ? addrNum[1] : '';
+    var charges = (reconData.tenantCharges && key && reconData.tenantCharges[key]) || [];
+    var bills = (reconData.propertyBills && key && reconData.propertyBills[key]) || [];
+    if (charges.length > 0 && !allChargeRows.find(function(r){ return r.key === key; })) {
+      var moTime = m.moveOutDate ? new Date(m.moveOutDate).getTime() : null;
+      var filteredBills = moTime ? bills.filter(function(b){ var bt = b.date ? new Date(b.date).getTime() : 0; return bt >= moTime - 5*86400000 && bt <= moTime + 30*86400000; }) : bills;
+      var filteredCharges = moTime ? charges.filter(function(c){ var ct = c.date ? new Date(c.date).getTime() : 0; return ct >= moTime - 5*86400000 && ct <= moTime + 30*86400000; }) : charges;
+      if (filteredCharges.length > 0) allChargeRows.push({ address: m.address, moveOutDate: m.moveOutDate, charges: filteredCharges, bills: filteredBills, key: key });
+    }
+  });
+  if (allChargeRows.length > 0) {
+    html += '<div class="trend-section-label" style="margin-top:20px">6000 vs 6070 Charge Reconciliation</div>';
+    allChargeRows.forEach(function(r) {
+      var tcTotal = r.charges.reduce(function(a,c){return a+Math.abs(c.amount);},0);
+      var pbTotal = r.bills.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+      var diff = Math.abs(tcTotal - pbTotal);
+      var exact = r.bills.length > 0 && diff < 1;
+      var partial = r.bills.length > 0 && diff >= 1;
+      var hc = exact ? 'var(--green)' : partial ? 'var(--amber)' : 'var(--red)';
+      var hb = exact ? 'var(--green-d)' : partial ? 'var(--amber-d)' : 'var(--red-d)';
+      var sl = exact ? '\u2713 Balanced' : partial ? '\u26a0 $' + Number(diff).toFixed(2) + ' diff' : '\u2717 No bills';
+      html += '<div class="card" style="margin-bottom:14px">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--rule)">';
+      html += '<div style="font-size:14px;font-weight:700">' + r.address + '<div style="font-size:11px;color:var(--muted);font-weight:400">Move-out: ' + (r.moveOutDate?r.moveOutDate.slice(0,10):'--') + '</div></div>';
+      html += '<span style="font-size:11px;padding:4px 12px;border-radius:20px;background:' + hb + ';color:' + hc + ';font-weight:700">' + sl + '</span></div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+      html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:8px">6000 \u2014 Tenant Charges</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--blue-d)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--blue)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--blue)">Amount</th></tr></thead><tbody>';
+      r.charges.forEach(function(c,ci){ html += '<tr style="border-bottom:1px solid var(--rule)' + (ci%2===1?';background:var(--card2)':'') + '"><td style="padding:6px 8px">' + c.description + '</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$' + Number(Math.abs(c.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>'; });
+      html += '<tr style="background:var(--blue-d)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$' + Number(tcTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr></tbody></table></div>';
+      html += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--teal2);margin-bottom:8px">6070 \u2014 Property Bills</div>';
+      if (!r.bills.length) { html += '<div style="padding:20px;text-align:center;background:var(--red-d);border-radius:8px;color:var(--red);font-size:12px;font-weight:600">No matching bills found.</div>'; }
+      else {
+        html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--teal-dim)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--teal2)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--teal2)">Amount</th></tr></thead><tbody>';
+        r.bills.forEach(function(b,bi){ html += '<tr style="border-bottom:1px solid var(--rule)' + (bi%2===1?';background:var(--card2)':'') + '"><td style="padding:6px 8px">' + b.description + '</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$' + Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr>'; });
+        html += '<tr style="background:var(--teal-dim)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$' + Number(pbTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td></tr></tbody></table>';
+      }
+      html += '</div></div></div>';
+    });
+  }
+
+  html += '</div>';
+  document.getElementById('app').innerHTML = html;
+  if (!D._moveOutCharges) {
+    fetch('/api/moveout-charges').then(function(r){return r.json();}).then(function(data){ D._moveOutCharges = data; renderMoveOuts(); }).catch(function(){ D._moveOutCharges = {}; });
+  }
+}
+
+// ---- MOVE-INS TAB ----
+function renderMoveIns() {
+  var mi = D.moveIns || {};
+  var all = mi.detail || [];
+  var now = new Date(); now.setHours(0,0,0,0);
+  var in30 = new Date(now); in30.setDate(in30.getDate()+30);
+  var d30ago = new Date(now); d30ago.setDate(d30ago.getDate()-30);
+  var upcoming = all.filter(function(m){ if (!m.moveInDate) return false; var d = new Date(m.moveInDate); d.setHours(0,0,0,0); return d >= now && d <= in30; });
+  var active = all.filter(function(m){ if (!m.moveInDate) return false; var d = new Date(m.moveInDate); d.setHours(0,0,0,0); return d >= d30ago && d < now; });
+  var checkInDue = active.filter(function(m){ var d = new Date(m.moveInDate); d.setHours(0,0,0,0); return Math.floor((now-d)/86400000) >= 25; });
+  var incomplete = upcoming.filter(function(m){ return !m.depositPaid || !m.leaseSigned || !m.electricConfirmed; });
+
+  var html = '<div class="main">';
+  html += '<div class="page-header"><div class="page-title">Move-Ins</div><div class="page-sub">Upcoming move-ins · Active tenants in first 30 days · Coordinator dashboard</div></div>';
+  html += '<div class="kpi-grid g4">';
+  html += kpi('Upcoming (30 days)', fmt(upcoming.length), 'scheduled move-ins', C.TEAL2);
+  html += kpi('Moving In Today', fmt(all.filter(function(m){ var d=new Date(m.moveInDate); d.setHours(0,0,0,0); return d.getTime()===now.getTime(); }).length), 'today', C.GREEN);
+  html += kpi('30-Day Check-In Due', fmt(checkInDue.length), 'tenants at 25-30 days', checkInDue.length>0?C.AMBER:C.GREEN);
+  html += kpi('Incomplete Prep', fmt(incomplete.length), 'missing deposit/lease/utilities', incomplete.length>0?C.RED:C.GREEN);
+  html += '</div>';
+
+  html += '<div class="trend-section-label" style="margin-top:4px">Upcoming Move-Ins — Next 30 Days</div>';
+  if (!upcoming.length) {
+    html += '<div class="card"><div style="color:var(--ghost);font-size:13px">No move-ins in the next 30 days.</div></div>';
+  } else {
+    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
+    html += '<th style="padding:6px 12px">Property / Tenant</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Move-In Date</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Days Until</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Rent</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Deposit</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Lease</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Utilities</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Insurance</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Tasks</th>';
+    html += '</tr></thead><tbody>';
+    upcoming.forEach(function(m, i) {
+      var miDate = new Date(m.moveInDate); miDate.setHours(0,0,0,0);
+      var daysUntil = Math.floor((miDate-now)/86400000);
+      var daysBg = daysUntil===0?'var(--green-d)':daysUntil<=7?'var(--red-d)':daysUntil<=14?'var(--amber-d)':'var(--blue-d)';
+      var daysColor = daysUntil===0?'var(--green)':daysUntil<=7?'var(--red)':daysUntil<=14?'var(--amber)':'var(--blue)';
+      var depBadge = m.depositPaid ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">\u2713 Paid</span>' : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">Pending</span>';
+      var leaseBadge = m.leaseSigned ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">\u2713 Signed</span>' : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">Unsigned</span>';
+      var utilOk = m.electricConfirmed && m.waterConfirmed && m.trashConfirmed;
+      var utilPartial = m.electricConfirmed || m.waterConfirmed || m.trashConfirmed;
+      var utilBadge = utilOk ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">\u2713 All Set</span>' : utilPartial ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-d);color:var(--amber);font-weight:600">Partial</span>' : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">Not Set</span>';
+      var insOk = m.insuranceCompany && m.insuranceCompany.toLowerCase() !== 'sn' && m.insuranceCompany.toLowerCase() !== 'pending';
+      var insBadge = insOk ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">\u2713 ' + m.insuranceCompany.slice(0,12) + '</span>' : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">Missing</span>';
+      var taskPct = m.tasksTotal > 0 ? Math.round((m.tasksDone/m.tasksTotal)*100) : 0;
+      var taskColor = taskPct===100?'var(--green)':taskPct>=80?'var(--amber)':'var(--red)';
+      html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
+      html += '<td style="padding:8px 12px"><div style="font-weight:500">' + m.address + '</div><div style="font-size:11px;color:var(--muted)">' + m.residents + '</div><div style="font-size:10px;color:var(--ghost)">' + m.owners + '</div></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px">' + (m.moveInDate?m.moveInDate.slice(0,10):'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:' + daysBg + ';color:' + daysColor + '">' + (daysUntil===0?'TODAY':daysUntil+'d') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--teal2)">' + (m.rent?'$'+Number(m.rent).toLocaleString():'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center">' + depBadge + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center">' + leaseBadge + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center">' + utilBadge + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center">' + insBadge + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-weight:600;color:' + taskColor + '">' + m.tasksDone + '/' + m.tasksTotal + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  // Active first 30 days
+  html += '<div class="trend-section-label" style="margin-top:20px">Active \u2014 First 30 Days</div>';
+  if (!active.length) {
+    html += '<div class="card"><div style="color:var(--ghost);font-size:13px">No tenants in their first 30 days.</div></div>';
+  } else {
+    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
+    html += '<th style="padding:6px 12px">Property / Tenant</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Move-In Date</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Days In</th>';
+    html += '<th style="padding:6px 12px;text-align:center">30-Day Check-In</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Stage</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Tasks</th>';
+    html += '</tr></thead><tbody>';
+    active.forEach(function(m, i) {
+      var miDate = new Date(m.moveInDate); miDate.setHours(0,0,0,0);
+      var daysIn = Math.floor((now-miDate)/86400000);
+      var checkInDate = new Date(miDate); checkInDate.setDate(checkInDate.getDate()+30);
+      var daysLeft = Math.floor((checkInDate-now)/86400000);
+      var ciColor = daysLeft<=0?'var(--red)':daysLeft<=5?'var(--amber)':'var(--green)';
+      var ciBg = daysLeft<=0?'var(--red-d)':daysLeft<=5?'var(--amber-d)':'var(--green-d)';
+      var taskPct = m.tasksTotal > 0 ? Math.round((m.tasksDone/m.tasksTotal)*100) : 0;
+      var taskColor = taskPct===100?'var(--green)':taskPct>=80?'var(--amber)':'var(--red)';
+      html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
+      html += '<td style="padding:8px 12px"><div style="font-weight:500">' + m.address + '</div><div style="font-size:11px;color:var(--muted)">' + m.residents + '</div></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px">' + (m.moveInDate?m.moveInDate.slice(0,10):'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-weight:700;color:var(--teal2)">' + daysIn + 'd</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + ciBg + ';color:' + ciColor + ';font-weight:600">' + (daysLeft<=0?'Overdue':daysLeft+'d left') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--teal-dim);color:var(--teal2)">' + (m.stage||'--') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-weight:600;color:' + taskColor + '">' + m.tasksDone + '/' + m.tasksTotal + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  // Accounting - mgmt fee type + placement fee
+  html += '<div class="trend-section-label" style="margin-top:20px">Move-In Accounting \u2014 Mgmt Fee & Placement Fee</div>';
+  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Day 1-14 = Full month mgmt fee \u00b7 Day 15-31 = Prorated \u00b7 Verify 6112 placement fee in Rentvine</div>';
+  var accountingMoveIns = all.filter(function(m){ if (!m.moveInDate) return false; var d=new Date(m.moveInDate); d.setHours(0,0,0,0); return d>=d30ago && d<=in30; }).sort(function(a,b){ return (a.moveInDate||'').localeCompare(b.moveInDate||''); });
+  if (accountingMoveIns.length) {
+    var placementData = D._moveInPlacement || {};
+    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
+    html += '<th style="padding:6px 12px">Property / Tenant</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Move-In Date</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Mgmt Fee</th>';
+    html += '<th style="padding:6px 12px;text-align:center">6112 Placement Fee</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Amount</th>';
+    html += '</tr></thead><tbody>';
+    accountingMoveIns.forEach(function(m, i) {
+      var addrNum = (m.address||'').match(/^(\d+)/);
+      var key = addrNum ? addrNum[1] : '';
+      var placements = placementData[key] || [];
+      var placementTotal = placements.reduce(function(a,p){ return a+Math.abs(p.amount); }, 0);
+      var feeColor = m.mgmtFeeType==='Full Month'?'var(--green)':'var(--amber)';
+      var feeBg = m.mgmtFeeType==='Full Month'?'var(--green-d)':'var(--amber-d)';
+      var placeBadge = placements.length > 0 ? '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--green-d);color:var(--green);font-weight:600">\u2713 Charged</span>' : '<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--red-d);color:var(--red);font-weight:600">Not Found</span>';
+      html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
+      html += '<td style="padding:8px 12px"><div style="font-weight:500">' + m.address + '</div><div style="font-size:11px;color:var(--muted)">' + m.residents + '</div><div style="font-size:10px;color:var(--ghost)">' + m.owners + '</div></td>';
+      html += '<td style="padding:8px 12px;text-align:center;font-size:11px">' + (m.moveInDate?m.moveInDate.slice(0,10):'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center"><span style="font-size:10px;padding:2px 8px;border-radius:20px;background:' + feeBg + ';color:' + feeColor + ';font-weight:600">' + (m.mgmtFeeType||'--') + '</span></td>';
+      html += '<td style="padding:8px 12px;text-align:center">' + placeBadge + '</td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--teal2)">' + (placementTotal>0?'$'+Number(placementTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'--') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  html += '</div>';
+  document.getElementById('app').innerHTML = html;
+  if (!D._moveInPlacement) {
+    fetch('/api/moveins-placement').then(function(r){return r.json();}).then(function(data){ D._moveInPlacement = data; renderMoveIns(); }).catch(function(){ D._moveInPlacement = {}; });
+  }
+}
+
+// ---- DELINQUENCY TAB ----
+function renderDelinquency() {
+  var p = D.portfolio || {};
+  var pastDue = p.pastDueTenants || [];
+  var totalPastDue = p.totalPastDue || 0;
+  var html = '<div class="main">';
+  html += '<div class="page-header"><div class="page-title">Delinquency / Collections</div><div class="page-sub">Tenants with past due rent balances</div></div>';
+  html += '<div class="kpi-grid g3">';
+  html += kpi('Total Past Due', '$' + Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}), pastDue.length + ' tenants', totalPastDue>0?C.RED:C.GREEN);
+  html += kpi('Tenants Delinquent', fmt(pastDue.length), 'with outstanding balance', pastDue.length>0?C.RED:C.GREEN);
+  html += kpi('Avg Past Due', pastDue.length?'$'+Number(totalPastDue/pastDue.length).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'--', 'per delinquent tenant', C.AMBER);
+  html += '</div>';
+  if (!pastDue.length) {
+    html += '<div class="card"><div style="color:var(--ghost);font-size:13px;padding:12px">No past due balances found.</div></div>';
+  } else {
+    html += '<div class="card"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    html += '<thead><tr style="background:var(--ink);color:rgba(255,255,255,0.6);font-size:10px;text-transform:uppercase;letter-spacing:.06em">';
+    html += '<th style="padding:6px 12px">Property / Tenant</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Past Due Rent</th>';
+    html += '<th style="padding:6px 12px;text-align:right">Total Due</th>';
+    html += '<th style="padding:6px 12px;text-align:center">Notice</th>';
+    html += '</tr></thead><tbody>';
+    pastDue.forEach(function(t, i) {
+      var noticeBadge = t.noticeDate ? '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--amber-d);color:var(--amber);font-weight:600">\u26a0 Notice</span>' : '<span style="font-size:10px;padding:2px 7px;border-radius:20px;background:var(--card2);color:var(--muted)">None</span>';
+      html += '<tr style="border-bottom:1px solid var(--rule)' + (i%2===1?';background:var(--card2)':'') + '">';
+      html += '<td style="padding:8px 12px"><div style="font-weight:500">' + (t.address||'--') + '</div><div style="font-size:11px;color:var(--muted)">' + (t.tenant||'') + '</div></td>';
+      html += '<td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--red)">$' + Number(t.pastDueRent).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td>';
+      html += '<td style="padding:8px 12px;text-align:right;color:var(--muted)">' + (t.pastDueTotal>t.pastDueRent?'$'+Number(t.pastDueTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'--') + '</td>';
+      html += '<td style="padding:8px 12px;text-align:center">' + noticeBadge + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+  html += '</div>';
+  document.getElementById('app').innerHTML = html;
+}
 
 function switchTab(id) {
   activeTab = id;
