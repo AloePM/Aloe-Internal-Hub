@@ -1587,7 +1587,7 @@ function renderMoveOuts() {
   // Accounting checklist - next 30 days
   if (accountingMoveOuts.length) {
     html += '<div class="trend-section-label" style="margin-top:20px">Accounting — Move-Out Distribution Review</div>';
-    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Review before distributing owner funds · Day 1-19 move-out = Full Month mgmt fee may apply</div>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Review before distributing owner funds · Day 1-19 move-out = Prorated mgmt fee · Day 20+ = Full Month</div>';
     html += '<div class="card" style="margin-bottom:14px"><div class="card-header">';
     html += '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Move-Out Accounting Checklist</div>';
     html += '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:var(--amber-d);color:var(--amber);border-radius:20px">'+accountingMoveOuts.length+' properties</span></div>';
@@ -1607,9 +1607,9 @@ function renderMoveOuts() {
     accountingMoveOuts.forEach(function(m, i) {
       var moDate = m.moveOutDate ? m.moveOutDate.slice(0,10) : '--';
       // Mgmt fee badge: move-out day 1-19 = Full Month, 20+ = Prorated
-      var feeType = m.mgmtFeeType || (m.moveOutDate ? (new Date(m.moveOutDate).getDate() < 20 ? 'Full Month' : 'Prorated') : '--');
-      var feeBg = feeType === 'Full Month' ? 'var(--green-d)' : 'var(--amber-d)';
-      var feeColor = feeType === 'Full Month' ? 'var(--green)' : 'var(--amber)';
+      var feeType = m.mgmtFeeType || (m.moveOutDate ? (new Date(m.moveOutDate).getDate() < 20 ? 'Prorated' : 'Full Month') : '--');
+      var feeBg = feeType === 'Prorated' ? 'var(--amber-d)' : 'var(--green-d)';
+      var feeColor = feeType === 'Prorated' ? 'var(--amber)' : 'var(--green)';
       // Deposit
       var deposit = m.depositAmount > 0 ? '$' + Number(m.depositAmount).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : '--';
       var depositColor = m.depositAmount > 0 ? 'var(--blue)' : 'var(--muted)';
@@ -1707,10 +1707,61 @@ function renderMoveOuts() {
     });
   }
 
+  html += '<div id="recon-section"></div>';
   html += '</div>';
   document.getElementById('app').innerHTML = html;
   if (!D._moveOutCharges) {
-    fetch('/api/moveout-charges').then(function(r){return r.json();}).then(function(data){ D._moveOutCharges = data; renderMoveOuts(); }).catch(function(){ D._moveOutCharges = {}; });
+    fetch('/api/moveout-charges').then(function(r){return r.json();}).then(function(data){
+      D._moveOutCharges = data;
+      // Re-render only the recon section without full re-render
+      var recon = document.getElementById('recon-section');
+      if (recon) {
+        var reconData2 = D._moveOutCharges || {};
+        var rows2 = [];
+        recentMoveOuts.concat(accountingMoveOuts).forEach(function(m) {
+          var addrNum = (m.address||'').match(/^(\d+)/);
+          var key = addrNum ? addrNum[1] : '';
+          if (!key) return;
+          var bills = (reconData2.propertyBills && reconData2.propertyBills[key]) || [];
+          if (!bills.length) return;
+          var moTime = m.moveOutDate ? new Date(m.moveOutDate).getTime() : null;
+          var fb = moTime ? bills.filter(function(b){ var bt=b.date?new Date(b.date).getTime():0; return bt>=moTime-5*86400000&&bt<=moTime+30*86400000; }) : bills;
+          if (fb.length && !rows2.find(function(r){return r.key===key;})) rows2.push({address:m.address,moveOutDate:m.moveOutDate,bills:fb,key:key});
+        });
+        if (rows2.length) {
+          var rhtml = '<div class="trend-section-label" style="margin-top:20px">6070 Charge Reconciliation — by Property</div>';
+          rows2.forEach(function(r) {
+            var pbTotal = r.bills.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+            var cleaning = r.bills.filter(function(b){return b.account&&b.account.indexOf('Cleaning')>=0;});
+            var repairs = r.bills.filter(function(b){return b.account&&b.account.indexOf('Repair')>=0;});
+            var cleanTotal = cleaning.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+            var repairTotal = repairs.reduce(function(a,b){return a+Math.abs(b.amount);},0);
+            rhtml += '<div class="card" style="margin-bottom:14px">';
+            rhtml += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--rule)">';
+            rhtml += '<div><div style="font-size:14px;font-weight:700">'+r.address+'</div>';
+            rhtml += '<div style="font-size:11px;color:var(--muted);margin-top:2px">Move-out: '+(r.moveOutDate?r.moveOutDate.slice(0,10):'--')+'</div></div>';
+            rhtml += '<span style="font-size:12px;font-weight:700;color:var(--teal2)">Total: $'+Number(pbTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span></div>';
+            rhtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+            rhtml += '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--teal2);margin-bottom:8px">6070-1 — Tenant Cleaning</div>';
+            if (!cleaning.length) { rhtml += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No cleaning bills</div>'; }
+            else {
+              rhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--teal-dim)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--teal2)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--teal2)">Amount</th><th style="padding:5px 8px;text-align:center;font-size:10px;color:var(--teal2)">Date</th></tr></thead><tbody>';
+              cleaning.forEach(function(b,bi){ rhtml += '<tr style="border-bottom:1px solid var(--rule)'+(bi%2===1?';background:var(--card2)':'')+'"><td style="padding:6px 8px">'+b.description+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$'+Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--muted)">'+(b.date?b.date.slice(0,10):'')+'</td></tr>'; });
+              rhtml += '<tr style="background:var(--teal-dim)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--teal2)">$'+Number(cleanTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td></td></tr></tbody></table>';
+            }
+            rhtml += '</div><div><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--blue);margin-bottom:8px">6070-2 — Tenant Repair Charges</div>';
+            if (!repairs.length) { rhtml += '<div style="padding:12px;background:var(--card2);border-radius:6px;color:var(--muted);font-size:12px">No repair bills</div>'; }
+            else {
+              rhtml += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--blue-d)"><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--blue)">Description</th><th style="padding:5px 8px;text-align:right;font-size:10px;color:var(--blue)">Amount</th><th style="padding:5px 8px;text-align:center;font-size:10px;color:var(--blue)">Date</th></tr></thead><tbody>';
+              repairs.forEach(function(b,bi){ rhtml += '<tr style="border-bottom:1px solid var(--rule)'+(bi%2===1?';background:var(--card2)':'')+'"><td style="padding:6px 8px">'+b.description+'</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$'+Number(Math.abs(b.amount)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--muted)">'+(b.date?b.date.slice(0,10):'')+'</td></tr>'; });
+              rhtml += '<tr style="background:var(--blue-d)"><td style="padding:6px 8px;font-weight:700">Total</td><td style="padding:6px 8px;text-align:right;font-weight:700;color:var(--blue)">$'+Number(repairTotal).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'</td><td></td></tr></tbody></table>';
+            }
+            rhtml += '</div></div></div>';
+          });
+          recon.innerHTML = rhtml;
+        }
+      }
+    }).catch(function(){ D._moveOutCharges = {}; });
   }
 }
 
