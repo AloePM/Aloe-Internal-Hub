@@ -2423,6 +2423,11 @@ const moveOutReasonRaw = [];
       moveOutType: c['Move-Out Type'] || 'Standard',
       depositAmount: c['Mirror Deposit Balance'] && c['Mirror Deposit Balance'].amount ? parseFloat(c['Mirror Deposit Balance'].amount) : 0,
       tenantBalance: c['Mirror Current Balance'] && c['Mirror Current Balance'].amount ? parseFloat(c['Mirror Current Balance'].amount) : 0,
+      comprehensiveInspection: c['bvrv4hKYmrXYiLpz6'] || null,
+      forwardingAddress: c['ifRegTvMnfuYrpxYi'] || null,
+      inspectionReceived: c['sFEaFREB74qPN8pgM'] || false,
+      owners: Array.isArray(c['ACRj6PevEsB3e56bk']) ? c['ACRj6PevEsB3e56bk'].map(function(o){return o.name||'';}).filter(Boolean).join(', ') : '',
+      tenant: Array.isArray(c.relatedContacts) ? c.relatedContacts.map(function(t){return t.name||'';}).filter(Boolean).join(', ') : '',
     };
   }),
 },
