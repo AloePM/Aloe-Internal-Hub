@@ -2063,6 +2063,15 @@ app.get('/api/metrics', async (req, res) => {
   }
 });
 
+app.get('/api/moveout-charges', async (req, res) => {
+  try {
+    const propsRaw = await fetchAllPages('/properties/export', { isActive: '' }, 3);
+    const props = propsRaw.map(function(i){ return i.property || i; });
+    const data = await fetchMoveOutChargeRecon(props);
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/metrics/refresh', (req, res) => {
   _metricsCache = null; _metricsCacheTime = 0;
   res.json({ cleared: true });
