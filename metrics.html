@@ -144,9 +144,7 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
 </div>
 
 <div class="nav">
-  <button class="tab active" data-tab="trends" onclick="switchTab('trends')">Trends</button>
-  <button class="tab" data-tab="overview" onclick="switchTab('overview')">Overview</button>
-  <button class="tab" data-tab="occupancy" onclick="switchTab('occupancy')">Occupancy</button>
+  <button class="tab active" data-tab="occupancy" onclick="switchTab('occupancy')">Occupancy</button>
   <button class="tab" data-tab="leasing" onclick="switchTab('leasing')">Leasing</button>
   <button class="tab" data-tab="pipeline" onclick="switchTab('pipeline')">Owner Pipeline</button>
   <button class="tab" data-tab="renewals" onclick="switchTab('renewals')">Renewals</button>
@@ -590,17 +588,7 @@ function renderOccupancy() {
 '<div style="font-size:12px;color:var(--muted);line-height:1.6">Move-out reasons come from the tenant-written <strong>Reason for Vacating</strong> field in Rentvine. Data will appear here once the backend changes are deployed.</div></div>')+      '</div>'+
 
     // Past due tenants
-    '<div class="card" style="margin-bottom:14px"><div class="card-header">'+
-    '<div class="card-title"><div class="card-title-bar" style="background:var(--red)"></div>Past Due Rent</div>'+
-    '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:rgba(239,68,68,0.1);color:var(--red);border-radius:20px">'+
-    '$'+Number(totalPastDue).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' total</span></div>'+
-    (pastDue.length ?
-      '<div class="detail-list open" style="display:block;max-height:400px;overflow-y:auto">'+
-      '<div class="detail-header"><span>Property / Tenant</span><span>Past Due Rent</span></div>'+
-      pdRows+(pastDue.length>30?'<div style="padding:8px;font-size:11px;color:var(--muted)">Showing 30 of '+pastDue.length+'</div>':'')+
-      '</div>' :
-      '<div style="color:var(--ghost);font-size:13px;padding:12px">No past due balances found</div>')+
-    '</div>'+
+    
 
     '</div>';
 
@@ -1514,8 +1502,6 @@ function renderRetention() {
 
 // ---- TAB SWITCHING ----
 var TABS = {
-  trends: renderTrends,
-  overview: renderOverview,
   occupancy: renderOccupancy,
   leasing: renderLeasing,
   pipeline: renderPipeline,
@@ -1528,7 +1514,7 @@ var TABS = {
   delinquency: renderDelinquency,
 };
 
-var activeTab = 'trends';
+var activeTab = 'occupancy';
 
 
 // ---- MOVE-OUTS TAB ----
