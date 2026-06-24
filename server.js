@@ -2055,6 +2055,46 @@ app.get('/api/metrics/refresh', (req, res) => {
   res.json({ cleared: true });
 });
 
+
+async function fetchMoveOutReasons() {
+  const reasons = {};
+  try {
+    const reportBody = {
+      displayColumns: ['moveOutTenantReason', 'moveOutReason', 'leaseMoveInDate', 'moveOutDate'],
+      filters: [
+        { name: 'moveOutDate', comparator: 'previous12Months' },
+        { name: 'isTenantPrimary', comparator: 'booleanTrue' }
+      ]
+    };
+    const url = RENTVINE_BASE + '/reports/lease-tenants?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(reportBody));
+    const r = await fetch(url, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    if (!r.ok) { console.error('Move-out reasons report error:', r.status); return reasons; }
+    const data = await r.json();
+    const rows = data.rows || [];
+    const tenancyDays = {}, tenancyCounts = {};
+    rows.forEach(row => {
+      const d = row.data || {};
+      const text = (d.moveOutTenantReason || d.moveOutReason || '').trim();
+      if (!text) return;
+      const cat = categorizeMoveOutReason(text);
+      reasons[cat] = (reasons[cat] || 0) + 1;
+      if (d.leaseMoveInDate && d.moveOutDate) {
+        const days = Math.floor((new Date(d.moveOutDate) - new Date(d.leaseMoveInDate)) / 86400000);
+        if (days > 0 && days < 3650) {
+          tenancyDays[cat] = (tenancyDays[cat] || 0) + days;
+          tenancyCounts[cat] = (tenancyCounts[cat] || 0) + 1;
+        }
+      }
+    });
+    Object.keys(reasons).forEach(cat => {
+      const avgDays = tenancyCounts[cat] ? Math.round(tenancyDays[cat] / tenancyCounts[cat]) : null;
+      reasons[cat] = { count: reasons[cat], avgTenancyMonths: avgDays ? Math.round(avgDays / 30) : null };
+    });
+    console.log('Move-out reasons fetched:', Object.keys(reasons).length, 'categories from', rows.length, 'rows');
+  } catch(e) { console.error('fetchMoveOutReasons error:', e.message); }
+  return reasons;
+}
+
 async function buildMetricsData() {
   const fetchStart = Date.now();
   const TMK = thisMonthKey();
@@ -2217,7 +2257,7 @@ function categorizeMoveOutReason(text) {
     return resolved;
   };
 
-  const [allApps, unitsCards, allLeadsRaw, allPMARaw, allOffboardRaw, allMoveOuts, allWOsRaw, allRenewalsRaw, allMoveIns] = await Promise.all([
+  const [allApps, unitsCards, allLeadsRaw, allPMARaw, allOffboardRaw, allMoveOuts, allWOsRaw, allRenewalsRaw, allMoveIns, fetchedMoveOutReasons] = await Promise.all([
     fetchAptlyBoard('MJxaStgENouWrNEKd', { maxPages: 10, params: { includeArchived: true } }),
     getUnitsCards(),
     fetchAptlyBoard('4EMDSYKirhQaNdQKz', { maxPages: 2, params: { includeArchived: false } }),
@@ -2227,6 +2267,7 @@ function categorizeMoveOutReason(text) {
     fetchAptlyBoard('workOrder', { maxPages: 2, params: { includeArchived: false } }),
     fetchAptlyBoard('86YrLPbwdkxtdyZoj', { maxPages: 5, params: { includeArchived: true } }),
     (async () => { const mi2=[]; for(let p2=0;p2<5;p2++){try{const r2=await fetch('https://core-api.getaptly.com/api/board/K9mMGGjKgQPqDykaa?page='+p2+'&pageSize=100&includeArchived=false',{headers:{'x-token':'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso='}});const b2=await r2.json();const it2=Array.isArray(b2)?b2:(b2&&b2.data||[]);if(!it2.length)break;mi2.push(...it2);if(it2.length<100)break;}catch(e){break;}}console.log('MoveIns:',mi2.length);return mi2;})(),
+    fetchMoveOutReasons(),
   ]);
 
   const allPMA = allPMARaw.map(c => resolveFields(c, pmaSchema));
@@ -2359,7 +2400,7 @@ function categorizeMoveOutReason(text) {
   moveOutsByMonth: formatTrend(moveOutsByMonth),
   expirationsByMonth: formatTrend(expirationsByMonth),
   renewalsDetail: renewalCardDetails.sort((a,b)=>(a.endDate||'').localeCompare(b.endDate||'')),
-  moveOutReasons: Object.entries(moveOutReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
+  moveOutReasons: Object.entries(fetchedMoveOutReasons||{}).sort((a,b)=>(b[1].count||b[1])-(a[1].count||a[1])).map(([reason,val])=>({reason, count: val.count||val, avgTenancyMonths: val.avgTenancyMonths||null})),
   moveOutReasonRaw: moveOutReasonRaw.sort((a,b)=>(b.moveOutDate||'').localeCompare(a.moveOutDate||'')),
   moveOutsDetail: allMoveOuts.map(c => resolveFields(c, moveOutSchema || {})).filter(c => {
     const d = c['Mirror Expected Move-Out Date'] || c['Mirror Move-Out Date'] || c.moveOutDate || '';
