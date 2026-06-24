@@ -2082,30 +2082,48 @@ app.get('/api/moveout-charges', async (req, res) => {
 
 app.get('/api/moveins-placement', async (req, res) => {
   try {
-    const reportBody = {
-      displayColumns: ['propertyID', 'propertyAddress', 'datePosted', 'debit', 'description'],
-      filters: [
-        { name: 'account', comparator: 'in', values: [94] },
-        { name: 'datePosted', comparator: 'last30Days' }
-      ]
-    };
-    const url = RENTVINE_BASE + '/reports/general-ledger?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(reportBody));
-    const r = await fetch(url, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
-    if (!r.ok) return res.status(500).json({ error: 'GL report error: ' + r.status });
-    const data = await r.json();
-    const rows = data.rows || [];
+    // Build propertyID -> streetNum map from properties export
+    const propIdToStreet = {};
+    for (let pg = 1; pg <= 5; pg++) {
+      const pr = await fetch(RENTVINE_BASE + '/properties/export?pageSize=200&page=' + pg, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+      if (!pr.ok) break;
+      const pd = await pr.json();
+      const batch = Array.isArray(pd) ? pd : (pd.data || []);
+      batch.forEach(function(item) {
+        const p = item.property || item;
+        const pid = String(p.propertyID || p.id || '');
+        const addr = (p.address || '').toLowerCase();
+        const numMatch = addr.match(/^(\d+)/);
+        if (pid && numMatch) propIdToStreet[pid] = numMatch[1];
+      });
+      if (batch.length < 200) break;
+    }
+    console.log('Placement fees: propertyID map has', Object.keys(propIdToStreet).length, 'entries');
+
+    // Fetch bill charge transactions (type 7) last 30 days, filter for lease fee
+    const cutoff = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
     const result = {};
-    rows.forEach(function(row) {
-      const d = row.data || {};
-      const amt = parseFloat(d.debit || 0);
-      if (amt <= 0) return;
-      const addr = (d.propertyAddress || '').toLowerCase();
-      const numMatch = addr.match(/^(\d+)/);
-      const key = numMatch ? numMatch[1] : '';
-      if (!key) return;
-      if (!result[key]) result[key] = [];
-      result[key].push({ date: d.datePosted || '', amount: amt, description: d.description || 'Placement Fee' });
-    });
+    const LEASE_FEE_PAT = /lease.?fee|placement.?fee|commission/i;
+    for (let pg = 1; pg <= 10; pg++) {
+      const tr = await fetch(RENTVINE_BASE + '/accounting/transactions?pageSize=200&page=' + pg + '&transactionTypeID=7&startDate=' + cutoff, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+      if (!tr.ok) break;
+      const td = await tr.json();
+      const txns = Array.isArray(td) ? td : (td.data || []);
+      if (!txns.length) break;
+      txns.forEach(function(t) {
+        const txn = t.transaction || t;
+        const desc = txn.description || txn.memo || '';
+        if (!LEASE_FEE_PAT.test(desc)) return;
+        const pid = String(txn.propertyID || '');
+        const key = propIdToStreet[pid] || '';
+        if (!key) return;
+        const amt = parseFloat(txn.amount || 0);
+        if (amt <= 0) return;
+        if (!result[key]) result[key] = [];
+        result[key].push({ date: txn.datePosted || '', amount: amt, description: desc.slice(0,80) });
+      });
+      if (txns.length < 200) break;
+    }
     console.log('Placement fees: found', Object.keys(result).length, 'properties');
     res.json(result);
   } catch(e) { res.status(500).json({ error: e.message }); }
