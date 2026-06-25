@@ -2754,6 +2754,10 @@ async function fetchMoveOutChargeRecon(allPropsArg) {
 }
 
 
+// ── Suppressed Fee Analysis ──
+const registerSuppressedFeeRoutes = require('./suppressed-fee-route');
+registerSuppressedFeeRoutes(app, RENTVINE_BASE, RENTVINE_AUTH, RENTVINE_ACCOUNT);
+
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
