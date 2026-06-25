@@ -193,8 +193,8 @@ function buildAnalysis(allAccountData, unbilledCutoffDate) {
   };
 }
 
-module.exports = function registerSuppressedFeeRoutes(app, rvBase, rvAuth, rvAccount) {
-  // Cache: reuse results for 15 minutes to avoid hammering Rentvine on refresh
+export default function registerSuppressedFeeRoutes(app, rvBase, rvAuth, rvAccount) {
+    // Cache: reuse results for 15 minutes to avoid hammering Rentvine on refresh
   let cache = null;
   let cacheAt = 0;
   const CACHE_TTL = 15 * 60 * 1000;
