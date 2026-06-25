@@ -2753,10 +2753,8 @@ async function fetchMoveOutChargeRecon(allPropsArg) {
   }
 }
 
-
 // ── Suppressed Fee Analysis ──
-import('./suppressed-fee-route.js').then(m => m.default(app, RENTVINE_BASE, RENTVINE_AUTH, RENTVINE_ACCOUNT));
-
+app.get('/suppressed-fees', (req, res) => res.sendFile(new URL('./suppressed-fees.html', import.meta.url).pathname));
 
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
