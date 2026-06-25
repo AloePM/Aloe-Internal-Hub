@@ -150,7 +150,6 @@ body{background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif;min-
   <button class="tab" data-tab="renewals" onclick="switchTab('renewals')">Renewals</button>
   <button class="tab" data-tab="portfolio" onclick="switchTab('portfolio')">Portfolio Growth</button>
  <button class="tab" data-tab="maintenance" onclick="switchTab('maintenance')">Maintenance</button>
-  <button class="tab" data-tab="retention" onclick="switchTab('retention')">Retention</button>
   <button class="tab" data-tab="moveouts" onclick="switchTab('moveouts')">Move-Outs</button>
   <button class="tab" data-tab="moveins" onclick="switchTab('moveins')">Move-Ins</button>
   <button class="tab" data-tab="delinquency" onclick="switchTab('delinquency')">Delinquency</button>
@@ -1451,47 +1450,6 @@ async function renderMaintenance() {
     }
   }, 50);
 }
-// ---- RETENTION TAB ----
-function renderRetention() {
-  var ci=D.comprehensiveInspections, em=D.endManagement, l=D.leases;
-  var ciRadius = 42;
-  var ciCirc = 2 * Math.PI * ciRadius;
-  var ciDash = (ci.optInRate/100) * ciCirc;
-
-  var html = '<div class="main">' +
-    '<div class="page-header"><div class="page-title">Owner and Tenant Retention</div></div>' +
-    '<div class="kpi-grid g4">' +
-      kpi('Comp. Inspection Opt-In', ci.optInRate+'%', ci.yes+' yes, '+ci.no+' no', ci.optInRate>=50?C.GREEN:C.AMBER) +
-      kpi('End Mgmt MTD', fmt(em.totalMTD), 'cancellations', em.totalMTD>0?C.RED:C.GREEN) +
-      kpi('Move-Out Reasons', fmt(l.moveOutReasons.length), 'distinct reasons tracked', C.TEAL) +
-      kpi('Expiring Leases (90d)', fmt(l.upcomingExpirations), 'need renewal action', C.AMBER) +
-    '</div>' +
-    '<div class="grid g-2">' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.GREEN+'"></div>Comprehensive Inspection Opt-In</div></div>' +
-      '<div class="insp-wrap" style="padding:10px 0">' +
-        '<div class="insp-ring" style="width:100px;height:100px">' +
-          '<svg width="100" height="100" viewBox="0 0 100 100">' +
-            '<circle class="insp-ring-bg" cx="50" cy="50" r="'+ciRadius+'" stroke-width="10"/>' +
-            '<circle class="insp-ring-fill" cx="50" cy="50" r="'+ciRadius+'" stroke-width="10" stroke="'+(ci.optInRate>=50?C.GREEN:C.AMBER)+'" stroke-dasharray="'+ciDash+' '+ciCirc+'"/>' +
-          '</svg>' +
-          '<div class="insp-pct" style="font-size:20px">'+ci.optInRate+'%</div>' +
-        '</div>' +
-        '<div class="insp-legend">' +
-          '<div class="insp-row"><div class="insp-dot" style="background:'+C.GREEN+'"></div><div class="insp-label">Yes Opted In</div><div class="insp-num">'+ci.yes+'</div></div>' +
-          '<div class="insp-row"><div class="insp-dot" style="background:var(--red)"></div><div class="insp-label">No Opted Out</div><div class="insp-num">'+ci.no+'</div></div>' +
-          '<div class="insp-row"><div class="insp-dot" style="background:var(--rule)"></div><div class="insp-label">Total Tracked</div><div class="insp-num">'+ci.total+'</div></div>' +
-        '</div>' +
-      '</div></div>' +
-      '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>End Management Reasons</div></div>' +
-      (em.reasons.length ? barRows(em.reasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:12px">Reasons flow from Aptly Offboard board.</div>') +
-      '</div>' +
-    '</div>' +
-    '<div class="card"><div class="card-header"><div class="card-title"><div class="card-title-bar" style="background:'+C.RED+'"></div>Move-Out Reasons from Rentvine</div></div>' +
-    (l.moveOutReasons.length ? barRows(l.moveOutReasons.map(function(r){return {label:r.reason,count:r.count};}), C.RED) : '<div style="color:var(--ghost);font-size:12px">Move-out reasons populate from the Rentvine vacateReason field on lease records.</div>') +
-    '</div></div>';
-
-  document.getElementById('app').innerHTML = html;
-}
 
 // ---- TAB SWITCHING ----
 var TABS = {
@@ -1501,7 +1459,6 @@ var TABS = {
   renewals: renderRenewals,
   portfolio: renderPortfolio,
   maintenance: renderMaintenance,
-  retention: renderRetention,
   moveouts: renderMoveOuts,
   moveins: renderMoveIns,
   delinquency: renderDelinquency,
