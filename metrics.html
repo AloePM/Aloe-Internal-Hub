@@ -737,25 +737,8 @@ function renderPipeline() {
   var endLabels=(em.byMonth||[]).map(function(x){return sm(x.month);});
   var endData=(em.byMonth||[]).map(function(x){return x.value;});
   var ptCancels=port.preTenancyCancellations||[];
-  var ptMTD=port.preTenancyMTD||0;
   var reasons=em.reasons||[];
   var net=pipe.signedMTD-em.totalMTD;
-  // Build pre-tenancy chart from ptCancels bucketed by month (last 12 months)
-  var ptBuckets={};
-  var ptNow=new Date();
-  for(var pi=11;pi>=0;pi--){
-    var pd=new Date(ptNow.getFullYear(),ptNow.getMonth()-pi,1);
-    var pk=pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
-    ptBuckets[pk]=0;
-  }
-  ptCancels.forEach(function(p){
-    if(!p.dateContractEnds) return;
-    var ed=new Date(p.dateContractEnds);
-    var ek=ed.getFullYear()+'-'+String(ed.getMonth()+1).padStart(2,'0');
-    if(ptBuckets[ek]!==undefined) ptBuckets[ek]++;
-  });
-  var ptLabels=Object.keys(ptBuckets).map(function(k){return sm(k);});
-  var ptData=Object.values(ptBuckets);
 
   var ptRows=ptCancels.slice(0,20).map(function(p){
     var begStr=p.dateContractBegins?new Date(p.dateContractBegins).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'--';
@@ -785,10 +768,7 @@ function renderPipeline() {
 
     // Pre-tenancy cancellations — separate section
     '<div class="grid g-2" style="margin-bottom:0">'+
-      '<div class="card"><div class="card-header">'+
-      '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Pre-Tenancy Cancellations — Last 12 Months</div></div>'+
-      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Properties cancelled before first tenant was placed, by month</div>'+
-      '<div class="chart-wrap" style="height:180px"><canvas id="pipe-pretenancy"></canvas></div></div>'+
+
       '<div class="card"><div class="card-header">'+
       '<div class="card-title"><div class="card-title-bar" style="background:'+C.AMBER+'"></div>Pre-Tenancy Cancel List</div>'+
       '<span style="font-size:11px;font-weight:700;padding:2px 9px;background:rgba(245,158,11,0.1);color:var(--amber);border-radius:20px">'+ptCancels.length+' total</span></div>'+
@@ -816,7 +796,6 @@ function renderPipeline() {
   setTimeout(function() {
     mkBar('pipe-main',labels,[{label:'New Leads',data:leads,backgroundColor:C.PURPLE+'cc'},{label:'PMA Signed',data:signed,backgroundColor:C.GREEN+'cc'}],220);
     mkBar('pipe-end',endLabels,[{label:'End Management',data:endData,backgroundColor:C.RED+'cc'}],220);
-    if(ptLabels.length) mkBar('pipe-pretenancy',ptLabels,[{label:'Pre-Tenancy Cancels',data:ptData,backgroundColor:C.AMBER+'cc'}],180);
   },50);
 }
 
