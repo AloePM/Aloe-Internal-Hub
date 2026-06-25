@@ -736,6 +736,10 @@ function renderPipeline() {
   var leads=(pipe.newLeadsByMonth||[]).map(function(x){return x.value;});
   var endLabels=(em.byMonth||[]).map(function(x){return sm(x.month);});
   var endData=(em.byMonth||[]).map(function(x){return x.value;});
+  var ptCancels=port.preTenancyCancellations||[];
+  var ptMTD=port.preTenancyMTD||0;
+  var reasons=em.reasons||[];
+  var net=pipe.signedMTD-em.totalMTD;
   // Build pre-tenancy chart from ptCancels bucketed by month (last 12 months)
   var ptBuckets={};
   var ptNow=new Date();
@@ -752,10 +756,6 @@ function renderPipeline() {
   });
   var ptLabels=Object.keys(ptBuckets).map(function(k){return sm(k);});
   var ptData=Object.values(ptBuckets);
-  var reasons=em.reasons||[];
-  var net=pipe.signedMTD-em.totalMTD;
-  var ptCancels=port.preTenancyCancellations||[];
-  var ptMTD=port.preTenancyMTD||0;
 
   var ptRows=ptCancels.slice(0,20).map(function(p){
     var begStr=p.dateContractBegins?new Date(p.dateContractBegins).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'--';
