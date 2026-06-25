@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suppressed Fee Analysis — Aloe PM</title>
+<style>
+:root{--teal:#3CC3E1;--teal-dark:#4BB4D2;--silver:#B4C3C3;--bg:#F8FAFC;--white:#fff;--text:#1a2332;--text-muted:#5a6a7a;--border:#e0e8ef;--danger:#c0392b;--danger-bg:#fdf2f2;--warn:#b07d00;--warn-bg:#fffbea;--success:#167a4b;--success-bg:#f0faf5;--radius:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+header{background:var(--white);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+header h1{font-size:17px;font-weight:600;color:var(--text)}
+header p{font-size:12px;color:var(--text-muted)}
+.logo{width:32px;height:32px;background:var(--teal);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
+.refresh-btn{margin-left:auto;padding:6px 14px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:12px;cursor:pointer;font-weight:500}
+.refresh-btn:hover{background:var(--teal-dark)}
+.refresh-btn:disabled{opacity:.5;cursor:default}
+main{max-width:1300px;margin:0 auto;padding:20px 20px 40px}
+#loading{text-align:center;padding:60px 20px;color:var(--text-muted)}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#error-msg{background:var(--danger-bg);border:1px solid #f5c6c6;color:var(--danger);border-radius:var(--radius);padding:16px;margin-bottom:16px;display:none}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.metric-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.metric-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.metric-val{font-size:22px;font-weight:600}
+.metric-val.danger{color:var(--danger)}
+.metric-val.warn{color:var(--warn)}
+.metric-val.success{color:var(--success)}
+.metric-val.neutral{color:var(--text)}
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:16px}
+.tab-btn{padding:8px 18px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text-muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .15s}
+.tab-btn.active{color:var(--teal-dark);border-bottom-color:var(--teal)}
+.tab-btn:hover:not(.active){color:var(--text)}
+.panel{display:none}.panel.active{display:block}
+.panel-desc{font-size:12px;color:var(--text-muted);margin-bottom:12px;background:var(--warn-bg);border:1px solid #f0e0a0;border-radius:var(--radius);padding:10px 14px}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.filter-bar select,.filter-bar input{font-size:12px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:var(--white);color:var(--text)}
+.filter-bar input{flex:1;min-width:140px}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--white)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:#f4f7fa;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:7px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#f8fbff}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.danger-text{color:var(--danger);font-weight:600}
+.warn-text{color:var(--warn);font-weight:600}
+.success-text{color:var(--success)}
+.badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;white-space:nowrap}
+.badge-danger{background:var(--danger-bg);color:var(--danger);border:1px solid #f5c6c6}
+.badge-warn{background:var(--warn-bg);color:var(--warn);border:1px solid #f0e0a0}
+.badge-ok{background:var(--success-bg);color:var(--success);border:1px solid #b6e5ce}
+.month-chip{display:inline-block;background:var(--danger-bg);color:var(--danger);font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;margin:1px;border:1px solid #f5c6c6;white-space:nowrap}
+.row-count{font-size:11px;color:var(--text-muted);margin-top:8px}
+.acct-tag{font-size:11px;color:var(--text-muted)}
+.prop-cell{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.cached-note{font-size:11px;color:var(--text-muted);margin-left:8px}
+#generated-at{font-size:11px;color:var(--text-muted);text-align:right;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">A</div>
+  <div>
+    <h1>Suppressed Fee Analysis</h1>
+    <p>All 14 accounts — balance mismatches &amp; unbilled income detection</p>
+  </div>
+  <button class="refresh-btn" id="refresh-btn" onclick="loadData(true)">↺ Refresh</button>
+</header>
+
+<main>
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Fetching GL data across all 14 suppressed fee accounts…</p>
+    <p style="font-size:12px;margin-top:6px;color:#8a9aaa">This takes 20–40 seconds — fetching all-time history</p>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div id="dashboard" style="display:none">
+    <div id="generated-at"></div>
+
+    <div class="summary-grid" id="summary-grid"></div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showPanel('unbilled',this)">
+        Unbilled months <span id="tab-unbilled-count"></span>
+      </button>
+      <button class="tab-btn" onclick="showPanel('mismatch',this)">
+        Balance mismatches <span id="tab-mismatch-count"></span>
+      </button>
+      <button class="tab-btn" onclick="showPanel('by-account',this)">By account</button>
+      <button class="tab-btn" onclick="showPanel('by-property',this)">By property</button>
+    </div>
+
+    <!-- UNBILLED -->
+    <div id="panel-unbilled" class="panel active">
+      <div class="panel-desc">
+        ⚠ Income received (credits) in months where <strong>no payout (debit) was recorded</strong> for that account,
+        cutoff: <strong id="cutoff-label"></strong>. May and June 2026 are excluded — visible on your manager dashboard.
+      </div>
+      <div class="filter-bar">
+        <select id="u-acct" onchange="renderUnbilled()"><option value="all">All accounts</option></select>
+        <input id="u-search" placeholder="Search property…" oninput="renderUnbilled()">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Property</th><th>Account</th>
+            <th class="num">Total income received</th>
+            <th>Unbilled months (income not yet disbursed)</th>
+            <th class="num">Unbilled amount</th>
+          </tr></thead>
+          <tbody id="u-body"></tbody>
+        </table>
+      </div>
+      <p class="row-count" id="u-count"></p>
+    </div>
+
+    <!-- MISMATCHES -->
+    <div id="panel-mismatch" class="panel">
+      <div class="panel-desc">
+        Properties where <strong>total payouts ≠ total income received</strong> for a given account.
+        Negative balance = you paid out more than received (overpaid). Positive = income sitting, not yet paid out.
+      </div>
+      <div class="filter-bar">
+        <select id="m-filter" onchange="renderMismatch()">
+          <option value="all">All mismatches</option>
+          <option value="overpaid">Overpaid only</option>
+          <option value="under-disbursed">Under-disbursed only</option>
+        </select>
+        <select id="m-acct" onchange="renderMismatch()"><option value="all">All accounts</option></select>
+        <input id="m-search" placeholder="Search property…" oninput="renderMismatch()">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Property</th><th>Account</th>
+            <th class="num">Income received</th>
+            <th class="num">Paid out</th>
+            <th class="num">Balance</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody id="m-body"></tbody>
+        </table>
+      </div>
+      <p class="row-count" id="m-count"></p>
+    </div>
+
+    <!-- BY ACCOUNT -->
+    <div id="panel-by-account" class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Account</th>
+            <th class="num">Total income received</th>
+            <th class="num">Total paid out</th>
+            <th class="num">Net balance</th>
+            <th class="num">Unbilled month-instances</th>
+            <th class="num">Properties w/ issues</th>
+          </tr></thead>
+          <tbody id="ba-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BY PROPERTY -->
+    <div id="panel-by-property" class="panel">
+      <div class="filter-bar">
+        <input id="p-search" placeholder="Search property…" oninput="renderByProperty()">
+        <select id="p-sort" onchange="renderByProperty()">
+          <option value="issues">Sort by issues</option>
+          <option value="name">Sort by name</option>
+          <option value="unbilled">Sort by unbilled $</option>
+          <option value="balance">Sort by balance</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Property</th>
+            <th class="num">Total income received</th>
+            <th class="num">Total paid out</th>
+            <th class="num">Net balance</th>
+            <th class="num">Unbilled income</th>
+            <th>Issues</th>
+          </tr></thead>
+          <tbody id="p-body"></tbody>
+        </table>
+      </div>
+      <p class="row-count" id="p-count"></p>
+    </div>
+  </div>
+</main>
+
+<script>
+let DATA = null;
+
+function fmt(n){
+  return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(n||0);
+}
+function fmtMonth(key){
+  const [y,m] = key.split('-');
+  return new Date(y, m-1, 1).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+}
+
+async function loadData(force=false){
+  document.getElementById('loading').style.display='block';
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('error-msg').style.display='none';
+  document.getElementById('refresh-btn').disabled=true;
+  document.getElementById('refresh-btn').textContent='Loading…';
+
+  try {
+    const url = '/api/suppressed-fee-analysis' + (force ? '?refresh=1' : '');
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({error:`HTTP ${res.status}`}));
+      throw new Error(err.error||`HTTP ${res.status}`);
+    }
+    DATA = await res.json();
+    document.getElementById('loading').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    renderAll();
+  } catch(e) {
+    document.getElementById('loading').style.display='none';
+    const em = document.getElementById('error-msg');
+    em.style.display='block';
+    em.textContent='Error: ' + e.message;
+  } finally {
+    document.getElementById('refresh-btn').disabled=false;
+    document.getElementById('refresh-btn').textContent='↺ Refresh';
+  }
+}
+
+function renderAll(){
+  const s = DATA.summary;
+
+  // Generated at / cache note
+  const genDate = new Date(DATA.generatedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  document.getElementById('generated-at').textContent = `Data as of ${genDate}${DATA.cached?' (cached)':''} — unbilled cutoff: ${DATA.unbilledCutoff}`;
+
+  document.getElementById('cutoff-label').textContent = DATA.unbilledCutoff;
+
+  // Summary cards
+  const cardDefs = [
+    ['Total income received', fmt(s.totalCredit), 'neutral'],
+    ['Total paid out', fmt(s.totalDebit), 'neutral'],
+    ['Net portfolio balance', fmt(s.netBalance), s.netBalance<0?'danger':s.netBalance>0?'warn':'success'],
+    ['Unbilled income (≤cutoff)', fmt(s.totalUnbilledIncome), s.totalUnbilledIncome>0?'danger':'success'],
+    ['Overpaid instances', s.overpaidInstances, s.overpaidInstances>0?'danger':'success'],
+    ['Unbilled month-instances', s.totalUnbilledMonthInstances, s.totalUnbilledMonthInstances>0?'warn':'success'],
+  ];
+  document.getElementById('summary-grid').innerHTML = cardDefs.map(([l,v,c])=>`
+    <div class="metric-card">
+      <div class="metric-label">${l}</div>
+      <div class="metric-val ${c}">${v}</div>
+    </div>`).join('');
+
+  // Tab counts
+  document.getElementById('tab-unbilled-count').textContent = DATA.unbilled.length ? `(${DATA.unbilled.length})` : '';
+  document.getElementById('tab-mismatch-count').textContent = DATA.mismatches.length ? `(${DATA.mismatches.length})` : '';
+
+  // Populate account filter dropdowns
+  const acctOpts = '<option value="all">All accounts</option>' +
+    [...new Set([...DATA.unbilled.map(u=>u.accountId), ...DATA.mismatches.map(m=>m.accountId)])].map(id => {
+      const a = DATA.byAccount.find(a=>a.accountId===id);
+      return `<option value="${id}">${a?.accountLabel||id}</option>`;
+    }).join('');
+  ['u-acct','m-acct'].forEach(id=>{ document.getElementById(id).innerHTML = acctOpts; });
+
+  renderUnbilled();
+  renderMismatch();
+  renderByAccount();
+  renderByProperty();
+}
+
+function renderUnbilled(){
+  const acctF = document.getElementById('u-acct').value;
+  const search = document.getElementById('u-search').value.toLowerCase();
+  let rows = (DATA.unbilled||[]).filter(r=>{
+    if(acctF!=='all' && String(r.accountId)!==acctF) return false;
+    if(search && !r.prop.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  document.getElementById('u-body').innerHTML = rows.length ? rows.map(r=>`
+    <tr>
+      <td class="prop-cell" title="${r.prop}">${r.prop}</td>
+      <td class="acct-tag">${r.accountLabel}</td>
+      <td class="num">${fmt(r.totalCredit)}</td>
+      <td>${r.unbilledMonths.map(m=>`<span class="month-chip">${fmtMonth(m.month)}&nbsp;${fmt(m.credit)}</span>`).join('')}</td>
+      <td class="num danger-text">${fmt(r.unbilledAmt)}</td>
+    </tr>`).join('')
+    : '<tr><td colspan="5" style="text-align:center;padding:20px;color:#8a9aaa">No unbilled months found — all clear!</td></tr>';
+  document.getElementById('u-count').textContent = `${rows.length} property-account combinations with unbilled months`;
+}
+
+function renderMismatch(){
+  const filter = document.getElementById('m-filter').value;
+  const acctF = document.getElementById('m-acct').value;
+  const search = document.getElementById('m-search').value.toLowerCase();
+  let rows = (DATA.mismatches||[]).filter(r=>{
+    if(filter!=='all' && r.status!==filter) return false;
+    if(acctF!=='all' && String(r.accountId)!==acctF) return false;
+    if(search && !r.prop.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  document.getElementById('m-body').innerHTML = rows.length ? rows.map(r=>{
+    const cls = r.diff<0?'danger-text':'warn-text';
+    const badge = r.diff<0?'<span class="badge badge-danger">Overpaid</span>':'<span class="badge badge-warn">Under-disbursed</span>';
+    const sign = r.diff<0?'−':'+';
+    return `<tr>
+      <td class="prop-cell" title="${r.prop}">${r.prop}</td>
+      <td class="acct-tag">${r.accountLabel}</td>
+      <td class="num success-text">${fmt(r.credit)}</td>
+      <td class="num">${fmt(r.debit)}</td>
+      <td class="num ${cls}">${sign}${fmt(Math.abs(r.diff))}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:20px;color:#8a9aaa">No mismatches found</td></tr>';
+  document.getElementById('m-count').textContent = `${rows.length} property-account combinations with mismatches`;
+}
+
+function renderByAccount(){
+  document.getElementById('ba-body').innerHTML = (DATA.byAccount||[]).map(r=>{
+    const cls = r.net<-0.005?'danger-text':r.net>0.005?'warn-text':'success-text';
+    const sign = r.net<0?'−':r.net>0?'+':'';
+    return `<tr>
+      <td style="font-weight:500">${r.accountLabel}</td>
+      <td class="num success-text">${fmt(r.totalCredit)}</td>
+      <td class="num">${fmt(r.totalDebit)}</td>
+      <td class="num ${cls}">${sign}${fmt(Math.abs(r.net))}</td>
+      <td class="num ${r.unbilledMonthCount>0?'warn-text':''}">${r.unbilledMonthCount||'—'}</td>
+      <td class="num ${r.propsWithIssues>0?'danger-text':''}">${r.propsWithIssues||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderByProperty(){
+  const search = document.getElementById('p-search').value.toLowerCase();
+  const sort = document.getElementById('p-sort').value;
+  let rows = (DATA.byProperty||[]).filter(r=>!search||r.prop.toLowerCase().includes(search));
+  if(sort==='name') rows = [...rows].sort((a,b)=>a.prop.localeCompare(b.prop));
+  else if(sort==='unbilled') rows = [...rows].sort((a,b)=>b.unbilledAmt-a.unbilledAmt);
+  else if(sort==='balance') rows = [...rows].sort((a,b)=>a.balance-b.balance);
+  else rows = [...rows].sort((a,b)=>b.issues.length-a.issues.length||b.unbilledAmt-a.unbilledAmt);
+
+  document.getElementById('p-body').innerHTML = rows.length ? rows.map(r=>{
+    const balCls = r.balance<-0.005?'danger-text':r.balance>0.005?'warn-text':'success-text';
+    const sign = r.balance<0?'−':r.balance>0?'+':'';
+    const badges = r.issues.map(i=>i==='mismatch'
+      ?'<span class="badge badge-danger">mismatch</span>'
+      :'<span class="badge badge-warn">unbilled</span>').join(' ');
+    return `<tr>
+      <td class="prop-cell" title="${r.prop}">${r.prop}</td>
+      <td class="num">${fmt(r.credit)}</td>
+      <td class="num">${fmt(r.debit)}</td>
+      <td class="num ${balCls}">${sign}${fmt(Math.abs(r.balance))}</td>
+      <td class="num ${r.unbilledAmt>0?'warn-text':''}">${r.unbilledAmt>0?fmt(r.unbilledAmt):'—'}</td>
+      <td>${badges||'<span class="badge badge-ok">clean</span>'}</td>
+    </tr>`;
+  }).join('')
+    : '<tr><td colspan="6" style="text-align:center;padding:20px;color:#8a9aaa">No properties found</td></tr>';
+  document.getElementById('p-count').textContent = `${rows.length} properties`;
+}
+
+function showPanel(name, btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+loadData();
+</script>
+</body>
+</html>
