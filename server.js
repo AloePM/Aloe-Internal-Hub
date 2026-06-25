@@ -2188,24 +2188,38 @@ async function fetchMoveOutReasons() {
 }
 
 async function fetchAllPropertyContracts() {
+  function parseRVDate(val) {
+    if (!val) return null;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const reportBody = {
+    displayColumns: ['propertyID', 'propertyAddress', 'dateContractBegins', 'dateContractEnds', 'isActive'],
+    filters: []
+  };
   const all = [];
-  for (let pg = 1; pg <= 10; pg++) {
-    const r = await fetch(RENTVINE_BASE + '/properties/export?pageSize=200&page=' + pg, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+  let page = 1;
+  while (page <= 10) {
+    const url = RENTVINE_BASE + '/reports/property?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(reportBody)) + '&page=' + page + '&pageSize=200';
+    const r = await fetch(url, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
     if (!r.ok) break;
     const d = await r.json();
-    const batch = Array.isArray(d) ? d : (d.data || []);
-    batch.forEach(function(item) {
-      const p = item.property || item;
+    const rows = d.rows || [];
+    if (!rows.length) break;
+    rows.forEach(function(row) {
+      const p = row.data || {};
       all.push({
         propertyID: p.propertyID,
-        address: p.address || '',
-        isActive: p.isActive === true || p.isActive === 1 || p.isActive === '1',
-        dateContractBegins: p.dateContractBegins ? new Date(p.dateContractBegins) : null,
-        dateContractEnds: p.dateContractEnds ? new Date(p.dateContractEnds) : null
+        address: p.propertyAddress || '',
+        isActive: p.isActive === 1 || p.isActive === '1' || p.isActive === true,
+        dateContractBegins: parseRVDate(p.dateContractBegins),
+        dateContractEnds: parseRVDate(p.dateContractEnds)
       });
     });
-    if (batch.length < 200) break;
+    if (rows.length < 200) break;
+    page++;
   }
+  console.log('fetchAllPropertyContracts: fetched', all.length, 'properties');
   return all;
 }
 
