@@ -2187,6 +2187,28 @@ async function fetchMoveOutReasons() {
   return reasons;
 }
 
+async function fetchAllPropertyContracts() {
+  const all = [];
+  for (let pg = 1; pg <= 10; pg++) {
+    const r = await fetch(RENTVINE_BASE + '/properties/export?pageSize=200&page=' + pg, { headers: { Authorization: 'Basic ' + RENTVINE_AUTH } });
+    if (!r.ok) break;
+    const d = await r.json();
+    const batch = Array.isArray(d) ? d : (d.data || []);
+    batch.forEach(function(item) {
+      const p = item.property || item;
+      all.push({
+        propertyID: p.propertyID,
+        address: p.address || '',
+        isActive: p.isActive === true || p.isActive === 1 || p.isActive === '1',
+        dateContractBegins: p.dateContractBegins ? new Date(p.dateContractBegins) : null,
+        dateContractEnds: p.dateContractEnds ? new Date(p.dateContractEnds) : null
+      });
+    });
+    if (batch.length < 200) break;
+  }
+  return all;
+}
+
 async function buildMetricsData() {
   const fetchStart = Date.now();
   const TMK = thisMonthKey();
@@ -2458,6 +2480,32 @@ const moveOutReasonRaw = [];
   let running = allProps.length;
   for (let i = propTrend.length-1; i >= 0; i--) { propTrend[i].total = running; running -= propTrend[i].gained; if (running < 0) running = 0; }
 
+  // needsUpdatedAgreement and preTenancyCancellations
+  const allPropertyContracts = await fetchAllPropertyContracts();
+  const nowDate = new Date(); nowDate.setHours(0,0,0,0);
+  const needsUpdatedAgreement = allPropertyContracts.filter(function(p) {
+    return p.isActive && p.dateContractEnds && p.dateContractEnds < nowDate;
+  }).map(function(p) {
+    return { address: p.address, city: '', dateContractEnds: p.dateContractEnds.toISOString().slice(0,10) };
+  });
+  const propIDsWithLeases = new Set();
+  activeLeases.concat(closedLeases).forEach(function(l) {
+    const pid = l.propertyID || (l._property && l._property.propertyID);
+    if (pid) propIDsWithLeases.add(String(pid));
+  });
+  const preTenancyCancellations = [];
+  let preTenancyMTD = 0;
+  allPropertyContracts.forEach(function(p) {
+    if (p.isActive) return;
+    if (!p.dateContractEnds || p.dateContractEnds > nowDate) return;
+    if (!p.dateContractBegins) return;
+    if (propIDsWithLeases.has(String(p.propertyID))) return;
+    const ek = p.dateContractEnds.getFullYear() + '-' + String(p.dateContractEnds.getMonth()+1).padStart(2,'0');
+    preTenancyCancellations.push({ address: p.address, city: '', dateContractBegins: p.dateContractBegins.toISOString().slice(0,10), dateContractEnds: p.dateContractEnds.toISOString().slice(0,10) });
+    if (ek === TMK) preTenancyMTD++;
+  });
+  console.log('needsUpdatedAgreement:', needsUpdatedAgreement.length, '| preTenancyCancellations:', preTenancyCancellations.length);
+
   const vacantUnitsList = activeUnits.filter(item => isUnitVacant(item.unit||item)).map(item => { const u = item.unit||item; const p2 = item.property||{}; return { address: u.address||p2.address||'—', city: u.city||p2.city||'', beds: u.bedrooms||u.beds||'', baths: u.bathrooms||u.baths||'', rent: parseFloat(u.marketRent||u.rent||0) }; }).sort((a,b) => (a.address||'').localeCompare(b.address||''));
 
   console.log('Metrics: fetched in', Math.round((Date.now()-fetchStart)/1000), 's');
@@ -2473,7 +2521,7 @@ const moveOutReasonRaw = [];
       gainedMTD: propGainedMTD,
       activeListings: publishedListings.length,
       propGainedTrend: formatTrend(propGainedByMonth),
-      propTrend, vacantUnitsList,
+      propTrend, vacantUnitsList, preTenancyCancellations, preTenancyMTD,
     },
     leases: {
   active: activeLeases.length, moveInsMTD, moveOutsMTD, upcomingExpirations,
@@ -2530,6 +2578,7 @@ const moveOutReasonRaw = [];
       totalMTD: endMgmtMTD,
       byMonth: formatTrend(endMgmtByMonth),
       reasons: Object.entries(endMgmtReasons).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>({reason,count})),
+      needsUpdatedAgreement,
     },
     comprehensiveInspections: { yes: comprehensiveInspYes, no: comprehensiveInspNo, total: comprehensiveInspYes+comprehensiveInspNo },
     moveIns: {
