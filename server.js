@@ -2758,6 +2758,15 @@ app.get('/suppressed-fees', (req, res) => res.sendFile(new URL('./suppressed-fee
 
 // ── Property Map ──────────────────────────────────────────────────────────
 
+
+app.get('/api/map-units-debug', async (req, res) => {
+  try {
+    const data = await rvFetch('/properties/units/export', { pageSize: 5, page: 1 });
+    const rows = Array.isArray(data) ? data : (data.data || []);
+    res.json({ count: rows.length, sample: rows.slice(0,3).map(r => ({ isVacant: (r.unit||r).isVacant, unitID: (r.unit||r).unitID, address: (r.unit||r).address })) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/map-debug', async (req, res) => {
   try {
     const data = await rvFetch('/properties/export', { pageSize: 5, page: 1 });
