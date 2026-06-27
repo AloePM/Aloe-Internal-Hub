@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Aloe PM — Property Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--teal:#3CC3E1;--bg:#0f1923;--bg2:#131f2e;--bg3:#1a2a3a;--border:#1e2d3d;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text)}
+#header{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:54px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:var(--bg);}
+.logo-name{font-size:15px;font-weight:600}.logo-sub{font-size:11px;color:var(--text3)}
+.stats{display:flex;gap:24px}.stat{text-align:center}
+.stat-n{font-size:20px;font-weight:700;line-height:1}.stat-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+#s-occ{color:var(--teal)}#s-vac{color:#f59e0b}
+#toolbar{display:flex;align-items:center;gap:8px;padding:7px 16px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;}
+.fbtn{padding:5px 15px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;}
+.fbtn.on{background:var(--teal);color:var(--bg);border-color:var(--teal);font-weight:600}
+.fbtn:hover:not(.on){border-color:var(--teal);color:var(--teal)}
+#search{margin-left:auto;padding:5px 13px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;width:210px;outline:none;}
+#search::placeholder{color:var(--text3)}#search:focus{border-color:var(--teal)}
+.refresh-btn{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);font-size:11px;cursor:pointer;transition:all .15s;}
+.refresh-btn:hover{border-color:var(--teal);color:var(--teal)}
+#layout{display:flex;height:calc(100vh - 54px - 42px)}
+#map{flex:1}
+#panel{width:280px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+#panel-head{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text3)}
+#panel-list{flex:1;overflow-y:auto;padding:4px 0}
+#panel-list::-webkit-scrollbar{width:4px}#panel-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.prow{padding:8px 14px;cursor:pointer;border-bottom:1px solid rgba(30,45,61,.5);transition:background .1s;display:flex;align-items:center;gap:10px;}
+.prow:hover{background:var(--bg3)}.prow.active{background:rgba(60,195,225,0.12);border-left:3px solid var(--teal)}
+.pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}.pdot.occ{background:var(--teal)}.pdot.vac{background:#f59e0b}
+.prow-info{min-width:0}.prow-addr{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow-city{font-size:10px;color:var(--text3);margin-top:1px}
+#overlay{position:fixed;inset:0;background:rgba(15,25,35,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9000;gap:14px;}
+.spin{width:42px;height:42px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ov-title{font-size:17px;font-weight:600}#ov-msg{font-size:13px;color:var(--text2);text-align:center;max-width:300px;line-height:1.6}
+#ov-err{color:#ef4444;font-size:13px;text-align:center;max-width:300px;line-height:1.5;display:none}
+#ov-retry{padding:9px 22px;background:var(--teal);color:var(--bg);border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:none;}
+.leaflet-popup-content-wrapper{background:var(--bg2) !important;border:1px solid var(--border) !important;border-radius:10px !important;box-shadow:0 8px 28px rgba(0,0,0,.5) !important;}
+.leaflet-popup-tip{background:var(--bg2) !important}.leaflet-popup-content{margin:13px 16px !important;color:var(--text)}
+.pu-title{font-size:13px;font-weight:700;margin-bottom:4px}.pu-city{font-size:11px;color:var(--text3);margin-bottom:9px}
+.pu-badge{display:inline-block;padding:2px 11px;border-radius:12px;font-size:11px;font-weight:600}
+.pu-badge.occ{background:rgba(60,195,225,.12);color:var(--teal);border:1px solid rgba(60,195,225,.3)}
+.pu-badge.vac{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.pu-detail{margin-top:8px;font-size:11px;color:var(--text3)}
+</style>
+</head>
+<body>
+<div id="header">
+  <div class="logo">
+    <div class="logo-mark">A</div>
+    <div><div class="logo-name">Aloe Property Management</div><div class="logo-sub">Portfolio Map</div></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="s-occ">-</div><div class="stat-l">Occupied</div></div>
+    <div class="stat"><div class="stat-n" id="s-vac">-</div><div class="stat-l">Vacant</div></div>
+    <div class="stat"><div class="stat-n" id="s-tot">-</div><div class="stat-l">Total</div></div>
+  </div>
+</div>
+<div id="toolbar">
+  <button class="fbtn on" data-f="all">All</button>
+  <button class="fbtn" data-f="occupied">Occupied</button>
+  <button class="fbtn" data-f="vacant">Vacant</button>
+  <input id="search" type="text" placeholder="Search address or city..."/>
+  <button class="refresh-btn" onclick="loadProperties(true)">Refresh</button>
+</div>
+<div id="layout">
+  <div id="map"></div>
+  <div id="panel">
+    <div id="panel-head">Properties (<span id="panel-count">0</span>)</div>
+    <div id="panel-list"></div>
+  </div>
+</div>
+<div id="overlay">
+  <div class="spin"></div>
+  <div id="ov-title">Loading Portfolio</div>
+  <div id="ov-msg">Fetching properties from Rentvine...</div>
+  <div id="ov-err"></div>
+  <button id="ov-retry" onclick="loadProperties(false)">Retry</button>
+</div>
+<script>
+const map = L.map('map',{zoomControl:false}).setView([33.36,-111.79],10);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'CartoDB',maxZoom:19}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+function mkIcon(v){
+  const c=v?'#f59e0b':'#3CC3E1';
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 24 32"><path d="M12 0C5.37 0 0 5.37 0 12c0 7.75 12 20 12 20S24 19.75 24 12C24 5.37 18.63 0 12 0z" fill="'+c+'" opacity=".92"/><circle cx="12" cy="12" r="5" fill="white" opacity=".92"/></svg>';
+  return L.divIcon({html:svg,className:'',iconSize:[22,30],iconAnchor:[11,30],popupAnchor:[0,-32]});
+}
+let all=[],markerLayer=L.layerGroup().addTo(map),activeFilter='all',searchTerm='',activeRow=null;
+document.querySelectorAll('.fbtn').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.fbtn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');activeFilter=b.dataset.f;render();
+}));
+document.getElementById('search').addEventListener('input',e=>{searchTerm=e.target.value;render();});
+function visible(p){
+  if(!p.lat||!p.lng)return false;
+  if(activeFilter==='occupied'&&p.isVacant)return false;
+  if(activeFilter==='vacant'&&!p.isVacant)return false;
+  if(searchTerm){const s=searchTerm.toLowerCase();if(!p.address.toLowerCase().includes(s)&&!(p.city||'').toLowerCase().includes(s))return false;}
+  return true;
+}
+function render(){
+  markerLayer.clearLayers();
+  const list=document.getElementById('panel-list');list.innerHTML='';
+  const shown=all.filter(visible);
+  shown.forEach(p=>{
+    const m=L.marker([p.lat,p.lng],{icon:mkIcon(p.isVacant)});
+    const badge=p.isVacant?'<span class="pu-badge vac">Vacant</span>':'<span class="pu-badge occ">Occupied</span>';
+    const detail=[p.beds?p.beds+' bd':'',p.baths?p.baths+' ba':'',p.rent?'$'+Number(p.rent).toLocaleString()+'/mo':''].filter(Boolean).join(' · ');
+    m.bindPopup('<div class="pu-title">'+p.address+'</div><div class="pu-city">'+(p.city||'')+', AZ</div>'+badge+(detail?'<div class="pu-detail">'+detail+'</div>':''));
+    p._marker=m;markerLayer.addLayer(m);
+    const row=document.createElement('div');row.className='prow';
+    row.innerHTML='<div class="pdot '+(p.isVacant?'vac':'occ')+'"></div><div class="prow-info"><div class="prow-addr">'+p.address+'</div><div class="prow-city">'+(p.city||'AZ')+'</div></div>';
+    row.addEventListener('click',()=>{
+      if(activeRow)activeRow.classList.remove('active');
+      row.classList.add('active');activeRow=row;
+      map.setView([p.lat,p.lng],15,{animate:true});m.openPopup();
+    });
+    list.appendChild(row);
+  });
+  document.getElementById('panel-count').textContent=shown.length;
+  document.getElementById('s-occ').textContent=shown.filter(p=>!p.isVacant).length;
+  document.getElementById('s-vac').textContent=shown.filter(p=>p.isVacant).length;
+  document.getElementById('s-tot').textContent=shown.length;
+}
+function setMsg(t,m){document.getElementById('ov-title').textContent=t;document.getElementById('ov-msg').textContent=m;}
+function showError(msg){document.getElementById('ov-err').style.display='block';document.getElementById('ov-err').textContent=msg;document.getElementById('ov-retry').style.display='block';}
+function hideOverlay(){document.getElementById('overlay').style.display='none';}
+async function loadProperties(forceRefresh){
+  forceRefresh=forceRefresh||false;
+  document.getElementById('overlay').style.display='flex';
+  document.getElementById('ov-err').style.display='none';
+  document.getElementById('ov-retry').style.display='none';
+  all=[];
+  try{
+    setMsg('Loading Portfolio','Fetching properties from Rentvine...');
+    const resp=await fetch('/api/map-properties'+(forceRefresh?'?refresh=1':''));
+    if(!resp.ok){const e=await resp.json().catch(()=>({error:resp.statusText}));throw new Error(e.error||'HTTP '+resp.status);}
+    const data=await resp.json();
+    all=data.properties||[];
+    if(!all.length)throw new Error('No active properties returned.');
+    const withCoords=all.filter(p=>p.lat&&p.lng).length;
+    if(!withCoords)throw new Error('Properties loaded but none geocoded. Check server logs.');
+    setMsg('Mapping...',''+withCoords+' of '+all.length+' properties geocoded');
+    setTimeout(function(){
+      render();
+      const ll=all.filter(p=>p.lat&&p.lng).map(p=>[p.lat,p.lng]);
+      if(ll.length)map.fitBounds(L.latLngBounds(ll).pad(0.07));
+      hideOverlay();
+    },300);
+  }catch(e){showError('Error: '+e.message);}
+}
+loadProperties();
+</script>
+</body>
+</html>
