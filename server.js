@@ -2830,6 +2830,8 @@ app.get('/api/map-properties', async (req, res) => {
       const units = unitsByProp[p.propertyID] || [];
       const isVacant = units.length === 0 ? false : units.every(u => u.isVacant === true || u.isVacant === 1);
       const u = units[0] || {};
+      const lat = parseFloat(p.latitude || 0);
+      const lng = parseFloat(p.longitude || 0);
       return {
         propertyID: p.propertyID,
         address: (p.address || p.streetAddress || '').trim(),
@@ -2837,19 +2839,13 @@ app.get('/api/map-properties', async (req, res) => {
         beds: u.bedrooms || u.beds || null,
         baths: u.bathrooms || u.baths || null,
         rent: u.marketRent || u.rent || null,
-        isVacant, unitCount: units.length
+        isVacant, unitCount: units.length,
+        lat: lat || null,
+        lng: lng || null
       };
     }).filter(p => p.address);
-    console.log(`[map] Geocoding ${properties.length} properties...`);
-    let geocoded = 0;
-    for (const p of properties) {
-      const cached = _geocodeCache[`${p.address}|${p.city}`.toLowerCase()];
-      if (cached) { p.lat = cached.lat; p.lng = cached.lng; geocoded++; continue; }
-      await new Promise(r => setTimeout(r, 1100));
-      const coords = await geocodeAddress(p.address, p.city);
-      if (coords) { p.lat = coords.lat; p.lng = coords.lng; geocoded++; }
-    }
-    console.log(`[map] Geocoded ${geocoded}/${properties.length}`);
+    const geocoded = properties.filter(p => p.lat && p.lng).length;
+    console.log(`[map] Using Rentvine coordinates: ${geocoded}/${properties.length} have lat/lng`);
     _mapPropertiesCache = properties;
     _mapPropertiesCacheTime = Date.now();
     res.json({ properties, cached: false, count: properties.length, geocoded });
