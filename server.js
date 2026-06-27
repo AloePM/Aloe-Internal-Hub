@@ -2837,7 +2837,7 @@ app.get('/api/map-properties', async (req, res) => {
     const properties = allProps.map(r => {
       const p = r.property || r;
       const units = unitsByProp[p.propertyID] || [];
-      const isVacant = units.length === 0 ? false : units.every(u => u.isVacant === true || u.isVacant === 1);
+      const isVacant = units.length === 0 ? false : units.every(u => u.isVacant === true || u.isVacant === 1 || u.isVacant === "1");
       const u = units[0] || {};
       const lat = parseFloat(p.latitude || 0);
       const lng = parseFloat(p.longitude || 0);
