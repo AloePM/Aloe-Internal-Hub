@@ -2786,6 +2786,7 @@ app.get('/api/map-properties', async (req, res) => {
   try {
     const forceRefresh = req.query.refresh === '1';
     const now = Date.now();
+    if (!forceRefresh && _mapPropertiesCache && (now - _mapPropertiesCacheTime) < MAP_CACHE_TTL) {
       return res.json({ properties: _mapPropertiesCache, cached: true, count: _mapPropertiesCache.length });
     }
     console.log('[map] Fetching active properties...');
@@ -2811,6 +2812,8 @@ app.get('/api/map-properties', async (req, res) => {
     allUnits.forEach(r => {
       const u = r.unit || r; const p = r.property || {};
       const propId = u.propertyID || p.propertyID;
+      if (!propId) return;
+      if (!unitsByProp[propId]) unitsByProp[propId] = [];
       unitsByProp[propId].push(u);
     });
     const properties = allProps.map(r => {
