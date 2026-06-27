@@ -2756,6 +2756,97 @@ async function fetchMoveOutChargeRecon(allPropsArg) {
 // ── Suppressed Fee Analysis ──
 app.get('/suppressed-fees', (req, res) => res.sendFile(new URL('./suppressed-fees.html', import.meta.url).pathname));
 
+// ── Property Map ──────────────────────────────────────────────────────────
+app.get('/map', (req, res) => res.sendFile(new URL('./map.html', import.meta.url).pathname));
+
+const _geocodeCache = {};
+async function geocodeAddress(address, city) {
+  const key = `${address}|${city}`.toLowerCase();
+  if (_geocodeCache[key]) return _geocodeCache[key];
+  const q = encodeURIComponent(`${address}, ${city}, Arizona, USA`);
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
+      headers: { 'User-Agent': 'AloePropertyMap/1.0 (hub.aloepm.com)' }
+    });
+    const d = await r.json();
+    if (d.length) {
+      const coords = { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+      _geocodeCache[key] = coords;
+      return coords;
+    }
+  } catch (e) { console.error('Geocode error:', e.message); }
+  return null;
+}
+
+let _mapPropertiesCache = null;
+let _mapPropertiesCacheTime = 0;
+const MAP_CACHE_TTL = 4 * 60 * 60 * 1000;
+
+app.get('/api/map-properties', async (req, res) => {
+  try {
+    const forceRefresh = req.query.refresh === '1';
+    const now = Date.now();
+      return res.json({ properties: _mapPropertiesCache, cached: true, count: _mapPropertiesCache.length });
+    }
+    console.log('[map] Fetching active properties...');
+    let allProps = [], page = 1;
+    while (true) {
+      const data = await rvFetch('/properties/export', { pageSize: 200, page });
+      const rows = Array.isArray(data) ? data : (data.data || []);
+      allProps = allProps.concat(rows);
+      if (rows.length < 200) break;
+      page++;
+    }
+    allProps = allProps.filter(r => { const p = r.property || r; return p.isActive === true || p.isActive === 1; });
+    console.log(`[map] ${allProps.length} active properties`);
+    let allUnits = []; page = 1;
+    while (true) {
+      const data = await rvFetch('/properties/units/export', { pageSize: 200, page });
+      const rows = Array.isArray(data) ? data : (data.data || []);
+      allUnits = allUnits.concat(rows);
+      if (rows.length < 200) break;
+      page++;
+    }
+    const unitsByProp = {};
+    allUnits.forEach(r => {
+      const u = r.unit || r; const p = r.property || {};
+      const propId = u.propertyID || p.propertyID;
+      unitsByProp[propId].push(u);
+    });
+    const properties = allProps.map(r => {
+      const p = r.property || r;
+      const units = unitsByProp[p.propertyID] || [];
+      const isVacant = units.length === 0 ? false : units.every(u => u.isVacant === true || u.isVacant === 1);
+      const u = units[0] || {};
+      return {
+        propertyID: p.propertyID,
+        address: (p.address || p.streetAddress || '').trim(),
+        city: p.city || '',
+        beds: u.bedrooms || u.beds || null,
+        baths: u.bathrooms || u.baths || null,
+        rent: u.marketRent || u.rent || null,
+        isVacant, unitCount: units.length
+      };
+    }).filter(p => p.address);
+    console.log(`[map] Geocoding ${properties.length} properties...`);
+    let geocoded = 0;
+    for (const p of properties) {
+      const cached = _geocodeCache[`${p.address}|${p.city}`.toLowerCase()];
+      if (cached) { p.lat = cached.lat; p.lng = cached.lng; geocoded++; continue; }
+      await new Promise(r => setTimeout(r, 1100));
+      const coords = await geocodeAddress(p.address, p.city);
+      if (coords) { p.lat = coords.lat; p.lng = coords.lng; geocoded++; }
+    }
+    console.log(`[map] Geocoded ${geocoded}/${properties.length}`);
+    _mapPropertiesCache = properties;
+    _mapPropertiesCacheTime = Date.now();
+    res.json({ properties, cached: false, count: properties.length, geocoded });
+  } catch (e) {
+    console.error('[map] Error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
