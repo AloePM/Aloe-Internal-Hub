@@ -2807,7 +2807,7 @@ app.get('/api/map-properties', async (req, res) => {
       if (rows.length < 200) break;
       page++;
     }
-    allProps = allProps.filter(r => { const p = r.property || r; return p.isActive === true || p.isActive === 1; });
+    allProps = allProps.filter(r => { const p = r.property || r; return p.isActive === true || p.isActive === 1 || p.isActive === "1"; });
     console.log(`[map] ${allProps.length} active properties`);
     let allUnits = []; page = 1;
     while (true) {
