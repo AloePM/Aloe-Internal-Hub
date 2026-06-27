@@ -3250,6 +3250,12 @@ app.get('*', function(req, res) {
 <div class="section">
   <div class="section-label">Reports</div>
   <div class="tool-grid">
+    <a href="/map" class="tool-card primary" data-name="property map portfolio map occupied vacant region distance">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon">🗺️</div>
+      <div class="tool-name">Portfolio Map</div>
+      <div class="tool-desc">Interactive map — occupied vs vacant, region zones, distance tool</div>
+    </a>
     <a href="/metrics" class="tool-card primary" data-name="metrics kpi dashboard portfolio occupancy">
       <span class="badge badge-live">LIVE</span>
       <div class="tool-icon">📊</div>
