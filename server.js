@@ -2757,6 +2757,15 @@ async function fetchMoveOutChargeRecon(allPropsArg) {
 app.get('/suppressed-fees', (req, res) => res.sendFile(new URL('./suppressed-fees.html', import.meta.url).pathname));
 
 // ── Property Map ──────────────────────────────────────────────────────────
+
+app.get('/api/map-debug', async (req, res) => {
+  try {
+    const data = await rvFetch('/properties/export', { pageSize: 5, page: 1 });
+    const rows = Array.isArray(data) ? data : (data.data || []);
+    res.json({ count: rows.length, sample: rows.slice(0,2) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/map', (req, res) => res.sendFile(new URL('./map.html', import.meta.url).pathname));
 
 const _geocodeCache = {};
