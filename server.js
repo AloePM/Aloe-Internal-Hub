@@ -1568,7 +1568,7 @@ async function runDailyBillSync() {
       await fetch('https://slack.com/api/chat.postMessage', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'C0BDEUCP6MA', text: msg })
+        body: JSON.stringify({ channel: 'C0BCCV790VC', text: msg })
       });
       console.log('Bill sync: Slack summary sent');
     }
