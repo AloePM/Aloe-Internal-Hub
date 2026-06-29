@@ -1436,6 +1436,175 @@ app.get('/api/settlement-alert/test', async (req, res) => {
 });
 
 // ── End Late Payment Settlement Alert ──────────────────────────────────────
+// ── Daily Bill Sync ───────────────────────────────────────────────────────────
+
+async function runDailyBillSync() {
+  try {
+    console.log('Bill sync: starting daily run');
+    const azNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
+    const today = azNow.toISOString().slice(0, 10);
+    const yesterday = new Date(azNow);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+    // 1. Pull bills posted yesterday from Rentvine (including voided)
+    const billsUrl = `${RENTVINE_BASE}/reports/payables?exportTypeID=1&json=${encodeURIComponent(JSON.stringify({
+      displayColumns: ['billID','propertyID','contactName','chargeAccountID','datePosted','dateDue','amount','amountUnpaid','isPaid','isVoided','description'],
+      filters: [
+        { name: 'datePosted', comparator: 'betweenDate', startDate: yesterdayStr, endDate: yesterdayStr }
+      ]
+    }))}`;
+
+    const billsResp = await fetch(billsUrl, { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
+    const billsData = await billsResp.json();
+    const bills = Array.isArray(billsData) ? billsData : (billsData.data || []);
+    console.log(`Bill sync: ${bills.length} bills posted on ${yesterdayStr}`);
+
+    if (bills.length === 0) {
+      console.log('Bill sync: no bills yesterday, skipping');
+      return;
+    }
+
+    // 2. Get existing bill IDs from Google Sheet to avoid duplicates
+    let existingBillIDs = new Set();
+    if (SHEET_ID) {
+      try {
+        const sheets = getSheetsClient();
+        const existing = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: `'${SHEET_TAB}'!L:L`, // Bill ID column
+        });
+        const rows = existing.data.values || [];
+        rows.forEach(r => { if (r[0]) existingBillIDs.add(String(r[0])); });
+        console.log(`Bill sync: ${existingBillIDs.size} existing bill IDs in sheet`);
+      } catch(e) {
+        console.error('Bill sync: sheet read error:', e.message);
+      }
+    }
+
+    // 3. GL account name map
+    const glNames = {
+      80:'HOA Dues', 86:'Home Warranty Trade Fee', 82:'Cleaning Reimbursement',
+      106:'Key/Lock Replacement', 77:'Pest Control', 108:'Repairs - Other',
+      136:'Owner Administrative Charge', 93:'Management Fee', 94:'Lease/Placement Fee',
+      40:'Resident Benefit Package', 58:'Administrative Fee', 14:'Late Fee',
+    };
+
+    // 4. Look up property addresses
+    const newBills = [];
+    for (const b of bills) {
+      const billID = String(b.billID || b.bill_id || '');
+      if (!billID || existingBillIDs.has(billID)) continue;
+
+      const propID = String(b.propertyID || '');
+      let address = '';
+      if (propID) {
+        try {
+          const propData = await rvFetch('/properties/' + propID);
+          address = (propData?.property?.address || propData?.address || '').trim();
+        } catch(e) {}
+      }
+
+      const acctID = parseInt(b.chargeAccountID || 0);
+      const glName = glNames[acctID] || `GL ${acctID}`;
+      const amount = parseFloat(b.amount || 0).toFixed(2);
+      const vendor = b.contactName || '';
+      const desc = b.description || '';
+      const isVoided = b.isVoided === true || b.isVoided === 1 || b.isVoided === '1';
+      const status = isVoided ? 'VOIDED' : 'Auto-synced from Rentvine';
+
+      newBills.push({
+        billID, propID, address, vendor, amount, glName, desc,
+        datePosted: b.datePosted || yesterdayStr,
+        isVoided, status,
+      });
+
+    console.log(`Bill sync: ${newBills.length} new bills to log`);
+    if (newBills.length === 0) return;
+
+    // 5. Write to Google Sheet
+    if (SHEET_ID) {
+      try {
+        const sheets = getSheetsClient();
+        await ensureSheetTab(sheets);
+        for (const b of newBills) {
+          await appendSheetRow(sheets, [
+            new Date().toISOString(), // Date Submitted
+            b.datePosted,             // Date Paid
+            'Rentvine (auto)',        // Paid By
+            b.address,                // Property Address
+            '',                       // Owner / Portfolio
+            b.glName,                 // Expense Type
+            b.vendor,                 // Repair Type / Vendor Detail
+            b.isVoided ? '0.00' : b.amount, // Amount (0 if voided)
+            b.glName,                 // GL Account
+            b.desc,                   // Reference / Memo
+            b.isVoided ? '⚠️ VOIDED' : '', // Notes
+            b.billID,                 // Rentvine Bill ID
+            '',                       // Admin Bill ID
+            new Date().toISOString(), // Bill Created At
+            b.status,                 // Status
+          ]);
+        }
+        console.log(`Bill sync: ${newBills.length} rows written to sheet`);
+      } catch(e) {
+        console.error('Bill sync: sheet write error:', e.message);
+      }
+    }
+
+    // 6. Post Slack summary to #bo-accounting
+    if (SLACK_TOKEN && newBills.length > 0) {
+      const total = newBills.reduce((a, b) => a + parseFloat(b.amount), 0);
+      const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 });
+      let msg = `*📋 Daily Bill Sync — ${yesterdayStr}*\n`;
+      msg += `_${newBills.length} new bill(s) posted in Rentvine yesterday — logged to expense sheet_\n\n`;
+      newBills.forEach(b => {
+        const voidedFlag = b.isVoided ? ' ~~VOIDED~~' : '';
+        msg += `• *${b.vendor || 'Unknown Vendor'}* — ${b.address || 'No address'} — ${fmt(b.amount)} — ${b.glName}${voidedFlag}\n`;
+        if (b.desc) msg += `  _${b.desc}_\n`;
+      });
+      msg += `\n*Total: ${fmt(total)}*`;
+
+      await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'C0BDEUCP6MA', text: msg })
+      });
+      console.log('Bill sync: Slack summary sent');
+    }
+
+  } catch(e) {
+    console.error('Bill sync error:', e.message);
+  }
+}
+
+function scheduleDailyBillSync() {
+  function msUntilNext8am() {
+    const now = new Date();
+    const az = new Date(now.toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
+    const next = new Date(az);
+    next.setHours(8, 0, 0, 0);
+    if (az >= next) next.setDate(next.getDate() + 1);
+    return next - az;
+  }
+  setTimeout(function tick() {
+    runDailyBillSync().catch(e => console.error('Bill sync daily error:', e.message));
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }, msUntilNext8am());
+  console.log('Bill sync: scheduled daily at 8am AZ time');
+}
+scheduleDailyBillSync();
+
+app.get('/api/bill-sync/test', async (req, res) => {
+  try {
+    await runDailyBillSync();
+    res.json({ ok: true, message: 'Bill sync ran — check #bo-accounting and the sheet' });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── End Daily Bill Sync ───────────────────────────────────────────────────────
 function scheduleWOSync() {
   function msUntilNext11pm() {
     const now = new Date();
