@@ -1150,7 +1150,292 @@ app.get('/api/wo-sync/dry-run', async (req, res) => {
 app.post('/api/wo-sync/run', async (req, res) => {
   try { res.json(await runWOSync(false)); } catch(e) { res.status(500).json({ error: e.message }); }
 });
+// ── Late Payment Settlement Alert ──────────────────────────────────────────
 
+const ALOE_FEE_ACCOUNT_IDS = new Set([
+  93, 94, 40, 148, 58, 14, 51, 90, 136, 57, 12, 62, 56, 145, 19
+]);
+
+async function runLatePaymentSettlementAlert() {
+  try {
+    console.log('Settlement alert: starting run');
+
+    // 1. Get yesterday's date range in AZ time
+    const azNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
+    const yesterday = new Date(azNow);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().slice(0, 10);
+    const currentMonthStart = `${azNow.getFullYear()}-${String(azNow.getMonth() + 1).padStart(2, '0')}-01`;
+
+    // 2. Pull yesterday's settlements
+    const settlementUrl = `${RENTVINE_BASE}/reports/settlement-detail?exportTypeID=1&json=${encodeURIComponent(JSON.stringify({
+      displayColumns: ['settlementDate','datePosted','contactName','unit','amount','reference','paymentTypeID'],
+      filters: [{ name: 'settlementDate', comparator: 'betweenDate', startDate: yStr, endDate: yStr }],
+      orderBys: ['contactName']
+    }))}`;
+
+    const settlResp = await fetch(settlementUrl, {
+      headers: { Authorization: `Basic ${RENTVINE_AUTH}` }
+    });
+    const settlData = await settlResp.json();
+    const settlements = Array.isArray(settlData) ? settlData : (settlData.data || []);
+    console.log(`Settlement alert: ${settlements.length} settlements on ${yStr}`);
+
+    if (settlements.length === 0) {
+      console.log('Settlement alert: no settlements yesterday, skipping');
+      return;
+    }
+
+    // 3. Get all active leases to match contact names to leases/properties
+    let allLeases = [];
+    for (let pg = 1; pg <= 10; pg++) {
+      const batch = await rvFetch('/leases/export', { pageSize: 200, page: pg, 'primaryLeaseStatusIDs[]': 2 });
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      allLeases = allLeases.concat(batch);
+      if (batch.length < 200) break;
+    }
+
+    // Build lookup: contactName → lease info
+    const leaseByTenant = {};
+    allLeases.forEach(item => {
+      const l = item.lease || item;
+      const tenants = Array.isArray(l.tenants) ? l.tenants : [];
+      const address = (item.unit && item.unit.address) || (item.property && item.property.address) || '';
+      const city = (item.unit && item.unit.city) || (item.property && item.property.city) || '';
+      tenants.forEach(t => {
+        if (t.name) {
+          leaseByTenant[t.name.toLowerCase()] = {
+            leaseID: l.leaseID,
+            propertyID: (item.property && item.property.propertyID) || l.propertyID,
+            address,
+            city,
+            moveInDate: l.moveInDate || l.startDate,
+            moveOutDate: l.expectedMoveOutDate || l.moveOutDate,
+            rent: parseFloat((item.unit && item.unit.rent) || l.rent || 0)
+          };
+        }
+      });
+    });
+
+    // 4. Get all unpaid bills for this month grouped by propertyID
+    const billsUrl = `${RENTVINE_BASE}/reports/payables?exportTypeID=1&json=${encodeURIComponent(JSON.stringify({
+      displayColumns: ['propertyID','unitID','chargeAccountID','datePosted','dateDue','amount','amountUnpaid','isPaid','description','billID'],
+      filters: [
+        { name: 'isPaid', comparator: 'booleanFalse' },
+        { name: 'isVoided', comparator: 'booleanFalse' }
+      ]
+    }))}`;
+
+    const billsResp = await fetch(billsUrl, { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
+    const billsData = await billsResp.json();
+    const allBills = Array.isArray(billsData) ? billsData : (billsData.data || []);
+
+    // Group bills by propertyID, separate owner expenses from Aloe fees
+    const ownerBillsByProp = {};
+    const suppBillsByProp = {};
+    allBills.forEach(b => {
+      const propID = String(b.propertyID || '');
+      if (!propID) return;
+      const acctID = parseInt(b.chargeAccountID || 0);
+      const unpaid = parseFloat(b.amountUnpaid || b.amount || 0);
+      const desc = b.description || '';
+      const isSuppressed = b.isSuppressed === true || b.isSuppressed === 1 || b.isSuppressed === '1';
+
+      if (ALOE_FEE_ACCOUNT_IDS.has(acctID)) return; // skip Aloe fees
+
+      const entry = { desc, amount: unpaid, billID: b.billID, acctID };
+
+      if (isSuppressed) {
+        if (!suppBillsByProp[propID]) suppBillsByProp[propID] = [];
+        suppBillsByProp[propID].push(entry);
+      } else {
+        if (!ownerBillsByProp[propID]) ownerBillsByProp[propID] = [];
+        ownerBillsByProp[propID].push(entry);
+      }
+    });
+
+    // 5. Process each settlement
+    const today = new Date(azNow);
+    today.setHours(0,0,0,0);
+    const currentMonth = azNow.getMonth();
+    const currentYear = azNow.getFullYear();
+
+    const readyToPay = [];
+    const holdBills = [];
+    const skippedPrepaid = [];
+
+    for (const s of settlements) {
+      const contactName = s.contactName || '';
+      const amount = parseFloat(s.amount || 0);
+      if (amount <= 0) continue;
+
+      // Find lease for this tenant
+      const leaseInfo = leaseByTenant[contactName.toLowerCase()];
+      if (!leaseInfo) {
+        // Can't find lease — skip but note
+        skippedPrepaid.push(`${contactName} — $${amount.toFixed(2)} (lease not found)`);
+        continue;
+      }
+
+      // Check lease charges to see if any are past due
+      let hasPastDue = false;
+      let pastDueDesc = '';
+      try {
+        const charges = await rvFetch('/leases/' + leaseInfo.leaseID + '/charges', { pageSize: 50, isPaid: false });
+        const chargeArr = Array.isArray(charges) ? charges : (charges.data || []);
+        const pastDueCharges = chargeArr.filter(c => {
+          const dueDate = c.dateDue || c.dueDate || '';
+          return dueDate && dueDate < currentMonthStart;
+        });
+        if (pastDueCharges.length > 0) {
+          hasPastDue = true;
+          pastDueDesc = pastDueCharges.map(c =>
+            `${c.description || 'Charge'} due ${(c.dateDue||c.dueDate||'').slice(0,10)} ($${parseFloat(c.amount||0).toFixed(2)})`
+          ).join(', ');
+        }
+      } catch(e) {
+        console.error('Settlement alert: charge lookup error for lease', leaseInfo.leaseID, e.message);
+      }
+
+      if (!hasPastDue) {
+        skippedPrepaid.push(`${contactName} — ${leaseInfo.address} — $${amount.toFixed(2)} (current/prepaid)`);
+        continue;
+      }
+
+      // Calculate management fee
+      let mgmtFee = 89;
+      if (leaseInfo.moveInDate) {
+        const moveIn = new Date(leaseInfo.moveInDate);
+        if (moveIn.getMonth() === currentMonth && moveIn.getFullYear() === currentYear && moveIn.getDate() > 15) {
+          mgmtFee = 44.50;
+        }
+      }
+      if (leaseInfo.moveOutDate) {
+        const moveOut = new Date(leaseInfo.moveOutDate);
+        if (moveOut.getMonth() === currentMonth && moveOut.getFullYear() === currentYear && moveOut.getDate() < 15) {
+          mgmtFee = 44.50;
+        }
+      }
+
+      // Get unpaid owner bills for this property
+      const propID = String(leaseInfo.propertyID);
+      const ownerBills = ownerBillsByProp[propID] || [];
+      const suppBills = suppBillsByProp[propID] || [];
+      const ownerBillTotal = ownerBills.reduce((a, b) => a + b.amount, 0);
+      const suppBillTotal = suppBills.reduce((a, b) => a + b.amount, 0);
+
+      const ownerNet = amount - mgmtFee - ownerBillTotal;
+
+      const entry = {
+        contactName,
+        address: leaseInfo.address,
+        city: leaseInfo.city,
+        settled: amount,
+        mgmtFee,
+        pastDueDesc,
+        ownerBills,
+        ownerBillTotal,
+        suppBills,
+        suppBillTotal,
+        ownerNet
+      };
+
+      if (suppBills.length > 0 || ownerBillTotal > 0) {
+        holdBills.push(entry);
+      } else {
+        readyToPay.push(entry);
+      }
+    }
+
+    // 6. Build Slack message
+    const fmt = (n) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const dateLabel = yesterday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    let msg = `*💰 Late Payment Settlements — ${dateLabel}*\n`;
+    msg += `_Payments that settled yesterday for past-due charges_\n\n`;
+
+    if (readyToPay.length > 0) {
+      msg += `*✅ READY TO PAY OUT (${readyToPay.length})*\n`;
+      msg += '─'.repeat(40) + '\n';
+      readyToPay.forEach(e => {
+        msg += `*${e.contactName}* — ${e.address}${e.city ? ', ' + e.city : ''}\n`;
+        msg += `  Settled: ${fmt(e.settled)} | Applied to: ${e.pastDueDesc}\n`;
+        msg += `  Management fee: −${fmt(e.mgmtFee)}\n`;
+        msg += `  Unpaid owner bills: $0.00\n`;
+        msg += `  *NET OWNER PAYOUT: ${fmt(e.ownerNet)}*\n\n`;
+      });
+    }
+
+    if (holdBills.length > 0) {
+      msg += `*⚠️ VERIFY BEFORE PAYING (${holdBills.length})*\n`;
+      msg += '─'.repeat(40) + '\n';
+      holdBills.forEach(e => {
+        msg += `*${e.contactName}* — ${e.address}${e.city ? ', ' + e.city : ''}\n`;
+        msg += `  Settled: ${fmt(e.settled)} | Applied to: ${e.pastDueDesc}\n`;
+        msg += `  Management fee: −${fmt(e.mgmtFee)}\n`;
+        if (e.ownerBills.length > 0) {
+          msg += `  Unpaid owner bills: −${fmt(e.ownerBillTotal)}\n`;
+          e.ownerBills.forEach(b => { msg += `    • ${b.desc || 'Bill #' + b.billID}: ${fmt(b.amount)}\n`; });
+        }
+        if (e.suppBills.length > 0) {
+          msg += `  ⚠️ Suppressed bills not yet posted: ${fmt(e.suppBillTotal)}\n`;
+          e.suppBills.forEach(b => { msg += `    • ${b.desc || 'Bill #' + b.billID}: ${fmt(b.amount)}\n`; });
+        }
+        msg += `  *NET OWNER PAYOUT (est): ${fmt(e.ownerNet)}* — confirm bills before paying\n\n`;
+      });
+    }
+
+    if (skippedPrepaid.length > 0) {
+      msg += `*⏭️ SKIPPED — CURRENT/PREPAID (${skippedPrepaid.length})*\n`;
+      skippedPrepaid.forEach(s => { msg += `  • ${s}\n`; });
+    }
+
+    if (readyToPay.length === 0 && holdBills.length === 0) {
+      msg += '_No past-due payments settled yesterday._\n';
+    }
+
+    // 7. Send DM to Randi
+    if (SLACK_TOKEN) {
+      await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'U066CCVN0HJ', text: msg })
+      });
+      console.log('Settlement alert: Slack DM sent');
+    }
+
+  } catch(e) {
+    console.error('Settlement alert error:', e.message);
+  }
+}
+
+function scheduleSettlementAlert() {
+  function msUntilNext7am() {
+    const now = new Date();
+    const az = new Date(now.toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
+    const next = new Date(az);
+    next.setHours(7, 0, 0, 0);
+    if (az >= next) next.setDate(next.getDate() + 1);
+    return next - az;
+  }
+  setTimeout(function tick() {
+    runLatePaymentSettlementAlert().catch(e => console.error('Settlement alert nightly error:', e.message));
+    setTimeout(tick, 24 * 60 * 60 * 1000);
+  }, msUntilNext7am());
+  console.log('Settlement alert: scheduled daily at 7am AZ time');
+}
+scheduleSettlementAlert();
+
+// Add a manual trigger endpoint for testing
+app.get('/api/settlement-alert/test', async (req, res) => {
+  try {
+    await runLatePaymentSettlementAlert();
+    res.json({ ok: true, message: 'Settlement alert ran — check your Slack DM' });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── End Late Payment Settlement Alert ──────────────────────────────────────
 function scheduleWOSync() {
   function msUntilNext11pm() {
     const now = new Date();
