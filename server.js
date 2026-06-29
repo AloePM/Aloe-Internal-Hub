@@ -1518,7 +1518,7 @@ async function runDailyBillSync() {
         datePosted: b.datePosted || yesterdayStr,
         isVoided, status,
       });
-
+    }  
     console.log(`Bill sync: ${newBills.length} new bills to log`);
     if (newBills.length === 0) return;
 
