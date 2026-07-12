@@ -2534,12 +2534,8 @@ app.post('/api/sync/aptly-wo', async (req, res) => {
     // Fetch Rentvine open+recent WOs to build lookup map
     const rvByNumber = {};
     for (let pg = 1; pg <= 10; pg++) {
-      const r = await fetch(RENTVINE_BASE + '/maintenance/work-orders?pageSize=100&page=' + pg, {
-        headers: { Authorization: 'Basic ' + RENTVINE_AUTH }
-      });
-      if (!r.ok) break;
-      const d = await r.json();
-      const wos = Array.isArray(d) ? d : (d.data || []);
+      const wos = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
+      if (!Array.isArray(wos) || !wos.length) break;
       wos.forEach(wo => {
         const n = String(wo.workOrderNumber || '').trim();
         if (n) rvByNumber[n] = wo;
@@ -2587,12 +2583,9 @@ app.post('/api/sync/aptly-wo', async (req, res) => {
         const rvVendorName = (rvWO.vendorName || '').trim();
         if (vendorName && vendorName.toLowerCase() !== rvVendorName.toLowerCase()) {
           // Search Rentvine contacts for vendor
-          const vr = await fetch(RENTVINE_BASE + '/contacts?search=' + encodeURIComponent(vendorName) + '&pageSize=5', {
-            headers: { Authorization: 'Basic ' + RENTVINE_AUTH }
-          });
-          if (vr.ok) {
-            const vd = await vr.json();
-            const contacts = Array.isArray(vd) ? vd : (vd.data || []);
+          const vContacts = await rvFetch('/contacts', { search: vendorName, pageSize: 5 });
+          if (vContacts) {
+            const contacts = Array.isArray(vContacts) ? vContacts : (vContacts.data || []);
             const match = contacts.find(c => (c.name||'').toLowerCase().includes(vendorName.toLowerCase().slice(0,10)));
             if (match) {
               updates.vendorContactID = match.contactID || match.id;
@@ -2605,7 +2598,7 @@ app.post('/api/sync/aptly-wo', async (req, res) => {
       if (Object.keys(updates).length > 0) {
         const patchR = await fetch(RENTVINE_BASE + '/maintenance/work-orders/' + rvWOId, {
           method: 'PATCH',
-          headers: { Authorization: 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json', 'X-Rentvine-Account': 'aloepm' },
           body: JSON.stringify(updates)
         });
         console.log('Aptly WO sync: patched WO#' + woNumber + ' status=' + patchR.status, JSON.stringify(updates));
