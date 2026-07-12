@@ -2518,7 +2518,7 @@ app.post('/api/sync/aptly-wo', async (req, res) => {
     const aptlyCards = [];
     for (let pg = 0; pg <= 1; pg++) {
       const r = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=' + pg + '&pageSize=100&includeArchived=true', {
-        headers: { 'x-token': APTLY_TOK }
+        headers: { 'x-token': process.env.APTLY_TOKEN }
       });
       if (!r.ok) break;
       const d = await r.json();
