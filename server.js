@@ -2508,6 +2508,127 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
   return results;
 }
 
+app.post('/api/webhook/aptly-wo-update', async (req, res) => {
+  res.sendStatus(200); // Acknowledge immediately
+  try {
+    // Verify HMAC signature
+    const secret = process.env.APTLY_WEBHOOK_SECRET;
+    if (secret) {
+      const crypto = await import('crypto');
+      const sig = req.headers['x-aptly-signature'] || req.headers['x-signature'] || '';
+      const body = JSON.stringify(req.body);
+      const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
+      if (sig && sig !== expected && !sig.includes(expected)) {
+        console.log('Aptly webhook: invalid signature');
+        return;
+      }
+    }
+
+    const payload = req.body;
+    console.log('Aptly WO webhook received:', JSON.stringify(payload).slice(0, 300));
+
+    // Only process workOrder board cards
+    const boardType = payload.boardType || payload.board?.type || payload.card?.boardType || '';
+    const cardData = payload.card || payload.data || payload;
+    const stage = cardData.Stage || cardData.stage || cardData.status || '';
+    const woNumber = String(cardData.workOrderNumber || cardData['Work Order Number'] || cardData['Mirror Work Order Number'] || '').trim();
+
+    if (!woNumber) {
+      console.log('Aptly WO webhook: no WO number found in payload');
+      return;
+    }
+
+    // Map Aptly stage to Rentvine status ID
+    // primaryWorkOrderStatusID: 1=Pending, 2=Open, 3=Closed, 4=OnHold
+    const stageUpper = stage.toUpperCase();
+    let newStatusID = null;
+    let statusLabel = '';
+    if (/CANCEL/i.test(stageUpper)) {
+      newStatusID = 3; statusLabel = 'Closed (Cancelled)';
+    } else if (/COMPLET/i.test(stageUpper)) {
+      newStatusID = 3; statusLabel = 'Closed (Complete)';
+    } else if (/OPEN|IN.?PROGRESS|SCHEDULED|REQUESTED|PENDING|ASSIGNED/i.test(stageUpper)) {
+      newStatusID = 2; statusLabel = 'Open';
+    } else if (/HOLD|ON.?HOLD|WAITING/i.test(stageUpper)) {
+      newStatusID = 4; statusLabel = 'On Hold';
+    }
+
+    // Find Rentvine WO by number
+    let rvWO = null;
+    for (let pg = 1; pg <= 5; pg++) {
+      const r = await fetch(RENTVINE_BASE + '/maintenance/work-orders?pageSize=100&page=' + pg, {
+        headers: { Authorization: 'Basic ' + RENTVINE_AUTH }
+      });
+      if (!r.ok) break;
+      const d = await r.json();
+      const wos = Array.isArray(d) ? d : (d.data || []);
+      rvWO = wos.find(wo => String(wo.workOrderNumber || '').trim() === woNumber);
+      if (rvWO || wos.length < 100) break;
+    }
+
+    if (!rvWO) {
+      console.log('Aptly WO webhook: RV WO#' + woNumber + ' not found');
+      return;
+    }
+
+    const rvWOId = rvWO.workOrderID || rvWO.id;
+    const address = rvWO.unitAddress || rvWO.propertyAddress || '';
+    const updates = {};
+    const changes = [];
+
+    // Status update
+    if (newStatusID && rvWO.primaryWorkOrderStatusID != newStatusID) {
+      updates.primaryWorkOrderStatusID = newStatusID;
+      changes.push('Status → ' + statusLabel);
+    }
+
+    // Vendor update
+    const aptlyVendors = Array.isArray(cardData.vendor) ? cardData.vendor : (cardData.vendor ? [cardData.vendor] : []);
+    if (aptlyVendors.length > 0) {
+      const vendorName = (aptlyVendors[0].name || aptlyVendors[0] || '').trim();
+      if (vendorName && vendorName !== (rvWO.vendorName || '').trim()) {
+        // Search Rentvine for vendor contact
+        const vr = await fetch(RENTVINE_BASE + '/contacts?search=' + encodeURIComponent(vendorName) + '&pageSize=5', {
+          headers: { Authorization: 'Basic ' + RENTVINE_AUTH }
+        });
+        if (vr.ok) {
+          const vd = await vr.json();
+          const contacts = Array.isArray(vd) ? vd : (vd.data || []);
+          const match = contacts.find(c => (c.name||'').toLowerCase().includes(vendorName.toLowerCase()));
+          if (match) {
+            updates.vendorContactID = match.contactID || match.id;
+            changes.push('Vendor → ' + vendorName);
+          }
+        }
+      }
+    }
+
+    // Apply updates to Rentvine
+    if (Object.keys(updates).length > 0) {
+      const patchR = await fetch(RENTVINE_BASE + '/maintenance/work-orders/' + rvWOId, {
+        method: 'PATCH',
+        headers: { Authorization: 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      console.log('Aptly WO webhook: patched RV WO#' + woNumber + ' status=' + patchR.status, JSON.stringify(updates));
+
+      // Post to #maintenance Slack
+      if (SLACK_TOKEN && changes.length > 0) {
+        const msg = ':arrows_counterclockwise: *WO Sync* — WO #' + woNumber + ' (' + address + ')\n' +
+          changes.map(c => '• ' + c + ' _(Aptly → Rentvine)_').join('\n') +
+          '\n<https://aloepm.rentvine.com/maintenance/work-orders/' + rvWOId + '|View in Rentvine>';
+        await fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: 'C06BWVACZQF', text: msg })
+        });
+      }
+    } else {
+      console.log('Aptly WO webhook: WO#' + woNumber + ' already in sync, no update needed');
+    }
+  } catch(e) { console.error('Aptly WO webhook error:', e.message); }
+});
+
 app.post('/api/webhook/rv-wo-created', async (req, res) => {
   res.sendStatus(200); return; // Disabled
   res.sendStatus(200); // Acknowledge immediately
