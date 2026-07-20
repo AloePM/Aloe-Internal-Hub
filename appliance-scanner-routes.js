@@ -23,7 +23,7 @@ const storage = new Storage();
 const BUCKET = 'aloe-hub-data-496300';
 
 // ── Env / config ─────────────────────────────────────────────────────────────
-const ZI_KEY          = process.env.ZI_API_KEY;           // Base64 KeyID:Secret
+const ZI_KEY          = process.env.ZINSPECTOR_API_KEY;           // Base64 KeyID:Secret
 const ZI_BASE         = 'https://portfolio.zinspector.com';
 const ANT_KEY         = process.env.ANTHROPIC_API_KEY;
 const RV_BASE         = process.env.RENTVINE_BASE || 'https://api.rentvine.com/v2';
