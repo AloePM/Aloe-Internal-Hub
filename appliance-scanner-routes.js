@@ -153,7 +153,8 @@ async function getRvProperties() {
 // Normalize address for matching
 function normAddr(addr) {
   if (!addr) return '';
-  return addr.toLowerCase()
+  const streetOnly = addr.split(',')[0];
+  return streetOnly.toLowerCase()
     .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr')
     .replace(/\bavenue\b/g, 'ave').replace(/\bboulevard\b/g, 'blvd')
     .replace(/\blane\b/g, 'ln').replace(/\broad\b/g, 'rd')
