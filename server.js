@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'child_process';
 
 import { initPlaidRoutes } from './plaid-integration.js';
+import scannerRoutes from './appliance-scanner-routes.js';
 
 const app = express();
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
@@ -2783,6 +2784,8 @@ app.get('/sale-analysis', (req, res) => res.sendFile(new URL('./sale-analysis.ht
 app.get('/owner-report', (req, res) => res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 app.get('/metrics', (req, res) => res.sendFile(new URL('./metrics.html', import.meta.url).pathname));
 app.get('/expense-log', (req, res) => res.sendFile(new URL('./expense-log.html', import.meta.url).pathname));
+app.get('/appliance-scanner', (req, res) => res.sendFile(new URL('./appliance-scanner.html', import.meta.url).pathname));
+app.use('/api/scanner', scannerRoutes);
 app.get('/api/properties-search', async (req, res) => {
   try {
     let all = [], page = 1;
