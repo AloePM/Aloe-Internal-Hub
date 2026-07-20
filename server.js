@@ -3648,6 +3648,88 @@ app.get('/api/map-properties', async (req, res) => {
   }
 });
 
+// Rentvine property lookup — used by all agents via hubRequest
+app.get('/api/rentvine/property-lookup', async (req, res) => {
+  try {
+    const q = (req.query.q || '').toLowerCase();
+    if (!q) return res.json({ properties: [] });
+    const RENTVINE_BASE = `https://${process.env.RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
+    const RENTVINE_AUTH = Buffer.from(`${process.env.RENTVINE_API_KEY}:${process.env.RENTVINE_API_SECRET}`).toString('base64');
+    // Search all leases and match by address
+    let allLeases = [];
+    for (let pg = 1; pg <= 10; pg++) {
+      const r = await fetch(`${RENTVINE_BASE}/leases/export?pageSize=200&page=${pg}&primaryLeaseStatusIDs=1,2`, {
+        headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': process.env.RENTVINE_ACCOUNT }
+      });
+      if (!r.ok) break;
+      const data = await r.json();
+      const batch = Array.isArray(data) ? data : (data.data || []);
+      if (!batch.length) break;
+      allLeases = allLeases.concat(batch);
+      if (batch.length < 200) break;
+    }
+    // Also search vacant units
+    let allUnits = [];
+    for (let pg = 1; pg <= 5; pg++) {
+      const r = await fetch(`${RENTVINE_BASE}/properties/units/export?pageSize=200&page=${pg}`, {
+        headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': process.env.RENTVINE_ACCOUNT }
+      });
+      if (!r.ok) break;
+      const data = await r.json();
+      const batch = Array.isArray(data) ? data : (data.data || []);
+      if (!batch.length) break;
+      allUnits = allUnits.concat(batch);
+      if (batch.length < 200) break;
+    }
+    const normalize = s => (s || '').toLowerCase().replace(/east/g,'e').replace(/west/g,'w').replace(/north/g,'n').replace(/south/g,'s').replace(/street/g,'st').replace(/avenue/g,'ave').replace(/drive/g,'dr').replace(/[^a-z0-9]/g,'');
+    const nq = normalize(q);
+    const results = [];
+    const seen = new Set();
+    // Match from leases
+    for (const l of allLeases) {
+      const addr = normalize(l.unit?.address || '');
+      if (addr.includes(nq) || nq.includes(addr.slice(0,8))) {
+        const key = l.property?.propertyID;
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          results.push({ propertyId: l.property?.propertyID, leaseId: l.lease?.leaseID, address: l.unit?.address, city: l.unit?.city, state: l.unit?.stateID, zip: l.unit?.postalCode });
+        }
+      }
+    }
+    // Match from units if not found in leases
+    if (!results.length) {
+      for (const u of allUnits) {
+        const addr = normalize(u.unit?.address || '');
+        if (addr.includes(nq) || nq.includes(addr.slice(0,8))) {
+          const key = u.property?.propertyID;
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            results.push({ propertyId: u.property?.propertyID, leaseId: u.unit?.leaseID, address: u.unit?.address, city: u.unit?.city, state: u.unit?.stateID, zip: u.unit?.postalCode });
+          }
+        }
+      }
+    }
+    res.json({ properties: results.slice(0, 5) });
+  } catch(e) {
+    console.error('property-lookup error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/rentvine/properties/:propertyId/units', async (req, res) => {
+  try {
+    const RENTVINE_BASE = `https://${process.env.RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
+    const RENTVINE_AUTH = Buffer.from(`${process.env.RENTVINE_API_KEY}:${process.env.RENTVINE_API_SECRET}`).toString('base64');
+    const r = await fetch(`${RENTVINE_BASE}/properties/units/export?pageSize=50&page=1&propertyID=${req.params.propertyId}`, {
+      headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': process.env.RENTVINE_ACCOUNT }
+    });
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : (data.data || []));
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Webhook forwarding — forward Rentvine webhooks to Ari on port 3001
 app.post('/webhook/rentvine', express.json(), async (req, res) => {
   res.sendStatus(200); // Acknowledge immediately
