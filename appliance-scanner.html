@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Appliance Scanner — Aloe PM Hub</title>
+<style>
+:root {
+  --bg: #F4F2ED;
+  --surface: #fff;
+  --surface2: #EDEAE3;
+  --border: #DDD9D0;
+  --ink: #1A1917;
+  --ink2: #5C5852;
+  --ink3: #A09C96;
+  --teal: #3CC3E1;
+  --teal-d: #2AABCB;
+  --green: #2C6E49;
+  --green-l: #E0F0E8;
+  --amber: #92400E;
+  --amber-l: #FEF3C7;
+  --red: #991B1B;
+  --red-l: #FEE2E2;
+  --blue: #1D4E89;
+  --blue-l: #DBEAFE;
+  --r: 10px;
+  --sh: 0 1px 3px rgba(0,0,0,.07), 0 4px 16px rgba(0,0,0,.04);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', -apple-system, sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; }
+
+/* ── Layout ── */
+.page { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.subtitle { color: var(--ink2); font-size: 13px; margin-bottom: 24px; }
+
+/* ── Stat bar ── */
+.stat-bar { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.stat { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r); padding: 14px 20px; flex: 1; min-width: 120px; }
+.stat-num { font-size: 28px; font-weight: 700; color: var(--teal); }
+.stat-lbl { font-size: 12px; color: var(--ink2); font-weight: 500; margin-top: 2px; }
+
+/* ── Two-column ── */
+.cols { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+@media(max-width:800px){ .cols { grid-template-columns: 1fr; } }
+
+/* ── Panel ── */
+.panel { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r); padding: 20px; box-shadow: var(--sh); margin-bottom: 16px; }
+.panel h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+/* ── Buttons ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; font-family: inherit; }
+.btn-primary { background: var(--teal); color: #fff; }
+.btn-primary:hover { background: var(--teal-d); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-success { background: var(--green); color: #fff; }
+.btn-success:hover { background: #1e5235; }
+.btn-danger { background: var(--red-l); color: var(--red); }
+.btn-danger:hover { background: #fca5a5; }
+.btn-ghost { background: var(--surface2); color: var(--ink2); }
+.btn-ghost:hover { background: var(--border); color: var(--ink); }
+.btn-full { width: 100%; justify-content: center; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+
+/* ── Forms ── */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; font-weight: 600; color: var(--ink2); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .04em; }
+input[type=text], select, textarea { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; color: var(--ink); background: var(--bg); outline: none; transition: border-color .15s; }
+input:focus, select:focus, textarea:focus { border-color: var(--teal); background: #fff; }
+
+/* ── Progress ── */
+.prog-wrap { margin-top: 12px; display: none; }
+.prog-bg { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+.prog-fill { height: 100%; background: var(--teal); border-radius: 3px; transition: width .4s; }
+.prog-lbl { font-size: 12px; color: var(--ink2); margin-bottom: 4px; }
+
+/* ── Review queue ── */
+.review-list { display: grid; gap: 12px; }
+.review-card { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.review-card.overwrite { border-color: #fcd34d; }
+.review-head { padding: 14px 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border); }
+.review-addr { font-weight: 700; font-size: 14px; }
+.review-meta { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+.review-body { display: grid; grid-template-columns: 200px 1fr; gap: 0; }
+@media(max-width:600px){ .review-body { grid-template-columns: 1fr; } }
+.review-photo { position: relative; background: var(--surface2); }
+.review-photo img { width: 100%; height: 100%; object-fit: cover; display: block; min-height: 160px; max-height: 220px; }
+.review-photo-desc { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 6px 8px; }
+.review-fields { padding: 14px 16px; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+.field-name { font-size: 12px; font-weight: 600; color: var(--ink2); }
+.field-val { font-size: 13px; }
+.field-val input { padding: 5px 8px; font-size: 12px; }
+.overwrite-tag { font-size: 10px; background: var(--amber-l); color: var(--amber); border-radius: 4px; padding: 2px 6px; white-space: nowrap; }
+.conf-tag { font-size: 10px; border-radius: 4px; padding: 2px 6px; white-space: nowrap; }
+.conf-high { background: var(--green-l); color: var(--green); }
+.conf-medium { background: var(--blue-l); color: var(--blue); }
+.conf-low { background: var(--surface2); color: var(--ink3); }
+.review-foot { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+
+/* ── Badges ── */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-green { background: var(--green-l); color: var(--green); }
+.badge-amber { background: var(--amber-l); color: var(--amber); }
+.badge-red { background: var(--red-l); color: var(--red); }
+.badge-blue { background: var(--blue-l); color: var(--blue); }
+.badge-gray { background: var(--surface2); color: var(--ink2); }
+
+/* ── Alerts ── */
+.alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none; }
+.alert.show { display: block; }
+.alert-error { background: var(--red-l); color: var(--red); }
+.alert-success { background: var(--green-l); color: var(--green); }
+.alert-info { background: var(--blue-l); color: var(--blue); }
+
+/* ── Empty ── */
+.empty { text-align: center; padding: 48px 20px; color: var(--ink3); }
+.empty .ico { font-size: 36px; margin-bottom: 10px; }
+
+/* ── Tabs ── */
+.tab-bar { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface2); padding: 4px; border-radius: 10px; width: fit-content; }
+.tab { padding: 7px 16px; border: none; border-radius: 7px; cursor: pointer; background: none; font-size: 13px; font-weight: 500; color: var(--ink2); transition: all .15s; font-family: inherit; }
+.tab.active { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+
+/* ── Log ── */
+.log-list { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
+.log-item { font-size: 12px; padding: 8px 12px; background: var(--surface2); border-radius: 6px; }
+.log-item.ok { background: var(--green-l); color: #1e5235; }
+.log-item.warn { background: var(--amber-l); color: var(--amber); }
+.log-item.err { background: var(--red-l); color: var(--red); }
+
+/* ── Loading spinner ── */
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin .6s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>🔍 Appliance Scanner</h1>
+  <p class="subtitle">AI-powered inspection photo analysis → Rentvine custom field review queue</p>
+
+  <!-- Stat bar -->
+  <div class="stat-bar">
+    <div class="stat"><div class="stat-num" id="stat-pending">–</div><div class="stat-lbl">Pending Review</div></div>
+    <div class="stat"><div class="stat-num" id="stat-approved">–</div><div class="stat-lbl">Approved</div></div>
+    <div class="stat"><div class="stat-num" id="stat-skipped">–</div><div class="stat-lbl">Skipped</div></div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab active" onclick="showTab('review')">📋 Review Queue</button>
+    <button class="tab" onclick="showTab('scan')">▶️ Run Scanner</button>
+  </div>
+
+  <!-- ── REVIEW TAB ── -->
+  <div id="tab-review">
+    <div id="review-alert" class="alert"></div>
+    <div id="review-list">
+      <div class="empty"><div class="ico">⏳</div><p>Loading review queue…</p></div>
+    </div>
+  </div>
+
+  <!-- ── SCAN TAB ── -->
+  <div id="tab-scan" style="display:none;">
+    <div class="cols">
+
+      <!-- Left: controls -->
+      <div>
+        <div class="panel">
+          <h3>🏠 Scan Single Property</h3>
+          <div class="field">
+            <label>Search zInspector Property</label>
+            <input type="text" id="prop-search" placeholder="Start typing an address…" oninput="searchProps(this.value)"/>
+          </div>
+          <div id="prop-results" style="display:none;margin-bottom:12px;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;"></div>
+          <div id="selected-prop" style="display:none;margin-bottom:12px;" class="badge badge-blue"></div>
+          <button class="btn btn-primary btn-full" id="scan-one-btn" onclick="scanOne()" disabled>
+            Scan This Property
+          </button>
+          <div id="scan-one-alert" class="alert" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="panel">
+          <h3>🌐 Scan Full Portfolio</h3>
+          <p style="font-size:13px;color:var(--ink2);margin-bottom:14px;line-height:1.5;">
+            Scans all <strong>524 properties</strong> — fetches photos from each, runs AI vision, and sends results to Slack + this queue. Takes several hours. Can run overnight.
+          </p>
+          <button class="btn btn-primary btn-full" id="scan-all-btn" onclick="scanAll()">
+            Start Full Portfolio Scan
+          </button>
+          <div class="prog-wrap" id="scan-prog">
+            <div class="prog-lbl" id="scan-lbl">Starting…</div>
+            <div class="prog-bg"><div class="prog-fill" id="scan-bar" style="width:0%"></div></div>
+          </div>
+          <div id="scan-all-alert" class="alert" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <!-- Right: scan log -->
+      <div>
+        <div class="panel">
+          <h3>📜 Activity Log</h3>
+          <div class="log-list" id="activity-log">
+            <div class="log-item">No activity yet — start a scan above.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let pendingRecords = [];
+let selectedPropId = null;
+let selectedPropAddr = '';
+let jobPollInterval = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadStats();
+loadQueue();
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function showTab(tab) {
+  document.getElementById('tab-review').style.display = tab === 'review' ? 'block' : 'none';
+  document.getElementById('tab-scan').style.display   = tab === 'scan'   ? 'block' : 'none';
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i===0&&tab==='review')||(i===1&&tab==='scan')));
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const data = await apiFetch('/api/scanner/status');
+    document.getElementById('stat-pending').textContent  = data.pending;
+    document.getElementById('stat-approved').textContent = data.approved;
+    document.getElementById('stat-skipped').textContent  = data.skipped;
+  } catch {}
+}
+
+// ── Queue ─────────────────────────────────────────────────────────────────────
+async function loadQueue() {
+  try {
+    pendingRecords = await apiFetch('/api/scanner/pending');
+    renderQueue();
+  } catch(e) {
+    document.getElementById('review-list').innerHTML =
+      `<div class="empty"><div class="ico">❌</div><p>Error loading queue: ${e.message}</p></div>`;
+  }
+}
+
+function renderQueue() {
+  if (!pendingRecords.length) {
+    document.getElementById('review-list').innerHTML =
+      `<div class="empty"><div class="ico">✅</div><p>No items pending review. Run a scan to populate the queue.</p></div>`;
+    return;
+  }
+
+  const html = pendingRecords.map(r => renderCard(r)).join('');
+  document.getElementById('review-list').innerHTML = `<div class="review-list">${html}</div>`;
+}
+
+function renderCard(r) {
+  const hasOverwrite = r.updates?.some(u => u.wouldOverwrite);
+  const photoUrl     = r.photo?.url || '';
+  const photoDesc    = r.visionResult?.photoDescription || '';
+  const matchPct     = r.matchScore ? Math.round(r.matchScore * 100) : '?';
+
+  const fieldsHtml = (r.updates || []).map(u => `
+    <div class="field-row" id="field-${r.scanId}-${u.fieldName.replace(/\W/g,'_')}">
+      <div>
+        <div class="field-name">${esc(u.fieldName)}</div>
+        ${u.wouldOverwrite ? `<div class="overwrite-tag">⚠️ replaces: ${esc(u.existingValue)}</div>` : ''}
+      </div>
+      <div class="field-val">
+        <input type="text" value="${esc(u.newValue)}" data-scan="${r.scanId}" data-field="${esc(u.fieldName)}" onchange="updateFieldVal(this)"/>
+      </div>
+      <span class="conf-tag conf-${u.confidence}">${u.confidence}</span>
+    </div>`).join('');
+
+  return `
+    <div class="review-card ${hasOverwrite ? 'overwrite' : ''}" id="card-${r.scanId}">
+      <div class="review-head">
+        <div>
+          <div class="review-addr">${esc(r.ziAddress)}</div>
+          <div class="review-meta">Rentvine match: ${matchPct}% · ${r.updates?.length || 0} fields · ${fmtDate(r.createdAt)}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+          ${hasOverwrite ? '<span class="badge badge-amber">⚠️ Overwrites</span>' : '<span class="badge badge-green">New fields only</span>'}
+        </div>
+      </div>
+      <div class="review-body">
+        <div class="review-photo">
+          ${photoUrl ? `<img src="${esc(photoUrl)}" loading="lazy" onerror="this.parentNode.style.background='var(--surface2)'"/>` : '<div style="height:160px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:12px;">No photo</div>'}
+          ${photoDesc ? `<div class="review-photo-desc">${esc(photoDesc)}</div>` : ''}
+        </div>
+        <div class="review-fields">
+          ${fieldsHtml || '<div style="color:var(--ink3);font-size:13px;">No extractable fields.</div>'}
+        </div>
+      </div>
+      <div class="review-foot">
+        <button class="btn btn-success btn-sm" onclick="approveCard('${r.scanId}')">✅ Approve & Write to Rentvine</button>
+        <button class="btn btn-danger btn-sm" onclick="skipCard('${r.scanId}')">⏭ Skip</button>
+        <span style="font-size:11px;color:var(--ink3);margin-left:auto;">Scan ID: ${r.scanId}</span>
+      </div>
+    </div>`;
+}
+
+// Track local edits to field values
+const fieldEdits = {};
+function updateFieldVal(input) {
+  const scanId    = input.dataset.scan;
+  const fieldName = input.dataset.field;
+  if (!fieldEdits[scanId]) fieldEdits[scanId] = {};
+  fieldEdits[scanId][fieldName] = input.value;
+}
+
+async function approveCard(scanId) {
+  const btn = document.querySelector(`#card-${scanId} .btn-success`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Writing…'; }
+  try {
+    await apiFetch(`/api/scanner/approve/${scanId}`, {
+      method: 'POST',
+      body: JSON.stringify({ overrides: fieldEdits[scanId] || {} }),
+    });
+    document.getElementById(`card-${scanId}`)?.remove();
+    pendingRecords = pendingRecords.filter(r => r.scanId !== scanId);
+    showAlert('review-alert', '✅ Written to Rentvine.', 'success');
+    loadStats();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Approve & Write to Rentvine'; }
+    showAlert('review-alert', '❌ Error: ' + e.message, 'error');
+  }
+}
+
+async function skipCard(scanId) {
+  try {
+    await apiFetch(`/api/scanner/skip/${scanId}`, { method: 'POST', body: '{}' });
+    document.getElementById(`card-${scanId}`)?.remove();
+    pendingRecords = pendingRecords.filter(r => r.scanId !== scanId);
+    loadStats();
+  } catch(e) { showAlert('review-alert', '❌ ' + e.message, 'error'); }
+}
+
+// ── Property search ───────────────────────────────────────────────────────────
+let searchTimeout;
+function searchProps(q) {
+  clearTimeout(searchTimeout);
+  if (!q.trim()) { document.getElementById('prop-results').style.display = 'none'; return; }
+  searchTimeout = setTimeout(async () => {
+    try {
+      const props = await apiFetch(`/api/scanner/zi-properties?search=${encodeURIComponent(q)}`);
+      const el = document.getElementById('prop-results');
+      if (!props.length) { el.style.display = 'none'; return; }
+      el.innerHTML = props.slice(0,10).map(p => `
+        <div onclick="selectProp(${p.id}, '${esc(p.Address||p.Name)}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+          <div style="font-weight:600;">${esc(p.Name||p.Address)}</div>
+          <div style="font-size:11px;color:var(--ink3);">${esc(p.Address||'')}</div>
+        </div>`).join('');
+      el.style.display = 'block';
+    } catch {}
+  }, 350);
+}
+
+function selectProp(id, addr) {
+  selectedPropId   = id;
+  selectedPropAddr = addr;
+  document.getElementById('prop-results').style.display = 'none';
+  document.getElementById('prop-search').value = addr;
+  const sp = document.getElementById('selected-prop');
+  sp.textContent  = '📍 ' + addr;
+  sp.style.display = 'inline-flex';
+  document.getElementById('scan-one-btn').disabled = false;
+}
+
+// ── Scan single ───────────────────────────────────────────────────────────────
+async function scanOne() {
+  if (!selectedPropId) return;
+  const btn = document.getElementById('scan-one-btn');
+  btn.disabled = true; btn.textContent = '⏳ Scanning…';
+  addLog(`Starting scan for ${selectedPropAddr}…`);
+  try {
+    const result = await apiFetch('/api/scanner/scan-property', {
+      method: 'POST',
+      body: JSON.stringify({ ziPropertyId: selectedPropId }),
+    });
+    if (result.status === 'no_rv_match') {
+      addLog(`⚠️ No Rentvine match for ${selectedPropAddr}`, 'warn');
+      showAlert('scan-one-alert', '⚠️ No matching Rentvine property found for this address.', 'error');
+    } else if (result.status === 'no_photos') {
+      addLog(`📷 No photos found for ${selectedPropAddr}`, 'warn');
+      showAlert('scan-one-alert', '📷 No inspection photos found for this property.', 'error');
+    } else {
+      addLog(`✅ Scanned ${selectedPropAddr} — ${result.scansPosted} review(s) sent`, 'ok');
+      showAlert('scan-one-alert', `✅ Done — ${result.scansPosted} review(s) sent to Slack and queue.`, 'success');
+      await loadQueue();
+      await loadStats();
+    }
+  } catch(e) {
+    addLog(`❌ Error: ${e.message}`, 'err');
+    showAlert('scan-one-alert', '❌ ' + e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Scan This Property';
+}
+
+// ── Scan all ──────────────────────────────────────────────────────────────────
+async function scanAll() {
+  if (!confirm('Start a full portfolio scan? This will take several hours and post results to Slack + this queue.')) return;
+  const btn = document.getElementById('scan-all-btn');
+  btn.disabled = true; btn.textContent = '⏳ Running…';
+  document.getElementById('scan-prog').style.display = 'block';
+  addLog('Full portfolio scan started…');
+  try {
+    const { jobId } = await apiFetch('/api/scanner/scan-all', { method: 'POST', body: '{}' });
+    showAlert('scan-all-alert', `✅ Scan started (Job: ${jobId}). Results will appear in Slack and the review queue.`, 'success');
+    addLog(`Job ID: ${jobId}`, 'ok');
+    pollJob(jobId);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Start Full Portfolio Scan';
+    showAlert('scan-all-alert', '❌ ' + e.message, 'error');
+  }
+}
+
+async function pollJob(jobId) {
+  if (jobPollInterval) clearInterval(jobPollInterval);
+  jobPollInterval = setInterval(async () => {
+    try {
+      const job = await apiFetch(`/api/scanner/job/${jobId}`);
+      const pct = job.total > 0 ? Math.round(job.done / job.total * 100) : 0;
+      document.getElementById('scan-bar').style.width = pct + '%';
+      document.getElementById('scan-lbl').textContent = `${job.done}/${job.total} properties — ${pct}%`;
+
+      if (job.status === 'complete' || job.status === 'error') {
+        clearInterval(jobPollInterval);
+        document.getElementById('scan-all-btn').disabled = false;
+        document.getElementById('scan-all-btn').textContent = 'Start Full Portfolio Scan';
+        if (job.status === 'complete') {
+          addLog(`✅ Scan complete — ${job.summary?.reviewsSent} reviews sent`, 'ok');
+        } else {
+          addLog(`❌ Scan error: ${job.error}`, 'err');
+        }
+        await loadQueue();
+        await loadStats();
+      }
+    } catch {}
+  }, 15000); // poll every 15s
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────────
+function addLog(msg, type = '') {
+  const el = document.getElementById('activity-log');
+  const item = document.createElement('div');
+  item.className = 'log-item ' + type;
+  item.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.insertBefore(item, el.firstChild);
+  if (el.children.length > 50) el.removeChild(el.lastChild);
+}
+
+function showAlert(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'alert show alert-' + (type === 'success' ? 'success' : type === 'info' ? 'info' : 'error');
+  el.textContent = msg;
+  setTimeout(() => { el.className = 'alert'; }, 6000);
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) },
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(`${res.status}: ${t}`); }
+  return res.json();
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(s) {
+  if (!s) return '';
+  return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+</script>
+</body>
+</html>
