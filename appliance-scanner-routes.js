@@ -738,16 +738,24 @@ router.post('/skip/:scanId', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/scanner/scan-property — scan a single zInspector property by ID
+// POST /api/scanner/scan-property — scan a single zInspector property by ID (async)
 router.post('/scan-property', async (req, res) => {
   const { ziPropertyId } = req.body;
   if (!ziPropertyId) return res.status(400).json({ error: 'ziPropertyId required' });
-  try {
-    const rvProperties = await getRvProperties();
-    const ziProp = await ziFetch(`/api/propertiesCursor/${ziPropertyId}/`);
-    const result = await scanProperty(ziProp, rvProperties);
-    res.json(result);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+
+  // Return immediately — run scan in background
+  res.json({ status: 'started', message: 'Scan started. Results will appear in the review queue.' });
+
+  (async () => {
+    try {
+      const rvProperties = await getRvProperties();
+      const ziProp = await ziFetch(`/api/propertiesCursor/${ziPropertyId}/`);
+      const result = await scanProperty(ziProp, rvProperties);
+      console.log('Single property scan complete:', JSON.stringify(result));
+    } catch(e) {
+      console.error('Single property scan error:', e.message);
+    }
+  })();
 });
 
 // POST /api/scanner/scan-all — kick off full portfolio scan (async, streams progress via SSE or just returns job id)
