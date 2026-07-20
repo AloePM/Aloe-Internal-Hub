@@ -100,7 +100,7 @@ async function getPropertyPhotos(ziPropertyId, limit = 60) {
     const otherPhotos = [];
     items.forEach(m => {
       (m.actions || []).forEach(note => {
-        const url = note.publicUrl || note.URL;
+        const url = note.URL || note.publicUrl;
         if (!url || photos.find(p => p.url === url)) return;
         const photo = {
           url,
