@@ -119,7 +119,7 @@ async function rvFetch(path, options = {}) {
   const res = await fetch(url, {
     ...options,
     headers: {
-      Authorization: `Basic ${RV_AUTH}`,
+      Authorization: 'Basic ' + Buffer.from(process.env.RENTVINE_API_KEY + ':' + process.env.RENTVINE_API_SECRET).toString('base64'),
       'X-Rentvine-Account': RV_ACCOUNT,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
