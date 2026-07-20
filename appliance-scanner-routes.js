@@ -140,7 +140,7 @@ async function getRvProperties() {
     const data = await rvFetch(`/properties/export?page=${page}&pageSize=100&isActive=true`);
     const items = Array.isArray(data) ? data : (data.data || []);
     if (!items.length) break;
-    const unwrapped = items.map(r => r.property || r);
+    const unwrapped = items.map(r => ({ ...( r.property || r), propertyID: (r.property || r).propertyID || (r.property || r).id }));
     all = all.concat(unwrapped);
     if (items.length < 100) break;
     page++;
@@ -182,7 +182,7 @@ function matchRvProperty(ziAddress, rvProperties) {
 
   let best = null, bestScore = 0;
   for (const p of rvProperties) {
-    const rvAddr = normAddr(p.address || p.Address || '');
+    const rvAddr = normAddr(p.address || p.Address || p.name || p.Name || '');
     if (ziNum && !rvAddr.startsWith(ziNum)) continue; // skip if street number differs
 
     const maxLen = Math.max(ziNorm.length, rvAddr.length);
