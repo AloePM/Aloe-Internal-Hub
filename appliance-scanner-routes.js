@@ -94,20 +94,31 @@ async function getPropertyPhotos(ziPropertyId, limit = 60) {
       page_size: 100,
     });
     const items = mediaData.results || [];
+    // Prioritize appliance-relevant areas
+    const PRIORITY_AREAS = ['kitchen','laundry','appliance','mechanical','garage','utility','systems'];
+    const priorityPhotos = [];
+    const otherPhotos = [];
     items.forEach(m => {
       (m.actions || []).forEach(note => {
         const url = note.publicUrl || note.URL;
-        if (url && !photos.find(p => p.url === url)) {
-          photos.push({
-            url,
-            area:    note.AreaName || 'Unknown',
-            detail:  note.Detail || '',
-            docId:   doc.id,
-            docDate: doc.Date,
-          });
+        if (!url || photos.find(p => p.url === url)) return;
+        const photo = {
+          url,
+          area:    note.AreaName || 'Unknown',
+          detail:  note.Detail || '',
+          docId:   doc.id,
+          docDate: doc.Date,
+        };
+        const areaLower = (note.AreaName || '').toLowerCase();
+        if (PRIORITY_AREAS.some(a => areaLower.includes(a))) {
+          priorityPhotos.push(photo);
+        } else {
+          otherPhotos.push(photo);
         }
       });
     });
+    // Add priority photos first, then others
+    photos.push(...priorityPhotos, ...otherPhotos);
     if (photos.length >= limit) break;
   }
   return photos.slice(0, limit);
