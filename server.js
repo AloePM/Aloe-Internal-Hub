@@ -3648,6 +3648,22 @@ app.get('/api/map-properties', async (req, res) => {
   }
 });
 
+// Webhook forwarding — forward Rentvine webhooks to Ari on port 3001
+app.post('/webhook/rentvine', express.json(), async (req, res) => {
+  res.sendStatus(200); // Acknowledge immediately
+  try {
+    const body = JSON.stringify(req.body);
+    const response = await fetch('http://34.16.238.69:3001/webhook/rentvine', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-rentvine-signature': req.headers['x-rentvine-signature'] || '' },
+      body
+    });
+    console.log('Webhook forwarded to Ari:', response.status);
+  } catch(e) {
+    console.error('Webhook forward error:', e.message);
+  }
+});
+
 app.get('*', function(req, res) {
   res.send(`<!DOCTYPE html>
 <html lang="en">
