@@ -53,7 +53,7 @@ async function ziFetch(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== '') url.searchParams.set(k, v);
   });
-  const res = await fetch(url.toString(), { headers: { 'x-api-key': ZI_KEY } });
+  const res = await fetch(url.toString(), { headers: { 'x-api-key': ZI_KEY, 'Origin': 'https://hub.aloepm.com' } });
   if (!res.ok) throw new Error(`zInspector ${res.status}: ${await res.text()}`);
   return res.json();
 }
