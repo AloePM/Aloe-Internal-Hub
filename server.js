@@ -1,11 +1,15 @@
 import express from 'express';
+import { Storage } from '@google-cloud/storage';
+const storage = new Storage();
+const BUCKET = 'aloe-hub-data-496300';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'child_process';
+import { execFile } from 'child_process';
+import multer from 'multer';
 
 import { initPlaidRoutes } from './plaid-integration.js';
-import scannerRoutes from './appliance-scanner-routes.js';
 
 const app = express();
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
@@ -94,6 +98,103 @@ app.get('/api/hoa/templates', async (req, res) => {
 });
 app.get('/vendors', (req, res) => {
      res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
+});
+
+app.get('/vendors/edit', (req, res) => {
+  res.sendFile(new URL('./vendors-edit.html', import.meta.url).pathname);
+});
+
+// ── Vendor directory — persisted to GCS via fetch ──
+const _vendorBucket = 'aloe-hub-data-496300';
+const _vendorFile = 'vendors.json';
+let _vendorCache = null;
+
+async function getGCSToken() {
+  const r = await fetch('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token', {
+    headers: { 'Metadata-Flavor': 'Google' }
+  });
+  const d = await r.json();
+  return d.access_token;
+}
+
+async function readVendors() {
+  if (_vendorCache) return _vendorCache;
+  try {
+    const token = await getGCSToken();
+    const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${_vendorBucket}/o/${_vendorFile}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!r.ok) throw new Error('GCS read ' + r.status);
+    _vendorCache = await r.json();
+    return _vendorCache;
+  } catch(e) {
+    console.error('GCS read failed, using local vendors.json:', e.message);
+    const { default: fs } = await import('fs');
+    const { default: path } = await import('path');
+    const raw = fs.readFileSync(path.join(process.cwd(), 'vendors.json'), 'utf8');
+    _vendorCache = JSON.parse(raw);
+    return _vendorCache;
+  }
+}
+
+async function writeVendors(data) {
+  _vendorCache = data;
+  const token = await getGCSToken();
+  const body = JSON.stringify(data, null, 2);
+  const r = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${_vendorBucket}/o?uploadType=media&name=${_vendorFile}`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body
+  });
+  if (!r.ok) throw new Error('GCS write ' + r.status + ': ' + await r.text());
+}
+
+app.get('/api/vendors', async (req, res) => {
+  try {
+    res.json(await readVendors());
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/vendors', async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload || !Array.isArray(payload.trades)) return res.status(400).json({ error: 'Invalid payload' });
+    payload.lastUpdated = new Date().toISOString().slice(0, 10);
+    await writeVendors(payload);
+    res.json({ ok: true, lastUpdated: payload.lastUpdated });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/rv-vendors', async (req, res) => {
+  try {
+    let all = [], pg = 1;
+    while (pg <= 10) {
+      const batch = await rvFetch('/vendors', { pageSize: 200, page: pg });
+      const rows = Array.isArray(batch) ? batch : [];
+      if (!rows.length) break;
+      all = all.concat(rows);
+      if (rows.length < 200) break;
+      pg++;
+    }
+    const vendors = all.map(r => {
+      const c = r.contact || r;
+      return {
+        id: c.contactID,
+        name: c.name || '',
+        phone: c.phone || '',
+        email: c.email || '',
+        status: c.isActive === '1' ? 'active' : 'inactive',
+        insuranceExpiration: c.liabilityInsuranceExpiresDate || null,
+      };
+    });
+    res.json({ vendors });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 app.get('/resources/vendors', (req, res) => {
   res.sendFile(new URL('./vendor-resources.html', import.meta.url).pathname);
@@ -447,12 +548,16 @@ function fuzzyMatch(query, target) {
   return false;
 }
 
-async function rvFetch(path, params = {}) {
+async function rvFetch(path, params = {}, method = 'GET', body = null) {
   const url = new URL(`${RENTVINE_BASE}${path}`);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) url.searchParams.set(k, v);
-  });
-  const r = await fetch(url.toString(), { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
+  if (method === 'GET') {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) url.searchParams.set(k, v);
+    });
+  }
+  const opts = { method, headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': 'aloepm', 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url.toString(), opts);
   if (!r.ok) {
     const txt = await r.text();
     console.error('Rentvine error', r.status, txt.slice(0, 200));
@@ -905,6 +1010,86 @@ app.post('/api/chat', async function(req, res) {
     console.error('Chat error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── HOA: Property lookup (must be BEFORE the catch-all rentvine proxy) ──────
+app.get('/api/rentvine/property-lookup', hubAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toLowerCase();
+    let allProps = [];
+    for (let page = 1; page <= 10; page++) {
+      const url = `${RENTVINE_BASE}/properties/export?pageSize=500&page=${page}`;
+      const r = await fetch(url, { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
+      const batch = await r.json();
+      const items = Array.isArray(batch) ? batch : (batch.data || batch.results || []);
+      if (!items.length) break;
+      allProps = allProps.concat(items);
+      if (items.length < 500) break;
+    }
+    console.log(`property-lookup: fetched ${allProps.length} total, filtering for "${q}"`);
+    // Strip directional prefixes/suffixes for flexible matching
+    const stripDirections = s => s.replace(/\b(north|south|east|west|n|s|e|w)\b\.?/gi, '').replace(/\s+/g, ' ').trim();
+    const qClean = stripDirections(q);
+    const filtered = q ? allProps.filter(item => {
+      const p = item.property || item;
+      const addr = stripDirections((p.address || '').toLowerCase());
+      const street = stripDirections((p.streetName || '').toLowerCase());
+      const num = String(p.streetNumber || '').toLowerCase();
+      // Must match street number exactly if provided in query
+      const queryParts = qClean.split(/\s+/);
+      const queryNum = queryParts.find(p => /^\d+$/.test(p)) || '';
+      const queryStreet = queryParts.filter(p => !/^\d+$/.test(p)).join(' ');
+      const numMatch = !queryNum || num === queryNum;
+      const streetMatch = !queryStreet || addr.includes(queryStreet) || street.includes(queryStreet);
+      return numMatch && streetMatch;
+    }) : allProps;
+    // Enrich with unit leaseID (property export doesn't include it)
+    const enriched = await Promise.all(filtered.slice(0, 10).map(async item => {
+      const p = item.property || item;
+      let leaseId = p.leaseID || null;
+      if (!leaseId) {
+        try {
+          const units = await rvFetch('/properties/' + p.propertyID + '/units');
+          const unitList = Array.isArray(units) ? units : (units.units || units.data || []);
+          if (unitList.length > 0) {
+            const u = unitList[0].unit || unitList[0];
+            leaseId = u.leaseID || null;
+          }
+        } catch(e) { /* ignore */ }
+      }
+      return { propertyId: p.propertyID, leaseId, address: p.address, city: p.city, state: p.stateID, zip: p.postalCode };
+    }));
+    res.json({ properties: enriched });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── HOA routes (must be before catch-all proxy) ──────────────────────────
+app.get('/api/rentvine/properties/:id', hubAuth, async (req, res) => {
+  try {
+    const r = await fetch(`${RENTVINE_BASE}/properties/${req.params.id}`, { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
+    res.json(await r.json());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rentvine/properties/:id/leases', hubAuth, async (req, res) => {
+  try {
+    const r = await fetch(`${RENTVINE_BASE}/leases/export?propertyID=${req.params.id}&statusID=2&pageSize=10`, { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
+    res.json(await r.json());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rentvine/leases/:id', hubAuth, async (req, res) => {
+  try {
+    const r = await fetch(`${RENTVINE_BASE}/leases/${req.params.id}`, { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
+    res.json(await r.json());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rentvine/leases/:id/charges', hubAuth, async (req, res) => {
+  try {
+    const r = await fetch(`${RENTVINE_BASE}/accounting/leases/${req.params.id}/charges`, { method: 'POST', headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT, 'Content-Type': 'application/json' }, body: JSON.stringify(req.body) });
+    res.json(await r.json());
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.use('/api/rentvine', async function(req, res) {
@@ -1437,146 +1622,125 @@ app.get('/api/settlement-alert/test', async (req, res) => {
 });
 
 // ── End Late Payment Settlement Alert ──────────────────────────────────────
-// ── Daily Bill Sync ───────────────────────────────────────────────────────────
+// ── Daily Bill Sync ────────────────────────────────────────────────────────────────────────────
 
-async function runDailyBillSync() {
+async function runDailyBillSync(overrideStartDate) {
   try {
     console.log('Bill sync: starting daily run');
     const azNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Phoenix' }));
-    const today = azNow.toISOString().slice(0, 10);
+    const todayStr = azNow.toISOString().slice(0, 10);
     const yesterday = new Date(azNow);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    const startDate = overrideStartDate || yesterday.toISOString().slice(0, 10);
+    const endDate = overrideStartDate ? todayStr : todayStr;
 
-    // 1. Pull bills posted yesterday from Rentvine (including voided)
-    const billsUrl = `${RENTVINE_BASE}/reports/payables?exportTypeID=1&json=${encodeURIComponent(JSON.stringify({
-      displayColumns: ['billID','propertyID','contactName','chargeAccountID','datePosted','dateDue','amount','amountUnpaid','isPaid','isVoided','description'],
-      filters: [
-        { name: 'datePosted', comparator: 'betweenDate', startDate: yesterdayStr, endDate: yesterdayStr }
-      ]
-    }))}`;
+    if (!SHEET_ID) return;
+    const sheets = getSheetsClient();
+    await ensureSheetTab(sheets);
 
-    const billsResp = await fetch(billsUrl, { headers: { Authorization: `Basic ${RENTVINE_AUTH}` } });
-    const billsData = await billsResp.json();
-    const bills = Array.isArray(billsData) ? billsData : (billsData.data || []);
-    console.log(`Bill sync: ${bills.length} bills posted on ${yesterdayStr}`);
+    // Get existing bill IDs from sheet (col M = index 12)
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: "'" + SHEET_TAB + "'!M:M",
+    });
+    const existingIDs = new Set((existing.data.values || []).flat().filter(Boolean).map(String));
+    console.log('Bill sync:', existingIDs.size, 'existing bill IDs in sheet');
 
-    if (bills.length === 0) {
-      console.log('Bill sync: no bills yesterday, skipping');
-      return;
+    // Fetch payables report — returns all fields in one call
+    const reportResp = await fetch(RENTVINE_BASE + '/reports/payables?exportTypeID=1', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Basic ' + RENTVINE_AUTH,
+        'X-Rentvine-Account': RENTVINE_ACCOUNT,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        filters: [
+          { name: 'payeeContactID', comparator: 'equals', value: String(CONTACT_REIMBURSEMENTS) },
+          { name: 'dateTimeCreated', comparator: 'betweenDate', startDate: startDate, endDate: endDate }
+        ]
+      })
+    });
+    const reportData = await reportResp.json();
+    const allRows = (reportData.rows || []).filter(r => r && r.data);
+    // Filter client-side by dateTimeCreated since report date filters are unreliable
+    const rows = allRows.filter(r => {
+      const dtc = (r.data.dateTimeCreated || '').slice(0, 10);
+      return dtc >= startDate;
+    });
+    console.log('Bill sync: payables report returned', allRows.length, 'total,', rows.length, 'after dateTimeCreated filter (>=', startDate + ')');
+
+    const now = new Date().toISOString();
+    const rowsToAdd = [];
+
+    for (const row of rows) {
+      const d = row.data;
+      const billID = String(d.billID || '');
+      if (!billID) continue;
+      if (d.isVoided === '1' || d.isVoided === 1) continue;
+      if (existingIDs.has(billID)) continue;
+
+      const address = [d.propertyAddress, d.propertyCity, d.propertyStateID]
+        .filter(Boolean).filter(v => v !== 'None').join(', ');
+      const owner = (d.portfolioName && d.portfolioName !== 'None') ? d.portfolioName : '';
+      const expenseType = (d.chargeAccountName && d.chargeAccountName !== 'None') ? d.chargeAccountName : '';
+      const description = (d.description && d.description !== 'None') ? d.description : '';
+      const reference = (d.reference && d.reference !== 'None') ? d.reference : '';
+      const amount = Number(d.amount || 0).toFixed(2);
+      const billDate = (d.datePosted || '').slice(0, 10);
+
+      if (!amount || amount === '0.00') {
+        console.warn('Bill sync: skipping bill', billID, '- amount is 0');
+        continue;
+      }
+
+      rowsToAdd.push([
+        now,               // A: Date Submitted
+        billDate,          // B: Date Paid
+        'Rentvine (auto)', // C: Paid By
+        '',                // D: Payment Method
+        address,           // E: Property Address
+        owner,             // F: Owner / Portfolio
+        expenseType,       // G: Expense Type
+        description,       // H: Repair Type / Vendor Detail
+        amount,            // I: Amount
+        expenseType,       // J: GL Account
+        reference,         // K: Reference / Memo
+        '',                // L: Notes
+        billID,            // M: Rentvine Bill ID
+        '',                // N: Admin Bill ID
+        now,               // O: Bill Created At
+        'Auto-synced',     // P: Status
+      ]);
+      existingIDs.add(billID);
     }
 
-    // 2. Get existing bill IDs from Google Sheet to avoid duplicates
-    let existingBillIDs = new Set();
-    if (SHEET_ID) {
-      try {
-        const sheets = getSheetsClient();
-        const existing = await sheets.spreadsheets.values.get({
-          spreadsheetId: SHEET_ID,
-          range: `'${SHEET_TAB}'!L:L`, // Bill ID column
-        });
-        const rows = existing.data.values || [];
-        rows.forEach(r => { if (r[0]) existingBillIDs.add(String(r[0])); });
-        console.log(`Bill sync: ${existingBillIDs.size} existing bill IDs in sheet`);
-      } catch(e) {
-        console.error('Bill sync: sheet read error:', e.message);
-      }
-    }
+    console.log('Bill sync:', rowsToAdd.length, 'rows to add');
 
-    // 3. GL account name map
-    const glNames = {
-      80:'HOA Dues', 86:'Home Warranty Trade Fee', 82:'Cleaning Reimbursement',
-      106:'Key/Lock Replacement', 77:'Pest Control', 108:'Repairs - Other',
-      136:'Owner Administrative Charge', 93:'Management Fee', 94:'Lease/Placement Fee',
-      40:'Resident Benefit Package', 58:'Administrative Fee', 14:'Late Fee',
-    };
-
-    // 4. Look up property addresses
-    const newBills = [];
-    for (const b of bills) {
-      const billID = String(b.billID || b.bill_id || '');
-      if (!billID || existingBillIDs.has(billID)) continue;
-
-      const propID = String(b.propertyID || '');
-      let address = '';
-      if (propID) {
-        try {
-          const propData = await rvFetch('/properties/' + propID);
-          address = (propData?.property?.address || propData?.address || '').trim();
-        } catch(e) {}
-      }
-
-      const acctID = parseInt(b.chargeAccountID || 0);
-      const glName = glNames[acctID] || `GL ${acctID}`;
-      const amount = parseFloat(b.amount || 0).toFixed(2);
-      const vendor = b.contactName || '';
-      const desc = b.description || '';
-      const isVoided = b.isVoided === true || b.isVoided === 1 || b.isVoided === '1';
-      const status = isVoided ? 'VOIDED' : 'Auto-synced from Rentvine';
-
-      newBills.push({
-        billID, propID, address, vendor, amount, glName, desc,
-        datePosted: b.datePosted || yesterdayStr,
-        isVoided, status,
+    if (rowsToAdd.length > 0) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range: "'" + SHEET_TAB + "'!A1",
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: rowsToAdd },
       });
-    }  
-    console.log(`Bill sync: ${newBills.length} new bills to log`);
-    if (newBills.length === 0) return;
-
-    // 5. Write to Google Sheet
-    if (SHEET_ID) {
-      try {
-        const sheets = getSheetsClient();
-        await ensureSheetTab(sheets);
-        for (const b of newBills) {
-          await appendSheetRow(sheets, [
-            new Date().toISOString(), // Date Submitted
-            b.datePosted,             // Date Paid
-            'Rentvine (auto)',        // Paid By
-            b.address,                // Property Address
-            '',                       // Owner / Portfolio
-            b.glName,                 // Expense Type
-            b.vendor,                 // Repair Type / Vendor Detail
-            b.isVoided ? '0.00' : b.amount, // Amount (0 if voided)
-            b.glName,                 // GL Account
-            b.desc,                   // Reference / Memo
-            b.isVoided ? '⚠️ VOIDED' : '', // Notes
-            b.billID,                 // Rentvine Bill ID
-            '',                       // Admin Bill ID
-            new Date().toISOString(), // Bill Created At
-            b.status,                 // Status
-          ]);
-        }
-        console.log(`Bill sync: ${newBills.length} rows written to sheet`);
-      } catch(e) {
-        console.error('Bill sync: sheet write error:', e.message);
-      }
     }
 
-    // 6. Post Slack summary to #bo-accounting
-    if (SLACK_TOKEN && newBills.length > 0) {
-      const total = newBills.reduce((a, b) => a + parseFloat(b.amount), 0);
-      const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 });
-      let msg = `*📋 Daily Bill Sync — ${yesterdayStr}*\n`;
-      msg += `_${newBills.length} new bill(s) posted in Rentvine yesterday — logged to expense sheet_\n\n`;
-      newBills.forEach(b => {
-        const voidedFlag = b.isVoided ? ' ~~VOIDED~~' : '';
-        msg += `• *${b.vendor || 'Unknown Vendor'}* — ${b.address || 'No address'} — ${fmt(b.amount)} — ${b.glName}${voidedFlag}\n`;
-        if (b.desc) msg += `  _${b.desc}_\n`;
-      });
-      msg += `\n*Total: ${fmt(total)}*`;
+    console.log('Bill sync: done. Added', rowsToAdd.length, 'rows');
 
-      await fetch('https://slack.com/api/chat.postMessage', {
+    // Slack summary
+    if (SLACK_WEBHOOK && rowsToAdd.length > 0) {
+      const total = rowsToAdd.reduce(function(s, r) { return s + parseFloat(r[8] || 0); }, 0);
+      const fmt = function(n) { return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2 }); };
+      const msg = '*Bills Synced — ' + todayStr + '*\n' + rowsToAdd.length + ' rows added to expense sheet. Total: ' + fmt(total);
+      await fetch(SLACK_WEBHOOK, {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'C0BCCV790VC', text: msg })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: msg }),
       });
-      console.log('Bill sync: Slack summary sent');
     }
-
-  } catch(e) {
-    console.error('Bill sync error:', e.message);
-  }
+  } catch(e) { console.error('Bill sync error:', e.message); }
 }
 
 function scheduleDailyBillSync() {
@@ -1596,16 +1760,21 @@ function scheduleDailyBillSync() {
 }
 scheduleDailyBillSync();
 
+app.get('/api/bill-sync/full', async (req, res) => {
+  try {
+    await runDailyBillSync('2026-06-01');
+    res.json({ ok: true, message: 'Full sync from June 1 ran — check sheet' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/bill-sync/test', async (req, res) => {
   try {
     await runDailyBillSync();
-    res.json({ ok: true, message: 'Bill sync ran — check #bo-accounting and the sheet' });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
+    res.json({ ok: true, message: 'Bill sync ran — check sheet' });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── End Daily Bill Sync ───────────────────────────────────────────────────────
+// ── End Daily Bill Sync ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 function scheduleWOSync() {
   function msUntilNext11pm() {
     const now = new Date();
@@ -2091,6 +2260,7 @@ const CONTACT_REIMBURSEMENTS  = 3229;
 const CONTACT_MGMT_COMPANY    = 1;
 const GL_OWNER_ADMIN_FEE      = 136;
 const ADMIN_TRADE_FEE_AMOUNT  = 10.00;
+const ADMIN_CHECK_FEE_AMOUNT   = 5.00;
 const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK_URL;
 const SHEET_ID      = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 const SHEET_TAB     = 'Expense Log';
@@ -2114,7 +2284,7 @@ function getSheetsClient() {
 }
 
 const SHEET_HEADERS = [
-  'Date Submitted', 'Date Paid', 'Paid By',
+  'Date Submitted', 'Date Paid', 'Paid By', 'Payment Method',
   'Property Address', 'Owner / Portfolio',
   'Expense Type', 'Repair Type / Vendor Detail',
   'Amount', 'GL Account', 'Reference / Memo',
@@ -2240,7 +2410,7 @@ function buildSlackMessage({ who, property, expType, repairType, vendorName, amo
 }
 
 app.post('/api/expense-log', async (req, res) => {
-  const { property, expType, amount, payDate, reference, notes, vendorName, repairType, who } = req.body;
+  const { property, expType, amount, payDate, reference, notes, vendorName, repairType, who, payMethod } = req.body;
   if (!property || !expType || !amount || !who || !payDate) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -2270,13 +2440,40 @@ app.post('/api/expense-log', async (req, res) => {
       adminBillID = bill2?.bill?.billID || bill2?.billID || bill2?.id || '';
     }
 
+    // $5 admin fee + Slack check notification for Check payments
+    let checkFeeID = null;
+    if (payMethod === "Check") {
+      try {
+        const billCheck = await postBill(buildBillPayload({
+          contactID: CONTACT_MGMT_COMPANY, payDate,
+          reference: 'Check Processing Fee - ' + expType.label,
+          lineDescription: 'Check Processing Fee - ' + expType.label + ' ' + property.address + (property.portfolioName ? ' (' + property.portfolioName + ')' : ''),
+          ledgerID, glAccountID: GL_OWNER_ADMIN_FEE, amount: ADMIN_CHECK_FEE_AMOUNT,
+        }));
+        checkFeeID = billCheck?.bill?.billID || billCheck?.billID || billCheck?.id || '';
+        console.log('[expense-log] Check fee bill created:', checkFeeID);
+      } catch(e) { console.error("[expense-log] Check fee bill error:", e.message); }
+      // Post check instructions to Slack
+      const checkMsg = [
+        "@Rita please write a check from operating:",
+        "*Amount:* $" + Number(amount).toFixed(2),
+        "*Pay to:* " + (vendorName || expType.label),
+        "*Property:* " + property.address + (property.portfolioName ? " (" + property.portfolioName + ")" : ""),
+        refString ? "*Reference:* " + refString : null,
+        notes ? "*Notes / Mail to:* " + notes : null,
+        "*Logged by:* " + who,
+      ].filter(Boolean).join("\n");
+      await postSlack(checkMsg);
+    }
+
+
     if (SHEET_ID) {
       try {
         const sheets = getSheetsClient();
         await ensureSheetTab(sheets);
         const glNames = {80:'HOA Dues',86:'Home Warranty Trade Fee',82:'Cleaning Reimbursement',106:'Key/Lock Replacement',77:'Pest Control',108:'Repairs - Other',136:'Owner Administrative Charge'};
         await appendSheetRow(sheets, [
-          now, payDate, who, property.address, property.portfolioName || '',
+          now, payDate, who, payMethod || '', property.address, property.portfolioName || '',
           expType.label, repairType || vendorName || '',
           Number(amount).toFixed(2), glNames[glAccountID] || String(glAccountID),
           refString, notes || '', String(billID), adminBillID ? String(adminBillID) : '',
@@ -2299,6 +2496,206 @@ app.post('/api/expense-log', async (req, res) => {
 // ── End Expense Log ───────────────────────────────────────────────────────────
 
 // ── EXPENSE LOG: Upload receipt to Rentvine bill ─────────────────────────────
+// ── EXPENSE LOG: Backfill existing RV bills to Google Sheet ─────────────────
+app.post('/api/expense-log/write-rows', async (req, res) => {
+  if (!SHEET_ID) return res.status(400).json({ error: 'No sheet ID' });
+  try {
+    const { rows } = req.body;
+    if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows provided' });
+    const sheets = getSheetsClient();
+    await ensureSheetTab(sheets);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "'" + SHEET_TAB + "'!A1",
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      resource: { values: rows },
+    });
+    res.json({ success: true, written: rows.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/expense-log/fix-header', async (req, res) => {
+  if (!SHEET_ID) return res.status(400).json({ error: 'No sheet ID' });
+  try {
+    const sheets = getSheetsClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: "'" + SHEET_TAB + "'!A1",
+      valueInputOption: 'RAW',
+      resource: { values: [SHEET_HEADERS] },
+    });
+    res.json({ success: true, headers: SHEET_HEADERS });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/expense-log/reset-sheet', async (req, res) => {
+  if (!SHEET_ID) return res.status(400).json({ error: 'No sheet ID' });
+  try {
+    const sheets = getSheetsClient();
+    await ensureSheetTab(sheets);
+    // Keep only header row
+    const data = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!A1:O1`,
+    });
+    const header = data.data.values || [];
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!A:O`,
+    });
+    if (header.length) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `'${SHEET_TAB}'!A1`,
+        valueInputOption: 'RAW',
+        resource: { values: header },
+      });
+    }
+    res.json({ success: true, message: 'Sheet cleared — header preserved' });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/expense-log/clean-sheet', async (req, res) => {
+  if (!SHEET_ID) return res.status(400).json({ error: 'No sheet ID' });
+  try {
+    const sheets = getSheetsClient();
+    const data = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!A:O`,
+    });
+    const rows = data.data.values || [];
+    // Keep header row and rows where column L (index 11) is a pure number
+    const kept = rows.filter((row, i) => {
+      if (i === 0) return true; // keep header
+      const colL = String(row[11] || '').trim();
+      return /^\d+$/.test(colL); // keep only numeric bill IDs
+    });
+    // Clear and rewrite
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!A:O`,
+    });
+    if (kept.length) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `'${SHEET_TAB}'!A1`,
+        valueInputOption: 'RAW',
+        resource: { values: kept },
+      });
+    }
+    res.json({ success: true, kept: kept.length - 1, removed: rows.length - kept.length });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/expense-log/backfill', async (req, res) => {
+  if (!SHEET_ID) return res.status(400).json({ error: 'GOOGLE_SHEETS_SPREADSHEET_ID not set' });
+  try {
+    // Use the same dailyBillSync logic with a fixed start date
+    await runDailyBillSync('2026-06-01');
+    return res.json({ success: true, message: 'Backfill from 2026-06-01 complete — check sheet' });
+  } catch (e) {
+    console.error('[expense-log] Backfill error:', e.message);
+    return res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/expense-log/backfill_DISABLED', async (req, res) => {
+  if (!SHEET_ID) return res.status(400).json({ error: 'GOOGLE_SHEETS_SPREADSHEET_ID not set' });
+  try {
+    const sheets = getSheetsClient();
+    await ensureSheetTab(sheets);
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `'${SHEET_TAB}'!M:M`,
+    });
+    const existingIDs = new Set((existing.data.values || []).flat().filter(Boolean).map(String));
+    console.log('[backfill] Existing bill IDs in sheet (col M):', existingIDs.size, 'sample:', [...existingIDs].slice(0,5));
+    const START_DATE = '2026-06-01';
+    const GL_NAMES = {80:'HOA Dues',86:'Home Warranty Trade Fee',82:'Cleaning Reimbursement',106:'Key/Lock Replacement',79:'Landscaping',77:'Pest Control',102:'Painting',103:'Plumbing',104:'Flooring',105:'HVAC',110:'Electrical',108:'Repairs - Other',81:'Cleaning and Maintenance - Other',78:'General Maintenance Labor',83:'Pool Services',144:'Inspection',143:'Irrigation',111:'Supplies',136:'Owner Administrative Charge'};
+    let all = [], page = 1;
+    while (page <= 20) {
+      const rvResp = await fetch(`${RENTVINE_BASE}/accounting/bills?contactID=${CONTACT_REIMBURSEMENTS}&startDate=${START_DATE}&pageSize=200&page=${page}`, { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT, 'Content-Type': 'application/json' } });
+      const data = await rvResp.json();
+      const rows = Array.isArray(data) ? data : (data?.data ?? []);
+      if (!rows.length) break;
+      all = all.concat(rows);
+      if (rows.length < 200) break;
+      page++;
+    }
+    let added = 0, skipped = 0;
+    const rowsToAdd = [];
+    for (const row of all) {
+      const b = row.bill || row;
+      const billID = String(b.billID || b.id || '');
+      if (!billID || existingIDs.has(billID)) { skipped++; continue; }
+      if (b.isVoided === true || b.isVoided === 1 || String(b.isVoided) === '1') { skipped++; continue; }
+
+      // Fetch full bill with charges for amount, GL, description
+      let description = b.description || b.paymentMemo || '';
+      let reference = b.reference || b.paymentMemo || '';
+      let billDate = (b.billDate || '').slice(0, 10);
+      let amount = '0.00';
+      let glName = '';
+      try {
+        await new Promise(r => setTimeout(r, 150)); // avoid rate limiting
+        const det = await fetch(RENTVINE_BASE + '/accounting/bills/' + billID + '?includes=charges', {
+          headers: { Authorization: 'Basic ' + RENTVINE_AUTH, 'X-Rentvine-Account': RENTVINE_ACCOUNT }
+        });
+        const d = await det.json();
+        const fb = d && d.bill ? d.bill : b;
+        description = fb.description || fb.paymentMemo || description;
+        reference = fb.reference || fb.paymentMemo || reference;
+        billDate = (fb.billDate || billDate).slice(0, 10);
+        const charges = (d && d.charges) ? d.charges : [];
+        const total = charges.reduce(function(s, c) { return s + Number(c.amount || 0); }, 0);
+        amount = total > 0 ? total.toFixed(2) : String(b.totalAmount || '0.00');
+        const glID = charges[0] ? (charges[0].chargeAccountID || '') : '';
+        glName = GL_NAMES[parseInt(glID)] || GL_NAMES[parseInt(b.glAccountID)] || '';
+      } catch(e) {
+        console.warn('[backfill] Detail fetch failed for bill', billID, e.message);
+        amount = String(b.totalAmount || '0.00');
+      }
+      // Skip bills where amount is still 0 — flag for manual review
+      if (!amount || amount === '0.00') {
+        console.warn('[backfill] Skipping bill', billID, '- amount is 0, needs manual review');
+        skipped++;
+        continue;
+      }
+
+      const ownerMatch = description.match(/\(([^)]+)\)\s*$/);
+      const owner = ownerMatch ? ownerMatch[1] : '';
+      const withoutOwner = ownerMatch ? description.slice(0, ownerMatch.index).trim() : description;
+      const addrMatch = withoutOwner.match(/\d+\s+.+/);
+      const address = addrMatch ? addrMatch[0].trim() : withoutOwner;
+      const now = new Date().toISOString();
+      rowsToAdd.push([now, billDate, '', '', address, owner, glName, '', amount, glName, reference, '', billID, '', now, 'Auto-synced']);
+      existingIDs.add(billID);
+      added++;
+    }
+    if (rowsToAdd.length) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range: `'${SHEET_TAB}'!A1`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: { values: rowsToAdd },
+      });
+    }
+    console.log('[expense-log] Backfill complete: added', added, 'skipped', skipped, 'existingIDs sample:', [...existingIDs].slice(0,5));
+    console.log('[expense-log] First bill sample:', all[0] ? JSON.stringify(all[0]).slice(0,200) : 'none');
+    const ids = all.map(r => String((r.bill||r).billID||'')); console.log('[expense-log] All bill IDs:', ids.join(','));
+    res.json({ success: true, added, skipped, total: all.length });
+  } catch (e) {
+    console.error('[expense-log] Backfill error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/expense-log/upload', async (req, res) => {
   try {
     const billID = req.query.billID;
@@ -2509,119 +2906,6 @@ async function syncPhotosForWO(workOrderID, workOrderNumber) {
   return results;
 }
 
-app.post('/api/sync/aptly-wo', async (req, res) => {
-  res.json({ started: true });
-  try {
-    const cutoff = new Date(Date.now() - 10*60*1000).toISOString();
-    console.log('Aptly WO sync: checking cards updated since', cutoff);
-
-    // Fetch recently updated Aptly WO cards
-    const aptlyCards = [];
-    for (let pg = 0; pg <= 1; pg++) {
-      const r = await fetch('https://core-api.getaptly.com/api/board/workOrder?page=' + pg + '&pageSize=100&includeArchived=true', {
-        headers: { 'x-token': process.env.APTLY_TOKEN }
-      });
-      if (!r.ok) break;
-      const d = await r.json();
-      const cards = Array.isArray(d) ? d : (d.data || []);
-      cards.forEach(c => {
-        if (c.updatedAt && c.updatedAt >= cutoff) aptlyCards.push(c);
-      });
-      if (cards.length < 100) break;
-    }
-    console.log('Aptly WO sync: found', aptlyCards.length, 'recently updated cards');
-    if (!aptlyCards.length) return;
-
-    // Fetch Rentvine open+recent WOs to build lookup map
-    const rvByNumber = {};
-    for (let pg = 1; pg <= 10; pg++) {
-      const wos = await rvFetch('/maintenance/work-orders', { pageSize: 100, page: pg });
-      if (!Array.isArray(wos) || !wos.length) break;
-      wos.forEach(wo => {
-        const n = String(wo.workOrderNumber || '').trim();
-        if (n) rvByNumber[n] = wo;
-      });
-      if (wos.length < 100) break;
-    }
-    console.log('Aptly WO sync: loaded', Object.keys(rvByNumber).length, 'RV WOs');
-
-    const changes = [];
-    for (const card of aptlyCards) {
-      const woNumber = String(card.workOrderNumber || '').trim();
-      if (!woNumber) continue;
-      const rvWO = rvByNumber[woNumber];
-      if (!rvWO) continue;
-
-      const rvWOId = rvWO.workOrderID || rvWO.id;
-      const address = rvWO.unitAddress || rvWO.propertyAddress || '';
-      const stage = (card.stage || '').trim();
-      const updates = {};
-      const cardChanges = [];
-
-      // Map Aptly stage to Rentvine status ID
-      let newStatusID = null;
-      let statusLabel = '';
-      if (/cancel/i.test(stage)) {
-        newStatusID = 3; statusLabel = 'Closed (Cancelled)';
-      } else if (/complet/i.test(stage)) {
-        newStatusID = 3; statusLabel = 'Closed (Complete)';
-      } else if (/open|in.?progress|scheduled|requested|pending|assigned/i.test(stage)) {
-        newStatusID = 2; statusLabel = 'Open';
-      } else if (/hold|waiting/i.test(stage)) {
-        newStatusID = 4; statusLabel = 'On Hold';
-      }
-
-      const currentStatusID = parseInt(rvWO.primaryWorkOrderStatusID || 0);
-      if (newStatusID && currentStatusID !== newStatusID) {
-        updates.primaryWorkOrderStatusID = newStatusID;
-        cardChanges.push('Status → ' + statusLabel);
-      }
-
-      // Vendor sync
-      const aptlyVendors = Array.isArray(card.vendor) ? card.vendor : (card.vendor ? [card.vendor] : []);
-      if (aptlyVendors.length > 0) {
-        const vendorName = (aptlyVendors[0].name || aptlyVendors[0] || '').trim();
-        const rvVendorName = (rvWO.vendorName || '').trim();
-        if (vendorName && vendorName.toLowerCase() !== rvVendorName.toLowerCase()) {
-          // Search Rentvine contacts for vendor
-          const vContacts = await rvFetch('/contacts', { search: vendorName, pageSize: 5 });
-          if (vContacts) {
-            const contacts = Array.isArray(vContacts) ? vContacts : (vContacts.data || []);
-            const match = contacts.find(c => (c.name||'').toLowerCase().includes(vendorName.toLowerCase().slice(0,10)));
-            if (match) {
-              updates.vendorContactID = match.contactID || match.id;
-              cardChanges.push('Vendor → ' + vendorName);
-            }
-          }
-        }
-      }
-
-      if (Object.keys(updates).length > 0) {
-        const patchR = await fetch(RENTVINE_BASE + '/maintenance/work-orders/' + rvWOId, {
-          method: 'PATCH',
-          headers: { 'Authorization': 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json', 'X-Rentvine-Account': 'aloepm' },
-          body: JSON.stringify(updates)
-        });
-        console.log('Aptly WO sync: patched WO#' + woNumber + ' status=' + patchR.status, JSON.stringify(updates));
-        changes.push({ woNumber, address, cardChanges });
-      }
-    }
-
-    // Post to Slack only if something changed
-    if (changes.length > 0 && SLACK_TOKEN) {
-      const msg = ':arrows_counterclockwise: *Aptly-Rentvine WO Sync* -- ' + changes.length + ' update(s):\n' +
-        changes.map(c => '* WO #' + c.woNumber + ' (' + c.address + ') -- ' + c.cardChanges.join(', ')).join('\n');
-      await fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'C06BWVACZQF', text: msg })
-      });
-    }
-    console.log('Aptly WO sync complete:', changes.length, 'changes applied');
-  } catch(e) { console.error('Aptly WO sync error:', e.message); }
-});
-
-
 app.post('/api/webhook/rv-wo-created', async (req, res) => {
   res.sendStatus(200); return; // Disabled
   res.sendStatus(200); // Acknowledge immediately
@@ -2784,8 +3068,6 @@ app.get('/sale-analysis', (req, res) => res.sendFile(new URL('./sale-analysis.ht
 app.get('/owner-report', (req, res) => res.sendFile(new URL('./owner-report.html', import.meta.url).pathname));
 app.get('/metrics', (req, res) => res.sendFile(new URL('./metrics.html', import.meta.url).pathname));
 app.get('/expense-log', (req, res) => res.sendFile(new URL('./expense-log.html', import.meta.url).pathname));
-app.get('/appliance-scanner', (req, res) => res.sendFile(new URL('./appliance-scanner.html', import.meta.url).pathname));
-app.use('/api/scanner', scannerRoutes);
 app.get('/api/properties-search', async (req, res) => {
   try {
     let all = [], page = 1;
@@ -3648,166 +3930,1353 @@ app.get('/api/map-properties', async (req, res) => {
   }
 });
 
-// Rentvine property lookup — used by all agents via hubRequest
-// ── Aptly aptlet-lookup — used by Kat and hub-client for unit/building IDs ──
-app.get('/api/aptly/aptlet-lookup', async (req, res) => {
-  const tok = req.headers['x-hub-token'] || req.headers['x-agent-key'] || req.query.token;
-  if (tok !== process.env.HUB_TOKEN && tok !== process.env.HUB_INTERNAL_SECRET) return res.status(403).json({ error: 'Unauthorized' });
-  try {
-    const q = (req.query.q || '').trim();
-    if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
-    // Search work order cards for a matching address/house number
-    const r = await fetch(`https://core-api.getaptly.com/api/board/search?query=${encodeURIComponent(q)}&pageSize=5`, {
-      headers: { 'x-token': process.env.APTLY_TOKEN }
-    });
-    const data = await r.json();
-    const cards = data.data || data.results || (Array.isArray(data) ? data : []);
-    const match = cards.find(c => (c.unit?.[0]?._id || c.location?.[0]?._id));
-    if (match) {
-      return res.json({
-        unit_aptly_id: match.unit?.[0]?._id || null,
-        building_aptly_id: match.location?.[0]?._id || null,
-        address: match.unit?.[0]?.name || match.name || null
-      });
-    }
-    res.json({ unit_aptly_id: null, building_aptly_id: null });
-  } catch(e) {
-    console.error('aptlet-lookup error:', e.message);
-    res.json({ unit_aptly_id: null, building_aptly_id: null });
-  }
-});
 
-// ── Kat building-lookup — searches Aptly units board by house number ──────
-app.get('/api/kat/building-lookup', async (req, res) => {
-  const tok = req.headers['x-hub-token'] || req.headers['x-agent-key'] || req.query.token;
-  if (tok !== process.env.HUB_TOKEN && tok !== process.env.HUB_INTERNAL_SECRET) return res.status(403).json({ error: 'Unauthorized' });
+// ── zInspector Proxy ──
+app.use('/api/zinspector', async (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  const ziKey = process.env.ZINSPECTOR_API_KEY;
+  if (!ziKey) return res.status(500).json({ error: 'ZINSPECTOR_API_KEY not set on server' });
+  const ziPath = req.path;
+  const query = new URLSearchParams(req.query).toString();
+  const url = `https://portfolio.zinspector.com${ziPath}${query ? '?' + query : ''}`;
   try {
-    const q = (req.query.q || '').trim();
-    if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
-    // Search Aptly units board via core-api
-    const r = await fetch(`https://core-api.getaptly.com/api/board/unit?page=0&pageSize=100&query=${encodeURIComponent(q)}`, {
-      headers: { 'x-token': process.env.APTLY_TOKEN }
-    });
-    const data = await r.json();
-    const units = data.data || data.cards || (Array.isArray(data) ? data : []);
-    const match = units.find(u => {
-      const name = (u.name || u.Name || '').toLowerCase();
-      const qlow = q.toLowerCase();
-      return name.includes(qlow) || name.includes(qlow.split(' ')[0]);
-    });
-    if (match) {
-      const loc = (match.location || [])[0] || {};
-      const unit = (match.unit || [])[0] || {};
-      return res.json({
-        unit_aptly_id: unit._id || match._id || null,
-        unit_aptly_name: unit.name || match.name || null,
-        unit_aptly_duogram: unit.duogram || match.duogram || null,
-        building_aptly_id: loc._id || null,
-        building_aptly_name: loc.name || null,
-        building_aptly_duogram: loc.duogram || null
-      });
-    }
-    res.json({ unit_aptly_id: null, building_aptly_id: null });
-  } catch(e) {
-    console.error('kat-building-lookup error:', e.message);
-    res.json({ unit_aptly_id: null, building_aptly_id: null });
-  }
-});
-
-app.get('/api/rentvine/property-lookup', async (req, res) => {
-  try {
-    const q = (req.query.q || '').toLowerCase();
-    if (!q) return res.json({ properties: [] });
-    const RENTVINE_BASE = `https://${process.env.RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
-    const RENTVINE_AUTH = Buffer.from(`${process.env.RENTVINE_API_KEY}:${process.env.RENTVINE_API_SECRET}`).toString('base64');
-    // Search all leases and match by address
-    let allLeases = [];
-    for (let pg = 1; pg <= 10; pg++) {
-      const r = await fetch(`${RENTVINE_BASE}/leases/export?pageSize=200&page=${pg}&primaryLeaseStatusIDs=1,2`, {
-        headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': process.env.RENTVINE_ACCOUNT }
-      });
-      if (!r.ok) break;
-      const data = await r.json();
-      const batch = Array.isArray(data) ? data : (data.data || []);
-      if (!batch.length) break;
-      allLeases = allLeases.concat(batch);
-      if (batch.length < 200) break;
-    }
-    // Also search vacant units
-    let allUnits = [];
-    for (let pg = 1; pg <= 5; pg++) {
-      const r = await fetch(`${RENTVINE_BASE}/properties/units/export?pageSize=200&page=${pg}`, {
-        headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': process.env.RENTVINE_ACCOUNT }
-      });
-      if (!r.ok) break;
-      const data = await r.json();
-      const batch = Array.isArray(data) ? data : (data.data || []);
-      if (!batch.length) break;
-      allUnits = allUnits.concat(batch);
-      if (batch.length < 200) break;
-    }
-    const normalize = s => (s || '').toLowerCase().replace(/east/g,'e').replace(/west/g,'w').replace(/north/g,'n').replace(/south/g,'s').replace(/street/g,'st').replace(/avenue/g,'ave').replace(/drive/g,'dr').replace(/[^a-z0-9]/g,'');
-    const nq = normalize(q);
-    const results = [];
-    const seen = new Set();
-    // Match from leases
-    for (const l of allLeases) {
-      const addr = normalize(l.unit?.address || '');
-      if (addr.includes(nq) || nq.includes(addr.slice(0,8))) {
-        const key = l.property?.propertyID;
-        if (key && !seen.has(key)) {
-          seen.add(key);
-          results.push({ propertyId: l.property?.propertyID, leaseId: l.lease?.leaseID, address: l.unit?.address, city: l.unit?.city, state: l.unit?.stateID, zip: l.unit?.postalCode });
-        }
+    const r = await fetch(url, {
+      headers: {
+        'x-api-key': ziKey,
+        'Accept': 'application/json',
+        'Origin': 'https://aloe-internal-hub-1089452383500.us-west4.run.app',
+        'Referer': 'https://aloe-internal-hub-1089452383500.us-west4.run.app/'
       }
+    });
+    res.status(r.status).json(await r.json());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// ── End zInspector Proxy ──
+
+// ── Aptly Proxy Routes ─────────────────────────────────────────────────────
+const APTLY_API_TOKEN = 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+const APTLY_API_BASE = 'https://core-api.getaptly.com';
+const HUB_SECRET = process.env.HUB_INTERNAL_SECRET || 'aloe-hub-ari-2026';
+
+async function aptlyCall(method, path, body = null) {
+  const opts = {
+    method,
+    headers: { 'x-token': APTLY_API_TOKEN, 'Content-Type': 'application/json' },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${APTLY_API_BASE}${path}`, opts);
+  const text = await res.text();
+  try { return { status: res.status, data: JSON.parse(text) }; }
+  catch(e) { return { status: res.status, data: text }; }
+}
+
+function hubAuth(req, res, next) {
+  if (req.headers['x-hub-token'] !== HUB_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+}
+
+app.get('/api/aptly/cards/search', hubAuth, async (req, res) => {
+  try {
+    const { query = '', stage = '', limit = '10' } = req.query;
+    const q = query.toLowerCase();
+    const stageFilter = stage.toLowerCase();
+    let allCards = [];
+    for (let page = 0; page <= 100; page++) {
+      const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
+      const batch = Array.isArray(data) ? data : ((data && data.data) || []);
+      if (!batch.length) break;
+      allCards = allCards.concat(batch);
+      if (batch.length < 100) break;
     }
-    // Match from units if not found in leases
-    if (!results.length) {
-      for (const u of allUnits) {
-        const addr = normalize(u.unit?.address || '');
-        if (addr.includes(nq) || nq.includes(addr.slice(0,8))) {
-          const key = u.property?.propertyID;
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            results.push({ propertyId: u.property?.propertyID, leaseId: u.unit?.leaseID, address: u.unit?.address, city: u.unit?.city, state: u.unit?.stateID, zip: u.unit?.postalCode });
-          }
-        }
-      }
-    }
-    res.json({ properties: results.slice(0, 5) });
-  } catch(e) {
-    console.error('property-lookup error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
+    let filtered = allCards;
+    if (q) filtered = filtered.filter(c => JSON.stringify(c).toLowerCase().includes(q));
+    if (stageFilter) filtered = filtered.filter(c => (c.stage || '').toLowerCase().includes(stageFilter));
+    const maxItems = Math.min(parseInt(limit) || 10, 50);
+    res.json({ items: filtered.slice(0, maxItems).map(c => {
+      const unitAddr = Array.isArray(c.unit) && c.unit[0] ? c.unit[0].name : '';
+      const locAddr = Array.isArray(c.location) && c.location[0] ? c.location[0].name : '';
+      const city = c['x8524dtbdHzHhdsYR'] || '';
+      const streetAddress = unitAddr || locAddr || c.address || '';
+      const address = streetAddress + (city ? ', ' + city + ', AZ' : '');
+      const vendorName = Array.isArray(c.vendor) && c.vendor[0] ? c.vendor[0].name : c.vendorName || '';
+      return { id: c.cardId, title: c.name, stage: c.stage, priority: c.priority, address, vendor: vendorName, woNumber: c.workOrderNumber };
+    }), total: filtered.length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/rentvine/properties/:propertyId/units', async (req, res) => {
+app.get('/api/aptly/cards/:id', hubAuth, async (req, res) => {
   try {
-    const RENTVINE_BASE = `https://${process.env.RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
-    const RENTVINE_AUTH = Buffer.from(`${process.env.RENTVINE_API_KEY}:${process.env.RENTVINE_API_SECRET}`).toString('base64');
-    const r = await fetch(`${RENTVINE_BASE}/properties/units/export?pageSize=50&page=1&propertyID=${req.params.propertyId}`, {
-      headers: { 'Authorization': `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': process.env.RENTVINE_ACCOUNT }
+    const data = await unitsFetch('/api/board/workOrder/' + req.params.id);
+    const c = (data && data.data) || data;
+    res.json({ 
+    id: c.cardId, title: c.name, stage: c.stage, priority: c.priority, 
+    description: c.description, address: c.address, 
+    vendor: c.vendor ? c.vendor.map(v => v.name).join(', ') : '',
+    woNumber: c.workOrderNumber,
+    maintenanceCategory: c.maintenanceCategory, 
+    maintenanceNotes: c['F26dyKdxBuz56YTPA'] || c.maintenanceNotes || '',
+    maintenanceLimit: c['vL9npBewrXTyxrn8c'] ? c['vL9npBewrXTyxrn8c'].amount : null,
+    homeWarranty: c['3PvcEJoFBQLnjHnd6'] || c.homeWarranty || '',
+    issueType: c['nfEujqs3ujMNgMFom'] || '',
+    pestControl: c.pestControl || '',
+    landscaping: c.landscaping || '',
+    ownerApproved: c.isOwnerApproved,
+    vacant: c.isVacant,
+  });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/aptly/cards', hubAuth, async (req, res) => {
+  try {
+    const data = await unitsFetch('/api/board/workOrder', {}, 'POST', req.body);
+    res.json((data && data.data) || data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/aptly/cards/:id', hubAuth, async (req, res) => {
+  try {
+    const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    // Aptly update: POST /api/board/workOrder with cardId in body
+    const body = { _id: req.params.id, ...req.body };
+    const r = await fetch('https://core-api.getaptly.com/api/board/workOrder', {
+      method: 'POST',
+      headers: { 'x-token': unitsToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
     const data = await r.json();
-    res.json(Array.isArray(data) ? data : (data.data || []));
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
+    res.status(r.status).json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// Webhook forwarding — forward Rentvine webhooks to Ari on port 3001
+app.post('/api/aptly/cards/:id/comment', hubAuth, async (req, res) => {
+  try {
+    const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    const r = await fetch('https://core-api.getaptly.com/api/board/workOrder/' + req.params.id + '/comment', {
+      method: 'POST',
+      headers: { 'x-token': unitsToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await r.json();
+    res.status(r.status).json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/aptly/cards/:id/comments', hubAuth, async (req, res) => {
+  try {
+    const cardId = req.params.id;
+    // Search the board and find the full card with comments
+    let foundCard = null;
+    for (let page = 0; page <= 100; page++) {
+      const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
+      const batch = Array.isArray(data) ? data : ((data && data.data) || []);
+      if (!batch.length) break;
+      foundCard = batch.find(c => c.cardId === cardId);
+      if (foundCard) break;
+      if (batch.length < 100) break;
+    }
+    if (!foundCard) return res.status(404).json({ error: 'Card not found' });
+    const comments = (foundCard.comments) || [];
+    res.json({ comments: comments.map(cm => ({ user: cm.userName || cm.userId, content: cm.content, date: cm.createdAt })) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rentvine/work-orders/:id/notes', hubAuth, async (req, res) => {
+  try {
+    const idOrNum = req.params.id;
+    const results = await rvFetch('/maintenance/work-orders', { pageSize: 50, page: 1, search: idOrNum });
+    const found = (Array.isArray(results) ? results : []).find(r => String(r.workOrder.workOrderNumber) === String(idOrNum) || String(r.workOrder.workOrderID) === String(idOrNum));
+    if (!found) return res.status(404).json({ error: 'WO not found', idOrNum });
+    const internalId = found.workOrder.workOrderID;
+    const notes = await rvFetch('/notes', { objectTypeID: 16, objectID: internalId, pageSize: 50 });
+    res.json({ workOrder: { id: internalId, number: found.workOrder.workOrderNumber, description: (found.workOrder.description||'').slice(0,200) }, notes: Array.isArray(notes) ? notes.map(n => ({ author: n.createdByName||n.author, content: n.note||n.content, date: n.datePosted||n.createdAt })) : [] });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});;;
+
+app.get('/api/debug/rv-wo-search', hubAuth, async (req, res) => {
+  try {
+    const { q } = req.query;
+    const data = await rvFetch('/maintenance/work-orders', { pageSize: 10, page: 1, search: q });
+    res.json({ type: Array.isArray(data) ? 'array' : typeof data, length: Array.isArray(data) ? data.length : null, keys: Array.isArray(data) && data[0] ? Object.keys(data[0]).slice(0,10) : (typeof data === 'object' ? Object.keys(data).slice(0,10) : null), sample: Array.isArray(data) ? data[0] : data });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/rv-notes/:id', hubAuth, async (req, res) => {
+  try {
+    const data = await rvFetch('/notes', { objectTypeID: 16, objectID: req.params.id, pageSize: 10 });
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Rentvine Webhook Proxy ──
 app.post('/webhook/rentvine', express.json(), async (req, res) => {
-  res.sendStatus(200); // Acknowledge immediately
   try {
-    const body = JSON.stringify(req.body);
+    const payload = req.body;
+    console.log('RV webhook forwarding:', JSON.stringify(payload).slice(0, 200));
+    // Forward to Ari on the server
     const response = await fetch('http://34.16.238.69:3001/webhook/rentvine', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-rentvine-signature': req.headers['x-rentvine-signature'] || '' },
-      body
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-    console.log('Webhook forwarded to Ari:', response.status);
+    const result = await response.json();
+    res.json(result);
   } catch(e) {
-    console.error('Webhook forward error:', e.message);
+    console.error('Webhook proxy error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+// ── Quo Webhook Handler ──
+app.post('/webhook/quo', express.json(), async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log('Quo webhook:', JSON.stringify(payload).slice(0, 300));
+
+    const event = payload.event || payload.type || '';
+    if (!event.includes('message')) return res.json({ ok: true, skipped: true });
+
+    const msg = payload.data || payload.message || payload;
+    const direction = msg.direction || '';
+    const from = msg.from || msg.participant || '';
+    const body = msg.body || msg.content || msg.text || '';
+    const mediaUrls = msg.mediaUrls || msg.attachments || msg.media || [];
+    const hasAttachment = mediaUrls.length > 0;
+    const inboxNumber = msg.to || msg.inboxNumber || '';
+
+    // Only care about inbound messages with attachments OR invoice/quote keywords
+    const isInbound = direction === 'inbound' || direction === 'in';
+    const lowerBody = body.toLowerCase();
+    const isInvoice = lowerBody.includes('invoice') || lowerBody.includes('total') || lowerBody.includes('amount due') || lowerBody.includes('payment');
+    const isQuote = lowerBody.includes('quote') || lowerBody.includes('estimate') || lowerBody.includes('proposal');
+
+    if (!isInbound || (!hasAttachment && !isInvoice && !isQuote)) {
+      return res.json({ ok: true, skipped: true });
+    }
+
+    // Look up vendor in Rentvine by phone
+    let vendorName = null;
+    try {
+      const rvLookup = await fetch(`https://hub.aloepm.com/api/rentvine/vendor-by-phone?phone=${encodeURIComponent(from)}`, {
+        headers: { 'x-hub-token': HUB_SECRET }
+      });
+      const rvData = await rvLookup.json();
+      if (rvData.found) vendorName = rvData.vendor.name;
+    } catch(e) { console.log('Vendor lookup error:', e.message); }
+
+    // Forward to Ari
+    const ariPayload = {
+      type: 'quo_message',
+      from,
+      inboxNumber,
+      body,
+      hasAttachment,
+      mediaUrls,
+      isInvoice,
+      isQuote,
+      vendorName,
+    };
+
+    await fetch('http://34.16.238.69:3001/webhook/quo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ariPayload),
+    });
+
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Quo webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+// ── End Quo Webhook Handler ──
+
+// ── End Rentvine Webhook Proxy ──
+
+app.get('/api/rentvine/unit/:id', hubAuth, async (req, res) => {
+  try {
+    const data = await rvFetch('/properties/units/export', { pageSize: 200, page: 1 });
+    const units = Array.isArray(data) ? data : [];
+    const found = units.find(r => String((r.unit && r.unit.unitID) || r.unitID) === String(req.params.id));
+    if (!found) return res.status(404).json({ error: 'Unit not found', id: req.params.id });
+    const unit = found.unit || found;
+    const property = found.property || {};
+    const streetAddress = unit.address || unit.streetAddress || property.address || '';
+    const city = unit.city || property.city || '';
+    const state = unit.stateID || property.stateID || 'AZ';
+    const zip = unit.postalCode || property.postalCode || '';
+    const address = [streetAddress, city, state, zip].filter(Boolean).join(', ');
+    res.json({ address, streetAddress, city, state, zip });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/aptly/schema', hubAuth, async (req, res) => {
+  try {
+    const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    const r = await fetch('https://core-api.getaptly.com/api/schema/workOrder', {
+      headers: { 'x-token': unitsToken }
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/aptly/vendors', hubAuth, async (req, res) => {
+  try {
+    const vendors = {};
+    for (let page = 0; page <= 20; page++) {
+      const data = await unitsFetch('/api/board/workOrder', { page, pageSize: 100, includeArchived: false });
+      const batch = Array.isArray(data) ? data : ((data && data.data) || []);
+      if (!batch.length) break;
+      for (const card of batch) {
+        const vendorList = card.vendor || [];
+        for (const v of vendorList) {
+          if (v._id && v.name) vendors[v.name] = v._id;
+        }
+      }
+      if (batch.length < 100) break;
+    }
+    res.json({ vendors, count: Object.keys(vendors).length });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/aptly/vendor-search', hubAuth, async (req, res) => {
+  try {
+    const { name = '', phone = '' } = req.query;
+    const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    
+    // Search contacts by phone or name
+    const params = new URLSearchParams({ page: 0, pageSize: 20 });
+    if (phone) params.set('phone', phone);
+    if (name) params.set('query', name);
+    
+    const r = await fetch(`https://core-api.getaptly.com/api/contacts?${params}`, {
+      headers: { 'x-token': unitsToken }
+    });
+    const data = await r.json();
+    const contacts = (data.data || []).filter(c => 
+      c.contactType === 'Vendor' || 
+      c.typeId === 'vendor' ||
+      (c.fullname && name && c.fullname.toLowerCase().includes(name.toLowerCase()))
+    );
+    res.json({ contacts: contacts.map(c => ({ _id: c._id, name: c.fullname, type: c.contactType })) });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/aptly/cards/:id/dispatch', hubAuth, async (req, res) => {
+  try {
+    const { vendorPhone, vendorId, homeWarranty = 'No' } = req.body;
+    const unitsToken = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    
+    let resolvedVendorId = vendorId;
+    
+    // Look up vendor by phone if no ID provided
+    if (!resolvedVendorId && vendorPhone) {
+      const r = await fetch(`https://core-api.getaptly.com/api/contacts?phone=${encodeURIComponent(vendorPhone)}&pageSize=5`, {
+        headers: { 'x-token': unitsToken }
+      });
+      const data = await r.json();
+      const vendor = (data.data || []).find(c => c.contactType === 'Vendor');
+      if (!vendor) return res.status(404).json({ error: 'Vendor not found for phone: ' + vendorPhone });
+      resolvedVendorId = vendor._id;
+    }
+    
+    if (!resolvedVendorId) return res.status(400).json({ error: 'vendorPhone or vendorId required' });
+    
+    // Update card: set vendor + home warranty + reassign flag if needed
+    const body = {
+      _id: req.params.id,
+      vendor: [{ _id: resolvedVendorId }],
+      '3PvcEJoFBQLnjHnd6': homeWarranty,
+    };
+    if (req.body.isReassign) {
+      body['39gNjdkmpFpoPLzth'] = true;
+    }
+    
+    const r = await fetch('https://core-api.getaptly.com/api/board/workOrder', {
+      method: 'POST',
+      headers: { 'x-token': unitsToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    res.status(r.status).json({ success: r.ok, vendorId: resolvedVendorId, homeWarranty, result: data });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rentvine/vendor-by-phone', hubAuth, async (req, res) => {
+  try {
+    const { phone } = req.query;
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+    // Normalize phone - strip non-digits for comparison
+    const normalized = phone.replace(/\D/g, '').slice(-10);
+    const data = await rvFetch('/vendors', { pageSize: 200, page: 1 });
+    const records = Array.isArray(data) ? data : (data.results || data.data || []);
+    const match = records.find(r => {
+      const v = r.contact || r;
+      const vPhone = (v.phone || '').replace(/\D/g, '').slice(-10);
+      return vPhone === normalized;
+    });
+    if (!match) return res.json({ found: false, normalized });
+    const v = match.contact || match;
+    res.json({ found: true, vendor: { id: v.contactID, name: v.name, phone: v.phone } });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/debug/rv-vendors', hubAuth, async (req, res) => {
+  try {
+    const data = await rvFetch('/contacts/vendors', { pageSize: 5, page: 1 });
+    res.json({ type: typeof data, isArray: Array.isArray(data), keys: typeof data === 'object' ? Object.keys(data).slice(0,5) : null, sample: Array.isArray(data) ? data[0] : data });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rentvine/property-lookup', hubAuth, async (req, res) => {
+  try {
+    const { q } = req.query;
+    const q_lower = (q || '').toLowerCase();
+    // Use pageSize=5000 to get all properties in one shot (Rentvine default for accounts endpoint)
+    let allProps = [];
+    for (let page = 1; page <= 10; page++) {
+      const data = await rvFetch('/properties/export', { pageSize: 500, page });
+      const batch = Array.isArray(data) ? data : (data.results || data.data || []);
+      if (!batch.length) break;
+      allProps = allProps.concat(batch);
+      if (batch.length < 500) break; // last page
+    }
+    console.log(`properties/search: fetched ${allProps.length} total, filtering for "${q_lower}"`);
+    const filtered = q_lower ? allProps.filter(r => {
+      const p = r.property || r;
+      const addr = (p.address || p.name || '').toLowerCase();
+      const street = (p.streetName || '').toLowerCase();
+      const num = String(p.streetNumber || '').toLowerCase();
+      const city = (p.city || '').toLowerCase();
+      const full = [addr, street, num, city].join(' ');
+      const words = q_lower.split(/\s+/).filter(Boolean);
+      return words.every(w => full.includes(w));
+    }) : allProps;
+    res.json({ properties: filtered.slice(0, 10).map(r => {
+      const p = r.property || r;
+      return {
+        propertyId: p.propertyID || p.id,
+        address: p.address || p.streetAddress,
+        city: p.city, state: p.stateID, zip: p.postalCode,
+        name: p.name, unitCount: p.unitCount
+      };
+    })});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/rentvine/properties/:id/units', hubAuth, async (req, res) => {
+  try {
+    const data = await rvFetch('/properties/' + req.params.id + '/units');
+    const units = Array.isArray(data) ? data : (data.units || data.data || []);
+    res.json({ units: units.map(u => ({
+      unitId: u.unitID || u.id,
+      address: u.address || u.streetAddress,
+      name: u.name, beds: u.bedrooms, baths: u.bathrooms
+    }))});
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/rentvine/work-orders', hubAuth, async (req, res) => {
+  try {
+    const { propertyID, unitID, leaseID, description, priorityID = 2, isSharedWithTenant = true, isSharedWithOwner = false, sourceTypeID = 2 } = req.body;
+    if (!propertyID || !description) return res.status(400).json({ error: 'propertyID and description required' });
+    const body = { propertyID, description, priorityID, isSharedWithTenant, isSharedWithOwner, sourceTypeID };
+    if (unitID) body.unitID = unitID;
+    if (leaseID) body.leaseID = leaseID;
+    const data = await rvFetch('/maintenance/work-orders', {}, 'POST', body);
+    res.json(data);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Quo SMS ──────────────────────────────────────────────────────────────
+app.post('/api/quo/send-sms', hubAuth, async (req, res) => {
+  try {
+    const { to, message } = req.body;
+    if (!to || !message) return res.status(400).json({ error: 'to and message required' });
+    const QUO_TOKEN = process.env.QUO_API_TOKEN || 'dc4e31adbc86b3983202a9e8f39349e4e7ad1d4f53285dae230af23844b1988d';
+    const FROM_NUMBER = '+16028549884';
+    const r = await fetch('https://api.quo.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Authorization': QUO_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message, from: FROM_NUMBER, to: Array.isArray(to) ? to : [to], phoneNumberId: 'PNRRARIpQO' }),
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data });
+    res.json({ success: true, messageId: data.id || data.messageId, to, message });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Aptly → Rentvine cancel/complete sync ────────────────────────────────
+app.post('/api/sync/aptly-wo-status', hubAuth, async (req, res) => {
+  try {
+    const dryRun = req.body && req.body.dryRun;
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    
+    // 1. Fetch Aptly cards that are Cancelled or Completed
+    let aptlyDone = [];
+    for (let page = 0; page <= 50; page++) {
+      const r = await fetch(`https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=false`, {
+        headers: { 'x-token': APTLY_TOK }
+      });
+      if (!r.ok) break;
+      const raw = await r.json();
+      const items = Array.isArray(raw) ? raw : (raw && raw.data) || [];
+      if (!items.length) break;
+      const done = items.filter(c => {
+        const stage = (c.stage || '').toLowerCase();
+        return stage === 'cancelled' || stage === 'completed' || stage === 'completed already billed';
+      });
+      aptlyDone = aptlyDone.concat(done);
+      if (items.length < 100) break;
+    }
+    
+    console.log(`Aptly sync: found ${aptlyDone.length} cancelled/completed cards`);
+    
+    // 2. For each, find the matching Rentvine WO by workOrderNumber and update if still open
+    const results = { updated: [], skipped: [], errors: [] };
+    
+    for (const card of aptlyDone) {
+      const woNum = card.workOrderNumber || card['Work Order Number'];
+      const rvId = card.rentvineId || card['Rentvine ID'];
+      if (!woNum && !rvId) { results.skipped.push({ reason: 'no WO number', card: card._id }); continue; }
+      
+      const stage = (card.stage || '').toLowerCase();
+      // Rentvine status: 2=Completed, 3=Cancelled
+      const newStatusId = stage === 'cancelled' ? 3 : 2;
+      
+      try {
+        // Search Rentvine for the WO
+        const searchData = await rvFetch('/maintenance/work-orders', { 
+          pageSize: 5, 
+          page: 1,
+          ...(rvId ? { workOrderID: rvId } : { workOrderNumber: woNum })
+        });
+        const wos = Array.isArray(searchData) ? searchData : (searchData && searchData.data) || [];
+        const match = wos.find(r => {
+          const wo = r.workOrder || r;
+          return String(wo.workOrderNumber) === String(woNum) || String(wo.workOrderID) === String(rvId);
+        });
+        
+        if (!match) { results.skipped.push({ reason: 'not found in RV', woNum }); continue; }
+        
+        const wo = match.workOrder || match;
+        const currentStatus = parseInt(wo.workOrderStatusID || wo.primaryWorkOrderStatusID || 0);
+        
+        // Skip if already closed in Rentvine (status 2=Completed, 3=Cancelled, 7=Rejected, 18=Completed Already Billed)
+        if ([2, 3, 7, 18].includes(currentStatus)) {
+          results.skipped.push({ reason: 'already closed in RV', woNum, currentStatus });
+          continue;
+        }
+        
+        if (dryRun) {
+          results.updated.push({ woNum, newStatusId, dryRun: true });
+          continue;
+        }
+        
+        // Update Rentvine WO status
+        const updateData = await rvFetch(`/maintenance/work-orders/${wo.workOrderID}`, {}, 'PATCH', {
+          workOrderStatusID: newStatusId,
+          primaryWorkOrderStatusID: newStatusId,
+        });
+        
+        results.updated.push({ woNum, newStatusId, rvId: wo.workOrderID });
+        console.log(`Synced WO #${woNum}: status → ${newStatusId}`);
+      } catch(e) {
+        results.errors.push({ woNum, error: e.message });
+      }
+    }
+    
+    const summary = `Aptly→RV sync: ${results.updated.length} updated, ${results.skipped.length} skipped, ${results.errors.length} errors`;
+    console.log(summary);
+    
+    // Post summary to Slack if any updates
+    if (results.updated.length > 0 && !dryRun) {
+      const SLACK_TOKEN = process.env.SLACK_BOT_TOKEN || '';
+      if (SLACK_TOKEN) {
+        const lines = results.updated.map(u => `• WO #${u.woNum} → ${u.newStatusId === 3 ? 'Cancelled' : 'Completed'}`).join('\n');
+        await fetch('https://slack.com/api/chat.postMessage', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${SLACK_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channel: 'C0BC64LCKV1', text: `✅ *Aptly→Rentvine Sync*\n${lines}` })
+        });
+      }
+    }
+    
+    res.json({ summary, results });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Aptly → Rentvine cancel/complete sync ────────────────────────────────
+app.post('/api/sync/aptly-wo-status', hubAuth, async (req, res) => {
+  try {
+    const dryRun = req.body && req.body.dryRun;
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    let aptlyDone = [];
+    for (let page = 0; page <= 50; page++) {
+      const r = await fetch(`https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=false`, {
+        headers: { 'x-token': APTLY_TOK }
+      });
+      if (!r.ok) break;
+      const raw = await r.json();
+      const items = Array.isArray(raw) ? raw : (raw && raw.data) || [];
+      if (!items.length) break;
+      aptlyDone = aptlyDone.concat(items.filter(c => {
+        const stage = (c.stage || '').toLowerCase();
+        return stage === 'cancelled' || stage === 'completed' || stage === 'completed already billed';
+      }));
+      if (items.length < 100) break;
+    }
+    console.log(`Aptly sync: found ${aptlyDone.length} cancelled/completed cards`);
+    const results = { updated: [], skipped: [], errors: [] };
+    for (const card of aptlyDone) {
+      const woNum = card.workOrderNumber;
+      const rvId = card.rentvineId;
+      if (!woNum && !rvId) { results.skipped.push({ reason: 'no WO number', card: card._id }); continue; }
+      const stage = (card.stage || '').toLowerCase();
+      const newStatusId = stage === 'cancelled' ? 3 : 2;
+      try {
+        const searchData = await rvFetch('/maintenance/work-orders', { pageSize: 5, page: 1, ...(woNum ? { workOrderNumber: woNum } : {}) });
+        const wos = Array.isArray(searchData) ? searchData : (searchData && searchData.data) || [];
+        const match = wos.find(r => { const wo = r.workOrder || r; return String(wo.workOrderNumber) === String(woNum) || String(wo.workOrderID) === String(rvId); });
+        if (!match) { results.skipped.push({ reason: 'not found in RV', woNum }); continue; }
+        const wo = match.workOrder || match;
+        const currentStatus = parseInt(wo.workOrderStatusID || wo.primaryWorkOrderStatusID || 0);
+        if ([2, 3, 7, 18].includes(currentStatus)) { results.skipped.push({ reason: 'already closed', woNum }); continue; }
+        if (dryRun) { results.updated.push({ woNum, newStatusId, dryRun: true }); continue; }
+        await rvFetch(`/maintenance/work-orders/${wo.workOrderID}`, {}, 'PATCH', { workOrderStatusID: newStatusId });
+        results.updated.push({ woNum, newStatusId });
+        console.log(`Synced WO #${woNum} → status ${newStatusId}`);
+      } catch(e) { results.errors.push({ woNum, error: e.message }); }
+    }
+    const summary = `Aptly→RV sync: ${results.updated.length} updated, ${results.skipped.length} skipped, ${results.errors.length} errors`;
+    console.log(summary);
+    res.json({ summary, results });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Ari: Maintenance Work Order Creation ─────────────────────────────────
+app.post('/api/ari/create-work-order', hubAuth, async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_UNITS_TOKEN || process.env.APTLY_TOKEN || '';
+    const body = req.body;
+    const cardBody = {
+      description: body.description || '',
+      stage: body.stage || 'Internal Work Order Request',
+      priority: body.priority || 'Med',
+      source: 'Staff',
+      isSharedWithTenant: body.isSharedWithTenant || false,
+      isSharedWithOwner: body.isSharedWithOwner || false,
+    };
+    if (body.unitId) cardBody['unit'] = [{ _id: body.unitId, name: body.unitName || '', duogram: body.unitDuogram || '' }];
+    if (body.locationId) {
+      cardBody['location'] = [{ _id: body.locationId, name: body.locationName || '', duogram: body.locationDuogram || '' }];
+      cardBody['Buildings'] = [{ _id: body.locationId, name: body.locationName || '', duogram: body.locationDuogram || '' }];
+    }
+    if (body.portfolioId) cardBody['portfolio'] = [{ _id: body.portfolioId, name: body.portfolioName || '', duogram: body.portfolioDuogram || '' }];
+    if (body.ownerContacts && body.ownerContacts.length) cardBody['ownerContacts'] = body.ownerContacts;
+    // Set Rentvine Status to match Aptly stage
+    const stageToRVStatus = {
+      'Open': 'Open',
+      'Internal Work Order Request': 'Internal Work Order Request',
+      'Unit Turn': 'Unit Turn',
+      'Estimating': 'Estimating',
+      'Requested': 'Requested',
+      'Scheduled': 'Scheduled',
+      'Home Warranty': 'Home Warranty',
+      'Waiting for Parts': 'Waiting for Parts',
+      'Dispatch Work Order': 'Open',
+      'Completed': 'Completed',
+      'Cancelled': 'Cancelled',
+    };
+    const rvStatus = stageToRVStatus[body.stage] || 'Open';
+    cardBody['rentvineStatus'] = rvStatus;
+    console.log('Ari WO create:', JSON.stringify(cardBody).slice(0, 300));
+    const r = await fetch('https://core-api.getaptly.com/api/board/workOrder', {
+      method: 'POST',
+      headers: { 'x-token': APTLY_TOK, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cardBody),
+    });
+    const result = await r.json();
+    if (!r.ok) return res.status(500).json({ error: 'Aptly ' + r.status, detail: result });
+    const cardId = result.data?._id || result._id;
+    console.log('Ari WO created:', cardId);
+    res.json({ _id: cardId, cardId });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Kat: Building lookup by address ─────────────────────────────────────
+app.get('/api/kat/building-lookup', hubAuth, async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    const q = (req.query.q || '').trim();
+    if (!q) return res.status(400).json({ error: 'q param required' });
+    const houseNum = q.split(' ')[0];
+    let result = { unit_aptly_id: null, unit_aptly_name: null, unit_aptly_duogram: null, building_aptly_id: null, building_aptly_name: null, building_aptly_duogram: null };
+    for (let pg = 0; pg < 10 && !result.building_aptly_id; pg++) {
+      const r = await fetch(`https://core-api.getaptly.com/api/board/location?page=${pg}&pageSize=100&search=${encodeURIComponent(houseNum)}`, {
+        headers: { 'x-token': APTLY_TOK }
+      });
+      const data = await r.json();
+      const bldgs = Array.isArray(data) ? data : (data.data || []);
+      if (!bldgs.length) break;
+      for (const b of bldgs) {
+        const bAddr = (b.address?.address || b.address?.formattedAddress || b.name || '').toLowerCase();
+        if (bAddr.includes(houseNum.toLowerCase())) {
+          result.building_aptly_id = b._id;
+          result.building_aptly_name = b.address?.formattedAddress || b.name || '';
+          result.building_aptly_duogram = b.duogram || '';
+          if (b.units?.[0]) {
+            result.unit_aptly_id = b.units[0]._id;
+            result.unit_aptly_name = b.units[0].name || '';
+            result.unit_aptly_duogram = b.units[0].duogram || '';
+          }
+          break;
+        }
+      }
+      if (bldgs.length < 100) break;
+    }
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Kat: Building lookup by address ─────────────────────────────────────
+app.get('/api/kat/building-lookup', hubAuth, async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    const q = (req.query.q || '').trim();
+    if (!q) return res.status(400).json({ error: 'q param required' });
+    const houseNum = q.split(' ')[0];
+    let result = { unit_aptly_id: null, unit_aptly_name: null, unit_aptly_duogram: null, building_aptly_id: null, building_aptly_name: null, building_aptly_duogram: null };
+    for (let pg = 0; pg < 10 && !result.building_aptly_id; pg++) {
+      const r = await fetch(`https://core-api.getaptly.com/api/board/location?page=${pg}&pageSize=100&search=${encodeURIComponent(houseNum)}`, {
+        headers: { 'x-token': APTLY_TOK }
+      });
+      const data = await r.json();
+      const bldgs = Array.isArray(data) ? data : (data.data || []);
+      if (!bldgs.length) break;
+      for (const b of bldgs) {
+        const bAddr = (b.address?.address || b.address?.formattedAddress || b.name || '').toLowerCase();
+        if (bAddr.includes(houseNum.toLowerCase())) {
+          result.building_aptly_id = b._id;
+          result.building_aptly_name = b.address?.formattedAddress || b.name || '';
+          result.building_aptly_duogram = b.duogram || '';
+          if (b.units?.[0]) {
+            result.unit_aptly_id = b.units[0]._id;
+            result.unit_aptly_name = b.units[0].name || '';
+            result.unit_aptly_duogram = b.units[0].duogram || '';
+          }
+          break;
+        }
+      }
+      if (bldgs.length < 100) break;
+    }
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── End Aptly Proxy ──
+// Agent Hub - receive heartbeat from agent-monitor
+let agentStatus = { procs: [], pushedAt: null };
+
+
+
+// ── SOP Library ─────────────────────────────────────────────────────────────
+let sopRuns = [];
+
+app.get('/api/agents/sops', async (req, res) => {
+  try {
+    const [files] = await storage.bucket(BUCKET).getFiles({ prefix: 'sops/' });
+    const sops = [];
+    for (const file of files) {
+      if (!file.name.endsWith('.json')) continue;
+      const [data] = await file.download();
+      try { sops.push(JSON.parse(data.toString())); } catch(e) {}
+    }
+    sops.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    res.json(sops);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/agents/sops/:id', async (req, res) => {
+  try {
+    const file = storage.bucket(BUCKET).file('sops/' + req.params.id + '.json');
+    const [exists] = await file.exists();
+    if (!exists) return res.status(404).json({ error: 'SOP not found' });
+    const [data] = await file.download();
+    res.json(JSON.parse(data.toString()));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/agents/sops', async (req, res) => {
+  try {
+    const sop = req.body;
+    if (!sop.id) return res.status(400).json({ error: 'id required' });
+    sop.updatedAt = new Date().toISOString();
+    await storage.bucket(BUCKET).file('sops/' + sop.id + '.json').save(JSON.stringify(sop), { contentType: 'application/json' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/agents/sops/:id', async (req, res) => {
+  try {
+    await storage.bucket(BUCKET).file('sops/' + req.params.id + '.json').delete();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/agents/runs', (req, res) => {
+  const sopId = req.query.sop;
+  let results = sopRuns;
+  if (sopId) results = results.filter(function(r){ return r.sopId === sopId; });
+  res.json(results.slice(0, 100));
+});
+
+app.post('/api/agents/runs', (req, res) => {
+  const run = Object.assign({}, req.body, { timestamp: new Date().toISOString(), id: Date.now().toString() });
+  sopRuns.unshift(run);
+  if (sopRuns.length > 500) sopRuns = sopRuns.slice(0, 500);
+  res.json({ ok: true, id: run.id });
+});
+
+app.get('/agents/sops', (req, res) => res.sendFile('/app/public/sops.html'));
+app.get('/agents/jobs', (req, res) => res.sendFile('/app/public/jobs.html'));
+
+// ── Agent Hub API Routes ────────────────────────────────────────────────────
+
+// Playbook routes
+app.get('/api/agents/playbook/:agentId', async (req, res) => {
+  try {
+    const file = storage.bucket(BUCKET).file('playbooks/' + req.params.agentId + '.md');
+    const [exists] = await file.exists();
+    if (!exists) return res.json({ content: '', exists: false });
+    const [data] = await file.download();
+    res.json({ content: data.toString(), exists: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agents/playbook-save', async (req, res) => {
+  try {
+    const { agentId, content } = req.body;
+    const file = storage.bucket(BUCKET).file('playbooks/' + agentId + '.md');
+    await file.save(content, { contentType: 'text/markdown' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Knowledge routes
+app.get('/api/agents/knowledge/:scope', async (req, res) => {
+  try {
+    const file = storage.bucket(BUCKET).file('knowledge/' + req.params.scope + '.md');
+    const [exists] = await file.exists();
+    if (!exists) return res.json({ content: '', exists: false });
+    const [data] = await file.download();
+    res.json({ content: data.toString(), exists: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/agents/knowledge', async (req, res) => {
+  try {
+    const { scope, title, content } = req.body;
+    const scopes = scope === 'all' ? ['shared'] : [scope];
+    for (const s of scopes) {
+      const file = storage.bucket(BUCKET).file('knowledge/' + s + '.md');
+      const [exists] = await file.exists();
+      let existing = '';
+      if (exists) {
+        const [data] = await file.download();
+        existing = data.toString();
+      }
+      const entry = '\n\n---\n## ' + title + '\n*Added: ' + new Date().toISOString().slice(0,10) + '*\n\n' + content;
+      await file.save(existing + entry, { contentType: 'text/markdown' });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/agents/knowledge/:scope', async (req, res) => {
+  try {
+    await storage.bucket(BUCKET).file('knowledge/' + req.params.scope + '.md').save('', { contentType: 'text/markdown' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Activity log
+let agentActivity = [];
+
+app.post('/api/agents/log', (req, res) => {
+  const key = req.headers['x-agent-key'];
+  if (key !== 'aloe-internal') return res.status(401).json({ error: 'unauthorized' });
+  const entry = { ...req.body, timestamp: new Date().toISOString() };
+  agentActivity.unshift(entry);
+  if (agentActivity.length > 500) agentActivity = agentActivity.slice(0, 500);
+  res.json({ ok: true });
+});
+
+app.get('/api/agents/activity', (req, res) => {
+  const agent = req.query.agent;
+  const limit = parseInt(req.query.limit) || 50;
+  let results = agentActivity;
+  if (agent) results = results.filter(e => e.agentId === agent);
+  res.json(results.slice(0, limit));
+});
+
+app.post('/api/agents/heartbeat', (req, res) => {
+  const key = req.headers['x-agent-key'];
+  if (key !== 'aloe-internal') return res.status(401).json({ error: 'unauthorized' });
+  agentStatus = req.body;
+  res.json({ ok: true });
+});
+
+app.get('/api/agents/status', (req, res) => {
+  res.json(agentStatus);
+});
+
+
+
+app.get('/agents', (req, res) => {
+  res.sendFile('/app/public/agents.html');
+});
+app.get('/agents/activity', (req, res) => {
+  res.sendFile('/app/public/activity.html');
+});
+app.get('/agents/playbooks', (req, res) => {
+  res.sendFile('/app/public/playbooks.html');
+});
+app.get('/agents/knowledge', (req, res) => {
+  res.sendFile('/app/public/knowledge.html');
+});
+// ── Aptlet lookup — find Aptly unit/building IDs by house number ──────────
+// Searches work orders board (which covers all properties) to find aptlet IDs
+app.get('/api/aptly/aptlet-lookup', hubAuth, async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    const houseNum = (req.query.q || '').trim().split(' ')[0];
+    if (!houseNum) return res.status(400).json({ error: 'q param required' });
+
+    let found = null;
+    for (let page = 0; page < 15 && !found; page++) {
+      const r = await fetch(`https://core-api.getaptly.com/api/board/workOrder?page=${page}&pageSize=100&includeArchived=true`, {
+        headers: { 'x-token': APTLY_TOK }
+      });
+      const data = await r.json();
+      const cards = Array.isArray(data) ? data : (data.data || []);
+      if (!cards.length) break;
+      for (const c of cards) {
+        const name = c.name || '';
+        if (name.includes(houseNum) && c.unit?.[0]?._id && c.location?.[0]?._id) {
+          const buildingId = c.location[0]._id;
+          let portfolioId = null, portfolioName = null, portfolioDuogram = null;
+          try {
+            const bldgResp = await fetch(`https://core-api.getaptly.com/api/board/location/${buildingId}`, {
+              headers: { 'x-token': APTLY_TOK }
+            });
+            const bldgData = await bldgResp.json();
+            const bldg = bldgData.data || bldgData;
+            portfolioId = bldg.portfolio?.[0]?._id || null;
+            portfolioName = bldg.portfolio?.[0]?.name || null;
+            portfolioDuogram = bldg.portfolio?.[0]?.duogram || null;
+          } catch(e) { console.error('Building lookup error:', e.message); }
+          // Get owners from building record
+          let bldgOwners = [];
+          try {
+            const bldgResp2 = await fetch(`https://core-api.getaptly.com/api/board/location/${buildingId}`, {
+              headers: { 'x-token': APTLY_TOK }
+            });
+            const bldgData2 = await bldgResp2.json();
+            const bldg2 = bldgData2.data || bldgData2;
+            bldgOwners = bldg2.owners || [];
+          } catch(e) { console.error('Building owners error:', e.message); }
+          found = {
+            unit_aptly_id: c.unit[0]._id,
+            unit_aptly_name: c.unit[0].name || null,
+            unit_aptly_duogram: c.unit[0].duogram || null,
+            building_aptly_id: buildingId,
+            building_aptly_name: c.location[0].name || null,
+            building_aptly_duogram: c.location[0].duogram || null,
+            portfolio_aptly_id: portfolioId,
+            portfolio_aptly_name: portfolioName,
+            portfolio_aptly_duogram: portfolioDuogram,
+            owners: bldgOwners,
+          };
+          break;
+        }
+      }
+    }
+    if (!found) return res.json({ unit_aptly_id: null, building_aptly_id: null });
+    res.json(found);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/vendor-apply', async (req, res) => {
+  try {
+    const { business, name, phone, email, trade, license, area, insurance, about, why, hourlyRate, employees, hasVehicle, hasTools, social, refs, additional } = req.body;
+    const slackText = `New Vendor Application\nBusiness: ${business}\nContact: ${name} - ${phone} - ${email}\nTrade: ${trade}\nInsurance: ${insurance}`;
+    let slackOk = false;
+    if (process.env.SLACK_TOKEN) {
+      try {
+        const slackResp = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { 'Authorization': `Bearer ${process.env.SLACK_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'C07CY9SSF7D', text: slackText }) });
+        const slackData = await slackResp.json();
+        slackOk = slackData.ok;
+      } catch(e) { console.error('Slack vendor error:', e.message); }
+    }
+    if (slackOk) return res.json({ ok: true });
+    res.status(500).json({ error: 'Failed to deliver application' });
+  } catch (err) {
+    console.error('Vendor apply error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Plaid
+initPlaidRoutes(app);
+
+const PORT = process.env.PORT || 3000;
+
+// ── HOA: Property lookup by address ──────────────────────────────────────
+// duplicate properties/search route removed
+
+// ── HOA: Get property (includes custom HOA fields) ────────────────────────
+
+
+
+
+app.post('/api/aptly/hoa-cards', hubAuth, async (req, res) => {
+  try {
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    const body = req.body;
+
+    // Field KEYS from schema (not display names)
+    const cardBody = {
+      name:                body.title || '',
+      description:         body.violation_exact_wording || '',
+      stage:               'HOA Violation/Notice received',
+      createdAt:           new Date().toISOString(),
+      stageUpdatedAt:      new Date().toISOString(),
+      'Sz5KNfAAMDuThngyG': body.violation_issue || '',
+      'cPZmmmjQwYJriT53Y': body.warning_or_fine || '',
+      'iyZj4A2TfKiHRtF7i': body.owner_tenant_responsible || '',
+      'dueAt':             body.due_date || null,
+      'nMmfRWZyAFDFNW4mo': body.tenant_phone_1 || '',
+      'iSifhPDzhrNrMAZXx': body.tenant_phone_2 || '',
+      'BvfLpebk484dEsd4Y': body.mirror_hoa_name || '',
+      'T3tGDpxosQnR7u3NA': body.mirror_hoa_number || '',
+      '2u8QFWLBDrf6tC9P9': body.mirror_hoa_email || '',
+      'dMNaxpq2zPTY9rhaJ': body.mirror_hoa_website || '',
+    };
+    if (body.fine_amount) cardBody['RevYLWzf8Yv2QtwK9'] = Number(body.fine_amount);
+    if (body.unit_aptly_id) cardBody['unit'] = [{ _id: body.unit_aptly_id, name: body.unit_aptly_name || '', duogram: (body.unit_aptly_name || '').replace(/[^A-Z0-9]/g,'').slice(0,2) }];
+    if (body.building_aptly_id) cardBody['location'] = [{ _id: body.building_aptly_id, name: body.building_aptly_name || '', duogram: (body.building_aptly_name || '').replace(/[^A-Z0-9]/g,'').slice(0,2) }];
+
+    const r = await fetch('https://core-api.getaptly.com/api/board/8bazEHshdZNuMKCFE', {
+      method: 'POST',
+      headers: { 'x-token': APTLY_TOK, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cardBody)
+    });
+    const result = await r.json();
+    if (!r.ok) return res.status(500).json({ error: 'Aptly ' + r.status, detail: result });
+    const cardId = result.data?._id || result.cardId || result._id;
+    console.log('HOA card created:', cardId);
+    res.json({ _id: cardId, cardId });
+  } catch (e) { console.error('HOA card error:', e); res.status(500).json({ error: e.message }); }
+});
+
+
+
+// ── Property lookup via Aptly HOA registration board ─────────────────────
+// Searches the HOA registration board which stores Mirror Rentvine ID,
+// tenant name, lease dates, owner info, and HOA details
+app.get('/api/aptly/property-search', hubAuth, async (req, res) => {
+  try {
+    const q = req.query.q || '';
+    // Extract house number and street name for flexible matching
+    const houseNum = q.trim().split(' ')[0];
+    const streetName = q.replace(/^\d+\s+/, '').replace(/^[NSEW]\.?\s+/i, '').split(' ')[0];
+    const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
+    // Search HOA Violations board by street name then house number
+    const HOA_BOARD = '8bazEHshdZNuMKCFE';
+    let items = [];
+    for (const query of [streetName, houseNum]) {
+      if (!query) continue;
+      const r = await fetch(`https://core-api.getaptly.com/api/board/${HOA_BOARD}?page=0&pageSize=20&search=${encodeURIComponent(query)}`, {
+        headers: { 'x-token': APTLY_TOK }
+      });
+      const data = await r.json();
+      items = Array.isArray(data) ? data : (data.data || []);
+      if (items.length) break;
+    }
+    // Extract unit and building IDs from results
+    const mapped = await Promise.all(items.map(async c => {
+      let unit_aptly_id = c.unit?.[0]?._id || null;
+      let unit_aptly_name = c.unit?.[0]?.name || null;
+      let unit_aptly_duogram = c.unit?.[0]?.duogram || null;
+      let building_aptly_id = c.location?.[0]?._id || c.Buildings?.[0]?._id || null;
+      let building_aptly_name = c.location?.[0]?.name || c.Buildings?.[0]?.name || null;
+      let building_aptly_duogram = c.location?.[0]?.duogram || c.Buildings?.[0]?.duogram || null;
+      // Fallback to aptlet-lookup if IDs are missing
+      if (!unit_aptly_id && q) {
+        try {
+          const lookupR = await fetch(`https://hub.aloepm.com/api/aptly/aptlet-lookup?q=${encodeURIComponent(q)}`, {
+            headers: { 'x-hub-token': process.env.HUB_SECRET || 'aloe-hub-ari-2026' }
+          });
+          const lookup = await lookupR.json();
+          if (lookup.unit_aptly_id) {
+            unit_aptly_id = lookup.unit_aptly_id;
+            unit_aptly_name = lookup.unit_aptly_name;
+            unit_aptly_duogram = lookup.unit_aptly_duogram;
+            building_aptly_id = lookup.building_aptly_id;
+            building_aptly_name = lookup.building_aptly_name;
+            building_aptly_duogram = lookup.building_aptly_duogram;
+          }
+        } catch(e) { console.error('aptlet-lookup fallback error:', e.message); }
+      }
+      return {
+        id: c._id,
+        title: c.name || c.title || '',
+        unit_aptly_id, unit_aptly_name, unit_aptly_duogram,
+        building_aptly_id, building_aptly_name, building_aptly_duogram,
+      };
+    }));
+    res.json({ items: mapped });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+
+
+// Inspection Media → Structured Findings
+const uploadMedia = multer({ dest: '/tmp/inspection-uploads/' });
+
+app.post('/inspection-media', uploadMedia.array('files'), async (req, res) => {
+  try {
+    const type = req.body.type || 'inspection';
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ error: 'No files uploaded' });
+
+    const isVideo = files[0].mimetype.startsWith('video/');
+    const args = ['inspection_media.py', 'analyze', '--type', type, '--report'];
+
+    if (isVideo) {
+      args.push('--video', files[0].path);
+    } else {
+      args.push('--photos', ...files.map(f => f.path));
+    }
+
+    execFile('python3', args, {
+      cwd: '/app',
+      env: { ...process.env, PATH: '/opt/venv/bin:' + process.env.PATH },
+      maxBuffer: 1024 * 1024 * 10
+    }, (err, stdout, stderr) => {
+      // Clean up uploaded files
+      files.forEach(f => { import('fs').then(fs => fs.unlink(f.path, () => {})); });
+
+      if (err) {
+        console.error('Inspection media error:', stderr);
+        return res.status(500).json({ error: 'Pipeline failed', detail: stderr });
+      }
+
+      try {
+        const findings = JSON.parse(stdout);
+        res.json({ ok: true, findings });
+      } catch {
+        // Return raw output if not JSON
+        res.json({ ok: true, report: stdout });
+      }
+    });
+  } catch (err) {
+    console.error('Inspection media route error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Bank Reconciliation (Plaid -> ledger match -> discrepancies)
+import { execFile as execFileRecon } from 'child_process';
+const reconHandler = (req, res) => {
+  const { account_token, start_date, end_date, ledger, demo } = req.body;
+  const args = ['bank_recon.py', 'reconcile'];
+  if (demo) {
+    args.push('--demo', '--report');
+  } else {
+    if (!account_token || !start_date || !end_date || !ledger) {
+      return res.status(400).json({ error: 'Missing required fields: account_token, start_date, end_date, ledger' });
+    }
+    const fs = require('fs');
+    const tmpLedger = `/tmp/ledger-${Date.now()}.json`;
+    fs.writeFileSync(tmpLedger, JSON.stringify(ledger));
+    args.push('--plaid-token', account_token, '--start', start_date, '--end', end_date, '--ledger', tmpLedger, '--report');
+  }
+  execFileRecon('python3', args, {
+    cwd: '/app',
+    env: { ...process.env, PATH: '/opt/venv/bin:' + process.env.PATH },
+    maxBuffer: 1024 * 1024 * 5
+  }, (err, stdout, stderr) => {
+    if (err) {
+      console.error('Bank recon error:', stderr);
+      return res.status(500).json({ error: 'Reconciliation failed', detail: stderr });
+    }
+    try {
+      res.json({ ok: true, result: JSON.parse(stdout) });
+    } catch {
+      res.json({ ok: true, report: stdout });
+    }
+  });
+};
+app.post('/bank-recon', express.json(), reconHandler);
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile('/app/public/dashboard.html');
+});
+
+// ============================================================
+// FIVE-DAY NOTICE AUTO-CHARGE
+// ============================================================
+const APTLY_AR_BOARD_UUID      = 'wk228jktWTWibWNhT';
+const DELINQUENT_STAGE         = 'Delinquent';
+const FIVE_DAY_AMOUNT          = parseFloat(process.env.FIVE_DAY_NOTICE_AMOUNT       || '75');
+const FIVE_DAY_CHARGE_ACCT_ID  = String(process.env.FIVE_DAY_CHARGE_ACCOUNT_ID       || '');
+const FIVE_DAY_DESCRIPTION     = '5 Day Notice Fee';
+const BO_CHANNEL               = process.env.BO_ACCOUNTING_CHANNEL || 'C0BCCV790VC';
+
+app.post('/api/five-day-notice-charge', async (req, res) => {
+  if (req.headers['x-hub-token'] !== process.env.HUB_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const today      = new Date();
+  const todayStr   = today.toISOString().split('T')[0];
+  const dayOfMonth = today.getDate();
+  if (dayOfMonth !== 5 && req.query.force !== '1') {
+    return res.json({ skipped: true, reason: `Day is ${dayOfMonth}, not the 5th. Add ?force=1 to override.` });
+  }
+  if (!FIVE_DAY_CHARGE_ACCT_ID) {
+    return res.status(500).json({ error: 'FIVE_DAY_CHARGE_ACCOUNT_ID env var not set' });
+  }
+  const results = { applied: [], skipped: [], errors: [] };
+  try {
+    const aptlyResp = await fetch(
+      `https://core-api.getaptly.com/api/board/${APTLY_AR_BOARD_UUID}?page=0&pageSize=500`,
+      { headers: { 'x-token': APTLY_TOKEN, 'Content-Type': 'application/json' } }
+    );
+    if (!aptlyResp.ok) throw new Error(`Aptly board fetch failed: ${aptlyResp.status}`);
+    const aptlyData  = await aptlyResp.json();
+    const allCards   = aptlyData?.data || aptlyData?.items || [];
+    const delinquent = allCards.filter(c => c.Stage === DELINQUENT_STAGE);
+    console.log(`[5-day] ${delinquent.length} delinquent cards of ${allCards.length} total`);
+
+    const leasesResp = await fetch(
+      `${RENTVINE_BASE}/leases/export?primaryLeaseStatusIDs[]=2`,
+      { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } }
+    );
+    if (!leasesResp.ok) throw new Error(`Rentvine leases fetch failed: ${leasesResp.status}`);
+    const leasesRaw = await leasesResp.json();
+    const allLeases = Array.isArray(leasesRaw) ? leasesRaw : (leasesRaw?.data || []);
+    const norm = s => s?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+    const addrMap = {};
+    for (const item of allLeases) {
+      const addr    = norm(item?.unit?.address || item?.property?.address || '');
+      const leaseID = String(item?.lease?.leaseID || '');
+      if (addr && leaseID) addrMap[addr] = leaseID;
+    }
+
+    for (const card of delinquent) {
+      const address    = card['Mirror Address']?.standardAddress || card.Title || '';
+      const tenantName = card.Tenants?.[0]?.name || card.Leases?.[0]?.name || 'Unknown';
+      const streetNorm = norm(address.split(',')[0]);
+      let leaseID = addrMap[streetNorm];
+      if (!leaseID) {
+        const key = Object.keys(addrMap).find(k => k.startsWith(streetNorm.slice(0, 12)));
+        leaseID   = key ? addrMap[key] : null;
+      }
+      if (!leaseID) {
+        results.errors.push({ address, tenantName, reason: 'No matching Rentvine lease found for address' });
+        continue;
+      }
+      try {
+        const chkResp = await fetch(
+          `${RENTVINE_BASE}/accounting/leases/${leaseID}/charges?startDate=${todayStr}&endDate=${todayStr}`,
+          { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } }
+        );
+        if (chkResp.ok) {
+          const chkData  = await chkResp.json();
+          const existing = Array.isArray(chkData) ? chkData : (chkData?.data || []);
+          const already  = existing.some(c =>
+            String(c.chargeAccountID) === String(FIVE_DAY_CHARGE_ACCT_ID) ||
+            (c.description || '').toLowerCase().includes('5 day') ||
+            (c.description || '').toLowerCase().includes('notice fee')
+          );
+          if (already) {
+            results.skipped.push({ address, tenantName, leaseID, reason: 'Already charged today' });
+            continue;
+          }
+        }
+      } catch (e) {
+        console.warn(`[5-day] Dedup check failed for lease ${leaseID}: ${e.message} — proceeding`);
+      }
+      try {
+        const chargeResp = await fetch(
+          `${RENTVINE_BASE}/accounting/leases/${leaseID}/charges`,
+          {
+            method:  'POST',
+            headers: {
+              Authorization: `Basic ${RENTVINE_AUTH}`,
+              'X-Rentvine-Account': RENTVINE_ACCOUNT,
+              'Content-Type':       'application/json'
+            },
+            body: JSON.stringify({
+              chargeAccountID: String(FIVE_DAY_CHARGE_ACCT_ID),
+              description:     FIVE_DAY_DESCRIPTION,
+              amount:          FIVE_DAY_AMOUNT,
+              dueDate:         todayStr,
+              memo:            `Auto-applied by Ari — ${todayStr}`
+            })
+          }
+        );
+        if (!chargeResp.ok) {
+          const errText = await chargeResp.text();
+          throw new Error(`HTTP ${chargeResp.status}: ${errText}`);
+        }
+        const chargeResult = await chargeResp.json();
+        const chargeID = String(chargeResult?.chargeID || chargeResult?.id || '');
+        results.applied.push({ address, tenantName, leaseID, chargeID, amount: FIVE_DAY_AMOUNT });
+        console.log(`[5-day] ✅ $${FIVE_DAY_AMOUNT} → ${tenantName} @ ${address} (lease ${leaseID}, charge ${chargeID})`);
+      } catch (e) {
+        results.errors.push({ address, tenantName, leaseID, reason: e.message });
+        console.error(`[5-day] ❌ ${address}: ${e.message}`);
+      }
+    }
+
+    const dateLabel = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const fmtList   = (arr, fn) => arr.length ? arr.map(fn).join('\n') : '  _None_';
+    const msg = [
+      `*📋 5-Day Notice Charges — ${dateLabel}*`,
+      `\n✅ *Applied (${results.applied.length}):*`,
+      fmtList(results.applied,  r => `  • ${r.tenantName} — ${r.address} — $${r.amount}`),
+      results.skipped.length ? `\n⏭ *Already charged today (${results.skipped.length}):*\n` + fmtList(results.skipped, r => `  • ${r.tenantName} — ${r.address}`) : '',
+      results.errors.length  ? `\n❌ *Errors (${results.errors.length}):*\n`                + fmtList(results.errors,  r => `  • ${r.tenantName || r.address} — ${r.reason}`) : ''
+    ].filter(Boolean).join('\n');
+    await fetch('https://slack.com/api/chat.postMessage', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ channel: BO_CHANNEL, text: msg })
+    });
+    return res.json({ success: true, date: todayStr, ...results });
+  } catch (err) {
+    console.error('[5-day] Fatal:', err.message);
+    await fetch('https://slack.com/api/chat.postMessage', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ channel: BO_CHANNEL, text: `❌ *5-Day Notice job failed (${todayStr}):* ${err.message}` })
+    }).catch(() => {});
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -3965,6 +5434,12 @@ app.get('*', function(req, res) {
       <div class="tool-name">Lease Renewals</div>
       <div class="tool-desc">Renewal pipeline, offers, calculator — Persia's dashboard</div>
     </a>
+    <a href="/vendors/edit" class="tool-card primary" data-name="vendor directory contractor list trade edit">
+      <span class="badge badge-live">LIVE</span>
+      <div class="tool-icon silver">🔨</div>
+      <div class="tool-name">Vendor Directory</div>
+      <div class="tool-desc">Preferred vendor list by trade — add, edit, assign priorities and zones</div>
+    </a>
     <a href="/hoa" class="tool-card primary" data-name="hoa form filler registration juan">
       <span class="badge badge-live">LIVE</span>
       <div class="tool-icon">📋</div>
@@ -4090,28 +5565,33 @@ function filterTools(q) {
 </html>`);
 });
 // Vendor application form submission
-app.post('/api/vendor-apply', async (req, res) => {
+app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
+
+// Vendor Duplicate Bill Check
+app.post('/vendor-duplicate-check', express.json(), async (req, res) => {
   try {
-    const { business, name, phone, email, trade, license, area, insurance, about, why, hourlyRate, employees, hasVehicle, hasTools, social, refs, additional } = req.body;
-    const slackText = `New Vendor Application\nBusiness: ${business}\nContact: ${name} - ${phone} - ${email}\nTrade: ${trade}\nInsurance: ${insurance}`;
-    let slackOk = false;
-    if (process.env.SLACK_TOKEN) {
+    const days = req.body.days || 90;
+    const window = req.body.window_days || 7;
+    execFile('python3', ['vendor_duplicate_check.py', String(days), String(window)], {
+      cwd: '/app',
+      env: { ...process.env, PATH: '/opt/venv/bin:' + process.env.PATH },
+      maxBuffer: 1024 * 1024 * 10,
+      timeout: 120000
+    }, (err, stdout, stderr) => {
+      if (err) {
+        console.error('Vendor duplicate check error:', stderr);
+        return res.status(500).json({ error: 'Check failed', detail: stderr });
+      }
       try {
-        const slackResp = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { 'Authorization': `Bearer ${process.env.SLACK_TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'C07CY9SSF7D', text: slackText }) });
-        const slackData = await slackResp.json();
-        slackOk = slackData.ok;
-      } catch(e) { console.error('Slack vendor error:', e.message); }
-    }
-    if (slackOk) return res.json({ ok: true });
-    res.status(500).json({ error: 'Failed to deliver application' });
+        res.json({ ok: true, result: JSON.parse(stdout) });
+      } catch {
+        res.json({ ok: true, report: stdout });
+      }
+    });
   } catch (err) {
-    console.error('Vendor apply error:', err);
+    console.error('Vendor duplicate check route error:', err);
     res.status(500).json({ error: 'Failed' });
   }
 });
 
-// Plaid
-initPlaidRoutes(app);
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('Aloe Assistant running on port ' + PORT));
