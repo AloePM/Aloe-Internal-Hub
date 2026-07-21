@@ -3649,6 +3649,58 @@ app.get('/api/map-properties', async (req, res) => {
 });
 
 // Rentvine property lookup — used by all agents via hubRequest
+// ── Aptly aptlet-lookup — used by Kat and hub-client for unit/building IDs ──
+app.get('/api/aptly/aptlet-lookup', hubAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
+    // Search work order cards for a matching address/house number
+    const r = await fetch(`https://core-api.getaptly.com/api/board/search?query=${encodeURIComponent(q)}&pageSize=5`, {
+      headers: { 'x-token': process.env.APTLY_TOKEN }
+    });
+    const data = await r.json();
+    const cards = data.data || data.results || (Array.isArray(data) ? data : []);
+    const match = cards.find(c => (c.unit?.[0]?._id || c.location?.[0]?._id));
+    if (match) {
+      return res.json({
+        unit_aptly_id: match.unit?.[0]?._id || null,
+        building_aptly_id: match.location?.[0]?._id || null,
+        address: match.unit?.[0]?.name || match.name || null
+      });
+    }
+    res.json({ unit_aptly_id: null, building_aptly_id: null });
+  } catch(e) {
+    console.error('aptlet-lookup error:', e.message);
+    res.json({ unit_aptly_id: null, building_aptly_id: null });
+  }
+});
+
+// ── Kat building-lookup — searches Aptly units board by house number ──────
+app.get('/api/kat/building-lookup', hubAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
+    // Search all Aptly units for matching house number
+    const r = await fetch(`https://core-api.getaptly.com/api/unit?page=0&pageSize=100&query=${encodeURIComponent(q)}`, {
+      headers: { 'x-token': process.env.APTLY_TOKEN }
+    });
+    const data = await r.json();
+    const units = data.data || data.results || (Array.isArray(data) ? data : []);
+    const match = units.find(u => (u.name || '').includes(q) || (u.address || '').includes(q));
+    if (match) {
+      return res.json({
+        unit_aptly_id: match._id || null,
+        building_aptly_id: match.buildingId || match.locationId || null,
+        address: match.name || match.address || null
+      });
+    }
+    res.json({ unit_aptly_id: null, building_aptly_id: null });
+  } catch(e) {
+    console.error('kat-building-lookup error:', e.message);
+    res.json({ unit_aptly_id: null, building_aptly_id: null });
+  }
+});
+
 app.get('/api/rentvine/property-lookup', async (req, res) => {
   try {
     const q = (req.query.q || '').toLowerCase();
