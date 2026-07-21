@@ -1092,18 +1092,50 @@ app.post('/api/rentvine/leases/:id/charges', hubAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.use('/api/rentvine', async function(req, res, next) {
-  // Let specific routes handle these paths
-  if (req.path === '/property-lookup' || req.path.startsWith('/properties/') || req.path.startsWith('/leases/')) return next();
+app.use('/api/rentvine', async function(req, res) {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
+  // Handle property-lookup internally instead of proxying to Rentvine
+  if (req.path === '/property-lookup') {
+    const tok = req.headers['x-hub-token'] || req.headers['x-agent-key'] || req.query.token;
+    const secret = process.env.HUB_INTERNAL_SECRET || process.env.HUB_TOKEN || 'aloe-hub-ari-2026';
+    if (tok !== secret) return res.status(401).json({ error: 'Unauthorized' });
+    const q = (req.query.q || '').toLowerCase();
+    if (!q) return res.json({ properties: [] });
+    let allProps = [];
+    for (let page = 1; page <= 10; page++) {
+      const url = `${RENTVINE_BASE}/properties/export?pageSize=500&page=${page}`;
+      const r = await fetch(url, { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'X-Rentvine-Account': RENTVINE_ACCOUNT } });
+      const batch = await r.json();
+      const items = Array.isArray(batch) ? batch : (batch.data || batch.results || []);
+      if (!items.length) break;
+      allProps = allProps.concat(items);
+      if (items.length < 500) break;
+    }
+    const stripDir = s => s.replace(/\b(north|south|east|west|n|s|e|w)\b\.?/gi, '').replace(/\s+/g, ' ').trim();
+    const qClean = stripDir(q);
+    const filtered = allProps.filter(item => {
+      const p = item.property || item;
+      const addr = stripDir((p.address || '').toLowerCase());
+      const num = String(p.streetNumber || '');
+      const queryParts = qClean.split(/\s+/);
+      const queryNum = queryParts.find(x => /^\d+$/.test(x)) || '';
+      const queryStreet = queryParts.filter(x => !/^\d+$/.test(x)).join(' ');
+      return (!queryNum || num === queryNum) && (!queryStreet || addr.includes(queryStreet));
+    });
+    const results = filtered.slice(0, 5).map(item => {
+      const p = item.property || item;
+      return { propertyId: p.propertyID, address: p.address, city: p.city, state: p.stateID, zip: p.postalCode, leaseId: null };
+    });
+    return res.json({ properties: results });
+  }
   const rvPath = req.path;
   const query = new URLSearchParams(req.query).toString();
   const url = `${RENTVINE_BASE}${rvPath}${query ? '?' + query : ''}`;
   try {
-const opts = { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json', 'X-Rentvine-Account': RENTVINE_ACCOUNT } };
+    const opts = { headers: { Authorization: `Basic ${RENTVINE_AUTH}`, 'Content-Type': 'application/json', 'X-Rentvine-Account': RENTVINE_ACCOUNT } };
     if (req.method === 'POST') { opts.method = 'POST'; opts.body = JSON.stringify(req.body); }
     const r = await fetch(url, opts);
     res.json(await r.json());
