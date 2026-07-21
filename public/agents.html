@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agent Hub — Aloe PM</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a2332;min-height:100vh;display:flex}
+.sidebar{width:220px;min-height:100vh;background:#F8FAFA;border-right:1px solid #E8EEEE;display:flex;flex-direction:column;padding:20px 0;flex-shrink:0}
+.sidebar-logo{padding:0 20px 24px;border-bottom:1px solid #E8EEEE;margin-bottom:16px}
+.logo-text{font-size:15px;font-weight:800;color:#1a2332}
+.logo-sub{font-size:11px;color:#8AA0A0}
+.nav-section{padding:0 20px 8px;font-size:10px;font-weight:700;color:#8AA0A0;text-transform:uppercase;letter-spacing:.08em}
+.nav-link{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;color:#4A6060;text-decoration:none;border-radius:0}
+.nav-link:hover,.nav-link.active{background:#E8F8FC;color:#2A8FA6}
+.nav-icon{font-size:14px;width:18px}
+.sidebar-footer{margin-top:auto;padding:16px 20px;font-size:11px;color:#8AA0A0;border-top:1px solid #E8EEEE}
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{padding:16px 28px;border-bottom:1px solid #E8EEEE;display:flex;align-items:center;justify-content:space-between}
+.topbar-title{font-size:18px;font-weight:700;color:#1a2332}
+.topbar-sub{font-size:12px;color:#8AA0A0;margin-top:2px}
+.live-pill{font-size:11px;background:#E8F8FC;color:#2A8FA6;padding:4px 10px;border-radius:20px;font-weight:600}
+.content{padding:24px 28px;flex:1}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px}
+.stat{background:#F8FAFA;border-radius:10px;padding:16px 18px;border-left:3px solid #3CC3E1}
+.stat.green{border-left-color:#22C55E}
+.stat.amber{border-left-color:#F59E0B}
+.stat-label{font-size:11px;color:#8AA0A0;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.stat-value{font-size:26px;font-weight:800;color:#1a2332;margin-top:4px}
+.section-label{font-size:11px;font-weight:700;color:#8AA0A0;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.agent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.agent-card{background:#F8FAFA;border-radius:10px;padding:16px 18px;border:1px solid #E8EEEE;cursor:pointer;transition:all .15s}
+.agent-card:hover{border-color:#3CC3E1;box-shadow:0 2px 8px rgba(60,195,225,.12)}
+.agent-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.agent-dot{width:8px;height:8px;border-radius:50%;background:#22C55E;flex-shrink:0}
+.agent-dot.offline{background:#EF4444}
+.agent-name{font-size:14px;font-weight:700;color:#1a2332}
+.agent-role{font-size:11px;color:#8AA0A0}
+.agent-stats{display:flex;gap:16px;margin-top:8px}
+.agent-stat{font-size:11px;color:#8AA0A0}
+.agent-stat span{color:#1a2332;font-weight:600}
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}
+.btn-primary{background:#3CC3E1;color:#fff}
+.btn-primary:hover{background:#2A8FA6}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-text">🌿 Aloe PM</div>
+    <div class="logo-sub">Agent Hub</div>
+  </div>
+  <div class="nav-section">Navigation</div>
+  <a href="/agents" class="nav-link active"><span class="nav-icon">⬛</span>Overview</a>
+  <a href="/agents/activity" class="nav-link"><span class="nav-icon">📋</span>Activity</a>
+  <a href="/agents/playbooks" class="nav-link"><span class="nav-icon">📝</span>Playbooks</a>
+  <a href="/agents/knowledge" class="nav-link"><span class="nav-icon">💡</span>Knowledge</a>
+  <a href="/agents/sops" class="nav-link"><span class="nav-icon">⚙️</span>SOPs</a>
+  <a href="/agents/jobs" class="nav-link"><span class="nav-icon">🕐</span>Jobs</a>
+  <div class="sidebar-footer">hub.aloepm.com</div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Agent Overview</div>
+      <div class="topbar-sub">Phoenix Metro · All systems</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="live-pill" id="livePill">● Loading</div>
+      <button class="btn btn-primary" onclick="load()">↺ Refresh</button>
+    </div>
+  </div>
+  <div class="content">
+    <div class="stat-row" id="stats"></div>
+    <div class="section-label">Active Agents</div>
+    <div class="agent-grid" id="grid"></div>
+  </div>
+</div>
+<script>
+var ROLES={ari:"Maintenance Coordinator",bo:"Accounting",ivy:"Leasing Agent",rex:"Resident Coordinator",lea:"Owner Relations",kat:"HOA Compliance",jay:"Admin",mae:"Move-Out",joe:"Operations",mary:"Move-In Coordinator",remy:"Renewal Coordinator",troy:"Unit Turn"};
+var ICONS={ari:"🔧",bo:"💰",ivy:"🏠",rex:"👥",lea:"🏦",kat:"📋",jay:"⚡",mae:"📦",joe:"⚙️",mary:"🚪",remy:"🔄",troy:"🏗️"};
+async function load(){
+  try{
+    const r=await fetch('/api/agents/status');
+    const d=await r.json();
+    const agents=d.agents||[];
+    const online=agents.filter(a=>a.status==='online').length;
+    document.getElementById('livePill').textContent='● '+online+' online';
+    document.getElementById('stats').innerHTML=
+      '<div class="stat green"><div class="stat-label">Online</div><div class="stat-value">'+online+'</div></div>'+
+      '<div class="stat"><div class="stat-label">Total Agents</div><div class="stat-value">'+agents.length+'</div></div>'+
+      '<div class="stat amber"><div class="stat-label">Offline</div><div class="stat-value">'+(agents.length-online)+'</div></div>';
+    document.getElementById('grid').innerHTML=agents.map(a=>'<div class="agent-card"><div class="agent-header"><div class="agent-dot'+(a.status==='online'?'':' offline')+'"></div><div><div class="agent-name">'+(ICONS[a.name]||'🤖')+' '+a.name.charAt(0).toUpperCase()+a.name.slice(1)+'</div><div class="agent-role">'+(ROLES[a.name]||'AI Agent')+'</div></div></div><div class="agent-stats"><div class="agent-stat">Status: <span>'+(a.status||'unknown')+'</span></div><div class="agent-stat">Restarts: <span>'+(a.restarts||0)+'</span></div></div></div>').join('');
+  }catch(e){document.getElementById('livePill').textContent='● Error';}
+}
+load();
+setInterval(load,30000);
+</script>
+</body>
+</html>

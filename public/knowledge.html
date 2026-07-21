@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Knowledge — Aloe PM</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a2332;min-height:100vh;display:flex}.sidebar{width:220px;min-height:100vh;background:#F8FAFA;border-right:1px solid #E8EEEE;display:flex;flex-direction:column;padding:20px 0;flex-shrink:0}.sidebar-logo{padding:0 20px 24px;border-bottom:1px solid #E8EEEE;margin-bottom:16px}.logo-text{font-size:15px;font-weight:800}.logo-sub{font-size:11px;color:#8AA0A0}.nav-link{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;color:#4A6060;text-decoration:none}.nav-link:hover,.nav-link.active{background:#E8F8FC;color:#2A8FA6}.nav-icon{font-size:14px;width:18px}.sidebar-footer{margin-top:auto;padding:16px 20px;font-size:11px;color:#8AA0A0;border-top:1px solid #E8EEEE}.main{flex:1;display:flex;flex-direction:column}.topbar{padding:16px 28px;border-bottom:1px solid #E8EEEE}.topbar-title{font-size:18px;font-weight:700}.topbar-sub{font-size:12px;color:#8AA0A0}.content{padding:24px 28px;flex:1;max-width:700px}.lbl{font-size:11px;font-weight:700;color:#8AA0A0;text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;margin-top:24px}.lbl:first-child{margin-top:0}.target-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.tbtn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #E8EEEE;background:#F8FAFA;color:#4A6060}.tbtn.active{background:#E8F8FC;color:#2A8FA6;border-color:#3CC3E1}.editor-box{width:100%;min-height:200px;border:1px solid #E8EEEE;border-radius:8px;padding:14px;font-size:13px;font-family:monospace;resize:vertical;color:#1a2332;background:#FAFBFB}.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;margin-top:12px}.btn-primary{background:#3CC3E1;color:#fff}.st{font-size:12px;color:#8AA0A0;margin-left:12px}</style></head>
+<body><div class="sidebar"><div class="sidebar-logo"><div class="logo-text">🌿 Aloe PM</div><div class="logo-sub">Agent Hub</div></div><a href="/agents" class="nav-link"><span class="nav-icon">⬛</span>Overview</a><a href="/agents/activity" class="nav-link"><span class="nav-icon">📋</span>Activity</a><a href="/agents/playbooks" class="nav-link"><span class="nav-icon">📝</span>Playbooks</a><a href="/agents/knowledge" class="nav-link active"><span class="nav-icon">💡</span>Knowledge</a><a href="/agents/sops" class="nav-link"><span class="nav-icon">⚙️</span>SOPs</a><a href="/agents/jobs" class="nav-link"><span class="nav-icon">🕐</span>Jobs</a><div class="sidebar-footer">hub.aloepm.com</div></div>
+<div class="main"><div class="topbar"><div class="topbar-title">Knowledge Base</div><div class="topbar-sub">Push training knowledge to agents — takes effect on next restart</div></div>
+<div class="content"><div class="lbl">Push To</div>
+<div class="target-row">
+<button class="tbtn active" onclick="setT('shared',this)">🌐 All Agents</button>
+<button class="tbtn" onclick="setT('ari',this)">🔧 Ari</button>
+<button class="tbtn" onclick="setT('ivy',this)">🏠 Ivy</button>
+<button class="tbtn" onclick="setT('mary',this)">🚪 Mary</button>
+<button class="tbtn" onclick="setT('rex',this)">👥 Rex</button>
+<button class="tbtn" onclick="setT('lea',this)">🏦 Lea</button>
+<button class="tbtn" onclick="setT('kat',this)">📋 Kat</button>
+<button class="tbtn" onclick="setT('bo',this)">💰 Bo</button>
+<button class="tbtn" onclick="setT('jay',this)">⚡ Jay</button>
+<button class="tbtn" onclick="setT('joe',this)">⚙️ Joe</button>
+</div>
+<div class="lbl">Knowledge Content</div>
+<textarea class="editor-box" id="ed" placeholder="Enter knowledge to push to agents..."></textarea>
+<div style="display:flex;align-items:center"><button class="btn btn-primary" onclick="push()">📤 Push Knowledge</button><span class="st" id="st"></span></div>
+</div></div>
+<script>
+var t='shared';
+function setT(v,btn){t=v;document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+async function push(){const c=document.getElementById('ed').value.trim();if(!c){document.getElementById('st').textContent='Enter knowledge first';return;}document.getElementById('st').textContent='Pushing...';try{const r=await fetch('/api/agents/knowledge/'+t,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c,append:true})});document.getElementById('st').textContent=r.ok?'✅ Pushed — takes effect on next restart':'❌ Error';}catch(e){document.getElementById('st').textContent='❌ Error';}setTimeout(()=>document.getElementById('st').textContent='',5000);}
+</script></body></html>

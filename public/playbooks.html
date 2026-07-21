@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Playbooks — Aloe PM</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a2332;min-height:100vh;display:flex}.sidebar{width:220px;min-height:100vh;background:#F8FAFA;border-right:1px solid #E8EEEE;display:flex;flex-direction:column;padding:20px 0;flex-shrink:0}.sidebar-logo{padding:0 20px 24px;border-bottom:1px solid #E8EEEE;margin-bottom:16px}.logo-text{font-size:15px;font-weight:800}.logo-sub{font-size:11px;color:#8AA0A0}.nav-link{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;color:#4A6060;text-decoration:none}.nav-link:hover,.nav-link.active{background:#E8F8FC;color:#2A8FA6}.nav-icon{font-size:14px;width:18px}.sidebar-footer{margin-top:auto;padding:16px 20px;font-size:11px;color:#8AA0A0;border-top:1px solid #E8EEEE}.main{flex:1;display:flex;flex-direction:column}.topbar{padding:16px 28px;border-bottom:1px solid #E8EEEE}.topbar-title{font-size:18px;font-weight:700}.topbar-sub{font-size:12px;color:#8AA0A0}.content{padding:24px 28px;flex:1;display:flex;gap:20px}.agent-list{width:160px;flex-shrink:0}.agent-btn{display:block;width:100%;padding:9px 12px;margin-bottom:6px;border-radius:8px;background:#F8FAFA;border:1px solid #E8EEEE;font-size:13px;font-weight:600;color:#4A6060;cursor:pointer;text-align:left}.agent-btn:hover,.agent-btn.active{background:#E8F8FC;color:#2A8FA6;border-color:#3CC3E1}.editor-area{flex:1;display:flex;flex-direction:column;gap:12px}.lbl{font-size:11px;font-weight:700;color:#8AA0A0;text-transform:uppercase}.editor-box{width:100%;min-height:420px;border:1px solid #E8EEEE;border-radius:8px;padding:14px;font-size:13px;font-family:monospace;resize:vertical;color:#1a2332;background:#FAFBFB}.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}.btn-primary{background:#3CC3E1;color:#fff}.save-status{font-size:12px;color:#8AA0A0}</style></head>
+<body><div class="sidebar"><div class="sidebar-logo"><div class="logo-text">🌿 Aloe PM</div><div class="logo-sub">Agent Hub</div></div><a href="/agents" class="nav-link"><span class="nav-icon">⬛</span>Overview</a><a href="/agents/activity" class="nav-link"><span class="nav-icon">📋</span>Activity</a><a href="/agents/playbooks" class="nav-link active"><span class="nav-icon">📝</span>Playbooks</a><a href="/agents/knowledge" class="nav-link"><span class="nav-icon">💡</span>Knowledge</a><a href="/agents/sops" class="nav-link"><span class="nav-icon">⚙️</span>SOPs</a><a href="/agents/jobs" class="nav-link"><span class="nav-icon">🕐</span>Jobs</a><div class="sidebar-footer">hub.aloepm.com</div></div>
+<div class="main"><div class="topbar"><div class="topbar-title">Playbook Editor</div><div class="topbar-sub">Edit agent instructions stored in GCS</div></div>
+<div class="content"><div class="agent-list"><div class="lbl" style="margin-bottom:10px">Agents</div>
+<button class="agent-btn active" onclick="sel('ari',this)">🔧 Ari</button>
+<button class="agent-btn" onclick="sel('ivy',this)">🏠 Ivy</button>
+<button class="agent-btn" onclick="sel('mary',this)">🚪 Mary</button>
+<button class="agent-btn" onclick="sel('rex',this)">👥 Rex</button>
+<button class="agent-btn" onclick="sel('lea',this)">🏦 Lea</button>
+<button class="agent-btn" onclick="sel('kat',this)">📋 Kat</button>
+<button class="agent-btn" onclick="sel('bo',this)">💰 Bo</button>
+<button class="agent-btn" onclick="sel('jay',this)">⚡ Jay</button>
+<button class="agent-btn" onclick="sel('joe',this)">⚙️ Joe</button>
+<button class="agent-btn" onclick="sel('mae',this)">📦 Mae</button>
+<button class="agent-btn" onclick="sel('remy',this)">🔄 Remy</button>
+<button class="agent-btn" onclick="sel('troy',this)">🏗️ Troy</button>
+</div>
+<div class="editor-area"><div class="lbl" id="lbl">Ari — Playbook</div>
+<textarea class="editor-box" id="ed" placeholder="Loading..."></textarea>
+<div style="display:flex;align-items:center;gap:12px"><button class="btn btn-primary" onclick="save()">💾 Save</button><span class="save-status" id="st"></span></div>
+</div></div></div>
+<script>
+var cur='ari';
+async function sel(n,btn){cur=n;document.querySelectorAll('.agent-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.getElementById('lbl').textContent=n.charAt(0).toUpperCase()+n.slice(1)+' — Playbook';document.getElementById('ed').value='Loading...';try{const r=await fetch('/api/agents/playbook/'+n);const d=await r.json();document.getElementById('ed').value=d.content||d.playbook||'';}catch(e){document.getElementById('ed').value='Error loading.';}}
+async function save(){const c=document.getElementById('ed').value;document.getElementById('st').textContent='Saving...';try{const r=await fetch('/api/agents/playbook/'+cur,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});document.getElementById('st').textContent=r.ok?'✅ Saved':'❌ Error';}catch(e){document.getElementById('st').textContent='❌ Error';}setTimeout(()=>document.getElementById('st').textContent='',3000);}
+sel('ari',document.querySelector('.agent-btn'));
+</script></body></html>
