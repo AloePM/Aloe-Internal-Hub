@@ -3684,18 +3684,27 @@ app.get('/api/kat/building-lookup', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
-    // Search all Aptly units for matching house number
-    const r = await fetch(`https://core-api.getaptly.com/api/unit?page=0&pageSize=100&query=${encodeURIComponent(q)}`, {
+    // Search Aptly units board via core-api
+    const r = await fetch(`https://core-api.getaptly.com/api/board/unit?page=0&pageSize=100&query=${encodeURIComponent(q)}`, {
       headers: { 'x-token': process.env.APTLY_TOKEN }
     });
     const data = await r.json();
-    const units = data.data || data.results || (Array.isArray(data) ? data : []);
-    const match = units.find(u => (u.name || '').includes(q) || (u.address || '').includes(q));
+    const units = data.data || data.cards || (Array.isArray(data) ? data : []);
+    const match = units.find(u => {
+      const name = (u.name || u.Name || '').toLowerCase();
+      const qlow = q.toLowerCase();
+      return name.includes(qlow) || name.includes(qlow.split(' ')[0]);
+    });
     if (match) {
+      const loc = (match.location || [])[0] || {};
+      const unit = (match.unit || [])[0] || {};
       return res.json({
-        unit_aptly_id: match._id || null,
-        building_aptly_id: match.buildingId || match.locationId || null,
-        address: match.name || match.address || null
+        unit_aptly_id: unit._id || match._id || null,
+        unit_aptly_name: unit.name || match.name || null,
+        unit_aptly_duogram: unit.duogram || match.duogram || null,
+        building_aptly_id: loc._id || null,
+        building_aptly_name: loc.name || null,
+        building_aptly_duogram: loc.duogram || null
       });
     }
     res.json({ unit_aptly_id: null, building_aptly_id: null });
