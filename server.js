@@ -5402,11 +5402,11 @@ app.get('*', function(req, res) {
       <div class="tool-name">Aloe Assistant</div>
       <div class="tool-desc">AI chat — Rentvine, Aptly, Knowledge Base, Slack all connected</div>
     </a>
-    <a href="/sandbox" class="tool-card primary" data-name="sandbox agent training">
+    <a href="/agents" class="tool-card primary" data-name="agent hub management">
       <span class="badge badge-live">LIVE</span>
-      <div class="tool-icon">✏️</div>
-      <div class="tool-name">Agent Sandbox</div>
-      <div class="tool-desc">Train and coach AI agents before going live</div>
+      <div class="tool-icon">🤖</div>
+      <div class="tool-name">Agent Hub</div>
+      <div class="tool-desc">Monitor, train, and manage all AI agents — playbooks, knowledge, SOPs, activity feed</div>
     </a>
     <a href="/sms-queue" class="tool-card primary" data-name="sms queue drafts tenant messages">
       <span class="badge badge-new">NEW</span>
