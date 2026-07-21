@@ -1092,7 +1092,9 @@ app.post('/api/rentvine/leases/:id/charges', hubAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.use('/api/rentvine', async function(req, res) {
+app.use('/api/rentvine', async function(req, res, next) {
+  // Let specific routes handle these paths
+  if (req.path === '/property-lookup' || req.path.startsWith('/properties/') || req.path.startsWith('/leases/')) return next();
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
