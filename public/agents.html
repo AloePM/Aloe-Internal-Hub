@@ -84,7 +84,7 @@ async function load(){
   try{
     const r=await fetch('/api/agents/status');
     const d=await r.json();
-    const agents=d.agents||[];
+    const agents=d.agents||d.procs||[];
     const online=agents.filter(a=>a.status==='online').length;
     document.getElementById('livePill').textContent='● '+online+' online';
     document.getElementById('stats').innerHTML=
