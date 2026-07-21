@@ -3650,7 +3650,9 @@ app.get('/api/map-properties', async (req, res) => {
 
 // Rentvine property lookup — used by all agents via hubRequest
 // ── Aptly aptlet-lookup — used by Kat and hub-client for unit/building IDs ──
-app.get('/api/aptly/aptlet-lookup', hubAuth, async (req, res) => {
+app.get('/api/aptly/aptlet-lookup', async (req, res) => {
+  const tok = req.headers['x-hub-token'] || req.headers['x-agent-key'] || req.query.token;
+  if (tok !== process.env.HUB_TOKEN && tok !== process.env.HUB_INTERNAL_SECRET) return res.status(403).json({ error: 'Unauthorized' });
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
@@ -3676,7 +3678,9 @@ app.get('/api/aptly/aptlet-lookup', hubAuth, async (req, res) => {
 });
 
 // ── Kat building-lookup — searches Aptly units board by house number ──────
-app.get('/api/kat/building-lookup', hubAuth, async (req, res) => {
+app.get('/api/kat/building-lookup', async (req, res) => {
+  const tok = req.headers['x-hub-token'] || req.headers['x-agent-key'] || req.query.token;
+  if (tok !== process.env.HUB_TOKEN && tok !== process.env.HUB_INTERNAL_SECRET) return res.status(403).json({ error: 'Unauthorized' });
   try {
     const q = (req.query.q || '').trim();
     if (!q) return res.json({ unit_aptly_id: null, building_aptly_id: null });
