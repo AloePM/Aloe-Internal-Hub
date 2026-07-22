@@ -4155,7 +4155,7 @@ app.post('/webhook/rentvine', express.json(), async (req, res) => {
     const payload = req.body;
     console.log('RV webhook forwarding:', JSON.stringify(payload).slice(0, 200));
     // Forward to Ari on the server
-    const response = await fetch('http://34.16.238.69:3001/webhook/rentvine', {
+    const response = await fetch('http://10.182.0.2:3001/webhook/rentvine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
