@@ -27,7 +27,7 @@ app.get('/vacancy', (req, res) => {
 });
 
 app.get('/vacancy-risk', (req, res) => {
-  res.sendFile(new URL('./vacancy-risk.html', import.meta.url).pathname);
+  res.sendFile(new URL('./vacancy.html', import.meta.url).pathname);
 });
 // Route to serve the HOA filler UI
 app.get('/media-analyzer', (req, res) => res.sendFile(new URL('./media-analyzer.html', import.meta.url).pathname));
@@ -102,7 +102,7 @@ app.get('/vendors', (req, res) => {
 });
 
 app.get('/vendors/edit', (req, res) => {
-  res.sendFile(new URL('./vendors-edit.html', import.meta.url).pathname);
+  res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
 });
 
 // ── Vendor directory — persisted to GCS via fetch ──
@@ -3096,6 +3096,7 @@ app.get('/reload-kb-cache', function(req, res) {
 app.get('/chat', (req, res) => res.sendFile(new URL('chat.html', import.meta.url).pathname));
 app.get('/sandbox', (req, res) => res.sendFile(new URL('sandbox.html', import.meta.url).pathname));
 app.get('/recon-bills', (req, res) => res.sendFile(new URL('recon-bills.html', import.meta.url).pathname));
+app.get('/recon', (req, res) => res.sendFile(new URL('./recon.html', import.meta.url).pathname));
 app.get('/bank-setup', (req, res) => res.sendFile(new URL('plaid-setup.html', import.meta.url).pathname));
 app.get('/logo.png', (req, res) => res.sendFile(new URL('AloePM-Logo_FullColor__2_.png', import.meta.url).pathname));
 app.get('/rent-analysis', (req, res) => res.sendFile(new URL('./rent-analysis.html', import.meta.url).pathname));
