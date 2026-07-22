@@ -16,10 +16,27 @@
 </div>
 <div class="lbl">Knowledge Content</div>
 <textarea class="editor-box" id="ed" placeholder="Enter knowledge to push to agents..."></textarea>
-<div style="display:flex;align-items:center"><button class="btn btn-primary" onclick="push()">📤 Push Knowledge</button><span class="st" id="st"></span></div>
+<div style="display:flex;align-items:center"><button class="btn btn-primary" onclick="push()">📤 Push Knowledge</button> <button class="btn" style="background:#F8FAFA;border:1px solid #E8EEEE;color:#4A6060;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-left:8px" onclick="viewKnowledge()">👁 View Current</button><span class="st" id="st"></span></div>
 </div></div>
 <script>
 var t='shared';
 function setT(v,btn){t=v;document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
 async function push(){const c=document.getElementById('ed').value.trim();if(!c){document.getElementById('st').textContent='Enter knowledge first';return;}document.getElementById('st').textContent='Pushing...';try{const r=await fetch('/api/agents/knowledge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:t,title:'Knowledge Update '+new Date().toISOString().slice(0,10),content:c})});document.getElementById('st').textContent=r.ok?'✅ Pushed — takes effect on next restart':'❌ Error';}catch(e){document.getElementById('st').textContent='❌ Error';}setTimeout(()=>document.getElementById('st').textContent='',5000);}
-</script></body></html>
+</script><script>
+async function viewKnowledge(){
+  const scope = t;
+  document.getElementById('view-area').style.display='block';
+  document.getElementById('view-content').textContent='Loading...';
+  try{
+    const r = await fetch('/api/agents/knowledge/'+scope);
+    const d = await r.json();
+    document.getElementById('view-content').textContent = d.content || '(empty)';
+    document.getElementById('view-label').textContent = scope.charAt(0).toUpperCase()+scope.slice(1)+' — Current Knowledge';
+  }catch(e){document.getElementById('view-content').textContent='Error loading.';}
+}
+</script>
+<div id="view-area" style="display:none;margin-top:24px">
+<div class="lbl" id="view-label">Current Knowledge</div>
+<pre style="white-space:pre-wrap;font-size:12px;background:#FAFBFB;border:1px solid #E8EEEE;border-radius:8px;padding:14px;max-height:400px;overflow-y:auto;color:#1a2332" id="view-content"></pre>
+</div>
+</body></html>
