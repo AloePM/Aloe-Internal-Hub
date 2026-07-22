@@ -110,7 +110,7 @@ if (data.trades && Array.isArray(data.trades)) {
   allVendors = [];
   data.trades.forEach(function(t) {
     (t.vendors||[]).forEach(function(v) {
-      allVendors.push(Object.assign({}, v, {trade: t.trade||t.name||'Unknown'}));
+      allVendors.push(Object.assign({}, v, {trade: t.label||t.trade||t.name||'Unknown'}));
     });
   });
 } else {
