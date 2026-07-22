@@ -1,4 +1,5 @@
 import express from 'express';
+import scannerRoutes from './appliance-scanner-routes.js';
 import { Storage } from '@google-cloud/storage';
 const storage = new Storage();
 const BUCKET = 'aloe-hub-data-496300';
@@ -4145,6 +4146,9 @@ app.get('/api/debug/rv-notes/:id', hubAuth, async (req, res) => {
 });
 
 // ── Rentvine Webhook Proxy ──
+app.use('/api/scanner', scannerRoutes);
+app.get('/appliance-scanner', (req, res) => res.sendFile(new URL('./appliance-scanner.html', import.meta.url).pathname));
+
 app.post('/webhook/rentvine', express.json(), async (req, res) => {
   try {
     const payload = req.body;
