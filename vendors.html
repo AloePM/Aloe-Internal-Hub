@@ -105,7 +105,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);hei
   var allVendors=[],activeCategory='all',searchQuery='';
 function loadVendors(){
     fetch('/api/vendors').then(function(r){return r.json();}).then(function(data){
-      allVendors=data.vendors||data||[];
+      // Handle {lastUpdated, trades} format from GCS
+if (data.trades && Array.isArray(data.trades)) {
+  allVendors = [];
+  data.trades.forEach(function(t) {
+    (t.vendors||[]).forEach(function(v) {
+      allVendors.push(Object.assign({}, v, {trade: t.trade||t.name||'Unknown'}));
+    });
+  });
+} else {
+  allVendors = data.vendors||data||[];
+}
     var now=new Date();
     document.getElementById('last-updated').textContent='Updated '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     buildUI();
