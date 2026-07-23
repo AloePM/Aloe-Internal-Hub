@@ -4902,12 +4902,6 @@ app.get('/agents/tools', (req, res) => {
 app.get('/api/agents/tools', (req, res) => {
   res.json(agentStatus.tools || {});
 });
-app.get('/agents/tools', (req, res) => {
-  res.sendFile('/app/public/tools.html');
-});
-app.get('/api/agents/tools', (req, res) => {
-  res.json(agentStatus.tools || {});
-});
 // ── Aptlet lookup — find Aptly unit/building IDs by house number ──────────
 // Searches work orders board (which covers all properties) to find aptlet IDs
 app.get('/api/aptly/aptlet-lookup', hubAuth, async (req, res) => {
