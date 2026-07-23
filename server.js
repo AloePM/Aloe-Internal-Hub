@@ -98,7 +98,7 @@ app.get('/api/hoa/templates', async (req, res) => {
   }
 });
 app.get('/vendors', (req, res) => {
-     res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
+     res.sendFile(new URL('./vendors-edit.html', import.meta.url).pathname);
 });
 
 app.get('/vendors/edit', (req, res) => {
