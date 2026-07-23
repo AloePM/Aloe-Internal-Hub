@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agent Hub — Tools</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a2332;min-height:100vh;display:flex}
+.sidebar{width:220px;min-height:100vh;background:#F8FAFA;border-right:1px solid #E8EEEE;display:flex;flex-direction:column;padding:20px 0;flex-shrink:0}
+.sidebar-logo{padding:0 20px 24px;border-bottom:1px solid #E8EEEE;margin-bottom:16px}
+.logo-text{font-size:15px;font-weight:800;color:#1a2332}
+.logo-sub{font-size:11px;color:#8AA0A0}
+.nav-link{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;color:#4A6060;text-decoration:none}
+.nav-link:hover,.nav-link.active{background:#E8F8FC;color:#2A8FA6}
+.nav-icon{font-size:14px;width:18px}
+.sidebar-footer{margin-top:auto;padding:16px 20px;font-size:11px;color:#8AA0A0;border-top:1px solid #E8EEEE}
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{padding:16px 28px;border-bottom:1px solid #E8EEEE;display:flex;align-items:center;justify-content:space-between}
+.topbar-title{font-size:18px;font-weight:700;color:#1a2332}
+.topbar-sub{font-size:12px;color:#8AA0A0;margin-top:2px}
+.live-pill{font-size:11px;background:#E8F8FC;color:#2A8FA6;padding:4px 10px;border-radius:20px;font-weight:600}
+.content{padding:24px 28px;flex:1}
+.section-label{font-size:11px;font-weight:700;color:#8AA0A0;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px}
+.agent-tools-group{background:#F8FAFA;border-radius:10px;padding:16px 18px;border:1px solid #E8EEEE;margin-bottom:14px}
+.agent-tools-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.agent-tools-name{font-size:14px;font-weight:700;color:#1a2332}
+.agent-tools-role{font-size:11px;color:#8AA0A0}
+.agent-tools-count{margin-left:auto;font-size:11px;background:#E8F8FC;color:#2A8FA6;padding:3px 9px;border-radius:20px;font-weight:600}
+.tool-row{padding:10px 0;border-top:1px solid #E8EEEE}
+.tool-row:first-child{border-top:none}
+.tool-name{font-size:12.5px;font-weight:700;color:#1a2332;font-family:ui-monospace,Menlo,monospace}
+.tool-desc{font-size:12px;color:#4A6060;margin-top:3px;line-height:1.4}
+.tool-empty{font-size:12px;color:#8AA0A0;font-style:italic}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-text">🌿 Aloe PM</div>
+    <div class="logo-sub">Agent Hub</div>
+  </div>
+  <a href="/agents" class="nav-link"><span class="nav-icon">⬛</span>Overview</a>
+  <a href="/agents/activity" class="nav-link"><span class="nav-icon">📋</span>Activity</a>
+  <a href="/agents/playbooks" class="nav-link"><span class="nav-icon">📝</span>Playbooks</a>
+  <a href="/agents/knowledge" class="nav-link"><span class="nav-icon">💡</span>Knowledge</a>
+  <a href="/agents/sops" class="nav-link"><span class="nav-icon">⚙️</span>SOPs</a>
+  <a href="/agents/jobs" class="nav-link"><span class="nav-icon">🕐</span>Jobs</a>
+  <a href="/agents/tools" class="nav-link active"><span class="nav-icon">🛠️</span>Tools</a>
+  <div class="sidebar-footer">hub.aloepm.com</div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Agent Tools</div>
+      <div class="topbar-sub">Live tool inventory per agent · read-only</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="live-pill" id="livePill">● Loading</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="section-label">Tools by Agent</div>
+    <div id="toolsList"></div>
+  </div>
+</div>
+<script>
+var ROLES={ari:"Maintenance Coordinator",bo:"Accounting",ivy:"Leasing Agent",rex:"Resident Coordinator",lea:"Owner Relations",kat:"HOA Compliance",jay:"Admin",mae:"Move-Out",joe:"Operations",mary:"Move-In Coordinator",remy:"Renewal Coordinator",troy:"Unit Turn"};
+var ICONS={ari:"🔧",bo:"💰",ivy:"🏠",rex:"👥",lea:"🏦",kat:"📋",jay:"⚡",mae:"📦",joe:"⚙️",mary:"🚪",remy:"🔄",troy:"🏗️"};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+async function load(){
+  try{
+    const r=await fetch('/api/agents/tools');
+    const d=await r.json();
+    document.getElementById('livePill').textContent='● Loaded';
+    const names=Object.keys(ROLES);
+    document.getElementById('toolsList').innerHTML=names.map(function(name){
+      const tools=d[name]||[];
+      const rows=tools.length
+        ? tools.map(function(t){return '<div class="tool-row"><div class="tool-name">'+esc(t.name)+'</div><div class="tool-desc">'+esc(t.description)+'</div></div>';}).join('')
+        : '<div class="tool-row"><div class="tool-empty">No tools configured</div></div>';
+      return '<div class="agent-tools-group"><div class="agent-tools-header"><div class="agent-tools-name">'+(ICONS[name]||'🤖')+' '+name.charAt(0).toUpperCase()+name.slice(1)+'</div><div class="agent-tools-role">'+(ROLES[name]||'AI Agent')+'</div><div class="agent-tools-count">'+tools.length+' tool'+(tools.length===1?'':'s')+'</div></div>'+rows+'</div>';
+    }).join('');
+  }catch(e){document.getElementById('livePill').textContent='● Error';}
+}
+load();
+</script>
+</body>
+</html>
