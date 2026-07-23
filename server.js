@@ -1101,8 +1101,7 @@ app.use('/api/rentvine', async function(req, res) {
   // Handle property-lookup internally instead of proxying to Rentvine
   if (req.path === '/property-lookup') {
     const tok = req.headers['x-hub-token'] || req.headers['x-agent-key'] || req.query.token;
-    const secret = process.env.HUB_INTERNAL_SECRET || process.env.HUB_TOKEN || 'aloe-hub-ari-2026';
-    if (tok !== secret) return res.status(401).json({ error: 'Unauthorized' });
+    if (tok !== process.env.HUB_INTERNAL_SECRET) return res.status(401).json({ error: 'Unauthorized' });
     const q = (req.query.q || '').toLowerCase();
     if (!q) return res.json({ properties: [] });
     let allProps = [];
@@ -3995,7 +3994,7 @@ app.use('/api/zinspector', async (req, res) => {
 // ── Aptly Proxy Routes ─────────────────────────────────────────────────────
 const APTLY_API_TOKEN = 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
 const APTLY_API_BASE = 'https://core-api.getaptly.com';
-const HUB_SECRET = process.env.HUB_INTERNAL_SECRET || 'aloe-hub-ari-2026';
+const HUB_SECRET = process.env.HUB_INTERNAL_SECRET;
 
 async function aptlyCall(method, path, body = null) {
   const opts = {
@@ -5073,7 +5072,7 @@ app.get('/api/aptly/property-search', hubAuth, async (req, res) => {
       if (!unit_aptly_id && q) {
         try {
           const lookupR = await fetch(`https://hub.aloepm.com/api/aptly/aptlet-lookup?q=${encodeURIComponent(q)}`, {
-            headers: { 'x-hub-token': process.env.HUB_SECRET || 'aloe-hub-ari-2026' }
+            headers: { 'x-hub-token': process.env.HUB_INTERNAL_SECRET }
           });
           const lookup = await lookupR.json();
           if (lookup.unit_aptly_id) {
@@ -5193,7 +5192,7 @@ const FIVE_DAY_DESCRIPTION     = '5 Day Notice Fee';
 const BO_CHANNEL               = process.env.BO_ACCOUNTING_CHANNEL || 'C0BCCV790VC';
 
 app.post('/api/five-day-notice-charge', async (req, res) => {
-  if (req.headers['x-hub-token'] !== process.env.HUB_TOKEN) {
+  if (req.headers['x-hub-token'] !== process.env.HUB_INTERNAL_SECRET) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   const today      = new Date();
