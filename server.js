@@ -102,7 +102,7 @@ app.get('/vendors', (req, res) => {
 });
 
 app.get('/vendors/edit', (req, res) => {
-  res.sendFile(new URL('./vendors.html', import.meta.url).pathname);
+  res.sendFile(new URL('./vendors-edit.html', import.meta.url).pathname);
 });
 
 // ── Vendor directory — persisted to GCS via fetch ──
@@ -4155,7 +4155,7 @@ app.post('/webhook/rentvine', express.json(), async (req, res) => {
     const payload = req.body;
     console.log('RV webhook forwarding:', JSON.stringify(payload).slice(0, 200));
     // Forward to Ari on the server
-    const response = await fetch('http://10.182.0.2:3001/webhook/rentvine', {
+    const response = await fetch('http://34.16.157.83:3001/webhook/rentvine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

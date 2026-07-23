@@ -1,0 +1,2320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendor Directory — Aloe Hub</title>
+<style>
+  /* ============================================================
+     TOKENS
+     Deep aloe green for identity/structure, warm sand background
+     (paper, not stark white — easier on the eyes for a page staff
+     will sit in for a while), amber for the priority signal since
+     that's the one number on this page people actually scan for.
+     Monospace for phone/email — these are data to copy, not prose.
+  ============================================================= */
+  :root{
+    /* Pulled from AloePM-Logo_FullColor.svg: the wordmark + house-accent teal
+       is #40BCDB (--aloe-500 below, kept true to the mark). Darker/lighter
+       steps are derived from it for contrast. The neutral grays (--sand-*,
+       --ink-*) are lifted from the logo's house-icon grays (#B9BDC0/#B0AFB4/
+       #B2AFB0) rather than an unrelated gray scale, so the whole UI reads as
+       one family with the mark. */
+    --aloe-900:#164a5c;
+    --aloe-700:#1f7f9b;
+    --aloe-500:#5cc9e3;
+    --aloe-200:#cdeef5;
+    --aloe-100:#eefafd;
+    --sand-50:#f7f8f8;
+    --sand-100:#eef0f0;
+    --sand-200:#dcdfe0;
+    --ink-900:#292c2e;
+    --ink-600:#5f6467;
+    --ink-400:#9aa0a3;
+    --amber-600:#b8792f;
+    --amber-100:#f6e9d4;
+    --red-600:#a3402f;
+    --red-100:#f5e2dd;
+    --radius:10px;
+    --shadow-card:0 1px 2px rgba(18,56,69,0.07), 0 1px 1px rgba(18,56,69,0.05);
+    --font-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --font-data:"IBM Plex Mono","SF Mono",Menlo,Consolas,monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:var(--font-ui);
+    background:var(--sand-50);
+    color:var(--ink-900);
+    font-size:14px;
+    line-height:1.45;
+  }
+
+  /* ---------- Shell layout ---------- */
+  .shell{display:grid; grid-template-columns:240px 1fr; grid-template-rows:56px 1fr; height:100vh;}
+
+  .topbar{
+    grid-column:1/3;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px;
+    background:#ffffff;
+    border-bottom:1px solid var(--sand-200);
+    color:var(--ink-900);
+  }
+  .topbar .brand{display:flex; align-items:center; gap:12px; font-weight:600; letter-spacing:.01em;}
+  .topbar .brand img{height:36px; width:auto; display:block;}
+  .topbar .brand .divider{width:1px; height:18px; background:var(--sand-200);}
+  .topbar .brand .section{color:var(--ink-600); font-weight:500;}
+  .topbar .status{font-size:12px; color:var(--ink-400); font-family:var(--font-data);}
+  .topbar .status.unsaved{color:var(--amber-600);}
+  .topbar .status.error{color:var(--red-600);}
+
+  .sidebar{
+    background:var(--sand-100);
+    border-right:1px solid var(--sand-200);
+    overflow-y:auto;
+    padding:16px 10px;
+  }
+  .sidebar h2{
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--ink-400); margin:6px 10px 10px;
+    font-weight:600;
+  }
+  .trade-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:9px 10px; margin-bottom:2px;
+    border-radius:8px; cursor:pointer;
+    color:var(--ink-600);
+    font-weight:500;
+  }
+  .trade-item:hover{background:var(--sand-200);}
+  .trade-item.active{background:var(--aloe-700); color:#fff;}
+  .trade-item .count{
+    font-family:var(--font-data); font-size:12px;
+    color:var(--ink-400);
+  }
+  .trade-item.active .count{color:var(--aloe-200);}
+  .trade-add{
+    margin:10px 6px 0; width:calc(100% - 12px);
+    padding:8px 10px; border-radius:8px;
+    border:1px dashed var(--sand-200); background:transparent;
+    color:var(--ink-400); font-size:12px; cursor:pointer;
+    font-family:var(--font-ui);
+  }
+  .trade-add:hover{border-color:var(--aloe-500); color:var(--aloe-700);}
+
+  .main{overflow-y:auto; padding:24px 28px 60px;}
+  .main-head{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:18px; flex-wrap:wrap; gap:10px;
+  }
+  .main-head h1{font-size:20px; margin:0; font-weight:650; color:var(--aloe-900);}
+  .main-head .sub{font-size:12.5px; color:var(--ink-400); margin-top:2px;}
+  .head-actions{display:flex; gap:8px;}
+
+  button{font-family:var(--font-ui); cursor:pointer;}
+  .btn{
+    padding:8px 14px; border-radius:8px; border:1px solid var(--sand-200);
+    background:#fff; color:var(--ink-900); font-size:13px; font-weight:500;
+  }
+  .btn:hover{border-color:var(--aloe-500);}
+  .btn-primary{background:var(--aloe-700); border-color:var(--aloe-700); color:#fff;}
+  .btn-primary:hover{background:var(--aloe-900);}
+  .btn-ghost{border-color:transparent; background:transparent; color:var(--ink-600);}
+  .btn-ghost:hover{background:var(--sand-200);}
+  .btn-danger{color:var(--red-600);}
+
+  /* ---------- Vendor cards ---------- */
+  .cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px;}
+  .card{
+    background:#fff; border:1px solid var(--sand-200); border-radius:var(--radius);
+    box-shadow:var(--shadow-card); padding:14px; position:relative;
+  }
+  .card.inactive{opacity:.55;}
+  .card-top{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;}
+  .priority-badge{
+    display:flex; align-items:center; gap:5px;
+    font-family:var(--font-data); font-size:12px;
+    color:var(--amber-600); background:var(--amber-100);
+    border-radius:6px; padding:3px 7px; flex-shrink:0;
+  }
+  .priority-badge input{
+    width:26px; border:none; background:transparent; text-align:center;
+    font-family:var(--font-data); font-size:12px; color:var(--amber-600);
+  }
+  .field{margin-top:8px;}
+  .field label{display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-400); margin-bottom:3px;}
+  .field label .hint{text-transform:none; letter-spacing:0; font-size:10.5px; color:var(--ink-400); font-weight:400;}
+  .flag-chips{display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;}
+  .flag-chip{
+    font-size:10.5px; padding:2px 7px; border-radius:5px;
+    background:var(--amber-100); color:var(--amber-600); font-weight:600;
+    font-family:var(--font-data);
+  }
+  .field input, .field textarea{
+    width:100%; border:1px solid transparent; border-radius:6px;
+    padding:5px 7px; font-size:13px; font-family:var(--font-ui); color:var(--ink-900);
+    background:var(--sand-50);
+  }
+  .field input.mono, .field .mono{font-family:var(--font-data);}
+  .field input:focus, .field textarea:focus{
+    outline:none; border-color:var(--aloe-500); background:#fff;
+  }
+  .field textarea{resize:vertical; min-height:38px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+  .card-name-input{
+    font-size:15px; font-weight:600; border:none; background:transparent;
+    padding:2px 0; width:100%; color:var(--ink-900);
+  }
+  .card-name-input:focus{outline:none; border-bottom:1px solid var(--aloe-500);}
+
+  .trade-chips{display:flex; flex-wrap:wrap; gap:4px; margin-top:10px;}
+  .trade-chip{
+    font-size:10.5px; padding:2px 7px; border-radius:20px;
+    background:var(--aloe-100); color:var(--aloe-700); font-weight:500;
+  }
+  .trade-chip.current{background:var(--aloe-700); color:#fff;}
+
+  .card-foot{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:12px; padding-top:10px; border-top:1px solid var(--sand-100);
+  }
+  .active-toggle{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-600);}
+  .active-toggle input{accent-color:var(--aloe-700);}
+
+  .empty-state{
+    border:1px dashed var(--sand-200); border-radius:var(--radius);
+    padding:40px 20px; text-align:center; color:var(--ink-400);
+  }
+  .empty-state .btn-primary{margin-top:12px;}
+
+  /* ---------- Import panel (slide-over) ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(31,58,42,0.25);
+    display:none; z-index:20;
+  }
+  .overlay.open{display:block;}
+  .panel{
+    position:fixed; top:0; right:0; height:100%; width:380px;
+    background:#fff; box-shadow:-6px 0 24px rgba(31,58,42,0.15);
+    transform:translateX(100%); transition:transform .18s ease;
+    z-index:21; display:flex; flex-direction:column;
+  }
+  .panel.open{transform:translateX(0);}
+  .panel-head{
+    padding:16px 18px; border-bottom:1px solid var(--sand-200);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-head h3{margin:0; font-size:15px;}
+  .panel-search{padding:12px 18px; border-bottom:1px solid var(--sand-200);}
+  .panel-search input{
+    width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--sand-200);
+    font-size:13px; font-family:var(--font-ui);
+  }
+  .panel-list{overflow-y:auto; flex:1; padding:6px 10px;}
+  .rv-row{
+    padding:9px 8px; border-radius:8px; cursor:pointer;
+    display:flex; flex-direction:column; gap:1px;
+  }
+  .rv-row:hover{background:var(--sand-100);}
+  .rv-row .name{font-size:13px; font-weight:600;}
+  .rv-row .meta{font-size:11.5px; color:var(--ink-400); font-family:var(--font-data);}
+  .rv-row.already-here{opacity:.4; cursor:default;}
+  .rv-row.already-here:hover{background:transparent;}
+  .panel-foot{padding:10px 18px; border-top:1px solid var(--sand-200); font-size:11px; color:var(--ink-400);}
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--aloe-900); color:#fff; padding:9px 16px; border-radius:8px;
+    font-size:13px; z-index:30; opacity:0; pointer-events:none;
+    transition:opacity .15s ease;
+  }
+  .toast.show{opacity:1;}
+  .toast.error{background:var(--red-600);}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand"><img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI2LjIuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCA2ODAgMjcwIiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA2ODAgMjcwOyIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe2ZpbGw6I0I5QkRDMDt9Cgkuc3Qxe2ZpbGw6IzQwQkNEQjt9Cgkuc3Qye2ZpbGw6bm9uZTt9Cgkuc3Qze2ZpbGw6I0IwQUZCNDt9Cgkuc3Q0e2ZpbGw6I0IyQUZCMDt9Cjwvc3R5bGU+CjxnPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQxNy41LDE0LjhjMS40LDQuNCwxLDEwLjQtMSwxNy44Yy0yLjEsNy41LTUuMiwxNS45LTkuNCwyNS4zYy00LjIsOS40LTkuMiwxOS40LTE0LjksMzAuMQoJCQljLTUuNywxMC43LTExLjYsMjEuNS0xNy42LDMyLjVzLTExLjksMjEuOC0xNy41LDMyLjVjLTUuNiwxMC43LTEwLjQsMjAuNi0xNC4zLDI5LjljLTMuOSw5LjItNi43LDE3LjQtOC40LDI0LjYKCQkJYy0xLjcsNy4yLTEuNSwxMi44LDAuNSwxNi45Yy0xLjgsMC45LTQuMSwxLjQtNi45LDEuNGMtMS44LDAtMy43LTAuMy01LjctMC44Yy0yLTAuNS0zLjgtMS41LTUuNC0yLjdjLTEuNi0xLjMtMi45LTIuOS00LTQuOQoJCQljLTEuMS0yLTEuNi00LjUtMS42LTcuNWMtMC4yLTMuMiwwLjMtNywxLjQtMTEuNGMxLjEtNC40LDIuNi05LjMsNC41LTE0LjZjMS45LTUuMyw0LjItMTEuMSw2LjktMTcuMmMyLjctNi4xLDUuNi0xMi40LDguOC0xOQoJCQljLTUuOC0wLjMtMTMtMC4yLTIxLjcsMC4zYy04LjcsMC41LTE3LjgsMS4xLTI3LjIsMS43Yy0xMC44LDEyLjctNDQuNCw0Ny44LTU1LjUsNTkuNWMtMTEuMSwxMS43LTIxLjksMjItMzIuNSwzMC45CgkJCWMtMTAuNiw4LjktMjAuOSwxNi0zMC44LDIxLjRjLTkuOSw1LjMtMTkuMSw4LTI3LjcsOGMtMy4yLDAtNi40LTAuNS05LjYtMS40Yy00LjktMS40LTguNy0zLjYtMTEuNC02LjcKCQkJYy0yLjctMy4xLTQuNi02LjYtNS42LTEwLjNjLTEtMy43LTEuMS03LjUtMC4zLTExLjRjMC44LTMuOSwyLjItNy4zLDQuMy0xMC4yYzQuOSw3LjUsMTEuNiwxMS4yLDIwLjEsMTEuMmM1LjksMCwxMi42LTEuOCwyMC01LjMKCQkJYzcuNC0zLjUsMTUuMy04LjMsMjMuNi0xNC4zYzguMy02LDE2LjktMTMuMSwyNS43LTIxLjNjOC44LTguMiw0MC40LTM5LjksNDkuNC00OS4yYy00LjctMC4zLTktMC44LTEyLjktMS40CgkJCWMtMy45LTAuNi03LjEtMS42LTkuNy0zYy0zLjItMS44LTUuNC00LjItNi42LTcuMWMtMS4yLTIuOS0xLjctNS45LTEuNS05YzAuMi0zLjEsMS4xLTYuMiwyLjYtOS4xYzEuNS0zLDMuNC01LjQsNS43LTcuMgoJCQljNC43LDUsMTAuOSw4LjUsMTguNiwxMC41YzcuNywyLDE2LDMuMiwyNSwzLjdjMTAuNS0xMS42LDIwLjctMjMuMiwzMC43LTM0LjljOS45LTExLjcsMTkuMS0yMi42LDI3LjYtMzIuNwoJCQljOC41LTEwLjEsMTYtMTkuMiwyMi44LTI3LjJjNi43LTgsMTItMTQuMSwxNi0xOC4yYzIuNC0yLjYsNC44LTQuNCw3LjEtNS40YzIuMy0xLDQuNC0xLjUsNi40LTEuNWMxLjgsMCwzLjcsMC40LDUuNywxLjEKCQkJYy0wLjMtMi42LTAuOC00LjYtMS42LTUuOWMyLjktMS43LDYtMi41LDkuNC0yLjVjNC43LDAsOC43LDEuNSwxMiw0LjVDNDE0LjMsOC4xLDQxNi41LDExLjMsNDE3LjUsMTQuOHogTTMwMi4zLDEyOC4xCgkJCWM4LjItMC4zLDE1LjctMC40LDIyLjUtMC4zYzYuOCwwLjEsMTIuNCwwLjcsMTYuOCwxLjljNC40LTguOCw4LjktMTcuOCwxMy41LTI2LjhjNC42LTksOC45LTE3LjgsMTMtMjYuNAoJCQljNC4xLTguNiw3LjktMTYuOCwxMS4zLTI0LjdjMy40LTcuOSw2LjEtMTUuMSw4LjEtMjEuNmMtNS4yLDQuNi0xMSwxMC4zLTE3LjQsMTcuM2MtNi40LDYuOS0xMy4yLDE0LjctMjAuNSwyMy4yCgkJCWMtNy4yLDguNS0xNC45LDE3LjctMjIuOSwyNy42QzMxOC44LDEwOC4xLDMxMC42LDExOCwzMDIuMywxMjguMXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNNDY0LjksMTUyLjVjLTQuMyw3LjktOC44LDE1LjctMTMuNywyMy4yYy00LjksNy41LTEwLDE0LjItMTUuMiwxOS45Yy01LjMsNS43LTEwLjYsMTAuMy0xNi4xLDEzLjgKCQkJYy01LjUsMy41LTExLDUuMy0xNi41LDUuM2MtMy4xLDAtNS45LTAuNS04LjUtMS42Yy01LjUtMi05LjEtNS44LTExLTExLjNjLTEuOC01LjYtMi40LTEyLjItMS43LTIwYzAuNy03LjgsMi41LTE2LjMsNS40LTI1LjYKCQkJYzIuOS05LjMsNi4zLTE4LjgsMTAuMy0yOC41YzQtOS43LDguMi0xOS4yLDEyLjgtMjguNmM0LjYtOS40LDktMTcuOSwxMy4zLTI1LjZzOC4xLTE0LjMsMTEuNi0xOS44czUuOS05LjIsNy40LTExLjIKCQkJYzIuNi0zLjIsNS41LTQuOCw4LjctNC44YzIuNCwwLDQuOCwwLjgsNy4xLDIuM2MyLjMsMS41LDQuMywzLjEsNS45LDQuOGMyLDIuMSwzLjksNC42LDUuNyw3LjNjLTQuNiw3LTkuNiwxNS4xLTE1LjIsMjQuNAoJCQljLTUuNiw5LjItMTEuMSwxOC44LTE2LjYsMjguN2MtNS41LDkuOS0xMC43LDE5LjgtMTUuNiwyOS42Yy00LjksOS44LTguOSwxOC44LTEyLjEsMjdjLTMuMiw4LjItNS4zLDE1LjEtNi4zLDIwLjgKCQkJYy0xLDUuNy0wLjMsOS41LDIuMiwxMS4zYzEuMiwwLjksMi41LDEuNCwzLjksMS40YzIuOSwwLDYuMi0xLjQsOS44LTQuM2MzLjctMi45LDcuNC02LjYsMTEuMi0xMS4yYzMuOC00LjYsNy42LTkuNywxMS4zLTE1LjQKCQkJYzMuNy01LjcsNy4xLTExLjQsMTAuMi0xN2MxLjEtMS44LDIuMy0zLjIsMy43LTRjMS40LTAuOCwyLjctMS4zLDQuMS0xLjNjMi4xLDAsMy43LDEsNC44LDIuOQoJCQlDNDY2LjksMTQ2LjgsNDY2LjYsMTQ5LjMsNDY0LjksMTUyLjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTU2OS43LDE0Ny4zYzIuNC0zLjgsNS4xLTUuNyw4LTUuN2MyLjEsMCwzLjcsMSw0LjgsMy4xYzEuMSwyLjEsMC43LDQuNy0xLjEsNy45CgkJCWMtNC40LDcuOS0xMC4xLDE0LjUtMTYuOSwxOS42Yy02LjksNS4xLTE0LjYsNy43LTIzLjMsNy43Yy01LjMsMC0xMC41LTEtMTUuNi0zYy00LjksOS4xLTExLjEsMTctMTguNiwyMy43CgkJCWMtNy41LDYuNi0xNS45LDEwLjctMjUsMTIuMmMtMy40LDAuNS03LjEsMC0xMS4xLTEuM2MtNC0xLjMtNy45LTMuMy0xMS40LTYuMWMtMy42LTIuNy02LjYtNi4xLTktMTAuMmMtMi40LTQtMy43LTguNi0zLjctMTMuNgoJCQljMC05LjUsMS41LTE5LjMsNC42LTI5LjVjMy0xMC4yLDcuMi0xOS41LDEyLjYtMjcuOGM1LjMtOC4zLDExLjctMTQuOSwxOS0xOS45YzcuMy01LDE1LjItNywyMy44LTYuMWM3LjYsMC45LDEzLjcsMy40LDE4LjIsNy41CgkJCWM0LjUsNC4xLDcuNyw5LjIsOS41LDE1LjNjMS44LDYuMSwyLjUsMTIuOCwxLjksMjAuMmMtMC41LDcuNC0yLjEsMTQuOC00LjcsMjIuMWMxLjcsMC42LDMuNCwxLjEsNS4zLDEuNgoJCQljMS44LDAuNSwzLjgsMC43LDUuOSwwLjdjNC4zLDAsOC44LTEuMywxMy41LTMuOUM1NjAuOSwxNTkuMyw1NjUuNCwxNTQuNSw1NjkuNywxNDcuM3ogTTQ3OS4zLDE5OS45YzMuNSwwLjIsNi45LTAuNSwxMC4zLTEuOQoJCQljMy40LTEuNCw2LjUtMy41LDkuNS02LjFjMy0yLjYsNS43LTUuNyw4LjItOS4zYzIuNS0zLjYsNC44LTcuNCw2LjctMTEuNmwtMC4yLTAuMmMtMS43LTEuMi0yLjgtMi42LTMuMy00LjIKCQkJYy0wLjUtMS42LTAuNi0zLjItMC4yLTQuOGMwLjQtMS42LDEuMS0yLjksMi4zLTRjMS4xLTEuMSwyLjUtMS42LDQtMS42YzAuOSwwLDEuOSwwLjIsMywwLjdjMS40LTQuNCwyLjMtOC44LDIuNy0xMwoJCQljMC41LTQuMywwLjUtOC4yLDAtMTEuOGMtMC41LTMuNi0xLjUtNi43LTMuMS05LjRjLTEuNi0yLjctMy44LTQuNS02LjUtNS42Yy0yLjktMS4yLTYuNCwwLTEwLjQsMy41Yy00LDMuNi04LDguNC0xMiwxNC40CgkJCWMtNCw2LTcuNiwxMi43LTEwLjksMjAuMWMtMy4zLDcuNC01LjYsMTQuNC03LjEsMjAuOWMtMS41LDYuNi0xLjgsMTIuMS0wLjksMTYuNkM0NzIuMiwxOTcuMiw0NzQuOSwxOTkuNiw0NzkuMywxOTkuOXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNNjI4LjksOTguMWM3LDAuNiwxMi4zLDIuOCwxNS45LDYuNmMzLjYsMy44LDUuNiw4LjMsNi4yLDEzLjZjMC41LDUuMy0wLjQsMTAuOC0yLjcsMTYuNwoJCQljLTIuNCw1LjktNi4xLDExLjEtMTEuMSwxNS44Yy01LDQuNy0xMS4zLDguMy0xOC45LDEwLjljLTcuNSwyLjYtMTYuMiwzLjItMjYsMS44Yy0xLjcsNy4yLTEuNywxMy44LTAuMSwyMAoJCQljMS42LDYuMiw1LjYsMTAuOSwxMiwxNC4xYzIuNCwxLjIsNS4yLDEuOCw4LjIsMS44YzQuNiwwLDkuMy0xLjUsMTQuMS00LjVjNC44LTMsOS41LTYuOSwxNC4yLTExLjdjNC42LTQuOCw5LjEtMTAuNCwxMy4zLTE2LjcKCQkJYzQuMi02LjMsOC0xMi44LDExLjMtMTkuM2MwLjktMiwyLjEtMy40LDMuNS00LjJjMS40LTAuOCwyLjgtMS4zLDQtMS4zYzIuMSwwLDMuOCwxLDQuOSwzYzEuMSwyLDAuOSw0LjYtMC44LDcuOAoJCQljLTMuMiw1LjktNywxMi41LTExLjMsMTkuNmMtNC4zLDcuMS05LjMsMTMuNy0xNC44LDE5LjhjLTUuNSw2LjEtMTEuNiwxMS4yLTE4LjMsMTUuM2MtNi43LDQuMS0xNC4xLDYuMi0yMi4yLDYuMgoJCQljLTUuMiwwLTEwLjQtMS0xNS44LTNjLTctMi40LTEyLjctNi0xNy0xMC44Yy00LjMtNC43LTcuNS0xMC4xLTkuNC0xNmMtMS45LTUuOS0yLjctMTIuMy0yLjQtMTljMC4zLTYuNywxLjUtMTMuMywzLjctMTkuOQoJCQljMi4xLTYuNiw1LjEtMTIuOCw4LjktMTguOGMzLjgtNS45LDguMy0xMS4xLDEzLjQtMTUuNGM1LjEtNC4zLDEwLjgtNy43LDE3LjItMTBDNjE1LjIsOTguMyw2MjEuOSw5Ny41LDYyOC45LDk4LjF6IE01OTYuNiwxNTAuMwoJCQljOC43LDEuMSwxNS45LDAuMywyMS42LTIuMmM1LjctMi41LDEwLjEtNS43LDEzLTkuNmMzLTMuOSw0LjctNy45LDUtMTEuOWMwLjQtNC0wLjMtNy0yLjItOC44Yy0xLjQtMS40LTMuMS0yLjEtNS4zLTIuMQoJCQljLTIuNCwwLTUuMSwwLjktOCwyLjdjLTIuOSwxLjgtNS44LDQuMy04LjcsNy41Yy0yLjksMy4yLTUuNyw2LjktOC41LDExLjFDNjAxLDE0MS4zLDU5OC42LDE0NS43LDU5Ni42LDE1MC4zeiIvPgoJPC9nPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTIyMi43LDI1OS4yaC00LjN2OS45aC01LjJ2LTI1LjloOS41YzYuMiwwLDkuMywzLjUsOS4zLDhDMjMyLDI1NS4xLDIyOS4zLDI1OS4yLDIyMi43LDI1OS4yeiBNMjIyLjQsMjU1CgkJCWMyLjksMCw0LjItMS40LDQuMi0zLjdjMC0yLjQtMS4zLTMuOC00LjItMy44aC00LjF2Ny41SDIyMi40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yNDUuNCwyNDMuMmM2LjIsMCw5LjMsMy42LDkuMyw3LjljMCwzLjItMS43LDYuMy01LjksNy40bDYuMiwxMC41aC02bC01LjctMTAuMWgtMi40djEwLjFoLTUuMnYtMjUuOUgyNDUuNAoJCQl6IE0yNDUuMiwyNDcuNWgtNC4zdjcuNmg0LjNjMi45LDAsNC4yLTEuNSw0LjItMy45QzI0OS40LDI0OSwyNDguMSwyNDcuNSwyNDUuMiwyNDcuNXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMjcxLjQsMjY5LjNjLTcuMywwLTEzLjMtNS41LTEzLjMtMTMuM2MwLTcuNyw2LTEzLjIsMTMuMy0xMy4yYzcuNCwwLDEzLjIsNS41LDEzLjIsMTMuMgoJCQlDMjg0LjcsMjYzLjksMjc4LjgsMjY5LjMsMjcxLjQsMjY5LjN6IE0yNzEuNCwyNjQuN2M0LjcsMCw3LjktMy40LDcuOS04LjZjMC01LjMtMy4yLTguNi03LjktOC42Yy00LjcsMC03LjksMy4zLTcuOSw4LjYKCQkJQzI2My41LDI2MS4zLDI2Ni43LDI2NC43LDI3MS40LDI2NC43eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yOTguMSwyNTkuMmgtNC4zdjkuOWgtNS4ydi0yNS45aDkuNWM2LjIsMCw5LjMsMy41LDkuMyw4QzMwNy40LDI1NS4xLDMwNC43LDI1OS4yLDI5OC4xLDI1OS4yeiBNMjk3LjgsMjU1CgkJCWMyLjksMCw0LjItMS40LDQuMi0zLjdjMC0yLjQtMS4zLTMuOC00LjItMy44aC00LjF2Ny41SDI5Ny44eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zMjYuMSwyNDcuNGgtOS44djYuNWg4Ljd2NC4xaC04Ljd2Ni45aDkuOHY0LjJoLTE1di0yNS45aDE1VjI0Ny40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zNDAuNSwyNDMuMmM2LjIsMCw5LjMsMy42LDkuMyw3LjljMCwzLjItMS43LDYuMy01LjksNy40bDYuMiwxMC41aC02bC01LjctMTAuMUgzMzZ2MTAuMWgtNS4ydi0yNS45SDM0MC41egoJCQkgTTM0MC4zLDI0Ny41SDMzNnY3LjZoNC4zYzIuOSwwLDQuMi0xLjUsNC4yLTMuOUMzNDQuNSwyNDksMzQzLjIsMjQ3LjUsMzQwLjMsMjQ3LjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTM1My4yLDI0My4yaDE5djQuMmgtNi45djIxLjdoLTUuMnYtMjEuN2gtNi45VjI0My4yeiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0zNzMuOCwyNDMuMmg1LjlsNS42LDExLjhsNS41LTExLjhoNS44bC04LjcsMTYuOXY5aC01LjJ2LTlMMzczLjgsMjQzLjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTQwOC40LDI0My4yaDUuOWw4LjIsMTkuMmw4LjItMTkuMmg1Ljl2MjUuOWgtNS4ydi0xNi44bC02LjksMTYuOGgtMy45bC03LTE2Ljh2MTYuOGgtNS4yVjI0My4yeiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik00NTcuNSwyNjQuMmgtMTAuM2wtMS43LDQuOWgtNS40bDkuMy0yNS45aDZsOS4zLDI1LjloLTUuNUw0NTcuNSwyNjQuMnogTTQ1Mi40LDI0OS4ybC0zLjcsMTAuOGg3LjUKCQkJTDQ1Mi40LDI0OS4yeiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik00OTAuNCwyNDMuMnYyNS45aC01LjJsLTExLjctMTcuOHYxNy44aC01LjJ2LTI1LjloNS4ybDExLjcsMTcuOHYtMTcuOEg0OTAuNHoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNTExLjMsMjY0LjJINTAxbC0xLjcsNC45aC01LjRsOS4zLTI1LjloNmw5LjMsMjUuOUg1MTNMNTExLjMsMjY0LjJ6IE01MDYuMiwyNDkuMmwtMy43LDEwLjhoNy41CgkJCUw1MDYuMiwyNDkuMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNTQ2LDI1MWgtNmMtMS4yLTIuMi0zLjMtMy4zLTYuMS0zLjNjLTQuNiwwLTcuOSwzLjMtNy45LDguNGMwLDUuMywzLjMsOC41LDguMSw4LjVjNCwwLDYuNi0yLjMsNy4zLTZoLTguOQoJCQl2LTRoMTR2NC41Yy0xLDUuMy01LjcsMTAuMS0xMi42LDEwLjFjLTcuNSwwLTEzLjItNS40LTEzLjItMTMuMmMwLTcuNyw1LjctMTMuMiwxMy4yLTEzLjJDNTM5LjcsMjQyLjksNTQ0LjMsMjQ1LjgsNTQ2LDI1MXoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNTY1LjUsMjQ3LjRoLTkuOHY2LjVoOC43djQuMWgtOC43djYuOWg5Ljh2NC4yaC0xNXYtMjUuOWgxNVYyNDcuNHoiLz4KCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNTcwLjIsMjQzLjJoNS45bDguMiwxOS4ybDguMi0xOS4yaDUuOXYyNS45aC01LjJ2LTE2LjhsLTYuOSwxNi44aC0zLjlsLTctMTYuOHYxNi44aC01LjJWMjQzLjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTYxOC42LDI0Ny40aC05Ljh2Ni41aDguN3Y0LjFoLTguN3Y2LjloOS44djQuMmgtMTV2LTI1LjloMTVWMjQ3LjR6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTY0NS40LDI0My4ydjI1LjloLTUuMmwtMTEuNy0xNy44djE3LjhoLTUuMnYtMjUuOWg1LjJsMTEuNywxNy44di0xNy44SDY0NS40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik02NDkuMSwyNDMuMmgxOXY0LjJoLTYuOXYyMS43SDY1NnYtMjEuN2gtNi45VjI0My4yeiIvPgoJPC9nPgoJPGc+CgkJPGc+CgkJCTxsaW5lIGNsYXNzPSJzdDIiIHgxPSIyMS40IiB5MT0iMTM5LjYiIHgyPSI5My4yIiB5Mj0iODYuOSIvPgoJCTwvZz4KCQk8Zz4KCQkJPHBhdGggY2xhc3M9InN0MyIgZD0iTTE1OS40LDIxNy43SDI3Yy01LjIsMC05LjQtNC4yLTkuNC05LjR2LTY1LjhjMC0zLDEuNC01LjgsMy44LTcuNmw2Ni4yLTQ4LjZjMy4zLTIuNCw3LjgtMi40LDExLjEsMAoJCQkJbDY2LjIsNDguNmMyLjQsMS44LDMuOCw0LjYsMy44LDcuNnY2NS44QzE2OC44LDIxMy40LDE2NC42LDIxNy43LDE1OS40LDIxNy43eiBNOTMuMiw5Mi4xYy0wLjQsMC0wLjcsMC4xLTEsMC4zTDI1LjksMTQxCgkJCQljLTAuNSwwLjMtMC43LDAuOS0wLjcsMS40djY1LjhjMCwxLDAuOCwxLjgsMS44LDEuOGgxMzIuNGMxLDAsMS44LTAuOCwxLjgtMS44di02NS44YzAtMC42LTAuMy0xLjEtMC43LTEuNEw5NC4yLDkyLjQKCQkJCUM5My45LDkyLjIsOTMuNSw5Mi4xLDkzLjIsOTIuMXoiLz4KCQk8L2c+CgkJPGc+CgkJCTxnPgoJCQkJPHBhdGggY2xhc3M9InN0NCIgZD0iTTE3NC4xLDEzMUw5NS40LDczLjNjLTEuNC0xLTMuMi0xLTQuNSwwTDEyLjIsMTMxYy0xLjcsMS4zLTQuMSwwLjktNS40LTAuOGwtNC42LTYuMgoJCQkJCWMtMS4zLTEuNy0wLjktNC4xLDAuOC01LjRsODcuOC02NC40YzEuNC0xLDMuMi0xLDQuNSwwbDg3LjgsNjQuNGMxLjcsMS4zLDIuMSwzLjcsMC44LDUuNGwtNC42LDYuMgoJCQkJCUMxNzguMiwxMzEuOSwxNzUuOCwxMzIuMiwxNzQuMSwxMzF6Ii8+CgkJCTwvZz4KCQk8L2c+CgkJPGc+CgkJCTxnPgoJCQkJPGc+CgkJCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTgzLjQsMTcyLjFjMCwwLTEwLjktNy0yMy43LTEuNGMwLDAsMy4yLTkuNiwxOC0xMi43YzAsMCw1LjUsMC44LDUuNywxLjJjMC4yLDAuNCwzLjMsOC43LDMuMyw4LjcKCQkJCQkJTDgzLjQsMTcyLjF6Ii8+CgkJCQk8L2c+CgkJCQk8Zz4KCQkJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNNTkuNywxMjYuNWMwLDAsMS4zLDAuNywzLjQsMS45YzEzLjEsNy43LDIyLjgsMjAuMiwyNy4yLDM0LjdsMCwwdi05YzAsMC0wLjUtMTEuOCwzLjItMTUuNQoJCQkJCQlDOTMuNSwxMzguNiw4Mi41LDEyMy42LDU5LjcsMTI2LjV6Ii8+CgkJCQk8L2c+CgkJCQk8Zz4KCQkJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNODMuMywxNzMuNmMwLDAsMi41LTI2LjUtMzQuNy0yMi44YzAsMCwzNC43LTMwLDUwLjUsMjIuOCIvPgoJCQkJPC9nPgoJCQkJPGc+CgkJCQkJPGc+CgkJCQkJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0xMDMsMTcyLjFjMCwwLDEwLjktNywyMy43LTEuNGMwLDAtMy4yLTkuNi0xOC0xMi43YzAsMC01LjUsMC44LTUuNywxLjJjLTAuMiwwLjQtMy4zLDguNy0zLjMsOC43CgkJCQkJCQlMMTAzLDE3Mi4xeiIvPgoJCQkJCTwvZz4KCQkJCQk8Zz4KCQkJCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTEyNi43LDEyNi41YzAsMC0xLjMsMC43LTMuNCwxLjljLTEzLjEsNy43LTIyLjgsMjAuMi0yNy4yLDM0LjdsMCwwdi05YzAsMCwwLjUtMTEuOC0zLjItMTUuNQoJCQkJCQkJQzkyLjgsMTM4LjYsMTAzLjksMTIzLjYsMTI2LjcsMTI2LjV6Ii8+CgkJCQkJPC9nPgoJCQkJCTxnPgoJCQkJCQk8cGF0aCBjbGFzcz0ic3QxIiBkPSJNMTAzLDE3My42YzAsMC0yLjUtMjYuNSwzNC43LTIyLjhjMCwwLTM0LjctMzAtNTAuNSwyMi44Ii8+CgkJCQkJPC9nPgoJCQkJPC9nPgoJCQk8L2c+CgkJCTxnPgoJCQkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTk5LjcsMTMxYzAsOS4yLTIuOSwzOS4yLTYuNSwzOS4ycy02LjUtMzAtNi41LTM5LjJzNi41LTE2LjcsNi41LTE2LjdTOTkuNywxMjEuOCw5OS43LDEzMXoiLz4KCQkJPC9nPgoJCTwvZz4KCQk8cGF0aCBjbGFzcz0ic3QzIiBkPSJNMTE4LjgsMTcxLjdIOTMuMkg2Ny41Yy0xLjEsMC0xLjksMS0xLjksMi4xdjYuNGMwLDAsMCwwLjEsMCwwLjJjMCwwLjQsMC4xLDEuNCwxLjUsMS40CgkJCWMwLjksMCwxLjcsMC43LDEuOSwxLjdsNi44LDI4LjZoMTcuM2gxNy4zbDYuOC0yOC42YzAuMi0xLDEtMS43LDEuOS0xLjdjMS40LDAsMS41LTEsMS41LTEuNGMwLTAuMSwwLTAuMiwwLTAuMnYtNi40CgkJCUMxMjAuNywxNzIuNiwxMTkuOSwxNzEuNywxMTguOCwxNzEuN3oiLz4KCTwvZz4KPC9nPgo8L3N2Zz4K" alt="Aloe Property Management"><span class="divider"></span><span class="section">Vendor Directory</span></div>
+    <div class="status" id="statusLine">All changes saved</div>
+  </div>
+
+  <div class="sidebar" id="sidebar">
+    <h2>Trades</h2>
+    <div id="tradeList"></div>
+    <button class="trade-add" id="addTradeBtn">+ Add trade category</button>
+  </div>
+
+  <div class="main">
+    <div class="main-head">
+      <div>
+        <h1 id="tradeTitle">Loading…</h1>
+        <div class="sub" id="tradeSub"></div>
+      </div>
+      <div class="head-actions">
+        <button class="btn" id="importBtn">Import from Rentvine</button>
+        <button class="btn btn-primary" id="newVendorBtn">+ New vendor</button>
+      </div>
+    </div>
+    <div class="cards" id="cardGrid"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="panel" id="importPanel">
+  <div class="panel-head">
+    <h3>Import from Rentvine</h3>
+    <button class="btn-ghost" id="closePanel" style="padding:4px 8px;">✕</button>
+  </div>
+  <div class="panel-search">
+    <input type="text" id="rvSearch" placeholder="Search ~192 active Rentvine vendors…">
+  </div>
+  <div class="panel-list" id="rvList"></div>
+  <div class="panel-foot">Adding into: <strong id="rvTargetTrade">—</strong>. Already-listed vendors for this trade are dimmed — picking one still won't duplicate it here.</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==============================================================
+   DATA MODEL — matches the REAL vendors.json pulled from
+   gs://aloe-hub-data-496300/vendors.json on the Ari agent server:
+
+   { "lastUpdated": "YYYY-MM-DD",
+     "trades": [
+       { "id": "plumbing", "label": "Plumbing",
+         "vendors": [
+           { "name", "contact", "phone", "email", "priority",
+             "zones": [], "services": [], "exclusions": [],
+             "notes", "flags": [], "active", "rvContactId"? }
+         ]
+       }, ...
+     ]
+   }
+
+   GET  /api/vendors    -> this exact shape (ASSUMED — only POST was
+                            confirmed to exist; if GET 404s, the page
+                            falls back to the seed data below, which
+                            is a real snapshot from 2026-07-16, so you
+                            are never starting from a blank page).
+   POST /api/vendors    -> same shape, full replace, writes to GCS.
+   GET  /api/rv-vendors -> [{ id, name, phone, email }, ...] Rentvine
+                            vendors, used only by the Import panel.
+================================================================= */
+
+const SEED_DATA = {
+  "lastUpdated": "2026-07-16",
+  "trades": [
+    {
+      "id": "general",
+      "label": "General Maintenance",
+      "vendors": [
+        {
+          "name": "Easy Clean",
+          "contact": "Ana & Jose",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": ["Minor maintenance", "Light painting", "Basic plumbing (disposals, drains, shower repairs, toilet tank parts)"],
+          "exclusions": ["Roofing", "Pool/Spa", "Electrical (except basic outlet/breaker)", "Garage springs"],
+          "notes": "Confirm scope of work before assigning. 3-day service window for cleaning. Also primary cleaner in Maricopa.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "John",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 3,
+          "zones": ["Chandler", "Gilbert", "Tempe", "Mesa"],
+          "services": ["Minor maintenance", "Light painting", "Basic plumbing"],
+          "exclusions": ["Roofing", "Pool/Spa", "Electrical", "Garage springs"],
+          "notes": "East Valley only — Chandler, Gilbert, Tempe, Mesa. Confirm scope before assigning. ",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "CrossRoads Remodeling AZ",
+          "contact": "Matthew",
+          "phone": "+17145830236",
+          "email": "crossroadsremodelingaz@gmail.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Minor maintenance", "Light painting", "Basic plumbing (disposals", "drains", "shower repairs", "toilet tank parts)"],
+          "exclusions": ["electrical diagnostic"],
+          "notes": "2nd option for city of Maricopa if easy Clean can't do it. 2nd option to what Viatone can't do.",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5506"
+        },
+        {
+          "name": "Hendershot Construction",
+          "contact": "",
+          "phone": "+14803758969",
+          "email": "sales@hendershotconstructionllc.com",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "Goes everywhere",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3252"
+        }
+      ]
+    },
+    {
+      "id": "plumbing",
+      "label": "Plumbing",
+      "vendors": [
+        {
+          "name": "Viatone LLC",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["All plumbing", "Water heater issues"],
+          "exclusions": [],
+          "notes": "Primary plumber valley-wide. Also 2nd option for Maricopa if Easy Clean is too busy. Use for ALL water heater's leaking regardless of city.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "JB Water & Air",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 5,
+          "zones": ["Valley-wide"],
+          "services": ["Plumbing"],
+          "exclusions": [],
+          "notes": "Charges $250 extra for Maricopa — ask if they will waive if they do the work. Try to get approval beforehand. Only use if Easy Clean cannot handle in Maricopa.",
+          "flags": ["extra-fee-maricopa"],
+          "active": true
+        },
+        {
+          "name": "Easy Clean Maricopa",
+          "contact": "",
+          "phone": "+17082892907",
+          "email": "agomez118@yahoo.com",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "If emergency on weekend or anytime and no one else, you can reach out to ask if they can take care of issue and how much outside of Maricopa.",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3237"
+        },
+        {
+          "name": "JTB Plumbing LLC",
+          "contact": "",
+          "phone": "+16024343641",
+          "email": "jtbplumbingllc@gmail.com",
+          "priority": 4,
+          "zones": ["Valley-wide"],
+          "services": ["Plumbing"],
+          "exclusions": [],
+          "notes": "Will match Viatone pricing, he is referral from Viatone and will go anywhere in valley. Does major plumbing too and licensed.",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5942"
+        },
+        {
+          "name": "CrossRoads Remodeling AZ",
+          "contact": "",
+          "phone": "+17145830236",
+          "email": "crossroadsremodelingaz@gmail.com",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "Great for faucets, garbage disposal, valves, toilet issues. Use for garbage disposals primary outside of Maricopa or 2nd option to easy clean for maricopa",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5506"
+        },
+        {
+          "name": "Hendershot Construction",
+          "contact": "",
+          "phone": "+14803758969",
+          "email": "sales@hendershotconstructionllc.com",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "Use for garbage disposals secondary outside of Maricopa or 3rd option to easy clean for maricopa",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3252"
+        }
+      ]
+    },
+    {
+      "id": "roofing",
+      "label": "Roofing",
+      "vendors": [
+        {
+          "name": "Easy Clean",
+          "contact": "Ana & Jose",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": ["Minor roof repairs (fallen tiles)"],
+          "exclusions": ["Major repairs", "Licensed work"],
+          "notes": "Unlicensed — minor work only (fallen tiles). Maricopa only.",
+          "flags": ["unlicensed"],
+          "active": true
+        },
+        {
+          "name": "Superhero Roofing",
+          "contact": "Torsten",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Major repairs", "Minor repairs"],
+          "exclusions": [],
+          "notes": "Requires follow-up after assigning. licensed",
+          "flags": ["requires-followup"],
+          "active": true
+        },
+        {
+          "name": "Legacy Roofing",
+          "contact": "Blake",
+          "phone": "",
+          "email": "",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": ["Major repairs", "Minor repairs"],
+          "exclusions": [],
+          "notes": "licensed",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "iRoof",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 3,
+          "zones": ["Valley-wide"],
+          "services": ["Major repairs", "Minor repairs"],
+          "exclusions": [],
+          "notes": "licensed",
+          "flags": [],
+          "active": true
+        }
+      ]
+    },
+    {
+      "id": "hvac",
+      "label": "HVAC",
+      "vendors": [
+        {
+          "name": "Mac's Heating & Cooling",
+          "contact": "Mike (owner), Amanda (bookkeeping)",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["HVAC", "Heating", "Cooling"],
+          "exclusions": [],
+          "notes": "Primary HVAC vendor valley-wide.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "AC Rangers",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["HVAC"],
+          "exclusions": [],
+          "notes": "ALWAYS use on Stuart Neely properties — he is a part owner. 2nd option in Maricopa",
+          "flags": ["owner-relationship-stuart-neely"],
+          "active": true
+        },
+        {
+          "name": "911 Air",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 3,
+          "zones": ["Valley-wide"],
+          "services": ["HVAC"],
+          "exclusions": [],
+          "notes": "Last resort only.",
+          "flags": ["last-resort"],
+          "active": true
+        }
+      ]
+    },
+    {
+      "id": "garage",
+      "label": "Garage Doors",
+      "vendors": [
+        {
+          "name": "007 Garage",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Garage doors"],
+          "exclusions": [],
+          "notes": "Will NOT go to Maricopa or Casa Grande unless the job is worth it and preapproved— ask first before assigning.",
+          "flags": ["confirm-before-maricopa"],
+          "active": true
+        },
+        {
+          "name": "CopaGrande",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 2,
+          "zones": ["Maricopa", "Casa Grande"],
+          "services": ["Garage doors"],
+          "exclusions": [],
+          "notes": "Expensive.",
+          "flags": ["expensive"],
+          "active": true
+        },
+        {
+          "name": "Lifted High",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 3,
+          "zones": ["Maricopa"],
+          "services": ["Garage doors"],
+          "exclusions": [],
+          "notes": "Maricopa-based. More expensive.",
+          "flags": ["expensive"],
+          "active": true
+        },
+        {
+          "name": "Rottmann Garage Doors LLC",
+          "contact": "",
+          "phone": "+16028816436",
+          "email": "rottmanngaragedoors@gmail.com",
+          "priority": 4,
+          "zones": ["East Valley"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3314"
+        }
+      ]
+    },
+    {
+      "id": "landscaping",
+      "label": "Landscaping",
+      "vendors": [
+        {
+          "name": "Sunrise Landscaping",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": ["Irrigation", "Trees", "Sprinklers", "Plants", "Landscaping"],
+          "exclusions": [],
+          "notes": "Maricopa only.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Rain or Shine Landscaping",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": ["Irrigation", "Trees", "Sprinklers", "Plants", "Landscaping"],
+          "exclusions": [],
+          "notes": "2nd choice for Maricopa  Gets behind and work orders sometimes take time to close. Does a lot of our homes where landscaping is included",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Sunset Saguaro's Landscaping LLC",
+          "contact": "",
+          "phone": "+14809423725",
+          "email": "Sunsetsaguarosllc@gmail.com",
+          "priority": 1,
+          "zones": ["East Valley", "Phoenix", "Scottsdale", "San Tan Valley", "Queen Creek", "Ahwatukee", "Mesa", "Tempe", "Gilbert", "Chandler"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5599"
+        },
+        {
+          "name": "R&M Landscaping",
+          "contact": "",
+          "phone": "+16027772492",
+          "email": "resendizraul89@gmail.com",
+          "priority": 2,
+          "zones": ["West Valley", "Phoenix", "Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4542"
+        }
+      ]
+    },
+    {
+      "id": "carpet",
+      "label": "Carpet Services",
+      "vendors": [
+        {
+          "name": "Castellanos CleanPro & Restoration LLC",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa", "Casa Grande"],
+          "services": ["Carpet cleaning"],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "East Valley Carpet Cleaners",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["East Valley"],
+          "services": ["Carpet cleaning", "Carpet stretching", "Carpet repairs"],
+          "exclusions": [],
+          "notes": "East Valley areas: Chandler, Gilbert, Mesa, Tempe, Ahwatukee, Queen Creek, San Tan Valley.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Sean Floorsmith",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa", "Valley-wide"],
+          "services": ["Carpet stretching", "Carpet repairs"],
+          "exclusions": [],
+          "notes": "Also listed under Flooring.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Network Carpet",
+          "contact": "",
+          "phone": "+14808449755",
+          "email": "networkcarpet@gmail.com",
+          "priority": 4,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3288"
+        }
+      ]
+    },
+    {
+      "id": "flooring",
+      "label": "Flooring",
+      "vendors": [
+        {
+          "name": "Sean Floorsmith",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Flooring", "Carpet stretching", "Carpet repairs"],
+          "exclusions": [],
+          "notes": "Based out of Maricopa",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Puckett's Flooring",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Flooring"],
+          "exclusions": [],
+          "notes": "Accepts credit cards.",
+          "flags": ["accepts-credit-card"],
+          "active": true
+        },
+        {
+          "name": "Juan's Painting & Repairs",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 3,
+          "zones": ["Valley-wide"],
+          "services": ["Vinyl plank flooring"],
+          "exclusions": [],
+          "notes": "Primarily for vinyl plank. Also primary painter for Maricopa.",
+          "flags": [],
+          "active": true
+        }
+      ]
+    },
+    {
+      "id": "painting",
+      "label": "Painting",
+      "vendors": [
+        {
+          "name": "Juan's Painting & Repairs",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": ["Painting", "Vinyl plank flooring"],
+          "exclusions": [],
+          "notes": "Primary painter for Maricopa. Only does Maricopa ",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Jacobo Gomez",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Painting"],
+          "exclusions": [],
+          "notes": "Goes all over the valley",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Royalty Brush Painting",
+          "contact": "",
+          "phone": "(480) 235-5904",
+          "email": "",
+          "priority": 3,
+          "zones": ["Valley-wide"],
+          "services": ["Painting"],
+          "exclusions": [],
+          "notes": "Goes all over the valley",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Bigelow's Painting",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": ["Painting"],
+          "exclusions": [],
+          "notes": "$1.30/sq ft. Communication is poor — be proactive with follow-up. Goes all over the valley",
+          "flags": ["poor-communication"],
+          "active": true
+        },
+        {
+          "name": "Platinum Exteriors",
+          "contact": "",
+          "phone": "(928) 301-5529",
+          "email": "",
+          "priority": 3,
+          "zones": ["Valley-wide"],
+          "services": ["Exterior painting"],
+          "exclusions": [],
+          "notes": "$1.00/sq ft exterior. This is why they are priority, otherwise interior is last backup",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "JE Elite Cleaning",
+          "contact": "",
+          "phone": "+16239864055",
+          "email": "jeelitecleaning@aol.com",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "pain touch ups",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3264"
+        },
+        {
+          "name": "CrossRoads Remodeling AZ",
+          "contact": "",
+          "phone": "+17145830236",
+          "email": "crossroadsremodelingaz@gmail.com",
+          "priority": 7,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "Does touch up painting for unit turns and drywall. Use primarily for touch ups and smaller jobs, quote on bigger. He is based in Maricopa, ask if he will charge more if job is further out like West Side or Central Phx.",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5506"
+        }
+      ]
+    },
+    {
+      "id": "cleaning",
+      "label": "Cleaning",
+      "vendors": [
+        {
+          "name": "Easy Clean",
+          "contact": "Ana & Jose",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": ["Turnover cleaning"],
+          "exclusions": [],
+          "notes": "3-day service window. ",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "JE Elite Cleaning",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Turnover cleaning"],
+          "exclusions": [],
+          "notes": "Backup for Maricopa. Priority for all other locations. May need to send back — first cleaning not always sufficient.",
+          "flags": ["quality-check-required"],
+          "active": true
+        }
+      ]
+    },
+    {
+      "id": "appliance",
+      "label": "Appliance Repair",
+      "vendors": [
+        {
+          "name": "J&G Appliance",
+          "contact": "Joe",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Appliance repair"],
+          "exclusions": [],
+          "notes": "Also known as Joe Appliance.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Affordable Appliance Repair",
+          "contact": "",
+          "phone": "+14809143381",
+          "email": "aaprepair@gmail.com",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4405"
+        },
+        {
+          "name": "Phoenix Appliance Works",
+          "contact": "",
+          "phone": "+16028007468",
+          "email": "applianceworks.phx@gmail.com",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3298"
+        },
+        {
+          "name": "The Appliance Repair Professionals",
+          "contact": "",
+          "phone": "+18555128222",
+          "email": "pmjobs@theappliancerepairprofessionals.com",
+          "priority": 4,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3330"
+        },
+        {
+          "name": "Jeff Appliance Repair",
+          "contact": "",
+          "phone": "+15204311234",
+          "email": "jeffappliancerepair@outlook.com",
+          "priority": 5,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "Casa Grande based\n",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3787"
+        },
+        {
+          "name": "Felix Appliance repair",
+          "contact": "",
+          "phone": "+14804868900",
+          "email": "robert@felixappliancerepair.net",
+          "priority": 6,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3241"
+        }
+      ]
+    },
+    {
+      "id": "pest",
+      "label": "Pest Control",
+      "vendors": [
+        {
+          "name": "AZ Bug Guy",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Maricopa", "Casa Grande"],
+          "services": ["One-time sprays", "Included pest control"],
+          "exclusions": [],
+          "notes": "Good for 1x sprays and included pest control plans.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "T2 Pest Control",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Pest control"],
+          "exclusions": [],
+          "notes": "Use everywhere, primary for termites, bees, rodents, gophers, one time spray, but 2nd choice in Maricopa for 1x spray.",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Hunter Pest Control",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": ["Pest control"],
+          "exclusions": ["One-time sprays"],
+          "notes": "DO NOT use for one-time sprays.",
+          "flags": ["do-not-use-one-time"],
+          "active": true
+        },
+        {
+          "name": "Budget Bro's Termite",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": ["Termite"],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Green Machine Pest Control",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 3,
+          "zones": ["Valley-wide"],
+          "services": ["Pest control"],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true
+        }
+      ]
+    },
+    {
+      "id": "glass",
+      "label": "Glass Repair",
+      "vendors": [
+        {
+          "name": "Lizard Heights",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": ["Glass repair", "Window repair"],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true
+        },
+        {
+          "name": "Sommers Glass",
+          "contact": "",
+          "phone": "+15208367763",
+          "email": "sommersglass@yahoo.com",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3320"
+        },
+        {
+          "name": "Sonoran Glass",
+          "contact": "",
+          "phone": "+16028990047",
+          "email": "office@sonoran-glass.com",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4118"
+        },
+        {
+          "name": "Universal Glass",
+          "contact": "",
+          "phone": "+14808332928",
+          "email": "office@universalglassaz.com",
+          "priority": 4,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3337"
+        }
+      ]
+    },
+    {
+      "id": "trash",
+      "label": "Trash Removal",
+      "vendors": [
+        {
+          "name": "Rain or Shine Landscaping",
+          "contact": "",
+          "phone": "+16026950948",
+          "email": "rainorshinelandscapingaz@gmail.com",
+          "priority": 4,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3306"
+        },
+        {
+          "name": "Hendershot Construction",
+          "contact": "",
+          "phone": "+14803758969",
+          "email": "sales@hendershotconstructionllc.com",
+          "priority": 1,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3252"
+        },
+        {
+          "name": "Arizona Trash Pirate",
+          "contact": "",
+          "phone": "+15204507558",
+          "email": "jtrashpirate@gmail.com",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3201"
+        },
+        {
+          "name": "Valet Verde",
+          "contact": "",
+          "phone": "+14808233364",
+          "email": "ValetVerdellc@gmail.com",
+          "priority": 4,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5324"
+        }
+      ]
+    },
+    {
+      "id": "septic_plumbing",
+      "label": "Septic Plumbing",
+      "vendors": [
+        {
+          "name": "A-Z Septic",
+          "contact": "",
+          "phone": "+16025092017",
+          "email": "azsepticpumping@gmail.com",
+          "priority": 1,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3638"
+        },
+        {
+          "name": "Sunrise Plumbing Contractors, LLC",
+          "contact": "",
+          "phone": "+16235216654",
+          "email": "office@sunriseplumbingcontractors.com",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3327"
+        },
+        {
+          "name": "AAA Ajax Pumping",
+          "contact": "",
+          "phone": "+16022780075",
+          "email": "",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3186"
+        },
+        {
+          "name": "Ameripump",
+          "contact": "",
+          "phone": "+14803190073",
+          "email": "ameripump@gmail.com",
+          "priority": 4,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3637"
+        }
+      ]
+    },
+    {
+      "id": "carpet_cleaning",
+      "label": "Carpet Cleaning",
+      "vendors": [
+        {
+          "name": "Network Carpet",
+          "contact": "",
+          "phone": "+14808449755",
+          "email": "networkcarpet@gmail.com",
+          "priority": 2,
+          "zones": ["Valley-wide", "West Valley", "Phoenix"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3288"
+        },
+        {
+          "name": "Castellanos CleanPro & Restoration LLC",
+          "contact": "",
+          "phone": "+15202807161",
+          "email": "jcastejj@gmail.com",
+          "priority": 1,
+          "zones": ["Casa Grande", "Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3216"
+        },
+        {
+          "name": "East Valley Floor Care",
+          "contact": "",
+          "phone": "+14803401187",
+          "email": "evfloorcare@gmail.com",
+          "priority": 1,
+          "zones": ["East Valley", "Scottsdale", "Tempe", "Mesa", "San Tan Valley", "Queen Creek", "Ahwatukee", "Gilbert", "Chandler"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3236"
+        }
+      ]
+    },
+    {
+      "id": "electrical",
+      "label": "Electrical",
+      "vendors": [
+        {
+          "name": "JM Electrical",
+          "contact": "",
+          "phone": "+18188572645",
+          "email": "jmelectric4you@gmail.com",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3267"
+        },
+        {
+          "name": "Hendershot Construction",
+          "contact": "",
+          "phone": "+14803758969",
+          "email": "sales@hendershotconstructionllc.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3252"
+        },
+        {
+          "name": "Easy Clean Maricopa",
+          "contact": "",
+          "phone": "+17082892907",
+          "email": "agomez118@yahoo.com",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "Maricopa, unlicensed and will let you know if electrician is needed.",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3237"
+        },
+        {
+          "name": "Maricopa Electric",
+          "contact": "",
+          "phone": "+14803104985",
+          "email": "sean@maricopaelectric.me",
+          "priority": 4,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4235"
+        },
+        {
+          "name": "Mr Electric",
+          "contact": "",
+          "phone": "+14803767248",
+          "email": "svp.teamleads@gmail.com",
+          "priority": 5,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5275"
+        }
+      ]
+    },
+    {
+      "id": "drywall",
+      "label": "Drywall",
+      "vendors": [
+        {
+          "name": "Easy Clean Maricopa",
+          "contact": "",
+          "phone": "+17082892907",
+          "email": "agomez118@yahoo.com",
+          "priority": 2,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3237"
+        },
+        {
+          "name": "Juan's Painting and Repairs",
+          "contact": "",
+          "phone": "+16233400898",
+          "email": "juanornelas4048@gmail.com",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3295"
+        },
+        {
+          "name": "Jacobo Gomez",
+          "contact": "",
+          "phone": "+16026892468",
+          "email": "jdgomez1989@icloud.com",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3643"
+        },
+        {
+          "name": "Bigelow's Painting & Remodeling LLC",
+          "contact": "",
+          "phone": "+14803812944",
+          "email": "era@bigelowspainting.com",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3212"
+        },
+        {
+          "name": "CrossRoads Remodeling AZ",
+          "contact": "",
+          "phone": "+17145830236",
+          "email": "crossroadsremodelingaz@gmail.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5506"
+        }
+      ]
+    },
+    {
+      "id": "mold",
+      "label": "Mold",
+      "vendors": [
+        {
+          "name": "Advanced Environmental Solutions, LLC",
+          "contact": "",
+          "phone": "+16026218594",
+          "email": "scheduling@azenvsp.com",
+          "priority": 1,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5025"
+        }
+      ]
+    },
+    {
+      "id": "water_remediation",
+      "label": "Water Remediation",
+      "vendors": [
+        {
+          "name": "Castellanos CleanPro & Restoration LLC",
+          "contact": "",
+          "phone": "+15202807161",
+          "email": "jcastejj@gmail.com",
+          "priority": 3,
+          "zones": ["East Valley"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3216"
+        },
+        {
+          "name": "ALL-IN Ventures Inc. 1-800 WATER DAMAGE of Phoenix",
+          "contact": "",
+          "phone": "+16027152225",
+          "email": "tom.hodges@1800waterdamage.com",
+          "priority": 2,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3194"
+        },
+        {
+          "name": "Nautilus Water and Mold Damage",
+          "contact": "",
+          "phone": "+13032106999",
+          "email": "tony@nautiluswaterdamage.com",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5835"
+        },
+        {
+          "name": "Easy Clean Maricopa",
+          "contact": "",
+          "phone": "+17082892907",
+          "email": "agomez118@yahoo.com",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "Call first for Maricopa to access",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3237"
+        }
+      ]
+    },
+    {
+      "id": "pool_service",
+      "label": "Pool Service",
+      "vendors": [
+        {
+          "name": "Maricopa Pool Marshall",
+          "contact": "",
+          "phone": "+15202134393",
+          "email": "poolmarshallaz3@gmail.com",
+          "priority": 1,
+          "zones": ["Maricopa"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3280"
+        },
+        {
+          "name": "Vitality Pool Restoration Services",
+          "contact": "",
+          "phone": "+16023973686",
+          "email": "tannermanzione@gmail.com",
+          "priority": 1,
+          "zones": ["East Valley"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3340"
+        },
+        {
+          "name": "CoolTimes",
+          "contact": "",
+          "phone": "+14807098891",
+          "email": "avo227@hotmail.com",
+          "priority": 2,
+          "zones": ["East Valley"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3223"
+        }
+      ]
+    },
+    {
+      "id": "pool_remodel_or_restoration",
+      "label": "Pool Remodel or Restoration",
+      "vendors": [
+        {
+          "name": "Cool View Pools",
+          "contact": "",
+          "phone": "+16024348774",
+          "email": "Yosimar861@gmail.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "Fixes pool surfaces, pool features, cracks, etc.",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5893"
+        }
+      ]
+    },
+    {
+      "id": "fireplace_and_chimney",
+      "label": "Fireplace and Chimney",
+      "vendors": [
+        {
+          "name": "Honest Abe's Chimney Cleaning, LLC",
+          "contact": "",
+          "phone": "+14806655335",
+          "email": "service@ahonestabes.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3253"
+        }
+      ]
+    },
+    {
+      "id": "hvac_duct_cleaning",
+      "label": "HVAC Duct Cleaning",
+      "vendors": [
+        {
+          "name": "Honest Abe's Chimney Cleaning, LLC",
+          "contact": "",
+          "phone": "+14806655335",
+          "email": "service@ahonestabes.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3253"
+        },
+        {
+          "name": "Castellanos CleanPro & Restoration LLC",
+          "contact": "",
+          "phone": "+15202807161",
+          "email": "jcastejj@gmail.com",
+          "priority": 2,
+          "zones": ["East Valley"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3216"
+        }
+      ]
+    },
+    {
+      "id": "mailbox_keys",
+      "label": "Mailbox Keys",
+      "vendors": [
+        {
+          "name": "JK Postal",
+          "contact": "",
+          "phone": "+16023329380",
+          "email": "Jkpostal@peoplepc.com",
+          "priority": 1,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3266"
+        },
+        {
+          "name": "Express Mailbox",
+          "contact": "",
+          "phone": "+14804404424",
+          "email": "",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3239"
+        }
+      ]
+    },
+    {
+      "id": "locksmith",
+      "label": "Locksmith",
+      "vendors": [
+        {
+          "name": "Parker Lock Solutions",
+          "contact": "",
+          "phone": "+14805774849",
+          "email": "info@parkerlocksolutions.com",
+          "priority": 1,
+          "zones": ["Valley-wide"],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3343"
+        },
+        {
+          "name": "JT's Keys and Locks",
+          "contact": "",
+          "phone": "+16023691553",
+          "email": "jtskeyslocks@gmail.com",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3269"
+        }
+      ]
+    },
+    {
+      "id": "home_warranty",
+      "label": "Home Warranty",
+      "vendors": [
+        {
+          "name": "2-10 Home Warranty",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 1,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4129"
+        },
+        {
+          "name": "American Home Shield",
+          "contact": "",
+          "phone": "+18886821043",
+          "email": "",
+          "priority": 2,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3196"
+        },
+        {
+          "name": "American Home Warranty",
+          "contact": "",
+          "phone": "+18886169901",
+          "email": "",
+          "priority": 3,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4813"
+        },
+        {
+          "name": "Choice Home Warranty",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 4,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3218"
+        },
+        {
+          "name": "Fidelity Home Warranty",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 5,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3242"
+        },
+        {
+          "name": "First American Home Warranty",
+          "contact": "",
+          "phone": "+18009923400",
+          "email": "",
+          "priority": 6,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3243"
+        },
+        {
+          "name": "Geico Home Warranty",
+          "contact": "",
+          "phone": "+18665358768",
+          "email": "",
+          "priority": 7,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4510"
+        },
+        {
+          "name": "Home Warranty, Select",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 8,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3163"
+        },
+        {
+          "name": "Old Republic Home Warranty",
+          "contact": "",
+          "phone": "+18009725985",
+          "email": "",
+          "priority": 9,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "3291"
+        },
+        {
+          "name": "One Guard Home Warranty",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 10,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "4594"
+        },
+        {
+          "name": "Ortega Home Improvents",
+          "contact": "",
+          "phone": "+16024197659",
+          "email": "m.j.ortega7659@gmail.com",
+          "priority": 11,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5703"
+        },
+        {
+          "name": "Platinum Home Warranty",
+          "contact": "",
+          "phone": "",
+          "email": "",
+          "priority": 12,
+          "zones": [],
+          "services": [],
+          "exclusions": [],
+          "notes": "",
+          "flags": [],
+          "active": true,
+          "rvContactId": "5873"
+        }
+      ]
+    }
+  ]
+};
+
+const state = {
+  data: null,          // { lastUpdated, trades: [...] }
+  activeTradeId: null,
+  rvVendors: [],
+  dirty: false,
+  usingSeed: false
+};
+
+const el = (sel) => document.querySelector(sel);
+const tradeListEl = el('#tradeList');
+const cardGrid = el('#cardGrid');
+const tradeTitle = el('#tradeTitle');
+const tradeSub = el('#tradeSub');
+const statusLine = el('#statusLine');
+
+function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2)); }
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function arrToLines(arr){ return (arr||[]).join('\n'); }
+function linesToArr(text){ return text.split('\n').map(s=>s.trim()).filter(Boolean); }
+function arrToCsv(arr){ return (arr||[]).join(', '); }
+function csvToArr(text){ return text.split(',').map(s=>s.trim()).filter(Boolean); }
+
+function slugify(label){
+  let s = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  if(!s) s = 'trade';
+  let candidate = s, n = 2;
+  const existingIds = new Set(state.data.trades.map(t => t.id));
+  while(existingIds.has(candidate)){ candidate = s + '_' + n; n++; }
+  return candidate;
+}
+
+function showToast(msg, isError){
+  const t = el('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function setStatus(mode){
+  const map = {
+    saved:   ['All changes saved', ''],
+    unsaved: ['Unsaved changes', 'unsaved'],
+    saving:  ['Saving…', 'unsaved'],
+    error:   ['Save failed — will retry', 'error'],
+    seed:    ['Showing 07/16 snapshot — /api/vendors not reachable yet', 'unsaved']
+  };
+  const [text, cls] = map[mode];
+  statusLine.textContent = text;
+  statusLine.className = 'status ' + cls;
+}
+
+/* ---------------- Load ---------------- */
+async function loadVendors(){
+  try{
+    const res = await fetch('/api/vendors');
+    if(!res.ok) throw new Error('bad status ' + res.status);
+    const json = await res.json();
+    if(!json || !Array.isArray(json.trades)) throw new Error('unexpected shape');
+    state.data = json;
+    state.usingSeed = false;
+  }catch(err){
+    console.warn('Could not load /api/vendors — falling back to the 07/16 seed snapshot.', err);
+    state.data = deepClone(SEED_DATA);
+    state.usingSeed = true;
+  }
+  state.data.trades.forEach(t => t.vendors.forEach(v => { if(!v.__uid) v.__uid = uid(); }));
+  state.activeTradeId = state.data.trades.length ? state.data.trades[0].id : null;
+  renderTradeList();
+  renderCards();
+  if(state.usingSeed) setStatus('seed'); else setStatus('saved');
+}
+
+async function loadRentvineVendors(){
+  if(state.rvVendors.length) return state.rvVendors;
+  try{
+    const res = await fetch('/api/rv-vendors');
+    if(!res.ok) throw new Error('bad status ' + res.status);
+    const rvJson = await res.json();
+    state.rvVendors = Array.isArray(rvJson) ? rvJson : (rvJson.vendors || []);
+  }catch(err){
+    console.warn('Could not load /api/rv-vendors', err);
+    showToast('Could not load Rentvine vendors — check /api/rv-vendors', true);
+    state.rvVendors = [];
+  }
+  return state.rvVendors;
+}
+
+/* ---------------- Save (debounced, full replace) ---------------- */
+let saveTimer = null;
+function scheduleSave(){
+  state.dirty = true;
+  setStatus('unsaved');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 700);
+}
+async function doSave(){
+  setStatus('saving');
+  const payload = {
+    lastUpdated: new Date().toISOString().slice(0,10),
+    trades: state.data.trades.map(t => ({
+      id: t.id,
+      label: t.label,
+      vendors: t.vendors.map(v => {
+        const { __uid, ...rest } = v;
+        return rest;
+      })
+    }))
+  };
+  try{
+    const res = await fetch('/api/vendors', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('bad status ' + res.status);
+    state.dirty = false;
+    state.usingSeed = false;
+    setStatus('saved');
+  }catch(err){
+    console.error(err);
+    setStatus('error');
+    showToast('Save failed — check server.js / /api/vendors', true);
+  }
+}
+
+/* ---------------- Sidebar ---------------- */
+function renderTradeList(){
+  tradeListEl.innerHTML = '';
+  state.data.trades.forEach(trade => {
+    const item = document.createElement('div');
+    item.className = 'trade-item' + (trade.id === state.activeTradeId ? ' active' : '');
+    item.innerHTML = `<span>${escapeHtml(trade.label)}</span><span class="count">${trade.vendors.length}</span>`;
+    item.onclick = () => { state.activeTradeId = trade.id; renderTradeList(); renderCards(); };
+    tradeListEl.appendChild(item);
+  });
+}
+
+el('#addTradeBtn').onclick = () => {
+  const label = prompt('New trade category name (e.g. "Fencing"):');
+  if(!label || !label.trim()) return;
+  const clean = label.trim();
+  if(state.data.trades.some(t => t.label.toLowerCase() === clean.toLowerCase())){
+    showToast('That trade already exists'); return;
+  }
+  const trade = { id: slugify(clean), label: clean, vendors: [] };
+  state.data.trades.push(trade);
+  state.activeTradeId = trade.id;
+  renderTradeList();
+  renderCards();
+  scheduleSave();
+};
+
+/* ---------------- Card grid ---------------- */
+function getActiveTrade(){
+  return state.data.trades.find(t => t.id === state.activeTradeId) || null;
+}
+
+function renderCards(){
+  const trade = getActiveTrade();
+  tradeTitle.textContent = trade ? trade.label : 'No trades yet';
+  const vendors = trade ? trade.vendors : [];
+  tradeSub.textContent = trade ? `${vendors.length} vendor${vendors.length===1?'':'s'} · sorted by priority` : '';
+
+  cardGrid.innerHTML = '';
+  if(!trade){ return; }
+
+  if(vendors.length === 0){
+    cardGrid.innerHTML = `
+      <div class="empty-state" style="grid-column:1/-1;">
+        No vendors in ${escapeHtml(trade.label)} yet.<br>
+        <button class="btn btn-primary" id="emptyAddBtn">+ New vendor</button>
+      </div>`;
+    el('#emptyAddBtn').onclick = () => addBlankVendor(trade);
+    return;
+  }
+
+  const sorted = [...vendors].sort((a,b) => (a.priority ?? 99) - (b.priority ?? 99));
+  sorted.forEach(v => cardGrid.appendChild(renderCard(v, trade)));
+}
+
+function vendorKey(vendor){
+  return vendor.rvContactId ? ('rv:'+vendor.rvContactId) : ('nm:'+(vendor.name||'').trim().toLowerCase());
+}
+
+function otherTradesFor(vendor){
+  const key = vendorKey(vendor);
+  if(key === 'nm:') return [];
+  const out = [];
+  state.data.trades.forEach(trade => {
+    if(trade.id === state.activeTradeId) return;
+    if(trade.vendors.some(v2 => vendorKey(v2) === key)) out.push(trade.label);
+  });
+  return out;
+}
+
+function renderCard(vendor, trade){
+  const card = document.createElement('div');
+  card.className = 'card' + (vendor.active === false ? ' inactive' : '');
+
+  const chips = otherTradesFor(vendor);
+
+  card.innerHTML = `
+    <div class="card-top">
+      <input class="card-name-input" value="${escapeAttr(vendor.name||'')}" placeholder="Vendor name" data-field="name">
+      <div class="priority-badge" title="Call priority — 1 = call first">
+        #<input type="number" min="1" value="${vendor.priority ?? ''}" data-field="priority">
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label>Contact person</label>
+        <input value="${escapeAttr(vendor.contact||'')}" data-field="contact">
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input class="mono" value="${escapeAttr(vendor.phone||'')}" data-field="phone">
+      </div>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input class="mono" value="${escapeAttr(vendor.email||'')}" data-field="email">
+    </div>
+    <div class="field">
+      <label>Zones covered <span class="hint">(comma-separated)</span></label>
+      <input value="${escapeAttr(arrToCsv(vendor.zones))}" data-field="zones" data-kind="csv" placeholder="e.g. Maricopa, Valley-wide">
+    </div>
+    <div class="field">
+      <label>Services <span class="hint">(one per line)</span></label>
+      <textarea data-field="services" data-kind="lines" placeholder="What they handle">${escapeHtml(arrToLines(vendor.services))}</textarea>
+    </div>
+    <div class="field">
+      <label>Exclusions <span class="hint">(one per line)</span></label>
+      <textarea data-field="exclusions" data-kind="lines" placeholder="What they won't do">${escapeHtml(arrToLines(vendor.exclusions))}</textarea>
+    </div>
+    <div class="field">
+      <label>Flags <span class="hint">(comma-separated tags, e.g. last-resort)</span></label>
+      <input value="${escapeAttr(arrToCsv(vendor.flags))}" data-field="flags" data-kind="csv" placeholder="e.g. expensive, requires-followup">
+      <div class="flag-chips">${(vendor.flags||[]).map(f => `<span class="flag-chip">${escapeHtml(f)}</span>`).join('')}</div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea data-field="notes" placeholder="Anything Ari should know before calling">${escapeHtml(vendor.notes||'')}</textarea>
+    </div>
+    <div class="field">
+      <label>Rentvine contact ID</label>
+      <input class="mono" value="${escapeAttr(vendor.rvContactId||'')}" data-field="rvContactId" placeholder="—">
+    </div>
+
+    ${chips.length ? `<div class="trade-chips">
+        <span class="trade-chip current">${escapeHtml(trade.label)}</span>
+        ${chips.map(c => `<span class="trade-chip">${escapeHtml(c)}</span>`).join('')}
+      </div>` : ''}
+
+    <div class="card-foot">
+      <label class="active-toggle">
+        <input type="checkbox" data-field="active" ${vendor.active !== false ? 'checked' : ''}>
+        Active
+      </label>
+      <button class="btn-ghost btn-danger" data-action="remove">Remove from ${escapeHtml(trade.label)}</button>
+    </div>
+  `;
+
+  card.querySelectorAll('[data-field]').forEach(input => {
+    const field = input.dataset.field;
+    const kind = input.dataset.kind;
+    const handler = () => {
+      let val;
+      if(input.type === 'checkbox') val = input.checked;
+      else if(input.type === 'number') val = (input.value === '' ? null : Number(input.value));
+      else if(kind === 'csv') val = csvToArr(input.value);
+      else if(kind === 'lines') val = linesToArr(input.value);
+      else val = input.value;
+
+      if(field === 'rvContactId' && val === '') val = undefined;
+      if(val === undefined) delete vendor[field]; else vendor[field] = val;
+
+      scheduleSave();
+      if(field === 'active') card.classList.toggle('inactive', !vendor.active);
+      if(field === 'priority') renderCards(); // re-sort
+      if(field === 'flags'){
+        card.querySelector('.flag-chips').innerHTML = (vendor.flags||[]).map(f => `<span class="flag-chip">${escapeHtml(f)}</span>`).join('');
+      }
+      if(field === 'rvContactId' || field === 'name'){
+        const newChips = otherTradesFor(vendor);
+        const existing = card.querySelector('.trade-chips');
+        if(existing) existing.remove();
+        if(newChips.length){
+          const div = document.createElement('div');
+          div.className = 'trade-chips';
+          div.innerHTML = `<span class="trade-chip current">${escapeHtml(trade.label)}</span>` +
+            newChips.map(c => `<span class="trade-chip">${escapeHtml(c)}</span>`).join('');
+          card.querySelector('.card-foot').before(div);
+        }
+      }
+    };
+    input.addEventListener('input', handler);
+    input.addEventListener('change', handler);
+  });
+
+  card.querySelector('[data-action="remove"]').onclick = () => {
+    if(!confirm(`Remove ${vendor.name || 'this vendor'} from ${trade.label}? (Doesn't affect other trades they're listed under.)`)) return;
+    trade.vendors = trade.vendors.filter(v => v.__uid !== vendor.__uid);
+    renderTradeList();
+    renderCards();
+    scheduleSave();
+  };
+
+  return card;
+}
+
+function addBlankVendor(trade){
+  const v = { __uid: uid(), name:'', contact:'', phone:'', email:'', priority: (trade.vendors.length + 1), zones:[], services:[], exclusions:[], notes:'', flags:[], active:true };
+  trade.vendors.push(v);
+  renderTradeList();
+  renderCards();
+  scheduleSave();
+}
+el('#newVendorBtn').onclick = () => { const t = getActiveTrade(); if(t) addBlankVendor(t); };
+
+/* ---------------- Import from Rentvine panel ---------------- */
+const overlay = el('#overlay');
+const panel = el('#importPanel');
+
+function openPanel(){
+  const trade = getActiveTrade();
+  if(!trade){ showToast('Pick or create a trade first'); return; }
+  el('#rvTargetTrade').textContent = trade.label;
+  overlay.classList.add('open');
+  panel.classList.add('open');
+  loadRentvineVendors().then(renderRvList);
+}
+function closePanel(){
+  overlay.classList.remove('open');
+  panel.classList.remove('open');
+}
+el('#importBtn').onclick = openPanel;
+el('#closePanel').onclick = closePanel;
+overlay.onclick = closePanel;
+
+function currentTradeHasRvId(rvId){
+  const trade = getActiveTrade();
+  return !!(trade && trade.vendors.some(v => v.rvContactId === String(rvId)));
+}
+
+function renderRvList(filter){
+  const list = el('#rvList');
+  const q = (filter || el('#rvSearch').value || '').toLowerCase().trim();
+  const filtered = state.rvVendors.filter(v =>
+    !q || (v.name||'').toLowerCase().includes(q) || (v.phone||'').includes(q) || (v.email||'').toLowerCase().includes(q)
+  );
+  list.innerHTML = '';
+  if(filtered.length === 0){
+    list.innerHTML = `<div class="empty-state">No matches.</div>`;
+    return;
+  }
+  const trade = getActiveTrade();
+  filtered.forEach(rv => {
+    const already = currentTradeHasRvId(rv.id);
+    const row = document.createElement('div');
+    row.className = 'rv-row' + (already ? ' already-here' : '');
+    row.innerHTML = `
+      <span class="name">${escapeHtml(rv.name||'(no name)')}</span>
+      <span class="meta">${escapeHtml(rv.phone||'')}${rv.phone && rv.email ? ' · ' : ''}${escapeHtml(rv.email||'')}${already ? ' · already in ' + escapeHtml(trade.label) : ''}</span>
+    `;
+    if(!already){
+      row.onclick = () => importVendor(rv);
+    }
+    list.appendChild(row);
+  });
+}
+el('#rvSearch').addEventListener('input', () => renderRvList());
+
+function importVendor(rv){
+  const trade = getActiveTrade();
+  if(!trade) return;
+  if(currentTradeHasRvId(rv.id)){
+    showToast('Already in ' + trade.label);
+    return;
+  }
+  const v = {
+    __uid: uid(),
+    name: rv.name || '',
+    contact: rv.contact || '',
+    phone: rv.phone || '',
+    email: rv.email || '',
+    priority: (trade.vendors.length + 1),
+    zones: [], services: [], exclusions: [], notes: '', flags: [],
+    active: true,
+    rvContactId: String(rv.id)
+  };
+  trade.vendors.push(v);
+  renderTradeList();
+  renderCards();
+  renderRvList();
+  scheduleSave();
+  showToast(`${v.name || 'Vendor'} added to ${trade.label}`);
+}
+
+/* ---------------- utils ---------------- */
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
+
+/* ---------------- init ---------------- */
+loadVendors();
+</script>
+</body>
+</html>
