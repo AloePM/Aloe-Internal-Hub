@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Training — Aloe PM</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;color:#1a2332;min-height:100vh;display:flex}.sidebar{width:220px;min-height:100vh;background:#F8FAFA;border-right:1px solid #E8EEEE;display:flex;flex-direction:column;padding:20px 0;flex-shrink:0}.sidebar-logo{padding:0 20px 24px;border-bottom:1px solid #E8EEEE;margin-bottom:16px}.logo-text{font-size:15px;font-weight:800}.logo-sub{font-size:11px;color:#8AA0A0}.nav-link{display:flex;align-items:center;gap:10px;padding:9px 20px;font-size:13px;color:#4A6060;text-decoration:none}.nav-link:hover,.nav-link.active{background:#E8F8FC;color:#2A8FA6}.nav-icon{font-size:14px;width:18px}.sidebar-footer{margin-top:auto;padding:16px 20px;font-size:11px;color:#8AA0A0;border-top:1px solid #E8EEEE}.main{flex:1;display:flex;flex-direction:column}.topbar{padding:16px 28px;border-bottom:1px solid #E8EEEE;display:flex;justify-content:space-between;align-items:center}.topbar-title{font-size:18px;font-weight:700}.topbar-sub{font-size:12px;color:#8AA0A0}.badge{font-size:11px;font-weight:700;color:#B8860B;background:#FFF6E0;border:1px solid #F0DFA0;padding:4px 10px;border-radius:20px}.content{padding:24px 28px;flex:1;display:flex;gap:16px;min-height:0}.agent-list{width:150px;flex-shrink:0}.agent-btn{display:block;width:100%;padding:9px 12px;margin-bottom:6px;border-radius:8px;background:#F8FAFA;border:1px solid #E8EEEE;font-size:13px;font-weight:600;color:#4A6060;cursor:pointer;text-align:left}.agent-btn:hover,.agent-btn.active{background:#E8F8FC;color:#2A8FA6;border-color:#3CC3E1}.chat-area{flex:1.4;display:flex;flex-direction:column;min-width:0}.chat-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.lbl{font-size:11px;font-weight:700;color:#8AA0A0;text-transform:uppercase}.cp-select{font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #E8EEEE;color:#4A6060;font-weight:600}.chat-box{flex:1;border:1px solid #E8EEEE;border-radius:8px;background:#FAFBFB;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;min-height:0}.msg{max-width:80%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5}.msg-user{align-self:flex-end;background:#3CC3E1;color:#fff;border-bottom-right-radius:3px}.msg-agent{align-self:flex-start;background:#fff;border:1px solid #E8EEEE;border-bottom-left-radius:3px}.msg-empty{color:#8AA0A0;font-size:13px;text-align:center;margin:auto}.chat-input-row{display:flex;gap:8px;margin-top:10px}.chat-input{flex:1;padding:10px 12px;border:1px solid #E8EEEE;border-radius:8px;font-size:13px}.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}.btn-primary{background:#3CC3E1;color:#fff}.btn-ghost{background:#F8FAFA;color:#4A6060;border:1px solid #E8EEEE}.playbook-panel{width:340px;flex-shrink:0;display:flex;flex-direction:column;min-height:0}.playbook-box{flex:1;border:1px solid #E8EEEE;border-radius:8px;background:#FAFBFB;padding:14px;overflow-y:auto;font-size:11.5px;font-family:monospace;white-space:pre-wrap;color:#4A6060;line-height:1.5}</style></head>
+<body>
+<div class="sidebar">
+<div class="sidebar-logo"><div class="logo-text">🌿 Aloe PM</div><div class="logo-sub">Agent Hub</div></div>
+<a class="nav-link" href="/agents">⬛<span>Overview</span></a>
+<a class="nav-link" href="/agents/activity">📋<span>Activity</span></a>
+<a class="nav-link" href="/agents/playbooks">📝<span>Playbooks</span></a>
+<a class="nav-link" href="/agents/knowledge">💡<span>Knowledge</span></a>
+<a class="nav-link" href="/agents/sops">⚙️<span>SOPs</span></a>
+<a class="nav-link" href="/agents/jobs">🕐<span>Jobs</span></a>
+<a class="nav-link" href="/agents/tools">🛠️<span>Tools</span></a>
+<a class="nav-link active" href="/agents/training">🎯<span>Training</span></a>
+<div class="sidebar-footer">hub.aloepm.com</div>
+</div>
+<div class="main">
+<div class="topbar">
+<div><div class="topbar-title">Agent Training</div><div class="topbar-sub">Roleplay live against an agent's real current playbook</div></div>
+<div class="badge">🔒 No real messages, texts, or writes sent</div>
+</div>
+<div class="content">
+<div class="agent-list" id="agentList"></div>
+<div class="chat-area">
+<div class="chat-header">
+<div class="lbl" id="chatLbl">Select an agent</div>
+<select class="cp-select" id="cpSelect">
+<option value="tenant">I am a Tenant</option>
+<option value="owner">I am an Owner</option>
+<option value="vendor">I am a Vendor</option>
+</select>
+</div>
+<div class="chat-box" id="chatBox"><div class="msg-empty">Pick an agent on the left, then send a message as the counterparty you selected.</div></div>
+<div class="chat-input-row">
+<input class="chat-input" id="chatInput" placeholder="Type as the tenant/owner/vendor..." disabled/>
+<button class="btn btn-primary" id="sendBtn" onclick="send()" disabled>Send</button>
+<button class="btn btn-ghost" onclick="resetChat()">Reset</button>
+</div>
+</div>
+<div class="playbook-panel">
+<div class="lbl" style="margin-bottom:10px">Live Playbook Loaded</div>
+<div class="playbook-box" id="playbookBox">Select an agent to view what it's currently working from.</div>
+</div>
+</div>
+</div>
+<script>
+const AGENTS = ['ari','bo','ivy','mary','troy','rex','lea','kat','jay','mae','joe','remy'];
+let cur = null;
+let history = [];
+
+function initAgentList(){
+  const el = document.getElementById('agentList');
+  el.innerHTML = AGENTS.map(a => `<button class="agent-btn" onclick="selectAgent('${a}', this)">${a.charAt(0).toUpperCase()+a.slice(1)}</button>`).join('');
+}
+
+async function selectAgent(agentId, btn){
+  cur = agentId;
+  history = [];
+  document.querySelectorAll('.agent-btn').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('chatLbl').textContent = agentId.charAt(0).toUpperCase()+agentId.slice(1) + ' — Training';
+  document.getElementById('chatInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('chatBox').innerHTML = '<div class="msg-empty">Send a message to start.</div>';
+  document.getElementById('playbookBox').textContent = 'Loading...';
+  try {
+    const r = await fetch('/api/agents/train/context/' + agentId);
+    const d = await r.json();
+    document.getElementById('playbookBox').textContent = d.playbook || 'No playbook found for this agent.';
+  } catch(e) {
+    document.getElementById('playbookBox').textContent = 'Error loading playbook.';
+  }
+}
+
+function renderChat(){
+  const box = document.getElementById('chatBox');
+  if (history.length === 0){ box.innerHTML = '<div class="msg-empty">Send a message to start.</div>'; return; }
+  box.innerHTML = history.map(m => `<div class="msg ${m.role==='user'?'msg-user':'msg-agent'}">${m.content.replace(/</g,'&lt;')}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+async function send(){
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || !cur) return;
+  input.value = '';
+  history.push({role:'user', content:text});
+  renderChat();
+  document.getElementById('sendBtn').disabled = true;
+  try {
+    const cp = document.getElementById('cpSelect').value;
+    const r = await fetch('/api/agents/train', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ agentId: cur, counterparty: cp, messages: history })
+    });
+    const d = await r.json();
+    if (d.reply){
+      history.push({role:'assistant', content:d.reply});
+    } else {
+      history.push({role:'assistant', content:'[Error: ' + (d.error||'no reply') + ']'});
+    }
+  } catch(e) {
+    history.push({role:'assistant', content:'[Error contacting agent]'});
+  }
+  document.getElementById('sendBtn').disabled = false;
+  renderChat();
+}
+
+document.getElementById('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+function resetChat(){
+  history = [];
+  renderChat();
+}
+
+initAgentList();
+</script>
+</body></html>

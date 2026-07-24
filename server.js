@@ -4866,7 +4866,46 @@ app.post('/api/agents/playbook-save', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// Training routes (read-only vs GCS + Anthropic, no tool calls, no writes to Rentvine/Aptly/Quo)
+app.get('/api/agents/train/context/:agentId', async (req, res) => {
+  try {
+    const file = storage.bucket(BUCKET).file('playbooks/' + req.params.agentId + '.md');
+    const [exists] = await file.exists();
+    if (!exists) return res.status(404).json({ error: 'Playbook not found' });
+    const [data] = await file.download();
+    res.json({ agentId: req.params.agentId, playbook: data.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/agents/train', async (req, res) => {
+  try {
+    const { agentId, counterparty, messages } = req.body;
+    if (!agentId || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'agentId and messages[] are required' });
+    }
+    const file = storage.bucket(BUCKET).file('playbooks/' + agentId + '.md');
+    const [exists] = await file.exists();
+    if (!exists) return res.status(404).json({ error: 'Playbook not found for agent: ' + agentId });
+    const [data] = await file.download();
+    const playbook = data.toString();
+    const displayName = agentId.charAt(0).toUpperCase() + agentId.slice(1);
+    const systemPrompt = 'You are ' + displayName + ', an AI agent for Aloe Property Management. This is a TRAINING SESSION used to test and refine your playbook — you are being roleplayed against, not handling a live case, and no real messages, emails, texts, work orders, or charges will be sent or created no matter what you decide to do. Respond exactly as you would in a real conversation, following every rule in your playbook below. Do not mention that this is a training session or break character.\n\nThe person messaging you is playing the role of a ' + (counterparty || 'tenant') + '.\n\n--- PLAYBOOK ---\n' + playbook;
+    const resp = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: messages
+    });
+    const reply = resp.content.map(b => b.type === 'text' ? b.text : '').join('');
+    res.json({ reply });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.get('/agents/training', (req, res) => {
+  res.sendFile('/app/public/training.html');
+});
 // Knowledge routes
 app.get('/api/agents/knowledge/:scope', async (req, res) => {
   try {
