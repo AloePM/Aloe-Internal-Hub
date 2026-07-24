@@ -150,6 +150,66 @@ async function writeVendors(data) {
   if (!r.ok) throw new Error('GCS write ' + r.status + ': ' + await r.text());
 }
 
+const _hoaLetterHashFile = 'hoa-letter-hashes.json';
+let _hoaLetterHashCache = null;
+async function readHOALetterHashes() {
+  if (_hoaLetterHashCache) return _hoaLetterHashCache;
+  try {
+    const token = await getGCSToken();
+    const r = await fetch(`https://storage.googleapis.com/storage/v1/b/${_vendorBucket}/o/${_hoaLetterHashFile}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!r.ok) {
+      if (r.status === 404) { _hoaLetterHashCache = {}; return _hoaLetterHashCache; }
+      throw new Error('GCS read ' + r.status);
+    }
+    _hoaLetterHashCache = await r.json();
+    return _hoaLetterHashCache;
+  } catch(e) {
+    console.error('HOA letter hash read failed:', e.message);
+    return {};
+  }
+}
+async function writeHOALetterHashes(data) {
+  _hoaLetterHashCache = data;
+  const token = await getGCSToken();
+  const body = JSON.stringify(data, null, 2);
+  const r = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${_vendorBucket}/o?uploadType=media&name=${_hoaLetterHashFile}`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body
+  });
+  if (!r.ok) throw new Error('GCS write ' + r.status + ': ' + await r.text());
+}
+app.post('/api/kat/check-letter-hash', async (req, res) => {
+  if (req.headers['x-hub-token'] !== process.env.HUB_INTERNAL_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { hash } = req.body;
+    if (!hash) return res.status(400).json({ error: 'hash required' });
+    const registry = await readHOALetterHashes();
+    const existing = registry[hash];
+    if (existing) {
+      return res.json({ isDuplicate: true, existing });
+    }
+    res.json({ isDuplicate: false });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post('/api/kat/record-letter-hash', async (req, res) => {
+  if (req.headers['x-hub-token'] !== process.env.HUB_INTERNAL_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const { hash, cardId, address } = req.body;
+    if (!hash || !cardId) return res.status(400).json({ error: 'hash and cardId required' });
+    const registry = await readHOALetterHashes();
+    registry[hash] = { cardId, address: address || null, dateProcessed: new Date().toISOString() };
+    await writeHOALetterHashes(registry);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/vendors', async (req, res) => {
   try {
     res.json(await readVendors());
