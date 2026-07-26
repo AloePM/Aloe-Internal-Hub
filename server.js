@@ -181,6 +181,20 @@ async function writeHOALetterHashes(data) {
   });
   if (!r.ok) throw new Error('GCS write ' + r.status + ': ' + await r.text());
 }
+
+const _woSyncHistoryPrefix = 'wo-sync-history/';
+async function writeWOSyncHistory(dateStr, data) {
+  const token = await getGCSToken();
+  const body = JSON.stringify(data, null, 2);
+  const fileName = _woSyncHistoryPrefix + dateStr + '.json';
+  const r = await fetch(`https://storage.googleapis.com/upload/storage/v1/b/${_vendorBucket}/o?uploadType=media&name=${encodeURIComponent(fileName)}`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body
+  });
+  if (!r.ok) throw new Error('GCS write ' + r.status + ': ' + await r.text());
+}
+
 app.post('/api/kat/check-letter-hash', async (req, res) => {
   if (req.headers['x-hub-token'] !== process.env.HUB_INTERNAL_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   try {
@@ -1385,7 +1399,19 @@ async function runWOSync(dryRun) {
       console.log('WO Sync: missing-in-RV alert sent for ' + missingInRV.length + ' WOs');
     } catch(e) { console.error('WO Sync missing-in-RV Slack error:', e.message); }
   }
-
+const todayStr = new Date().toISOString().slice(0, 10);
+  try {
+    await writeWOSyncHistory(todayStr, {
+      date: todayStr,
+      ranAt: new Date().toISOString(),
+      closed: closeResults.filter(r => r.ok).length,
+      totalMatched: toClose.length,
+      items: closeResults,
+      missingInRentvine: missingInRV
+    });
+  } catch (e) {
+    console.error('WO Sync: failed to write history to GCS:', e.message);
+  }
   return { notified: toClose.length, items: toClose, missingInRentvine: missingInRV };
   }
 
