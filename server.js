@@ -1272,12 +1272,12 @@ async function fetchAllRVOpenWOs() {
   return all;
 }
 
-async function closeRVWorkOrder(workOrderId) {
+async function closeRVWorkOrder(workOrderId, statusId) {
   const url = RENTVINE_BASE + '/maintenance/work-orders/' + workOrderId;
   const resp = await fetch(url, {
     method: 'PATCH',
     headers: { 'Authorization': 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ primaryWorkOrderStatusID: 3 })
+    body: JSON.stringify({ workOrderStatusID: statusId })
   });
   const text = await resp.text();
   let json; try { json = JSON.parse(text); } catch(e) { json = { raw: text }; }
@@ -1285,7 +1285,7 @@ async function closeRVWorkOrder(workOrderId) {
     const putResp = await fetch(url, {
       method: 'PUT',
       headers: { 'Authorization': 'Basic ' + RENTVINE_AUTH, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ primaryWorkOrderStatusID: 3 })
+      body: JSON.stringify({ workOrderStatusID: statusId })
     });
     const putText = await putResp.text();
     let putJson; try { putJson = JSON.parse(putText); } catch(e) { putJson = { raw: putText }; }
@@ -1320,24 +1320,21 @@ async function runWOSync(dryRun) {
   console.log('WO Sync: ' + aptlyClosed.length + ' closed in Aptly, ' + rvOpen.length + ' open in RV, ' + toClose.length + ' to close');
   if (dryRun) return { dryRun: true, aptlyClosedCount: aptlyClosed.length, rvOpenCount: rvOpen.length, wouldClose: toClose };
 
-  if (SLACK_TOKEN && toClose.length > 0) {
-    const lines = toClose.map(r =>
-      '• <https://aloepm.rentvine.com/maintenance/work-orders/' + r.rvWorkOrderId + '|WO #' + r.woNumber + '> — ' + (r.address || 'see link') + ' — _' + r.aptlyStage + ' in Aptly_'
-    ).join('\n');
-    const slackText = '*🔧 WO Sync — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '*\n' +
-      '*' + toClose.length + ' work order(s) closed/cancelled in Aptly but still open in Rentvine:*\n' + lines +
-      '\n\n_Click each link → open in Rentvine → close · Runs nightly 11pm AZ_';
+  const closeResults = [];
+  for (const r of toClose) {
+    const stageLower = (r.aptlyStage || '').toLowerCase();
+    const rvStatusId = /^cancel/.test(stageLower) ? 3 : 2; // 3=Cancelled, 2=Completed
     try {
-      await fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + SLACK_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'C06BWVACZQF', text: slackText })
-      });
-      console.log('WO Sync: Slack alert sent for ' + toClose.length + ' WOs');
-    } catch(e) { console.error('WO Sync Slack error:', e.message); }
-  } else if (toClose.length === 0) {
-    console.log('WO Sync: systems in sync');
+      const result = await closeRVWorkOrder(r.rvWorkOrderId, rvStatusId);
+      closeResults.push(Object.assign({}, r, { rvStatusId, ok: result.ok, status: result.status }));
+      console.log('WO Sync: closed RV WO #' + r.woNumber + ' (id ' + r.rvWorkOrderId + ') -> status ' + rvStatusId + ' | ok=' + result.ok);
+    } catch (e) {
+      closeResults.push(Object.assign({}, r, { rvStatusId, ok: false, error: e.message }));
+      console.error('WO Sync: failed to close RV WO #' + r.woNumber + ':', e.message);
+    }
   }
+  console.log('WO Sync: auto-closed ' + closeResults.filter(r => r.ok).length + '/' + toClose.length + ' work orders');
+
   // Reverse check: Aptly open WOs missing from Rentvine entirely
   const APTLY_TOK = process.env.APTLY_TOKEN || 'oSWZZYDMlRZjUmnp6qb4yCr3EW3yKRO9Atns2VCANso=';
   const schemaResp2 = await fetch('https://core-api.getaptly.com/api/schema/workOrder', { headers: { 'x-token': APTLY_TOK } });
