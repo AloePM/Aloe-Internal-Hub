@@ -23,10 +23,10 @@ const storage = new Storage();
 const BUCKET = 'aloe-hub-data-496300';
 
 // ── Env / config ─────────────────────────────────────────────────────────────
-const ZI_KEY          = process.env.ZINSPECTOR_API_KEY;           // Base64 KeyID:Secret
+const ZI_KEY          = process.env.ZI_API_KEY;           // Base64 KeyID:Secret
 const ZI_BASE         = 'https://portfolio.zinspector.com';
 const ANT_KEY         = process.env.ANTHROPIC_API_KEY;
-const RV_BASE         = 'https://aloepm.rentvine.com/api/manager';
+const RV_BASE         = process.env.RENTVINE_BASE || 'https://api.rentvine.com/v2';
 const RV_AUTH         = process.env.RENTVINE_AUTH;
 const RV_ACCOUNT      = process.env.RENTVINE_ACCOUNT || 'aloepm';
 const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
@@ -53,7 +53,7 @@ async function ziFetch(path, params = {}) {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== '') url.searchParams.set(k, v);
   });
-  const res = await fetch(url.toString(), { headers: { 'x-api-key': ZI_KEY, 'Origin': 'https://hub.aloepm.com' } });
+  const res = await fetch(url.toString(), { headers: { 'x-api-key': ZI_KEY } });
   if (!res.ok) throw new Error(`zInspector ${res.status}: ${await res.text()}`);
   return res.json();
 }
@@ -94,31 +94,20 @@ async function getPropertyPhotos(ziPropertyId, limit = 60) {
       page_size: 100,
     });
     const items = mediaData.results || [];
-    // Prioritize appliance-relevant areas
-    const PRIORITY_AREAS = ['kitchen','laundry','appliance','mechanical','garage','utility','systems'];
-    const priorityPhotos = [];
-    const otherPhotos = [];
     items.forEach(m => {
       (m.actions || []).forEach(note => {
-        const url = note.URL || note.publicUrl;
-        if (!url || photos.find(p => p.url === url)) return;
-        const photo = {
-          url,
-          area:    note.AreaName || 'Unknown',
-          detail:  note.Detail || '',
-          docId:   doc.id,
-          docDate: doc.Date,
-        };
-        const areaLower = (note.AreaName || '').toLowerCase();
-        if (PRIORITY_AREAS.some(a => areaLower.includes(a))) {
-          priorityPhotos.push(photo);
-        } else {
-          otherPhotos.push(photo);
+        const url = note.publicUrl || note.URL;
+        if (url && !photos.find(p => p.url === url)) {
+          photos.push({
+            url,
+            area:    note.AreaName || 'Unknown',
+            detail:  note.Detail || '',
+            docId:   doc.id,
+            docDate: doc.Date,
+          });
         }
       });
     });
-    // Add priority photos first, then others
-    photos.push(...priorityPhotos, ...otherPhotos);
     if (photos.length >= limit) break;
   }
   return photos.slice(0, limit);
@@ -130,7 +119,7 @@ async function rvFetch(path, options = {}) {
   const res = await fetch(url, {
     ...options,
     headers: {
-      Authorization: 'Basic ' + Buffer.from(process.env.RENTVINE_API_KEY + ':' + process.env.RENTVINE_API_SECRET).toString('base64'),
+      Authorization: `Basic ${RV_AUTH}`,
       'X-Rentvine-Account': RV_ACCOUNT,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
@@ -151,7 +140,7 @@ async function getRvProperties() {
     const data = await rvFetch(`/properties/export?page=${page}&pageSize=100&isActive=true`);
     const items = Array.isArray(data) ? data : (data.data || []);
     if (!items.length) break;
-    const unwrapped = items.map(r => ({ ...( r.property || r), propertyID: (r.property || r).propertyID || (r.property || r).id }));
+    const unwrapped = items.map(r => r.property || r);
     all = all.concat(unwrapped);
     if (items.length < 100) break;
     page++;
@@ -164,8 +153,7 @@ async function getRvProperties() {
 // Normalize address for matching
 function normAddr(addr) {
   if (!addr) return '';
-  const streetOnly = addr.split(',')[0];
-  return streetOnly.toLowerCase()
+  return addr.toLowerCase()
     .replace(/\bstreet\b/g, 'st').replace(/\bdrive\b/g, 'dr')
     .replace(/\bavenue\b/g, 'ave').replace(/\bboulevard\b/g, 'blvd')
     .replace(/\blane\b/g, 'ln').replace(/\broad\b/g, 'rd')
@@ -194,7 +182,7 @@ function matchRvProperty(ziAddress, rvProperties) {
 
   let best = null, bestScore = 0;
   for (const p of rvProperties) {
-    const rvAddr = normAddr(p.address || p.Address || p.name || p.Name || '');
+    const rvAddr = normAddr(p.address || p.Address || '');
     if (ziNum && !rvAddr.startsWith(ziNum)) continue; // skip if street number differs
 
     const maxLen = Math.max(ziNorm.length, rvAddr.length);
@@ -212,18 +200,39 @@ function matchRvProperty(ziAddress, rvProperties) {
 // Get current custom field values for a Rentvine property
 async function getRvCustomFields(propertyId) {
   try {
-    const data = await rvFetch(`/properties/${propertyId}?includes=customFields`);
-    const p = data.property || data;
-    return p.customFields || p.CustomFields || {};
+    const data = await rvFetch(`/custom-fields/values/5/${propertyId}`);
+    // Returns array of categories with fields — flatten to {fieldID: value} map
+    const map = {};
+    if (Array.isArray(data)) {
+      data.forEach(cat => {
+        (cat.fields || []).forEach(f => {
+          map[f.customFieldID] = { value: f.value, name: f.name, catID: f.customFieldCategoryID };
+        });
+      });
+    }
+    return map;
   } catch { return {}; }
 }
 
 // PATCH custom fields on a Rentvine property
 async function patchRvCustomFields(propertyId, fields) {
-  return rvFetch(`/properties/${propertyId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ customFields: fields }),
+  // fields = { customFieldID: value, ... } grouped by categoryID
+  // API requires one POST per category
+  const byCat = {};
+  Object.entries(fields).forEach(([fieldId, val]) => {
+    const catId = val.catID;
+    if (!byCat[catId]) byCat[catId] = { customFieldCategoryID: String(catId) };
+    byCat[catId][String(fieldId)] = val.value !== undefined ? val.value : val;
   });
+  const results = [];
+  for (const payload of Object.values(byCat)) {
+    const r = await rvFetch(`/custom-fields/values/5/${propertyId}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    results.push(r);
+  }
+  return results;
 }
 
 // ── Claude Vision ─────────────────────────────────────────────────────────────
@@ -310,62 +319,74 @@ async function analyzePhoto(imageUrl) {
 
 // ── Map vision results → Rentvine custom field names ─────────────────────────
 // Based on the custom fields document provided
+// Maps appliance type → { fieldName: customFieldID, catID: categoryID }
+// Field IDs verified from Rentvine custom-fields/values/5/1
 const APPLIANCE_FIELD_MAP = {
   refrigerator: {
-    brand:  'Refrigerator brand',
-    model:  'Refrigerator model',
-    serial: 'Refrigerator serial number',
-    color:  'Refrigerator color',
+    catID: 191,
+    brand:  175,
+    model:  177,
+    serial: 178,
+    color:  176,
   },
   stove: {
-    brand:  'Range/stove brand',
-    model:  'Range/stove model number',
-    serial: 'Range/stove serial number',
-    color:  'Range/stove color',
+    catID: 192,
+    brand:  185,
+    model:  187,
+    serial: 186,
+    color:  184,
   },
   oven: {
-    brand:  'Built-in oven brand',
-    model:  'Built-in oven model',
-    serial: 'Built-in oven serial number',
-    color:  'Built-in oven color',
+    catID: 193,
+    brand:  193,
+    model:  194,
+    serial: 195,
+    color:  196,
   },
   dishwasher: {
-    brand:  'Dishwasher brand',
-    model:  'Dishwasher model number',
-    serial: 'Dishwasher serial number',
-    color:  'Dishwasher color',
+    catID: 190,
+    brand:  167,
+    model:  169,
+    serial: 170,
+    color:  168,
   },
   microwave: {
-    brand:  'Microwave brand',
-    model:  'Microwave model number',
-    serial: 'Microwave serial number',
-    color:  'Microwave color',
+    catID: 189,
+    brand:  159,
+    model:  160,
+    serial: 161,
+    color:  162,
   },
   washer: {
-    brand:  'Washing machine brand',
-    model:  'Washing machine model number',
-    serial: 'Washing machine serial number',
+    catID: 195,
+    brand:  210,
+    model:  211,
+    serial: 212,
   },
   dryer: {
-    brand:  'Dryer brand',
-    model:  'Dryer model number',
-    serial: 'Dryer serial number',
+    catID: 196,
+    brand:  220,
+    model:  221,
+    serial: 222,
   },
   water_heater: {
-    brand:  'Water heater brand',
-    model:  'Water heater model number',
-    serial: 'Water heater serial number',
+    catID: 198,
+    brand:  280,
+    model:  281,
+    serial: 282,
   },
   ac_unit: {
-    brand:  'AC unit 1 brand',
-    model:  'AC unit 1 model number',
-    serial: 'AC unit 1 serial number',
+    catID: 197,
+    brand:  228,
+    model:  229,
+    serial: 230,
   },
   cooktop: {
-    brand:  'Cooktop stove brand',
-    model:  'Cooktop stove model number',
-    serial: 'Cooktop stove serial number',
-    color:  'Cooktop stove color',
+    catID: 194,
+    brand:  203,
+    model:  201,
+    serial: 204,
+    color:  202,
   },
 };
 
@@ -377,15 +398,21 @@ function buildFieldUpdates(visionResult, existingFields) {
     if (appliance.confidence === 'low') continue;
     const fieldMap = APPLIANCE_FIELD_MAP[appliance.type];
     if (!fieldMap) continue;
+    const catID = fieldMap.catID;
 
-    for (const [key, fieldName] of Object.entries(fieldMap)) {
+    for (const [key, fieldId] of Object.entries(fieldMap)) {
+      if (key === 'catID') continue;
       const newVal = appliance[key];
       if (!newVal) continue;
-      const existingVal = existingFields[fieldName];
+      const existing = existingFields[String(fieldId)];
+      const existingVal = existing?.value || null;
+      const existingName = existing?.name || String(fieldId);
       updates.push({
-        fieldName,
+        fieldId:      String(fieldId),
+        catID:        String(catID),
+        fieldName:    existingName,
         newValue:     newVal,
-        existingValue: existingVal || null,
+        existingValue: existingVal,
         wouldOverwrite: !!existingVal && existingVal !== newVal,
         applianceType: appliance.type,
         confidence:   appliance.confidence,
@@ -393,39 +420,43 @@ function buildFieldUpdates(visionResult, existingFields) {
     }
   }
 
-  // Pool
+  // Pool — fieldID 260, catID 205
   if (visionResult.poolDetected) {
+    const existing = existingFields['260'];
     updates.push({
-      fieldName:     'Pool present?',
-      newValue:      true,
-      existingValue: existingFields['Pool present?'] || null,
-      wouldOverwrite: false, // toggling true is always safe
+      fieldId: '260', catID: '205',
+      fieldName: 'Pool present?',
+      newValue: '1',
+      existingValue: existing?.value || null,
+      wouldOverwrite: false,
       applianceType: 'pool',
-      confidence:    'high',
+      confidence: 'high',
     });
   }
 
-  // Spa
+  // Spa — fieldID 261, catID 205
   if (visionResult.spaDetected) {
     updates.push({
-      fieldName:     'Spa / hot tub present?',
-      newValue:      true,
-      existingValue: existingFields['Spa / hot tub present?'] || null,
+      fieldId: '261', catID: '205',
+      fieldName: 'Spa / hot tub present?',
+      newValue: '1',
+      existingValue: existingFields['261']?.value || null,
       wouldOverwrite: false,
       applianceType: 'spa',
-      confidence:    'high',
+      confidence: 'high',
     });
   }
 
-  // Water softener
+  // Water softener — fieldID 105, catID 31
   if (visionResult.waterSoftenerDetected) {
     updates.push({
-      fieldName:     'Water Softener',
-      newValue:      'Yes',
-      existingValue: existingFields['Water Softener'] || null,
+      fieldId: '105', catID: '31',
+      fieldName: 'Water Softener',
+      newValue: 'Yes',
+      existingValue: existingFields['105']?.value || null,
       wouldOverwrite: false,
       applianceType: 'water_softener',
-      confidence:    'high',
+      confidence: 'high',
     });
   }
 
@@ -618,7 +649,7 @@ router.post('/slack/actions', express.urlencoded({ extended: true }), async (req
       // Build the fields to write — skip fields that would overwrite without explicit approval
       const safeUpdates = record.updates.filter(u => !u.wouldOverwrite);
       const fieldPatch  = {};
-      safeUpdates.forEach(u => { fieldPatch[u.fieldName] = u.newValue; });
+      safeUpdates.forEach(u => { if (u.newValue) fieldPatch[u.fieldId] = { value: u.newValue, catID: u.catID }; });
 
       if (Object.keys(fieldPatch).length > 0) {
         await patchRvCustomFields(record.rvPropertyId, fieldPatch);
@@ -708,7 +739,7 @@ router.post('/approve/:scanId', async (req, res) => {
       ...u, newValue: overrides[u.fieldName] ?? u.newValue
     })) : record.updates;
 
-    updatesToApply.forEach(u => { if (u.newValue) fieldPatch[u.fieldName] = u.newValue; });
+    updatesToApply.forEach(u => { if (u.newValue) fieldPatch[u.fieldId] = { value: u.newValue, catID: u.catID }; });
 
     if (Object.keys(fieldPatch).length > 0) {
       await patchRvCustomFields(record.rvPropertyId, fieldPatch);
@@ -738,24 +769,16 @@ router.post('/skip/:scanId', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/scanner/scan-property — scan a single zInspector property by ID (async)
+// POST /api/scanner/scan-property — scan a single zInspector property by ID
 router.post('/scan-property', async (req, res) => {
   const { ziPropertyId } = req.body;
   if (!ziPropertyId) return res.status(400).json({ error: 'ziPropertyId required' });
-
-  // Return immediately — run scan in background
-  res.json({ status: 'started', message: 'Scan started. Results will appear in the review queue.' });
-
-  (async () => {
-    try {
-      const rvProperties = await getRvProperties();
-      const ziProp = await ziFetch(`/api/propertiesCursor/${ziPropertyId}/`);
-      const result = await scanProperty(ziProp, rvProperties);
-      console.log('Single property scan complete:', JSON.stringify(result));
-    } catch(e) {
-      console.error('Single property scan error:', e.message);
-    }
-  })();
+  try {
+    const rvProperties = await getRvProperties();
+    const ziProp = await ziFetch(`/api/propertiesCursor/${ziPropertyId}/`);
+    const result = await scanProperty(ziProp, rvProperties);
+    res.json(result);
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/scanner/scan-all — kick off full portfolio scan (async, streams progress via SSE or just returns job id)
