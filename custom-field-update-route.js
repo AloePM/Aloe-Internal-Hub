@@ -282,8 +282,7 @@ export function initCustomFieldUpdateRoutes(app, {
   });
 
   // ── POST /api/rentvine/field-update-slack-actions (Slack button handler) ──
-  app.post('/api/rentvine/field-update-slack-actions',
-    require('express').urlencoded({ extended: true }),
+  app.post('/api/agent/field-update-slack-actions',
     async (req, res) => {
       res.sendStatus(200); // ACK immediately
 
