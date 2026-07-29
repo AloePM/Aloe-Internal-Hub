@@ -13,6 +13,8 @@
 
 import express from 'express';
 
+import express from 'express';
+
 // ── Channel map by agent ──────────────────────────────────────────────────────
 const AGENT_CHANNELS = {
   'ari':              'C0BC64LCKV1',  // #maintenance-ari
