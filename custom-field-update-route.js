@@ -34,25 +34,36 @@ function normName(s) {
 }
 
 // Load all custom field definitions for objectType 5 (property)
+// Uses a known property ID to get all field defs — field structure is same across all properties
 // Returns flat array of { customFieldID, customFieldCategoryID, name, normName }
+let _fieldDefCache = null;
+let _fieldDefCacheTime = 0;
+
 async function loadPropertyFieldDefs(rvBase, rvAuth, rvAccount) {
-  const res = await fetch(`${rvBase}/custom-field-category-object-types/5`, {
+  // Cache for 1 hour
+  if (_fieldDefCache && Date.now() - _fieldDefCacheTime < 3600000) return _fieldDefCache;
+
+  // Use property ID 1 to get all field definitions (same schema across all properties)
+  const res = await fetch(`${rvBase}/custom-fields/values/5/1`, {
     headers: { Authorization: `Basic ${rvAuth}`, 'X-Rentvine-Account': rvAccount }
   });
   if (!res.ok) throw new Error(`Field defs fetch failed: ${res.status}`);
   const categories = await res.json();
   const fields = [];
   for (const cat of (Array.isArray(categories) ? categories : [])) {
-    for (const f of (cat.customFields || [])) {
+    const catID = cat.customFieldCategoryID;
+    for (const f of (cat.fields || [])) {
       fields.push({
-        customFieldID:         f.customFieldID,
-        customFieldCategoryID: f.customFieldCategoryID || cat.customFieldCategoryID,
+        customFieldID:         String(f.customFieldID),
+        customFieldCategoryID: String(f.customFieldCategoryID || catID),
         name:                  f.name,
         normName:              normName(f.name),
         fieldTypeID:           f.fieldTypeID,
       });
     }
   }
+  _fieldDefCache = fields;
+  _fieldDefCacheTime = Date.now();
   return fields;
 }
 
@@ -182,7 +193,7 @@ export function initCustomFieldUpdateRoutes(app, {
 
   // ── POST /api/rentvine/update-property-fields ────────────────────────────
   // Called by agents with: { address, agent, fields: [{name, value}], source? }
-  app.post('/api/agent/update-property-fields', hubAuth, async (req, res) => {
+  app.post('/api/rentvine/update-property-fields', hubAuth, async (req, res) => {
     const { address, agent = 'default', fields = [], source = '' } = req.body;
 
     if (!address) return res.status(400).json({ error: 'address required' });
@@ -271,8 +282,8 @@ export function initCustomFieldUpdateRoutes(app, {
   });
 
   // ── POST /api/rentvine/field-update-slack-actions (Slack button handler) ──
-  app.post('/api/agent/field-update-slack-actions',
-    (req, res, next) => { let body = ''; req.on('data', c => body += c); req.on('end', () => { try { req.body = Object.fromEntries(new URLSearchParams(body)); } catch{} next(); }); },
+  app.post('/api/rentvine/field-update-slack-actions',
+    require('express').urlencoded({ extended: true }),
     async (req, res) => {
       res.sendStatus(200); // ACK immediately
 
@@ -311,7 +322,7 @@ export function initCustomFieldUpdateRoutes(app, {
 
   // ── GET /api/rentvine/field-lookup (helper for agents) ───────────────────
   // Returns all field names + IDs so agents can reference them
-  app.get('/api/agent/field-lookup', hubAuth, async (req, res) => {
+  app.get('/api/rentvine/field-lookup', hubAuth, async (req, res) => {
     try {
       const defs = await loadPropertyFieldDefs(RENTVINE_BASE, RENTVINE_AUTH, RENTVINE_ACCOUNT);
       res.json(defs.map(f => ({
