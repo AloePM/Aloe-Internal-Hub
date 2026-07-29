@@ -484,7 +484,6 @@ const KB_URL              = process.env.KB_URL || 'https://kb.aloepm.com';
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const RENTVINE_BASE = `https://${RENTVINE_ACCOUNT}.rentvine.com/api/manager`;
 const RENTVINE_AUTH = Buffer.from(`${RENTVINE_API_KEY}:${RENTVINE_API_SECRET}`).toString('base64');
-initCustomFieldUpdateRoutes(app, { RENTVINE_BASE, RENTVINE_AUTH, RENTVINE_ACCOUNT, SLACK_TOKEN: process.env.SLACK_TOKEN, hubAuth });
 
 const KB_TOPIC_CACHE = {};
 const KB_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -4097,6 +4096,8 @@ function hubAuth(req, res, next) {
   if (req.headers['x-hub-token'] !== HUB_SECRET) return res.status(401).json({ error: 'Unauthorized' });
   next();
 }
+
+initCustomFieldUpdateRoutes(app, { RENTVINE_BASE, RENTVINE_AUTH, RENTVINE_ACCOUNT, SLACK_TOKEN: process.env.SLACK_TOKEN, hubAuth });
 
 app.get('/api/aptly/cards/search', hubAuth, async (req, res) => {
   try {
