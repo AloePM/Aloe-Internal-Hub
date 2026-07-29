@@ -11,6 +11,8 @@
 //   Called by Slack when user clicks Approve or Skip.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import express from 'express';
+
 // ── Channel map by agent ──────────────────────────────────────────────────────
 const AGENT_CHANNELS = {
   'ari':              'C0BC64LCKV1',  // #maintenance-ari
@@ -272,7 +274,7 @@ export function initCustomFieldUpdateRoutes(app, {
 
   // ── POST /api/rentvine/field-update-slack-actions (Slack button handler) ──
   app.post('/api/rentvine/field-update-slack-actions',
-    require('express').urlencoded({ extended: true }),
+    express.urlencoded({ extended: true }),
     async (req, res) => {
       res.sendStatus(200); // ACK immediately
 
