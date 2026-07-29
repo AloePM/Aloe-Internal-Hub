@@ -182,7 +182,7 @@ export function initCustomFieldUpdateRoutes(app, {
 
   // ── POST /api/rentvine/update-property-fields ────────────────────────────
   // Called by agents with: { address, agent, fields: [{name, value}], source? }
-  app.post('/api/rentvine/update-property-fields', hubAuth, async (req, res) => {
+  app.post('/api/agent/update-property-fields', hubAuth, async (req, res) => {
     const { address, agent = 'default', fields = [], source = '' } = req.body;
 
     if (!address) return res.status(400).json({ error: 'address required' });
@@ -271,7 +271,7 @@ export function initCustomFieldUpdateRoutes(app, {
   });
 
   // ── POST /api/rentvine/field-update-slack-actions (Slack button handler) ──
-  app.post('/api/rentvine/field-update-slack-actions',
+  app.post('/api/agent/field-update-slack-actions',
     (req, res, next) => { let body = ''; req.on('data', c => body += c); req.on('end', () => { try { req.body = Object.fromEntries(new URLSearchParams(body)); } catch{} next(); }); },
     async (req, res) => {
       res.sendStatus(200); // ACK immediately
@@ -311,7 +311,7 @@ export function initCustomFieldUpdateRoutes(app, {
 
   // ── GET /api/rentvine/field-lookup (helper for agents) ───────────────────
   // Returns all field names + IDs so agents can reference them
-  app.get('/api/rentvine/field-lookup', hubAuth, async (req, res) => {
+  app.get('/api/agent/field-lookup', hubAuth, async (req, res) => {
     try {
       const defs = await loadPropertyFieldDefs(RENTVINE_BASE, RENTVINE_AUTH, RENTVINE_ACCOUNT);
       res.json(defs.map(f => ({
