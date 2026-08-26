@@ -3922,12 +3922,13 @@ async function fetchMoveOutChargeRecon() {
     }
 
     // 3. Property bills - exact property IDs, exact accounts 74/75. No address parsing.
-    const glReport = {
+        const glReport = {
       displayColumns: ['propertyID', 'datePosted', 'debit', 'description', 'accountName'],
       filters: [
         { name: 'property', comparator: 'in', values: propertyIDs },
         { name: 'account', comparator: 'in', values: [74, 75] },
-        { name: 'datePosted', comparator: 'betweenDate', startDate: glWindowStart, endDate: windowEnd }
+        { name: 'datePosted', comparator: 'betweenDate', startDate: glWindowStart, endDate: windowEnd },
+        { name: 'accountingBasis', comparator: 'basisAccrual' }
       ]
     };
     const gUrl = RENTVINE_BASE + '/reports/general-ledger?exportTypeID=1&json=' + encodeURIComponent(JSON.stringify(glReport));
